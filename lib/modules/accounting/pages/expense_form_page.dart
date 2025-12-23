@@ -48,7 +48,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   String? _error;
 
   // Form fields
-  final TextEditingController _expenseNumberController = TextEditingController();
+  final TextEditingController _expenseNumberController =
+      TextEditingController();
   final TextEditingController _totalController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _referenceController = TextEditingController();
@@ -65,8 +66,10 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   // Calculated values
   double get _totalPaid => _parseAmount(_totalController.text);
   bool get _hasIva => _documentType == ExpenseDocumentType.invoice;
-  double get _netAmount => (!_hasIva || _totalPaid <= 0) ? _totalPaid : _totalPaid / 1.19;
-  double get _ivaAmount => (!_hasIva || _totalPaid <= 0) ? 0 : _totalPaid - _netAmount;
+  double get _netAmount =>
+      (!_hasIva || _totalPaid <= 0) ? _totalPaid : _totalPaid / 1.19;
+  double get _ivaAmount =>
+      (!_hasIva || _totalPaid <= 0) ? 0 : _totalPaid - _netAmount;
 
   @override
   void initState() {
@@ -129,7 +132,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             (a) => a.id == firstLine.accountId,
             orElse: () => _expenseAccounts.firstWhere(
               (a) => a.code == firstLine.accountCode,
-              orElse: () => _expenseAccounts.isNotEmpty ? _expenseAccounts.first : _fallbackAccount(firstLine),
+              orElse: () => _expenseAccounts.isNotEmpty
+                  ? _expenseAccounts.first
+                  : _fallbackAccount(firstLine),
             ),
           );
         }
@@ -143,7 +148,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       } else {
         // Preview expense number (doesn't increment until save)
         _expenseNumberController.text = await _previewExpenseNumber();
-        
+
         if (_expenseAccounts.isNotEmpty) {
           _selectedAccount = _expenseAccounts.firstWhere(
             (a) => a.code == '5200',
@@ -247,46 +252,83 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
         children: [
           // Top bar with title and save button
           _buildTopBar(context),
-          
+
           // Main content - two columns
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left column - Main form
-                  Expanded(
-                    flex: 7,
-                    child: Column(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Standard breakpoint for this 2-column layout
+                  if (constraints.maxWidth < 900) {
+                    return Column(
                       children: [
-                        // Expense details (main card)
-                        _buildCard(
-                          context,
-                          icon: Icons.receipt_long_outlined,
-                          title: 'Detalle del gasto',
-                          child: _buildExpenseDetailsSection(context),
+                        // Main form (full width)
+                        Column(
+                          children: [
+                            _buildCard(
+                              context,
+                              icon: Icons.receipt_long_outlined,
+                              title: 'Detalle del gasto',
+                              child: _buildExpenseDetailsSection(context),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildCard(
+                              context,
+                              icon: Icons.notes_outlined,
+                              title: 'Referencia',
+                              child: _buildReferenceSection(context),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        
-                        // Reference section
-                        _buildCard(
-                          context,
-                          icon: Icons.notes_outlined,
-                          title: 'Referencia',
-                          child: _buildReferenceSection(context),
+                        const SizedBox(height: 24),
+
+                        // Summary sidebar (full width on mobile)
+                        SizedBox(
+                          width: double.infinity,
+                          child: _buildSidebar(context),
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  
-                  // Right column - Summary sidebar
-                  SizedBox(
-                    width: 320,
-                    child: _buildSidebar(context),
-                  ),
-                ],
+                    );
+                  }
+
+                  // Desktop: 2 columns
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left column - Main form
+                      Expanded(
+                        flex: 7,
+                        child: Column(
+                          children: [
+                            _buildCard(
+                              context,
+                              icon: Icons.receipt_long_outlined,
+                              title: 'Detalle del gasto',
+                              child: _buildExpenseDetailsSection(context),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Reference section
+                            _buildCard(
+                              context,
+                              icon: Icons.notes_outlined,
+                              title: 'Referencia',
+                              child: _buildReferenceSection(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+
+                      // Right column - Summary sidebar
+                      SizedBox(
+                        width: 320,
+                        child: _buildSidebar(context),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -309,48 +351,108 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           ),
         ),
       ),
-      child: Row(
-        children: [
-          // Back button
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: IconButton(
-              onPressed: _isSaving ? null : () => context.pop(false),
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Volver',
-            ),
-          ),
-          const SizedBox(width: 16),
-          
-          // Title only - expense number shown only when editing
-          Expanded(
-            child: Text(
-              widget.expenseId == null ? 'Nuevo gasto' : 'Editar gasto',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          
-          // Save button
-          FilledButton.icon(
-            onPressed: _isSaving ? null : _handleSave,
-            icon: _isSaving
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.onPrimary,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+
+          if (isMobile) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        onPressed: _isSaving ? null : () => context.pop(false),
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Volver',
+                      ),
                     ),
-                  )
-                : const Icon(Icons.save_outlined, size: 18),
-            label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
-          ),
-        ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        widget.expenseId == null
+                            ? 'Nuevo gasto'
+                            : 'Editar gasto',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _handleSave,
+                  icon: _isSaving
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              // Back button
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  onPressed: _isSaving ? null : () => context.pop(false),
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Title only - expense number shown only when editing
+              Expanded(
+                child: Text(
+                  widget.expenseId == null ? 'Nuevo gasto' : 'Editar gasto',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
+              // Save button
+              FilledButton.icon(
+                onPressed: _isSaving ? null : _handleSave,
+                icon: _isSaving
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -442,9 +544,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
+                          horizontal: 12, vertical: 14),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8)),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(color: Colors.grey.shade300),
@@ -459,26 +561,39 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           ],
         ),
         const SizedBox(height: 16),
-        
+
         // Account and Amount row
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Account
-            Expanded(
-              flex: 3,
-              child: _buildAccountField(context),
-            ),
-            const SizedBox(width: 16),
-            // Amount
-            SizedBox(
-              width: 180,
-              child: _buildAmountField(context),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 600) {
+              return Column(
+                children: [
+                  _buildAccountField(context),
+                  const SizedBox(height: 16),
+                  _buildAmountField(context),
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Account
+                Expanded(
+                  flex: 3,
+                  child: _buildAccountField(context),
+                ),
+                const SizedBox(width: 16),
+                // Amount
+                SizedBox(
+                  width: 180,
+                  child: _buildAmountField(context),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
-        
+
         // Supplier row (compact)
         _buildFieldLabel('Proveedor (opcional)'),
         const SizedBox(height: 8),
@@ -494,13 +609,16 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             ),
             child: Row(
               children: [
-                Icon(Icons.store_outlined, size: 18, color: Colors.grey.shade500),
+                Icon(Icons.store_outlined,
+                    size: 18, color: Colors.grey.shade500),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _selectedSupplier?.name ?? 'Seleccionar proveedor...',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: _selectedSupplier != null ? null : Colors.grey.shade500,
+                      color: _selectedSupplier != null
+                          ? null
+                          : Colors.grey.shade500,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -508,7 +626,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                 if (_selectedSupplier != null)
                   GestureDetector(
                     onTap: () => setState(() => _selectedSupplier = null),
-                    child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+                    child: Icon(Icons.close,
+                        size: 18, color: Colors.grey.shade500),
                   )
                 else
                   Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
@@ -517,7 +636,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           ),
         ),
         const SizedBox(height: 16),
-        
+
         // Description
         _buildFieldLabel('Descripción (opcional)'),
         const SizedBox(height: 8),
@@ -554,8 +673,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               border: Border.all(
-                color: _selectedAccount == null 
-                    ? theme.colorScheme.error 
+                color: _selectedAccount == null
+                    ? theme.colorScheme.error
                     : Colors.grey.shade300,
               ),
               borderRadius: BorderRadius.circular(8),
@@ -568,7 +687,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                         ? '${_selectedAccount!.code} - ${_selectedAccount!.name}'
                         : 'Seleccione una cuenta',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: _selectedAccount != null ? null : Colors.grey.shade500,
+                      color: _selectedAccount != null
+                          ? null
+                          : Colors.grey.shade500,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -603,7 +724,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
               fontWeight: FontWeight.w600,
               color: theme.colorScheme.onSurface,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -683,8 +805,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today_outlined, 
-                         size: 18, color: theme.colorScheme.primary),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 18, color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Fechas y estado',
@@ -695,8 +817,10 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                   ],
                 ),
               ),
-              Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-              
+              Divider(
+                  height: 1,
+                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+
               // Date row
               _buildSidebarRow(
                 context,
@@ -714,14 +838,15 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                   if (picked != null) setState(() => _date = picked);
                 },
               ),
-              
+
               // Document type
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    Icon(Icons.description_outlined, 
-                         size: 18, color: Colors.grey.shade600),
+                    Icon(Icons.description_outlined,
+                        size: 18, color: Colors.grey.shade600),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -740,12 +865,13 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                             decoration: InputDecoration(
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                                  horizontal: 12, vertical: 10),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                                  borderRadius: BorderRadius.circular(8)),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide:
+                                    BorderSide(color: Colors.grey.shade300),
                               ),
                             ),
                             items: ExpenseDocumentType.values.map((type) {
@@ -755,7 +881,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                               );
                             }).toList(),
                             onChanged: (value) {
-                              if (value != null) setState(() => _documentType = value);
+                              if (value != null)
+                                setState(() => _documentType = value);
                             },
                           ),
                         ],
@@ -764,14 +891,15 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                   ],
                 ),
               ),
-              
+
               // IVA treatment
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    Icon(Icons.receipt_outlined, 
-                         size: 18, color: Colors.grey.shade600),
+                    Icon(Icons.receipt_outlined,
+                        size: 18, color: Colors.grey.shade600),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -787,27 +915,25 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                                horizontal: 12, vertical: 10),
                             decoration: BoxDecoration(
-                              color: _hasIva 
-                                  ? Colors.green.shade50 
+                              color: _hasIva
+                                  ? Colors.green.shade50
                                   : Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: _hasIva 
-                                    ? Colors.green.shade200 
+                                color: _hasIva
+                                    ? Colors.green.shade200
                                     : Colors.grey.shade300,
                               ),
                             ),
                             child: Text(
-                              _hasIva 
-                                  ? 'Con IVA (19%)' 
-                                  : 'Sin IVA (exento)',
+                              _hasIva ? 'Con IVA (19%)' : 'Sin IVA (exento)',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                color: _hasIva 
-                                    ? Colors.green.shade700 
+                                color: _hasIva
+                                    ? Colors.green.shade700
                                     : Colors.grey.shade600,
                               ),
                             ),
@@ -818,14 +944,15 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                   ],
                 ),
               ),
-              
+
               // Payment method
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    Icon(Icons.account_balance_wallet_outlined, 
-                         size: 18, color: Colors.grey.shade600),
+                    Icon(Icons.account_balance_wallet_outlined,
+                        size: 18, color: Colors.grey.shade600),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -844,24 +971,25 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                             decoration: InputDecoration(
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                                  horizontal: 12, vertical: 10),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                                  borderRadius: BorderRadius.circular(8)),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide:
+                                    BorderSide(color: Colors.grey.shade300),
                               ),
                             ),
                             items: _paymentMethods.map((method) {
                               return DropdownMenuItem(
                                 value: method,
-                                child: Text(method.name, 
-                                            overflow: TextOverflow.ellipsis),
+                                child: Text(method.name,
+                                    overflow: TextOverflow.ellipsis),
                               );
                             }).toList(),
-                            onChanged: (value) => 
+                            onChanged: (value) =>
                                 setState(() => _selectedPaymentMethod = value),
-                            validator: (value) => 
+                            validator: (value) =>
                                 value == null ? 'Requerido' : null,
                           ),
                         ],
@@ -874,7 +1002,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           ),
         ),
         const SizedBox(height: 16),
-        
+
         // Summary card
         Container(
           decoration: BoxDecoration(
@@ -892,8 +1020,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(Icons.summarize_outlined, 
-                         size: 18, color: theme.colorScheme.primary),
+                    Icon(Icons.summarize_outlined,
+                        size: 18, color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Resumen',
@@ -904,8 +1032,10 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                   ],
                 ),
               ),
-              Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-              
+              Divider(
+                  height: 1,
+                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+
               // Amounts
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -914,11 +1044,14 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                     _buildSummaryRow('Subtotal (Neto)', _netAmount),
                     if (_hasIva) ...[
                       const SizedBox(height: 8),
-                      _buildSummaryRow('IVA Crédito (19%)', _ivaAmount, 
-                                       isHighlight: true),
+                      _buildSummaryRow('IVA Crédito (19%)', _ivaAmount,
+                          isHighlight: true),
                     ],
                     const SizedBox(height: 12),
-                    Divider(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                    Divider(
+                        color: isDark
+                            ? Colors.grey.shade700
+                            : Colors.grey.shade300),
                     const SizedBox(height: 12),
                     _buildSummaryRow('Total', _totalPaid, isTotal: true),
                   ],
@@ -940,7 +1073,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -970,7 +1103,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             TextButton(
               onPressed: onTap,
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -981,7 +1115,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     );
   }
 
-  Widget _buildSummaryRow(String label, double amount, {
+  Widget _buildSummaryRow(
+    String label,
+    double amount, {
     bool isTotal = false,
     bool isHighlight = false,
   }) {
@@ -1001,10 +1137,10 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           style: TextStyle(
             fontSize: isTotal ? 18 : 14,
             fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
-            color: isTotal 
-                ? Theme.of(context).colorScheme.primary 
-                : isHighlight 
-                    ? Colors.green.shade700 
+            color: isTotal
+                ? Theme.of(context).colorScheme.primary
+                : isHighlight
+                    ? Colors.green.shade700
                     : null,
           ),
         ),
@@ -1032,7 +1168,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
           builder: (context, setDialogState) {
             final theme = Theme.of(context);
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Container(
                 width: 480,
                 constraints: const BoxConstraints(maxHeight: 500),
@@ -1092,10 +1229,12 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                                 final account = filtered[index];
                                 return ListTile(
                                   dense: true,
-                                  title: Text('${account.code} - ${account.name}'),
+                                  title:
+                                      Text('${account.code} - ${account.name}'),
                                   subtitle: Text(account.category.displayName,
-                                      style: TextStyle(fontSize: 12, 
-                                                       color: Colors.grey.shade500)),
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500)),
                                   onTap: () => Navigator.pop(context, account),
                                 );
                               },
@@ -1412,7 +1551,9 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                           hintText: 'Buscar por nombre o RUT...',
                           prefixIcon: const Icon(Icons.search),
                           filled: true,
-                          fillColor: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+                          fillColor: isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade100,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide.none,
@@ -1430,7 +1571,9 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                                 hintText: 'Crear nuevo proveedor...',
                                 prefixIcon: const Icon(Icons.add),
                                 filled: true,
-                                fillColor: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+                                fillColor: isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade100,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
@@ -1443,10 +1586,12 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                             onPressed: _isCreating
                                 ? null
                                 : () async {
-                                    final name = _newSupplierController.text.trim();
+                                    final name =
+                                        _newSupplierController.text.trim();
                                     if (name.isEmpty) return;
                                     setState(() => _isCreating = true);
-                                    final created = await widget.onCreateSupplier(name);
+                                    final created =
+                                        await widget.onCreateSupplier(name);
                                     setState(() => _isCreating = false);
                                     if (created != null && mounted) {
                                       Navigator.pop(context, created);
@@ -1477,7 +1622,7 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.store_outlined,
-                                   size: 48, color: Colors.grey.shade300),
+                                  size: 48, color: Colors.grey.shade300),
                               const SizedBox(height: 12),
                               Text(
                                 'No se encontraron proveedores',
@@ -1500,11 +1645,12 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                               leading: CircleAvatar(
                                 backgroundColor: Colors.grey.shade100,
                                 child: Icon(Icons.store_outlined,
-                                           color: Colors.grey.shade600),
+                                    color: Colors.grey.shade600),
                               ),
                               title: Text(
                                 supplier.name,
-                                style: const TextStyle(fontWeight: FontWeight.w500),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500),
                               ),
                               subtitle: supplier.rut != null
                                   ? Text(
@@ -1516,7 +1662,7 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                                     )
                                   : null,
                               trailing: Icon(Icons.chevron_right,
-                                           color: Colors.grey.shade400),
+                                  color: Colors.grey.shade400),
                               onTap: () => Navigator.pop(context, supplier),
                             );
                           },

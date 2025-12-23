@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data' show Uint8List;
+
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -123,7 +130,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     final salesService = context.read<SalesService>();
     final invoice = _findInvoice(salesService);
     if (invoice == null) return;
-    
+
     // ⚠️ WARN when confirming invoice without tax - allow quick fix
     if (invoice.taxTreatment == TaxTreatment.noTax) {
       final result = await showDialog<String>(
@@ -160,9 +167,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           ],
         ),
       );
-      
+
       if (result == 'cancel' || result == null) return; // User cancelled
-      
+
       if (result == 'edit') {
         // Navigate to edit page
         await _openEditInvoice(invoice);
@@ -170,7 +177,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       }
       // If 'no_tax' - continue with confirmation
     }
-    
+
     try {
       await salesService.updateInvoiceStatus(
           widget.invoiceId, InvoiceStatus.confirmed);
@@ -540,6 +547,17 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ],
             ),
           ),
+          IconButton(
+            onPressed: () => _downloadInvoicePDF(invoice),
+            icon: _isGeneratingPdf
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf),
+            tooltip: 'Descargar PDF',
+          ),
           if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -838,6 +856,311 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Cached logo bytes for PDF generation
+  Uint8List? _cachedLogoBytes;
+  String? _cachedLogoUrl;
+  bool _isGeneratingPdf = false;
+
+  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+    if (_isGeneratingPdf) return;
+
+    setState(() => _isGeneratingPdf = true);
+
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+
+      // Use printing package for cross-platform PDF download/share
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'factura_${invoice.invoiceNumber}.pdf',
+      );
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al generar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
+  }
+
+  Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
+    final pdf = pw.Document();
+
+    // Try to load company logo (use cache if available)
+    pw.ImageProvider? logoImage;
+    try {
+      final appearanceService = context.read<AppearanceService>();
+      final logoUrl = appearanceService.companyLogoUrl;
+      if (logoUrl != null && logoUrl.isNotEmpty) {
+        // Check if we already have cached bytes for this URL
+        if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
+          logoImage = pw.MemoryImage(_cachedLogoBytes!);
+        } else {
+          // Fetch and cache
+          final response = await http.get(Uri.parse(logoUrl));
+          if (response.statusCode == 200) {
+            _cachedLogoBytes = response.bodyBytes;
+            _cachedLogoUrl = logoUrl;
+            logoImage = pw.MemoryImage(_cachedLogoBytes!);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading logo for PDF: $e');
+    }
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.all(40),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header - much more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Company logo or text fallback
+                if (logoImage != null)
+                  pw.Image(logoImage,
+                      width: 120, height: 40, fit: pw.BoxFit.contain)
+                else
+                  pw.Text(
+                    'VIÑABIKE',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
+                  ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      '# ${invoice.invoiceNumber}',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Saldo adeudado',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      ChileanUtils.formatCurrency(invoice.balance),
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Company info - smaller
+            pw.Text('Viñabike',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Valparaíso',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Chile',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+
+            pw.SizedBox(height: 16),
+
+            // Customer and date info - more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Facturar a',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      invoice.customerName ?? 'Sin registro',
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue700,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Fecha de la factura :',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      ChileanUtils.formatDate(invoice.date),
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Items table - much tighter
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey300,
+                width: 0.3, // Ultra thin borders
+              ),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(35),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FixedColumnWidth(70),
+                4: const pw.FixedColumnWidth(70),
+              },
+              children: [
+                // Header row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
+                  children: [
+                    _buildPdfTableCell('#', isHeader: true),
+                    _buildPdfTableCell('Artículo & Descripción',
+                        isHeader: true),
+                    _buildPdfTableCell('Cant.', isHeader: true),
+                    _buildPdfTableCell('Tarifa', isHeader: true),
+                    _buildPdfTableCell('Cantidad', isHeader: true),
+                  ],
+                ),
+                // Data rows
+                ...invoice.items.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return pw.TableRow(
+                    children: [
+                      _buildPdfTableCell('${index + 1}'),
+                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.unitPrice)),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.lineTotal)),
+                    ],
+                  );
+                }),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Totals - tighter
+            pw.Row(
+              children: [
+                pw.Spacer(),
+                pw.SizedBox(
+                  width: 250,
+                  child: pw.Column(
+                    children: [
+                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
+                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
+                      if (invoice.paidAmount > 0) ...[
+                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                        _buildPdfTotalRow(
+                            'Pago realizado', -invoice.paidAmount),
+                      ],
+                      pw.Divider(thickness: 1, color: PdfColors.grey800),
+                      _buildPdfTotalRow('Saldo adeudado', invoice.balance,
+                          isTotal: true),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          color: isHeader ? PdfColors.white : PdfColors.black,
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+          fontSize: isHeader ? 9 : 10,
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfTotalRow(String label, double amount,
+      {bool isTotal = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 5),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
+            ),
+          ),
+          pw.Text(
+            ChileanUtils.formatCurrency(amount.abs()),
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
+            ),
+          ),
+        ],
       ),
     );
   }

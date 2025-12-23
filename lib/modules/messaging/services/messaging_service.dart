@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
+import 'dart:ui'; // For VoidCallback
 
 class MessagingService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -8,9 +10,13 @@ class MessagingService {
   /// Get current user ID
   String? get currentUserId => _client.auth.currentUser?.id;
 
-  /// Fetch conversations for the current user
+  /// Fetch conversations for the current user with unread counts
   /// [type] filter: 'internal' or 'support'
   Future<List<Conversation>> getConversations({String? type}) async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+
+    // First get conversations
     dynamic query = _client.from('conversations').select('''
       *,
       conversation_participants!inner(user_id)
@@ -27,21 +33,44 @@ class MessagingService {
     final response = await query;
     final List<dynamic> data = response as List<dynamic>;
 
-    return data.map((json) => Conversation.fromJson(json)).toList();
+    // Fetch unread counts for current user
+    final unreadResponse = await _client
+        .from('conversation_unread_counts')
+        .select('conversation_id, unread_count')
+        .eq('user_id', userId);
+
+    final Map<String, int> unreadMap = {};
+    for (var row in unreadResponse) {
+      unreadMap[row['conversation_id']] = row['unread_count'] ?? 0;
+    }
+
+    return data.map((json) {
+      // Inject unread count into json before parsing
+      json['unread_count'] = unreadMap[json['id']] ?? 0;
+      return Conversation.fromJson(json);
+    }).toList();
   }
 
-  /// Get messages for a specific conversation
-  Future<List<Message>> getMessages(String conversationId) async {
-    final response = await _client
-        .from('messages')
-        .select()
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true); // Oldest first for chat flow
+  /// Mark a conversation as read for the current user
+  Future<void> markAsRead(String conversationId) async {
+    final userId = currentUserId;
+    if (userId == null) return;
 
-    final List<dynamic> data = response as List<dynamic>;
-    return data
-        .map((json) => Message.fromJson(json, currentUserId: currentUserId))
-        .toList();
+    await _client.rpc('mark_conversation_read', params: {
+      'p_conversation_id': conversationId,
+    });
+  }
+
+  /// Get messages stream for a specific conversation
+  Stream<List<Message>> getMessagesStream(String conversationId) {
+    return _client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .order('created_at', ascending: true)
+        .map((data) => data
+            .map((json) => Message.fromJson(json, currentUserId: currentUserId))
+            .toList());
   }
 
   /// Send a message
@@ -50,6 +79,7 @@ class MessagingService {
     required String content,
     String type = 'text',
     Map<String, dynamic>? metadata,
+    List<String>? participantIds, // Optional: for push notifications
   }) async {
     if (currentUserId == null) throw Exception('Not authenticated');
 
@@ -63,28 +93,24 @@ class MessagingService {
     // Trigger updates conversation timestamp automatically via DB trigger
   }
 
-  /// Subscribe to new messages for a conversation
-  RealtimeChannel subscribeToConversation(
-    String conversationId,
-    Function(Message) onNewMessage,
-  ) {
+  /// Listen for ANY changes to the conversations table (for list re-fetch)
+  RealtimeChannel subscribeToConversationsUpdates(VoidCallback onUpdate) {
+    // We listen to the global 'conversations' table changes
+    // Ideally, we would filter by 'participant', but Supabase Realtime filters are limited on joins.
+    // So we listen to ALL 'conversations' changes, and the client will re-fetch.
+    // Optimization: Listen to specific IDs if list is small, or just accept the overhead for now.
+    // Better: Filter where 'id' is in the user's conversation list? Hard to maintain.
+    // Simplest robust solution: Listen to 'conversations' table.
     return _client
-        .channel('public:messages:conversation_id=eq.$conversationId')
+        .channel('public:conversations')
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversation_id',
-            value: conversationId,
-          ),
+          table: 'conversations',
           callback: (payload) {
-            final newMessage = Message.fromJson(
-              payload.newRecord,
-              currentUserId: currentUserId,
-            );
-            onNewMessage(newMessage);
+            // Trigger update regardless of payload for simplicity,
+            // the Provider will re-fetch the user's specific list.
+            onUpdate();
           },
         )
         .subscribe();
@@ -107,6 +133,7 @@ class MessagingService {
           'title': title,
           'context_type': contextType,
           'context_id': contextId,
+          'last_message_at': DateTime.now().toIso8601String(),
         })
         .select()
         .single();
@@ -128,29 +155,76 @@ class MessagingService {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
 
-    // 1. Check if conversation already exists
-    // This is complex in Supabase without a dedicated RPC or advanced query
-    // For MVP, we'll try to find one where both are participants
-    // Or just strictly create a new one if not found easily.
-    // Ideally, we'd have a 'participants_hash' or unique constraint, but
-    // let's do a simple check via RPC if available, or just create new for now to avoid logic errors.
-    // actually, let's just create one. (Optimization: deduplicate later)
+    // First, try to find an existing 1:1 internal conversation between these two users
+    // We need to find a conversation where:
+    // - type = 'internal'
+    // - both users are participants
+    // - only these two users are participants (1:1 chat)
 
-    // Better: Try to find an existing 'internal' conversation with just these 2 participants
-    // For now, let's just CREATE. Unique 'internal' constraint can be added later.
+    try {
+      // Get all internal conversations where current user is participant
+      final myConversations = await _client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', userId);
 
+      // Get all internal conversations where other user is participant
+      final otherConversations = await _client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', otherUserId);
+
+      // Find intersection
+      final myIds = (myConversations as List)
+          .map((c) => c['conversation_id'] as String)
+          .toSet();
+      final otherIds = (otherConversations as List)
+          .map((c) => c['conversation_id'] as String)
+          .toSet();
+      final commonIds = myIds.intersection(otherIds);
+
+      if (commonIds.isNotEmpty) {
+        // Check if any of these are internal 1:1 chats
+        for (final conversationId in commonIds) {
+          final conversation = await _client
+              .from('conversations')
+              .select('id, type')
+              .eq('id', conversationId)
+              .eq('type', 'internal')
+              .maybeSingle();
+
+          if (conversation != null) {
+            // Verify it's a 1:1 chat (only 2 participants)
+            final participants = await _client
+                .from('conversation_participants')
+                .select('user_id')
+                .eq('conversation_id', conversationId);
+
+            if ((participants as List).length == 2) {
+              // Found existing 1:1 chat, return it
+              return conversationId;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking existing conversations: $e');
+      // Continue to create new if check fails
+    }
+
+    // No existing chat found, create new one
     final conversation = await _client
         .from('conversations')
         .insert({
           'type': 'internal',
-          // No title for 1:1 chats, or maybe "Chat with [Name]" generated on read
+          'last_message_at': DateTime.now().toIso8601String(),
         })
         .select()
         .single();
 
     final conversationId = conversation['id'];
 
-    // 2. Add participants
+    // Add participants
     await _client.from('conversation_participants').insert([
       {
         'conversation_id': conversationId,
@@ -165,5 +239,24 @@ class MessagingService {
     ]);
 
     return conversationId;
+  }
+
+  /// Delete a conversation and all its messages
+  /// Uses RPC function for proper permission handling
+  Future<void> deleteConversation(String conversationId) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    debugPrint('🗑️ Deleting conversation: $conversationId');
+
+    try {
+      await _client.rpc('delete_conversation', params: {
+        'p_conversation_id': conversationId,
+      });
+      debugPrint('✅ Conversation deleted successfully');
+    } catch (e) {
+      debugPrint('❌ Error deleting conversation: $e');
+      rethrow;
+    }
   }
 }

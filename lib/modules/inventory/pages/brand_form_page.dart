@@ -100,7 +100,8 @@ class _BrandFormPageState extends State<BrandFormPage> {
       if (tenantId == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
+            const SnackBar(
+                content: Text('Error: No se pudo obtener el tenant ID')),
           );
         }
         return;
@@ -165,32 +166,79 @@ class _BrandFormPageState extends State<BrandFormPage> {
       key: _formKey,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.pop(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _existingBrand != null ? 'Editar Marca' : 'Nueva Marca',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 600;
+
+              if (isMobile) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () => context.pop(),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _existingBrand != null
+                                  ? 'Editar Marca'
+                                  : 'Nueva Marca',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Guardar',
+                          icon: Icons.save,
+                          onPressed: _isSaving ? null : _saveBrand,
+                          isLoading: _isSaving,
+                        ),
+                      ),
+                    ],
                   ),
+                );
+              }
+
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => context.pop(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _existingBrand != null ? 'Editar Marca' : 'Nueva Marca',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    AppButton(
+                      text: 'Guardar',
+                      icon: Icons.save,
+                      onPressed: _isSaving ? null : _saveBrand,
+                      isLoading: _isSaving,
+                    ),
+                  ],
                 ),
-                AppButton(
-                  text: 'Guardar',
-                  icon: Icons.save,
-                  onPressed: _isSaving ? null : _saveBrand,
-                  isLoading: _isSaving,
-                ),
-              ],
-            ),
+              );
+            },
           ),
           Expanded(
             child: SingleChildScrollView(

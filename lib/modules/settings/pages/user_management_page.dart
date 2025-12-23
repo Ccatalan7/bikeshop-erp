@@ -20,7 +20,7 @@ class UserManagementPage extends StatefulWidget {
 class _UserManagementPageState extends State<UserManagementPage> {
   late UserManagementService _userService;
   late TenantService _tenantService;
-  
+
   List<Map<String, dynamic>> _users = [];
   Map<String, dynamic>? _currentTenant;
   bool _isLoading = true;
@@ -43,15 +43,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
     try {
       final users = await _userService.getTenantUsers();
       final tenant = await _tenantService.getCurrentTenant();
-      
+
       if (tenant == null) {
         setState(() {
-          _errorMessage = 'No se encontró el tenant. Por favor contacta al administrador.';
+          _errorMessage =
+              'No se encontró el tenant. Por favor contacta al administrador.';
           _isLoading = false;
         });
         return;
       }
-      
+
       setState(() {
         _users = users;
         _currentTenant = tenant;
@@ -92,7 +93,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
       await _userService.toggleUserStatus(userId, !isCurrentlyActive);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isCurrentlyActive ? 'Usuario suspendido' : 'Usuario activado'),
+          content: Text(
+              isCurrentlyActive ? 'Usuario suspendido' : 'Usuario activado'),
           backgroundColor: Colors.green,
         ),
       );
@@ -186,37 +188,94 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         color: Theme.of(context).colorScheme.primaryContainer,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.business,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (constraints.maxWidth < 600) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Text(
-                                    _currentTenant!['shop_name'] ?? 'Empresa',
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.business,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _currentTenant!['shop_name'] ??
+                                                  'Empresa',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                            Text(
+                                              'Plan: ${_currentTenant!['plan'] ?? 'free'}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Text(
-                                    'Plan: ${_currentTenant!['plan'] ?? 'free'}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                  const SizedBox(height: 16),
+                                  AppButton(
+                                    text: 'Invitar Usuario',
+                                    icon: Icons.person_add,
+                                    onPressed: _showInviteDialog,
+                                    type: ButtonType.primary,
                                   ),
                                 ],
-                              ),
-                            ),
-                            AppButton(
-                              text: 'Invitar Usuario',
-                              icon: Icons.person_add,
-                              onPressed: _showInviteDialog,
-                            ),
-                          ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Icon(
+                                  Icons.business,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _currentTenant!['shop_name'] ??
+                                            'Empresa',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      Text(
+                                        'Plan: ${_currentTenant!['plan'] ?? 'free'}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                AppButton(
+                                  text: 'Invitar Usuario',
+                                  icon: Icons.person_add,
+                                  onPressed: _showInviteDialog,
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
-                    
+
                     // User count
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -297,7 +356,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
           children: [
             Text('Rol: ${_getRoleLabel(role)}'),
             if (employeeName != null)
-              Text('Empleado: $employeeName', style: const TextStyle(fontSize: 12)),
+              Text('Empleado: $employeeName',
+                  style: const TextStyle(fontSize: 12)),
             if (lastSignIn != null)
               Text(
                 'Último acceso: ${_formatDate(lastSignIn)}',
@@ -306,7 +366,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
             if (!isActive)
               const Text(
                 'SUSPENDIDO',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
           ],
         ),

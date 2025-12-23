@@ -11,6 +11,9 @@ class ExpandableMenuItem extends StatelessWidget {
   final bool isExpanded;
   final ValueChanged<bool>? onExpansionChanged;
   final bool isSingleItem;
+  final int badgeCount; // For unread notification badge
+  final void Function(String route)?
+      onNavigate; // Optional custom navigation handler
 
   const ExpandableMenuItem({
     super.key,
@@ -23,6 +26,8 @@ class ExpandableMenuItem extends StatelessWidget {
     this.isExpanded = false,
     this.onExpansionChanged,
     this.isSingleItem = false,
+    this.badgeCount = 0,
+    this.onNavigate,
   });
 
   MenuSubItem? _resolveSelectedSubItem(String location) {
@@ -68,7 +73,11 @@ class ExpandableMenuItem extends StatelessWidget {
                   ? () {
                       if (isSingleItem) {
                         if (subItems.isNotEmpty && !isSelected) {
-                          context.go(subItems.first.route);
+                          if (onNavigate != null) {
+                            onNavigate!(subItems.first.route);
+                          } else {
+                            context.go(subItems.first.route);
+                          }
                         }
                       } else {
                         onExpansionChanged?.call(!isExpanded);
@@ -111,6 +120,25 @@ class ExpandableMenuItem extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // Unread badge
+                    if (badgeCount > 0)
+                      Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : '$badgeCount',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
                     if (!isSingleItem)
                       RotatedBox(
                         quarterTurns: isExpanded ? 2 : 0,
@@ -160,7 +188,11 @@ class ExpandableMenuItem extends StatelessWidget {
                     onTap: enabled
                         ? () {
                             if (!isSelected) {
-                              context.go(subItem.route);
+                              if (onNavigate != null) {
+                                onNavigate!(subItem.route);
+                              } else {
+                                context.go(subItem.route);
+                              }
                             }
                           }
                         : null,

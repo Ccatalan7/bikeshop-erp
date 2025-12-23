@@ -20,36 +20,42 @@ class SalesReportsPage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Expanded(
-              child: GridView.count(
-                crossAxisCount: 3,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.5,
-                children: [
-                  _ReportCard(
-                    title: 'Ventas por artículo',
-                    description:
-                        'Detalle de ventas agrupado por productos y servicios.',
-                    icon: Icons.inventory_2_outlined,
-                    onTap: () => context.push('/sales/reports/by-product'),
-                  ),
-                  _ReportCard(
-                    title: 'Ventas por cliente',
-                    description: 'Resumen de ventas por cliente.',
-                    icon: Icons.people_outline,
-                    onTap: () => context.push('/sales/reports/by-customer'),
-                  ),
-                  _ReportCard(
-                    title: 'Ventas por vendedor',
-                    description: 'Rendimiento de ventas por usuario.',
-                    icon: Icons.badge_outlined,
-                    onTap: () {
-                      // TODO: Implement Sales by Salesperson
-                    },
-                    isComingSoon: true,
-                  ),
-                ],
-              ),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 600;
+                final crossAxisCount = isMobile ? 1 : 3;
+                final aspectRatio = isMobile ? 2.5 : 1.5;
+
+                return GridView.count(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: aspectRatio,
+                  children: [
+                    _ReportCard(
+                      title: 'Ventas por artículo',
+                      description:
+                          'Detalle de ventas agrupado por productos y servicios.',
+                      icon: Icons.inventory_2_outlined,
+                      onTap: () => context.push('/sales/reports/by-product'),
+                    ),
+                    _ReportCard(
+                      title: 'Ventas por cliente',
+                      description: 'Resumen de ventas por cliente.',
+                      icon: Icons.people_outline,
+                      onTap: () => context.push('/sales/reports/by-customer'),
+                    ),
+                    _ReportCard(
+                      title: 'Ventas por vendedor',
+                      description: 'Rendimiento de ventas por usuario.',
+                      icon: Icons.badge_outlined,
+                      onTap: () {
+                        // TODO: Implement Sales by Salesperson
+                      },
+                      isComingSoon: true,
+                    ),
+                  ],
+                );
+              }),
             ),
           ],
         ),

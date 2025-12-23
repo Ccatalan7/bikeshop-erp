@@ -123,43 +123,91 @@ class _SalesByProductPageState extends State<SalesByProductPage> {
                 bottom: BorderSide(color: theme.dividerColor),
               ),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.filter_list),
-                const SizedBox(width: 8),
-                Text('Filtros:', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 600) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.filter_list),
+                          const SizedBox(width: 8),
+                          Text('Filtros:', style: theme.textTheme.titleSmall),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        label: Text(_dateRange == null
+                            ? 'Todo el periodo'
+                            : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 365)),
+                            initialDateRange: _dateRange,
+                          );
+                          if (picked != null) {
+                            setState(() => _dateRange = picked);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          // TODO: Implement CSV Export
+                        },
+                        icon: const Icon(Icons.download),
+                        label: const Text('Exportar'),
+                      ),
+                    ],
+                  );
+                }
 
-                // Date Range Picker
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(_dateRange == null
-                      ? 'Todo el periodo'
-                      : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
-                  onPressed: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                      initialDateRange: _dateRange,
-                    );
-                    if (picked != null) {
-                      setState(() => _dateRange = picked);
-                    }
-                  },
-                ),
+                // Desktop / Wide
+                return Row(
+                  children: [
+                    const Icon(Icons.filter_list),
+                    const SizedBox(width: 8),
+                    Text('Filtros:', style: theme.textTheme.titleSmall),
+                    const SizedBox(width: 16),
 
-                const Spacer(),
+                    // Date Range Picker
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(_dateRange == null
+                          ? 'Todo el periodo'
+                          : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
+                      onPressed: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
+                          initialDateRange: _dateRange,
+                        );
+                        if (picked != null) {
+                          setState(() => _dateRange = picked);
+                        }
+                      },
+                    ),
 
-                // Export Button (Placeholder)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Implement CSV Export
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('Exportar'),
-                ),
-              ],
+                    const Spacer(),
+
+                    // Export Button (Placeholder)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        // TODO: Implement CSV Export
+                      },
+                      icon: const Icon(Icons.download),
+                      label: const Text('Exportar'),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -171,63 +219,194 @@ class _SalesByProductPageState extends State<SalesByProductPage> {
                     ? const Center(
                         child:
                             Text('No hay datos para el periodo seleccionado'))
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            sortColumnIndex: _sortColumnIndex,
-                            sortAscending: _sortAscending,
-                            columns: [
-                              DataColumn(
-                                label: const Text('Nombre del artículo'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                              ),
-                              DataColumn(
-                                label: const Text('SKU'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                              ),
-                              DataColumn(
-                                label: const Text('Cantidad vendida'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                                numeric: true,
-                              ),
-                              DataColumn(
-                                label: const Text('Importe'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                                numeric: true,
-                              ),
-                              DataColumn(
-                                label: const Text('Precio promedio'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                                numeric: true,
-                              ),
-                            ],
-                            rows: sortedList.map((data) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(data.name,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.primary,
-                                          fontWeight: FontWeight.w500,
-                                        )),
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 800) {
+                            return ListView.builder(
+                              itemCount: sortedList.length,
+                              padding: const EdgeInsets.all(16),
+                              itemBuilder: (context, index) {
+                                final data = sortedList[index];
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  child: InkWell(
                                     onTap: data.id != null
                                         ? () => _navigateToDetail(context, data)
                                         : null,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  data.name,
+                                                  style: theme
+                                                      .textTheme.titleMedium
+                                                      ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: theme
+                                                        .colorScheme.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (data.sku.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: theme.colorScheme
+                                                        .surfaceVariant,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                  ),
+                                                  child: Text(
+                                                    data.sku,
+                                                    style: theme
+                                                        .textTheme.labelSmall,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          const Divider(),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Cantidad',
+                                                    style: theme
+                                                        .textTheme.labelSmall,
+                                                  ),
+                                                  Text(
+                                                    data.quantity
+                                                        .toStringAsFixed(2),
+                                                    style: theme
+                                                        .textTheme.bodyLarge,
+                                                  ),
+                                                ],
+                                              ),
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    'Importe',
+                                                    style: theme
+                                                        .textTheme.labelSmall,
+                                                  ),
+                                                  Text(
+                                                    currencyFormat.format(
+                                                        data.totalAmount),
+                                                    style: theme
+                                                        .textTheme.titleMedium
+                                                        ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'Precio promedio:',
+                                                style:
+                                                    theme.textTheme.labelSmall,
+                                              ),
+                                              Text(
+                                                currencyFormat
+                                                    .format(data.averagePrice),
+                                                style:
+                                                    theme.textTheme.bodyMedium,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  DataCell(Text(data.sku)),
-                                  DataCell(
-                                      Text(data.quantity.toStringAsFixed(2))),
-                                  DataCell(Text(
-                                      currencyFormat.format(data.totalAmount))),
-                                  DataCell(Text(currencyFormat
-                                      .format(data.averagePrice))),
+                                );
+                              },
+                            );
+                          }
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                sortColumnIndex: _sortColumnIndex,
+                                sortAscending: _sortAscending,
+                                columns: [
+                                  DataColumn(
+                                    label: const Text('Nombre del artículo'),
+                                    onSort: (idx, asc) => _updateSort(idx, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('SKU'),
+                                    onSort: (idx, asc) => _updateSort(idx, asc),
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Cantidad vendida'),
+                                    onSort: (idx, asc) => _updateSort(idx, asc),
+                                    numeric: true,
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Importe'),
+                                    onSort: (idx, asc) => _updateSort(idx, asc),
+                                    numeric: true,
+                                  ),
+                                  DataColumn(
+                                    label: const Text('Precio promedio'),
+                                    onSort: (idx, asc) => _updateSort(idx, asc),
+                                    numeric: true,
+                                  ),
                                 ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
+                                rows: sortedList.map((data) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(data.name,
+                                            style: TextStyle(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.w500,
+                                            )),
+                                        onTap: data.id != null
+                                            ? () =>
+                                                _navigateToDetail(context, data)
+                                            : null,
+                                      ),
+                                      DataCell(Text(data.sku)),
+                                      DataCell(Text(
+                                          data.quantity.toStringAsFixed(2))),
+                                      DataCell(Text(currencyFormat
+                                          .format(data.totalAmount))),
+                                      DataCell(Text(currencyFormat
+                                          .format(data.averagePrice))),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          );
+                        },
                       ),
           ),
         ],

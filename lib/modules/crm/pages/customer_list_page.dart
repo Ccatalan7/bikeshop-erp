@@ -23,14 +23,15 @@ class _CustomerListPageState extends State<CustomerListPage> {
   List<Customer> _filteredCustomers = [];
   bool _isLoading = true;
   String _searchTerm = '';
-  
+
   // Pagination
   int _currentPage = 1;
   int _itemsPerPage = 50;
   int get _totalPages => (_filteredCustomers.length / _itemsPerPage).ceil();
   List<Customer> get _paginatedCustomers {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredCustomers.length);
+    final endIndex =
+        (startIndex + _itemsPerPage).clamp(0, _filteredCustomers.length);
     return _filteredCustomers.sublist(startIndex, endIndex);
   }
 
@@ -60,7 +61,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
         _currentPage = 1;
       });
     }
-    
+
     try {
       // Fetch fresh data (will use cache if still valid)
       final customers = await _customerService.getCustomers();
@@ -240,24 +241,55 @@ class _CustomerListPageState extends State<CustomerListPage> {
 
           // Stats
           if (!_isLoading && _customers.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  _buildStatItem('Total', _customers.length.toString()),
-                  const SizedBox(width: 24),
-                  _buildStatItem('Activos',
-                      _customers.where((c) => c.isActive).length.toString()),
-                  const SizedBox(width: 24),
-                  _buildStatItem(
-                      'Mostrando', _filteredCustomers.length.toString()),
-                ],
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 600;
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: isNarrow
+                      ? Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildStatItem(
+                                    'Total', _customers.length.toString()),
+                                _buildStatItem(
+                                    'Activos',
+                                    _customers
+                                        .where((c) => c.isActive)
+                                        .length
+                                        .toString()),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _buildStatItem('Mostrando',
+                                _filteredCustomers.length.toString()),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            _buildStatItem(
+                                'Total', _customers.length.toString()),
+                            const SizedBox(width: 24),
+                            _buildStatItem(
+                                'Activos',
+                                _customers
+                                    .where((c) => c.isActive)
+                                    .length
+                                    .toString()),
+                            const SizedBox(width: 24),
+                            _buildStatItem('Mostrando',
+                                _filteredCustomers.length.toString()),
+                          ],
+                        ),
+                );
+              },
             ),
           const SizedBox(height: 16),
 
@@ -524,75 +556,100 @@ class _CustomerListPageState extends State<CustomerListPage> {
     if (_totalPages <= 1) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: theme.dividerColor),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Page info
-          Text(
-            'Página $_currentPage de $_totalPages (${_filteredCustomers.length} clientes)',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(color: theme.dividerColor),
             ),
           ),
-          // Navigation controls
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.first_page),
-                onPressed: _currentPage > 1 ? _goToFirstPage : null,
-                tooltip: 'Primera página',
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: _currentPage > 1 ? _previousPage : null,
-                tooltip: 'Página anterior',
-              ),
-              // Page selector dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.dividerColor),
-                  borderRadius: BorderRadius.circular(4),
+          child: isMobile
+              ? Column(
+                  children: [
+                    Text(
+                      'Página $_currentPage de $_totalPages (${_filteredCustomers.length} clientes)',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: _buildPaginationButtons(theme),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Page info
+                    Text(
+                      'Página $_currentPage de $_totalPages (${_filteredCustomers.length} clientes)',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    // Navigation controls
+                    Row(
+                      children: _buildPaginationButtons(theme),
+                    ),
+                  ],
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _currentPage,
-                    items: List.generate(_totalPages, (index) {
-                      final pageNum = index + 1;
-                      return DropdownMenuItem(
-                        value: pageNum,
-                        child: Text('$pageNum'),
-                      );
-                    }),
-                    onChanged: (page) {
-                      if (page != null) _goToPage(page);
-                    },
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: _currentPage < _totalPages ? _nextPage : null,
-                tooltip: 'Página siguiente',
-              ),
-              IconButton(
-                icon: const Icon(Icons.last_page),
-                onPressed: _currentPage < _totalPages ? _goToLastPage : null,
-                tooltip: 'Última página',
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildPaginationButtons(ThemeData theme) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.first_page),
+        onPressed: _currentPage > 1 ? _goToFirstPage : null,
+        tooltip: 'Primera página',
+      ),
+      IconButton(
+        icon: const Icon(Icons.chevron_left),
+        onPressed: _currentPage > 1 ? _previousPage : null,
+        tooltip: 'Página anterior',
+      ),
+      // Page selector dropdown
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            value: _currentPage,
+            items: List.generate(_totalPages, (index) {
+              final pageNum = index + 1;
+              return DropdownMenuItem(
+                value: pageNum,
+                child: Text('$pageNum'),
+              );
+            }),
+            onChanged: (page) {
+              if (page != null) _goToPage(page);
+            },
+          ),
+        ),
+      ),
+      IconButton(
+        icon: const Icon(Icons.chevron_right),
+        onPressed: _currentPage < _totalPages ? _nextPage : null,
+        tooltip: 'Página siguiente',
+      ),
+      IconButton(
+        icon: const Icon(Icons.last_page),
+        onPressed: _currentPage < _totalPages ? _goToLastPage : null,
+        tooltip: 'Última página',
+      ),
+    ];
   }
 
   void _goToFirstPage() {

@@ -58,6 +58,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage> {
     final provider = context.watch<ChatProvider>();
     final activeId = provider.activeConversationId;
     final conversations = provider.conversations;
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
     // Find active conversation object
     Conversation? activeConversation;
@@ -67,6 +68,104 @@ class _EmployeeChatPageState extends State<EmployeeChatPage> {
       } catch (_) {
         // If not in current list (maybe filtered out), clear selection
       }
+    }
+
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Mensajes'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_comment_outlined),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => const NewChatDialog(),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadConversations,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Filter Tabs
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'all',
+                      label: Text('Todos'),
+                      icon: Icon(Icons.list),
+                    ),
+                    ButtonSegment(
+                      value: 'support',
+                      label: Text('Soporte'),
+                      icon: Icon(Icons.support_agent),
+                    ),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    _setFilter(newSelection.first);
+                  },
+                  showSelectedIcon: false,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ChatThreadList(
+                selectedId: activeId,
+                onSelected: (conversation) {
+                  context
+                      .read<ChatProvider>()
+                      .setActiveConversation(conversation.id);
+                  // Push to new screen
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => Scaffold(
+                        appBar: AppBar(
+                          title: Text(
+                            provider.getChatTitle(conversation),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                        body: ChatWindow(
+                          conversation: conversation,
+                          onReferenceTap: (ref) {
+                            // On mobile, show bottom sheet or dialog for reference
+                            // For now maybe simple dialog
+                            showDialog(
+                              context: context,
+                              builder: (context) => Dialog(
+                                child: SizedBox(
+                                  height: 400,
+                                  child: ContextSidePanel(
+                                    activeReference: ref,
+                                    onClose: () => Navigator.pop(context),
+                                    onToggleExpand: () {},
+                                    isExpanded: false,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return Scaffold(

@@ -79,77 +79,93 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
 
   Widget _buildContent(BuildContext context, Invoice invoice) {
     final theme = Theme.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        final padding =
+            isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24);
+
+        return SingleChildScrollView(
+          padding: padding,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isMobile ? double.infinity : 560,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton(
-                    onPressed: _returnToInvoice,
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Volver',
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
                     children: [
-                      Text(
-                        invoice.invoiceNumber.isNotEmpty
-                            ? 'Factura ${invoice.invoiceNumber}'
-                            : 'Factura',
-                        style: theme.textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      IconButton(
+                        onPressed: _returnToInvoice,
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Volver',
                       ),
-                      const SizedBox(height: 4),
-                      Text(invoice.customerName ?? 'Cliente'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              invoice.invoiceNumber.isNotEmpty
+                                  ? 'Factura ${invoice.invoiceNumber}'
+                                  : 'Factura',
+                              style: theme.textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              invoice.customerName ?? 'Cliente',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: padding, // Use same padding logic
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Saldo pendiente: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Total factura: ${ChileanUtils.formatCurrency(invoice.total)}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          if (invoice.dueDate != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Vence el ${ChileanUtils.formatDate(invoice.dueDate!)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  PaymentForm(
+                    invoice: invoice,
+                    dismissOnSubmit: false,
+                    onCompleted: () => _returnToInvoice(refresh: true),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Saldo pendiente: ${ChileanUtils.formatCurrency(invoice.balance)}',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Total factura: ${ChileanUtils.formatCurrency(invoice.total)}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      if (invoice.dueDate != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Vence el ${ChileanUtils.formatDate(invoice.dueDate!)}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              PaymentForm(
-                invoice: invoice,
-                dismissOnSubmit: false,
-                onCompleted: () => _returnToInvoice(refresh: true),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

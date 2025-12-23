@@ -25,7 +25,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
     final now = DateTime.now();
     _selectedYear = now.year;
     _selectedMonth = now.month;
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<F29Service>().loadDeclarations();
     });
@@ -55,7 +55,8 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.refresh),
                   label: const Text('Actualizar'),
-                  onPressed: () => context.read<F29Service>().loadDeclarations(),
+                  onPressed: () =>
+                      context.read<F29Service>().loadDeclarations(),
                 ),
               ],
             ),
@@ -63,44 +64,45 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
           // Content
           Expanded(
             child: Consumer<F29Service>(
-        builder: (context, service, child) {
-          if (service.isLoading) {
-            return const Center(child: BrandedLoading());
-          }
+              builder: (context, service, child) {
+                if (service.isLoading) {
+                  return const Center(child: BrandedLoading());
+                }
 
-          if (service.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error: ${service.error}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => service.loadDeclarations(),
-                    child: const Text('Reintentar'),
+                if (service.error != null) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error: ${service.error}'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => service.loadDeclarations(),
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSummaryCards(service),
+                      const SizedBox(height: 24),
+                      _buildGenerateSection(service),
+                      const SizedBox(height: 24),
+                      _buildDeclarationsList(service),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSummaryCards(service),
-                const SizedBox(height: 24),
-                _buildGenerateSection(service),
-                const SizedBox(height: 24),
-                _buildDeclarationsList(service),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
           ),
         ],
       ),
@@ -108,44 +110,84 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
   }
 
   Widget _buildSummaryCards(F29Service service) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildSummaryCard(
-            'Declaraciones Pendientes',
-            service.pendingDeclarations.length.toString(),
-            Icons.pending_actions,
-            Colors.orange,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildSummaryCard(
-            'Deuda Total',
-            _currencyFormat.format(service.totalDebt),
-            Icons.account_balance_wallet,
-            Colors.red,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildSummaryCard(
-            'Crédito IVA',
-            _currencyFormat.format(service.totalCredits),
-            Icons.savings,
-            Colors.green,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildSummaryCard(
-            'Atrasadas',
-            service.overdueDeclarations.length.toString(),
-            Icons.warning,
-            Colors.red,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          // Mobile/Tablet: Stack vertically
+          return Column(
+            children: [
+              _buildSummaryCard(
+                'Declaraciones Pendientes',
+                service.pendingDeclarations.length.toString(),
+                Icons.pending_actions,
+                Colors.orange,
+              ),
+              const SizedBox(height: 8),
+              _buildSummaryCard(
+                'Deuda Total',
+                _currencyFormat.format(service.totalDebt),
+                Icons.account_balance_wallet,
+                Colors.red,
+              ),
+              const SizedBox(height: 8),
+              _buildSummaryCard(
+                'Crédito IVA',
+                _currencyFormat.format(service.totalCredits),
+                Icons.savings,
+                Colors.green,
+              ),
+              const SizedBox(height: 8),
+              _buildSummaryCard(
+                'Atrasadas',
+                service.overdueDeclarations.length.toString(),
+                Icons.warning,
+                Colors.red,
+              ),
+            ],
+          );
+        }
+
+        // Desktop: Row
+        return Row(
+          children: [
+            Expanded(
+              child: _buildSummaryCard(
+                'Declaraciones Pendientes',
+                service.pendingDeclarations.length.toString(),
+                Icons.pending_actions,
+                Colors.orange,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildSummaryCard(
+                'Deuda Total',
+                _currencyFormat.format(service.totalDebt),
+                Icons.account_balance_wallet,
+                Colors.red,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildSummaryCard(
+                'Crédito IVA',
+                _currencyFormat.format(service.totalCredits),
+                Icons.savings,
+                Colors.green,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildSummaryCard(
+                'Atrasadas',
+                service.overdueDeclarations.length.toString(),
+                Icons.warning,
+                Colors.red,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -205,61 +247,126 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedMonth,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes',
-                      border: OutlineInputBorder(),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 600) {
+                  // Mobile
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<int>(
+                        value: _selectedMonth,
+                        decoration: const InputDecoration(
+                          labelText: 'Mes',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(12, (index) {
+                          final month = index + 1;
+                          final monthName = DateFormat.MMMM('es').format(
+                            DateTime(2000, month),
+                          );
+                          return DropdownMenuItem(
+                            value: month,
+                            child: Text(monthName),
+                          );
+                        }),
+                        onChanged: (value) =>
+                            setState(() => _selectedMonth = value),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        decoration: const InputDecoration(
+                          labelText: 'Año',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(5, (index) {
+                          final year = DateTime.now().year - index;
+                          return DropdownMenuItem(
+                            value: year,
+                            child: Text(year.toString()),
+                          );
+                        }),
+                        onChanged: (value) =>
+                            setState(() => _selectedYear = value),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: service.isLoading
+                            ? null
+                            : () => _generateF29(service),
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text('Generar F29'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                // Desktop
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedMonth,
+                        decoration: const InputDecoration(
+                          labelText: 'Mes',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(12, (index) {
+                          final month = index + 1;
+                          final monthName = DateFormat.MMMM('es').format(
+                            DateTime(2000, month),
+                          );
+                          return DropdownMenuItem(
+                            value: month,
+                            child: Text(monthName),
+                          );
+                        }),
+                        onChanged: (value) =>
+                            setState(() => _selectedMonth = value),
+                      ),
                     ),
-                    items: List.generate(12, (index) {
-                      final month = index + 1;
-                      final monthName = DateFormat.MMMM('es').format(
-                        DateTime(2000, month),
-                      );
-                      return DropdownMenuItem(
-                        value: month,
-                        child: Text(monthName),
-                      );
-                    }),
-                    onChanged: (value) => setState(() => _selectedMonth = value),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedYear,
-                    decoration: const InputDecoration(
-                      labelText: 'Año',
-                      border: OutlineInputBorder(),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        decoration: const InputDecoration(
+                          labelText: 'Año',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(5, (index) {
+                          final year = DateTime.now().year - index;
+                          return DropdownMenuItem(
+                            value: year,
+                            child: Text(year.toString()),
+                          );
+                        }),
+                        onChanged: (value) =>
+                            setState(() => _selectedYear = value),
+                      ),
                     ),
-                    items: List.generate(5, (index) {
-                      final year = DateTime.now().year - index;
-                      return DropdownMenuItem(
-                        value: year,
-                        child: Text(year.toString()),
-                      );
-                    }),
-                    onChanged: (value) => setState(() => _selectedYear = value),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  onPressed: service.isLoading
-                      ? null
-                      : () => _generateF29(service),
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text('Generar F29'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                    const SizedBox(width: 16),
+                    ElevatedButton.icon(
+                      onPressed: service.isLoading
+                          ? null
+                          : () => _generateF29(service),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Generar F29'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -399,7 +506,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
   Widget _buildDeclarationTile(F29Declaration f29) {
     Color statusColor;
     IconData statusIcon;
-    
+
     switch (f29.status) {
       case 'draft':
         statusColor = Colors.orange;

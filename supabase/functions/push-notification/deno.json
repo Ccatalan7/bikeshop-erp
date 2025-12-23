@@ -1,0 +1,9 @@
+{
+    "tasks": {
+        "start": "deno run --allow-net --allow-env index.ts"
+    },
+    "imports": {
+        "npm:@supabase/supabase-js@2": "npm:@supabase/supabase-js@2.39.3",
+        "npm:google-auth-library": "npm:google-auth-library@9.4.1"
+    }
+}

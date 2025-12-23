@@ -89,7 +89,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
       if (!mounted) return;
 
       if (kDebugMode) {
-        print('📊 Loaded ${attendances.length} attendances for ${employees.length} employees');
+        print(
+            '📊 Loaded ${attendances.length} attendances for ${employees.length} employees');
       }
 
       setState(() {
@@ -272,16 +273,16 @@ class _AttendancesPageState extends State<AttendancesPage> {
             final hrService = context.read<HRService>();
             final messenger = ScaffoldMessenger.of(context);
             final navigator = Navigator.of(context);
-            
+
             await hrService.deleteAttendance(attendance.id!);
-            
+
             // Close dialog first
             navigator.pop();
-            
+
             // Reload data
             if (!mounted) return;
             await _loadData();
-            
+
             // Show success message
             messenger.showSnackBar(
               const SnackBar(
@@ -383,81 +384,182 @@ class _AttendancesPageState extends State<AttendancesPage> {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _ViewButton(
-                label: 'Día',
-                isSelected: _currentView == TimeView.day,
-                onTap: () => _changeView(TimeView.day),
-              ),
-              const SizedBox(width: 8),
-              _ViewButton(
-                label: 'Semana',
-                isSelected: _currentView == TimeView.week,
-                onTap: () => _changeView(TimeView.week),
-              ),
-              const SizedBox(width: 8),
-              _ViewButton(
-                label: 'Mes',
-                isSelected: _currentView == TimeView.month,
-                onTap: () => _changeView(TimeView.month),
-              ),
-              const SizedBox(width: 8),
-              _ViewButton(
-                label: 'Trimestre',
-                isSelected: _currentView == TimeView.quarter,
-                onTap: () => _changeView(TimeView.quarter),
-              ),
-              const SizedBox(width: 8),
-              _ViewButton(
-                label: 'Año',
-                isSelected: _currentView == TimeView.year,
-                onTap: () => _changeView(TimeView.year),
-              ),
-              const Spacer(),
-              AppButton(
-                text: 'Nuevo',
-                onPressed: () {
-                  // TODO: Implement manual entry dialog
-                },
-                icon: Icons.add,
-                type: ButtonType.primary,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: _navigatePrevious,
-                tooltip: 'Período anterior',
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _navigateToday,
-                child: const Text('Hoy'),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: _navigateNext,
-                tooltip: 'Período siguiente',
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  _getDateRangeLabel(),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 600) {
+            // Mobile Layout
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Scrollable View Toggles
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ViewButton(
+                        label: 'Día',
+                        isSelected: _currentView == TimeView.day,
+                        onTap: () => _changeView(TimeView.day),
                       ),
+                      const SizedBox(width: 8),
+                      _ViewButton(
+                        label: 'Semana',
+                        isSelected: _currentView == TimeView.week,
+                        onTap: () => _changeView(TimeView.week),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewButton(
+                        label: 'Mes',
+                        isSelected: _currentView == TimeView.month,
+                        onTap: () => _changeView(TimeView.month),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewButton(
+                        label: 'Trimestre',
+                        isSelected: _currentView == TimeView.quarter,
+                        onTap: () => _changeView(TimeView.quarter),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewButton(
+                        label: 'Año',
+                        isSelected: _currentView == TimeView.year,
+                        onTap: () => _changeView(TimeView.year),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 16),
+
+                // Navigation & Label
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: _navigatePrevious,
+                      tooltip: 'Período anterior',
+                    ),
+                    Expanded(
+                      child: Text(
+                        _getDateRangeLabel(),
+                        textAlign: TextAlign.center,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: _navigateNext,
+                      tooltip: 'Período siguiente',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _navigateToday,
+                        child: const Text('Hoy'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppButton(
+                        text: 'Nuevo',
+                        onPressed: () {
+                          // TODO: Implement manual entry dialog
+                        },
+                        icon: Icons.add,
+                        type: ButtonType.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          // Desktop Layout
+          return Column(
+            children: [
+              Row(
+                children: [
+                  _ViewButton(
+                    label: 'Día',
+                    isSelected: _currentView == TimeView.day,
+                    onTap: () => _changeView(TimeView.day),
+                  ),
+                  const SizedBox(width: 8),
+                  _ViewButton(
+                    label: 'Semana',
+                    isSelected: _currentView == TimeView.week,
+                    onTap: () => _changeView(TimeView.week),
+                  ),
+                  const SizedBox(width: 8),
+                  _ViewButton(
+                    label: 'Mes',
+                    isSelected: _currentView == TimeView.month,
+                    onTap: () => _changeView(TimeView.month),
+                  ),
+                  const SizedBox(width: 8),
+                  _ViewButton(
+                    label: 'Trimestre',
+                    isSelected: _currentView == TimeView.quarter,
+                    onTap: () => _changeView(TimeView.quarter),
+                  ),
+                  const SizedBox(width: 8),
+                  _ViewButton(
+                    label: 'Año',
+                    isSelected: _currentView == TimeView.year,
+                    onTap: () => _changeView(TimeView.year),
+                  ),
+                  const Spacer(),
+                  AppButton(
+                    text: 'Nuevo',
+                    onPressed: () {
+                      // TODO: Implement manual entry dialog
+                    },
+                    icon: Icons.add,
+                    type: ButtonType.primary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: _navigatePrevious,
+                    tooltip: 'Período anterior',
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _navigateToday,
+                    child: const Text('Hoy'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: _navigateNext,
+                    tooltip: 'Período siguiente',
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      _getDateRangeLabel(),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -685,10 +787,10 @@ class _AttendancesPageState extends State<AttendancesPage> {
 
   String _getWeeklyTotalTooltip(Employee employee, List<DateTime> days) {
     final attendances = _attendancesByEmployee[employee.id] ?? [];
-    
+
     // Calculate total hours for the current view period
     Duration totalDuration = Duration.zero;
-    
+
     for (final attendance in attendances) {
       if (attendance.checkOut != null) {
         totalDuration += attendance.checkOut!.difference(attendance.checkIn);
@@ -696,10 +798,10 @@ class _AttendancesPageState extends State<AttendancesPage> {
         totalDuration += DateTime.now().difference(attendance.checkIn);
       }
     }
-    
+
     final hours = totalDuration.inHours;
     final minutes = totalDuration.inMinutes % 60;
-    
+
     String viewPeriod;
     if (_currentView == TimeView.week) {
       viewPeriod = 'Semana';
@@ -708,7 +810,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
     } else {
       viewPeriod = 'Año';
     }
-    
+
     return '$viewPeriod: ${hours}h ${minutes}m';
   }
 
@@ -747,7 +849,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
                         : Text(
                             employee.initials,
                             style: const TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.bold),
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
                           ),
                   ),
                   const SizedBox(width: 12),
@@ -836,7 +939,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
           String workedDuration;
           if (attendance.checkOut != null) {
             // Completed shift: calculate actual time worked
-            final duration = attendance.checkOut!.difference(attendance.checkIn);
+            final duration =
+                attendance.checkOut!.difference(attendance.checkIn);
             final hours = duration.inHours;
             final minutes = duration.inMinutes % 60;
             workedDuration = '$hours:${minutes.toString().padLeft(2, '0')}';

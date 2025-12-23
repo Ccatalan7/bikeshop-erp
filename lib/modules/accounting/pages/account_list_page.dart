@@ -24,7 +24,7 @@ class _AccountListPageState extends State<AccountListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
   AccountType? _selectedType;
-  Account? _selectedAccount;  // Added for split-pane view
+  Account? _selectedAccount; // Added for split-pane view
 
   @override
   void initState() {
@@ -91,83 +91,114 @@ class _AccountListPageState extends State<AccountListPage> {
 
   @override
   Widget build(BuildContext context) {
-    // When an account is selected, show split-pane layout
-    if (_selectedAccount != null) {
-      return MainLayout(
-        title: 'Plan de Cuentas',
-        body: Row(
-          children: [
-            // Left: Accounts list (narrower)
-            SizedBox(
-              width: 360,
-              child: Column(
-                children: [
-                  // Back button
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
-                      border: Border(
-                        bottom: BorderSide(color: Theme.of(context).dividerColor),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => setState(() => _selectedAccount = null),
-                          tooltip: 'Volver al listado',
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Volver al listado',
-                            style: TextStyle(fontWeight: FontWeight.w500),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        // On mobile, if account selected, show full screen ledger
+        if (isMobile && _selectedAccount != null) {
+          return Scaffold(
+            appBar: AppBar(
+              title:
+                  Text('${_selectedAccount!.code} - ${_selectedAccount!.name}'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _selectedAccount = null),
+              ),
+            ),
+            body: AccountLedgerPage(
+              key: ValueKey(_selectedAccount!.id),
+              account: _selectedAccount!,
+              isEmbedded: false,
+            ),
+          );
+        }
+
+        // Desktop split-view or Mobile list view
+        if (_selectedAccount != null && !isMobile) {
+          return MainLayout(
+            title: 'Plan de Cuentas',
+            body: Row(
+              children: [
+                // Left: Accounts list (narrower)
+                SizedBox(
+                  width: 360,
+                  child: Column(
+                    children: [
+                      // Back button
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          border: Border(
+                            bottom: BorderSide(
+                                color: Theme.of(context).dividerColor),
                           ),
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              onPressed: () =>
+                                  setState(() => _selectedAccount = null),
+                              tooltip: 'Volver al listado',
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Volver al listado',
+                                style: TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Original content (compact)
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _buildSearchAndFilterBar(
+                                isMobile: false), // Compact version
+                            Expanded(child: _buildAccountsList()),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  // Original content (compact)
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildSearchAndFilterBar(),
-                        Expanded(child: _buildAccountsList()),
-                      ],
-                    ),
+                ),
+                // Divider
+                VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Theme.of(context).dividerColor),
+                // Right: Account ledger
+                Expanded(
+                  child: AccountLedgerPage(
+                    key: ValueKey(_selectedAccount!.id),
+                    account: _selectedAccount!,
+                    isEmbedded: true,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            // Divider
-            VerticalDivider(width: 1, thickness: 1, color: Theme.of(context).dividerColor),
-            // Right: Account ledger
-            Expanded(
-              child: AccountLedgerPage(
-                key: ValueKey(_selectedAccount!.id), // Force rebuild when account changes
-                account: _selectedAccount!,
-                isEmbedded: true,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+          );
+        }
 
-    // Normal full-width layout
-    return MainLayout(
-      title: 'Plan de Cuentas',
-      body: Column(
-        children: [
-          _buildSearchAndFilterBar(),
-          Expanded(child: _buildAccountsList()),
-        ],
-      ),
+        // Normal full-width layout (List only)
+        return MainLayout(
+          title: 'Plan de Cuentas',
+          body: Column(
+            children: [
+              _buildSearchAndFilterBar(isMobile: isMobile),
+              Expanded(child: _buildAccountsList()),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildSearchAndFilterBar() {
+  Widget _buildSearchAndFilterBar({required bool isMobile}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -178,19 +209,16 @@ class _AccountListPageState extends State<AccountListPage> {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: SearchWidget(
-                  hintText: 'Buscar por código, nombre o descripción...',
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SearchWidget(
+                  hintText: 'Buscar...',
                   onSearchChanged: _onSearchChanged,
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<AccountType?>(
+                const SizedBox(height: 12),
+                DropdownButtonFormField<AccountType?>(
                   decoration: const InputDecoration(
                     labelText: 'Tipo',
                     border: OutlineInputBorder(),
@@ -214,15 +242,60 @@ class _AccountListPageState extends State<AccountListPage> {
                   ],
                   onChanged: _onTypeFilterChanged,
                 ),
-              ),
-              const SizedBox(width: 16),
-              AppButton(
-                text: 'Nueva Cuenta',
-                onPressed: () => context.push('/accounting/accounts/new'),
-                icon: Icons.add,
-              ),
-            ],
-          ),
+                const SizedBox(height: 12),
+                AppButton(
+                  text: 'Nueva Cuenta',
+                  onPressed: () => context.push('/accounting/accounts/new'),
+                  icon: Icons.add,
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: SearchWidget(
+                    hintText: 'Buscar por código, nombre o descripción...',
+                    onSearchChanged: _onSearchChanged,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<AccountType?>(
+                    decoration: const InputDecoration(
+                      labelText: 'Tipo',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    value: _selectedType,
+                    items: [
+                      const DropdownMenuItem<AccountType?>(
+                        value: null,
+                        child: Text('Todos'),
+                      ),
+                      ...AccountType.values.map(
+                        (type) => DropdownMenuItem<AccountType?>(
+                          value: type,
+                          child: Text(type.displayName),
+                        ),
+                      ),
+                    ],
+                    onChanged: _onTypeFilterChanged,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                AppButton(
+                  text: 'Nueva Cuenta',
+                  onPressed: () => context.push('/accounting/accounts/new'),
+                  icon: Icons.add,
+                ),
+              ],
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -279,7 +352,7 @@ class _AccountListPageState extends State<AccountListPage> {
       itemBuilder: (context, index) {
         final account = _filteredAccounts[index];
         final isSelected = _selectedAccount?.id == account.id;
-        
+
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           color: isSelected
@@ -290,149 +363,142 @@ class _AccountListPageState extends State<AccountListPage> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: _getTypeColor(account.type)
-                                      .withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _getTypeColor(account.type),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    account.code.substring(
-                                        0,
-                                        account.code.indexOf('.') != -1
-                                            ? account.code.indexOf('.')
-                                            : 1),
-                                    style: TextStyle(
-                                      color: _getTypeColor(account.type),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                '${account.code} - ${account.name}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _getTypeColor(account.type)
-                                              .withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: _getTypeColor(account.type),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          account.type.displayName,
-                                          style: TextStyle(
-                                            color: _getTypeColor(account.type),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: Colors.grey,
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          account.category.displayName,
-                                          style: TextStyle(
-                                            color: Colors.grey.shade600,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (account.description != null) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      account.description!,
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  switch (value) {
-                                    case 'edit':
-                                      context.push(
-                                          '/accounting/accounts/${account.id}/edit');
-                                      break;
-                                    case 'view':
-                                      _showAccountDetails(account);
-                                      break;
-                                    case 'delete':
-                                      _confirmDeleteAccount(account);
-                                      break;
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'view',
-                                    child: ListTile(
-                                      leading: Icon(Icons.visibility),
-                                      title: Text('Ver detalles'),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: ListTile(
-                                      leading: Icon(Icons.edit),
-                                      title: Text('Editar'),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: ListTile(
-                                      leading:
-                                          Icon(Icons.delete, color: Colors.red),
-                                      title: Text('Eliminar',
-                                          style: TextStyle(color: Colors.red)),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => _showAccountDetails(account),
-                            ),
-                          );
-                        },
-                      );
+                color: _getTypeColor(account.type).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _getTypeColor(account.type),
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  account.code.substring(
+                      0,
+                      account.code.indexOf('.') != -1
+                          ? account.code.indexOf('.')
+                          : 1),
+                  style: TextStyle(
+                    color: _getTypeColor(account.type),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            title: Text(
+              '${account.code} - ${account.name}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getTypeColor(account.type).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _getTypeColor(account.type),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        account.type.displayName,
+                        style: TextStyle(
+                          color: _getTypeColor(account.type),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.grey,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        account.category.displayName,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (account.description != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    account.description!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    context.push('/accounting/accounts/${account.id}/edit');
+                    break;
+                  case 'view':
+                    _showAccountDetails(account);
+                    break;
+                  case 'delete':
+                    _confirmDeleteAccount(account);
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'view',
+                  child: ListTile(
+                    leading: Icon(Icons.visibility),
+                    title: Text('Ver detalles'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit),
+                    title: Text('Editar'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete, color: Colors.red),
+                    title:
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () => _showAccountDetails(account),
+          ),
+        );
+      },
+    );
   }
 
   Color _getTypeColor(AccountType type) {

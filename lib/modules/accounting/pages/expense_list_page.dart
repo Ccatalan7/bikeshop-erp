@@ -58,8 +58,10 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     });
 
     try {
-      final categories = await _expenseService.fetchCategories(forceRefresh: refresh);
-      final expenses = await _expenseService.fetchExpenses(forceRefresh: refresh);
+      final categories =
+          await _expenseService.fetchCategories(forceRefresh: refresh);
+      final expenses =
+          await _expenseService.fetchExpenses(forceRefresh: refresh);
       setState(() {
         _categories = categories;
         _allExpenses = expenses;
@@ -86,20 +88,26 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           (expense.supplierName?.toLowerCase().contains(term) ?? false) ||
           (expense.reference?.toLowerCase().contains(term) ?? false);
 
-      final matchesPosting = _postingFilter == null ||
-          expense.postingStatus == _postingFilter;
+      final matchesPosting =
+          _postingFilter == null || expense.postingStatus == _postingFilter;
 
-      final matchesPayment = _paymentFilter == null ||
-          expense.paymentStatus == _paymentFilter;
+      final matchesPayment =
+          _paymentFilter == null || expense.paymentStatus == _paymentFilter;
 
       final matchesCategory = _selectedCategoryId == null ||
           expense.categoryId == _selectedCategoryId;
 
       final matchesDate = _dateRange == null ||
-          (expense.issueDate.isAfter(_dateRange!.start.subtract(const Duration(days: 1))) &&
-              expense.issueDate.isBefore(_dateRange!.end.add(const Duration(days: 1))));
+          (expense.issueDate.isAfter(
+                  _dateRange!.start.subtract(const Duration(days: 1))) &&
+              expense.issueDate
+                  .isBefore(_dateRange!.end.add(const Duration(days: 1))));
 
-      return matchesSearch && matchesPosting && matchesPayment && matchesCategory && matchesDate;
+      return matchesSearch &&
+          matchesPosting &&
+          matchesPayment &&
+          matchesCategory &&
+          matchesDate;
     }).toList();
 
     setState(() {
@@ -112,7 +120,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       .fold(0.0, (sum, expense) => sum + expense.balance);
 
   double get _scheduledTotal => _filteredExpenses
-      .where((expense) => expense.paymentStatus == ExpensePaymentStatus.scheduled)
+      .where(
+          (expense) => expense.paymentStatus == ExpensePaymentStatus.scheduled)
       .fold(0.0, (sum, expense) => sum + expense.balance);
 
   double get _partialTotal => _filteredExpenses
@@ -125,21 +134,27 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      title: 'Gastos',
-      body: Column(
-        children: [
-          _buildFiltersCard(context),
-          const SizedBox(height: 16),
-          _buildSummaryRow(context),
-          const SizedBox(height: 16),
-          Expanded(child: _buildContent(context)),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        return MainLayout(
+          title: 'Gastos',
+          body: Column(
+            children: [
+              _buildFiltersCard(context, isMobile),
+              const SizedBox(height: 16),
+              _buildSummaryRow(context),
+              const SizedBox(height: 16),
+              Expanded(child: _buildContent(context, isMobile)),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildFiltersCard(BuildContext context) {
+  Widget _buildFiltersCard(BuildContext context, bool isMobile) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Padding(
@@ -147,37 +162,81 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: SearchWidget(
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SearchWidget(
                     controller: _searchController,
-                    hintText: 'Buscar por número, proveedor o referencia...',
+                    hintText: 'Buscar...',
                     onSearchChanged: (_) => _applyFilters(),
                   ),
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  tooltip: 'Actualizar',
-                  onPressed: _isLoading ? null : () => _loadData(refresh: true),
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  text: 'Nuevo gasto',
-                  icon: Icons.add_circle_outline,
-                  onPressed: () {
-                    context
-                        .push<bool>('/accounting/expenses/new')
-                        .then((created) {
-                      if (created == true) {
-                        _loadData(refresh: true);
-                      }
-                    });
-                  },
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          text: 'Nuevo gasto',
+                          icon: Icons.add_circle_outline,
+                          onPressed: () {
+                            context
+                                .push<bool>('/accounting/expenses/new')
+                                .then((created) {
+                              if (created == true) {
+                                _loadData(refresh: true);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Actualizar',
+                        onPressed:
+                            _isLoading ? null : () => _loadData(refresh: true),
+                        icon: const Icon(Icons.refresh_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.surfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: SearchWidget(
+                      controller: _searchController,
+                      hintText: 'Buscar por número, proveedor o referencia...',
+                      onSearchChanged: (_) => _applyFilters(),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    tooltip: 'Actualizar',
+                    onPressed:
+                        _isLoading ? null : () => _loadData(refresh: true),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  AppButton(
+                    text: 'Nuevo gasto',
+                    icon: Icons.add_circle_outline,
+                    onPressed: () {
+                      context
+                          .push<bool>('/accounting/expenses/new')
+                          .then((created) {
+                        if (created == true) {
+                          _loadData(refresh: true);
+                        }
+                      });
+                    },
+                  ),
+                ],
+              ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -268,7 +327,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
     );
@@ -276,8 +336,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
 
   Widget _buildDateSelector(BuildContext context) {
     final label = _dateRange == null
-    ? 'Rango de fechas'
-    : '${ChileanUtils.formatDate(_dateRange!.start)} - ${ChileanUtils.formatDate(_dateRange!.end)}';
+        ? 'Rango de fechas'
+        : '${ChileanUtils.formatDate(_dateRange!.start)} - ${ChileanUtils.formatDate(_dateRange!.end)}';
 
     return SizedBox(
       width: 220,
@@ -337,7 +397,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     );
   }
 
-  Widget _buildContent(BuildContext context) {
+  Widget _buildContent(BuildContext context, bool isMobile) {
     if (_isLoading) {
       return const Center(child: BrandedLoading());
     }
@@ -347,7 +407,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: Theme.of(context).disabledColor),
+            Icon(Icons.receipt_long_outlined,
+                size: 64, color: Theme.of(context).disabledColor),
             const SizedBox(height: 12),
             Text(
               _searchController.text.isEmpty &&
@@ -374,6 +435,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         final expense = _filteredExpenses[index];
         return _ExpenseCard(
           expense: expense,
+          isMobile: isMobile,
           currencyFormat: _currencyFormat,
           onView: () {
             if (expense.id == null) return;
@@ -412,7 +474,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
               context: context,
               builder: (context) => AlertDialog(
                 title: const Text('Eliminar gasto'),
-                content: const Text('Esta acción es irreversible. ¿Deseas continuar?'),
+                content: const Text(
+                    'Esta acción es irreversible. ¿Deseas continuar?'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
@@ -527,6 +590,7 @@ class _ExpenseCard extends StatelessWidget {
   const _ExpenseCard({
     required this.expense,
     required this.currencyFormat,
+    this.isMobile = false,
     required this.onView,
     required this.onEdit,
     this.onPost,
@@ -536,6 +600,7 @@ class _ExpenseCard extends StatelessWidget {
 
   final Expense expense;
   final NumberFormat currencyFormat;
+  final bool isMobile;
   final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback? onPost;
@@ -551,53 +616,104 @@ class _ExpenseCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         expense.expenseNumber,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 4),
                       Text(
-                        expense.supplierName ?? 'Proveedor sin nombre',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        currencyFormat.format(expense.totalAmount),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
-                      if (expense.reference != null && expense.reference!.isNotEmpty)
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    expense.supplierName ?? 'Proveedor sin nombre',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  if (expense.reference != null &&
+                      expense.reference!.isNotEmpty)
+                    Text(
+                      'Ref: ${expense.reference!}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      Text(
+                        'Emitido: ${ChileanUtils.formatDate(expense.issueDate)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (expense.dueDate != null)
                         Text(
-                          expense.reference!,
+                          'Vence: ${ChileanUtils.formatDate(expense.dueDate!)}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      currencyFormat.format(expense.totalAmount),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                ],
+              )
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          expense.expenseNumber,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          expense.supplierName ?? 'Proveedor sin nombre',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        if (expense.reference != null &&
+                            expense.reference!.isNotEmpty)
+                          Text(
+                            expense.reference!,
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Emitido: ${ChileanUtils.formatDate(expense.issueDate)}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (expense.dueDate != null)
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
                       Text(
-                        'Vence: ${ChileanUtils.formatDate(expense.dueDate!)}',
+                        currencyFormat.format(expense.totalAmount),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Emitido: ${ChileanUtils.formatDate(expense.issueDate)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
-                  ],
-                ),
-              ],
-            ),
+                      if (expense.dueDate != null)
+                        Text(
+                          'Vence: ${ChileanUtils.formatDate(expense.dueDate!)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -616,7 +732,8 @@ class _ExpenseCard extends StatelessWidget {
                 if (expense.balance > 0)
                   Chip(
                     avatar: const Icon(Icons.account_balance_wallet_outlined),
-                    label: Text('Saldo: ${currencyFormat.format(expense.balance)}'),
+                    label: Text(
+                        'Saldo: ${currencyFormat.format(expense.balance)}'),
                   ),
                 if (expense.categoryId != null)
                   Chip(
@@ -706,7 +823,8 @@ class _ExpenseCard extends StatelessWidget {
     }
   }
 
-  static Color _postingStatusColor(BuildContext context, ExpensePostingStatus status) {
+  static Color _postingStatusColor(
+      BuildContext context, ExpensePostingStatus status) {
     switch (status) {
       case ExpensePostingStatus.draft:
         return Colors.orange.shade100;
@@ -732,7 +850,8 @@ class _ExpenseCard extends StatelessWidget {
     }
   }
 
-  static Color _paymentStatusColor(BuildContext context, ExpensePaymentStatus status) {
+  static Color _paymentStatusColor(
+      BuildContext context, ExpensePaymentStatus status) {
     switch (status) {
       case ExpensePaymentStatus.pending:
         return Colors.orange.shade50;

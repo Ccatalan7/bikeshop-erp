@@ -29,14 +29,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   List<Supplier> _suppliers = [];
   List<Map<String, dynamic>> _categories = [];
   bool _isArchiving = false; // Loading state for bulk operations
-  
+
   // Alternatives cache: itemId -> list of alternative products with stock
   final Map<String, List<Map<String, dynamic>>> _alternativesCache = {};
-  
+
   // Pagination
   static const int _itemsPerPage = 100;
   int _currentPage = 1;
-  
+
   // Cache for invoice data to avoid multiple queries
   final Map<String, Map<String, dynamic>> _invoiceCache = {};
 
@@ -55,24 +55,26 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       }
     });
   }
-  
+
   /// Preload all invoice data in one query
   Future<void> _preloadInvoiceData() async {
     final preloadStart = DateTime.now();
     debugPrint('⏱️ [INVOICE CACHE] Starting preload...');
-    
+
     try {
       final response = await Supabase.instance.client
           .from('purchase_invoices')
           .select('id, invoice_number, created_at');
-      
+
       for (final invoice in response) {
         _invoiceCache[invoice['id'] as String] = invoice;
       }
-      
-      final preloadTime = DateTime.now().difference(preloadStart).inMilliseconds;
-      debugPrint('✅ [INVOICE CACHE] Preloaded ${_invoiceCache.length} invoices in ${preloadTime}ms');
-      
+
+      final preloadTime =
+          DateTime.now().difference(preloadStart).inMilliseconds;
+      debugPrint(
+          '✅ [INVOICE CACHE] Preloaded ${_invoiceCache.length} invoices in ${preloadTime}ms');
+
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('❌ [INVOICE CACHE] Error: $e');
@@ -83,20 +85,23 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   Future<void> _initializeService() async {
     final pageStartTime = DateTime.now();
     debugPrint('⏱️ [PAGE] Smart Purchase List page mounted');
-    
+
     final service = context.read<SmartPurchaseListService>();
-    
+
     // If already initialized, data is instantly available
     if (service.isInitialized) {
-      final cachedTime = DateTime.now().difference(pageStartTime).inMilliseconds;
-      debugPrint('✅ [PAGE] Using cached data - ready instantly in ${cachedTime}ms');
+      final cachedTime =
+          DateTime.now().difference(pageStartTime).inMilliseconds;
+      debugPrint(
+          '✅ [PAGE] Using cached data - ready instantly in ${cachedTime}ms');
       return;
     }
-    
+
     // Initialize service asynchronously
     debugPrint('⏱️ [PAGE] Calling service.initialize()...');
     await service.initialize();
-    final totalPageTime = DateTime.now().difference(pageStartTime).inMilliseconds;
+    final totalPageTime =
+        DateTime.now().difference(pageStartTime).inMilliseconds;
     debugPrint('✅ [PAGE] TOTAL PAGE LOAD TIME: ${totalPageTime}ms');
   }
 
@@ -107,10 +112,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   DateTime? _getInvoiceCreatedDate(String? invoiceId) {
     if (invoiceId == null) return null;
-    
+
     final createdAtStr = _invoiceCache[invoiceId]?['created_at'] as String?;
     if (createdAtStr == null) return null;
-    
+
     try {
       return DateTime.parse(createdAtStr);
     } catch (e) {
@@ -128,17 +133,17 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ),
       ),
     );
-    
+
     // When returning, reload with 'received' filter
     if (mounted && result != null) {
       setState(() {
         _statusFilter = 'received';
       });
       context.read<SmartPurchaseListService>().loadItems(
-        statusFilter: 'received',
-        supplierFilter: _supplierFilter,
-        searchQuery: _searchQuery,
-      );
+            statusFilter: 'received',
+            supplierFilter: _supplierFilter,
+            searchQuery: _searchQuery,
+          );
     }
   }
 
@@ -171,7 +176,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
       if (mounted) {
         setState(() {
-          _categories = (response as List<dynamic>).cast<Map<String, dynamic>>();
+          _categories =
+              (response as List<dynamic>).cast<Map<String, dynamic>>();
         });
       }
     } catch (e) {
@@ -182,25 +188,28 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   String _getCategoryDisplayName() {
     if (_categoryFilter == 'all') return 'Todas';
     if (_categoryFilter == 'none') return 'Sin categoría';
-    
+
     final category = _categories.firstWhere(
       (cat) => cat['id'] == _categoryFilter,
       orElse: () => {},
     );
-    
-    return category['full_path'] as String? ?? category['name'] as String? ?? 'Seleccionar...';
+
+    return category['full_path'] as String? ??
+        category['name'] as String? ??
+        'Seleccionar...';
   }
 
   String _extractCategoryName(String? fullPath) {
     if (fullPath == null || fullPath.isEmpty) return 'Sin categoría';
-    
+
     // Extract last part after final " / "
     final parts = fullPath.split(' / ');
     return parts.last.trim();
   }
 
   /// Find alternative products with similar specs/keywords
-  Future<List<Map<String, dynamic>>> _findAlternatives(SmartPurchaseListItem item) async {
+  Future<List<Map<String, dynamic>>> _findAlternatives(
+      SmartPurchaseListItem item) async {
     // Check cache first
     if (_alternativesCache.containsKey(item.id)) {
       return _alternativesCache[item.id]!;
@@ -237,10 +246,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
       // Extract specs from original product (keywords already extracted above)
       final originalSpecs = _extractSpecs(item.productName);
-      
+
       // Debug: Log extracted specs
       debugPrint('🔍 Original: ${item.productName}');
-      debugPrint('   Sizes: ${originalSpecs['sizes']}, Widths: ${originalSpecs['widths']}, Keywords: $keywords');
+      debugPrint(
+          '   Sizes: ${originalSpecs['sizes']}, Widths: ${originalSpecs['widths']}, Keywords: $keywords');
 
       // Score and filter products based on SPEC matching (critical) + keyword overlap
       final alternatives = <Map<String, dynamic>>[];
@@ -248,9 +258,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         final productName = product['name'] as String;
         final productSpecs = _extractSpecs(productName);
         final productNameLower = productName.toLowerCase();
-        
+
         int specMatchScore = 0;
-        
+
         // CRITICAL: Match wheel sizes (must match!)
         if (originalSpecs['sizes']!.isNotEmpty) {
           for (final size in originalSpecs['sizes']!) {
@@ -260,7 +270,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             }
           }
         }
-        
+
         // Match widths (important for tubes/tires)
         if (originalSpecs['widths']!.isNotEmpty) {
           for (final width in originalSpecs['widths']!) {
@@ -270,7 +280,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             }
           }
         }
-        
+
         // Match diameters (important for axles, hubs)
         if (originalSpecs['diameters']!.isNotEmpty) {
           for (final diameter in originalSpecs['diameters']!) {
@@ -280,7 +290,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             }
           }
         }
-        
+
         // Match standards (QR, presta, etc.)
         if (originalSpecs['standards']!.isNotEmpty) {
           for (final standard in originalSpecs['standards']!) {
@@ -290,7 +300,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             }
           }
         }
-        
+
         // Secondary: keyword matching
         int keywordMatches = 0;
         for (final keyword in keywords) {
@@ -302,11 +312,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         // STRICT MATCHING: If original has wheel size, alternative MUST have matching size
         final originalHasSize = originalSpecs['sizes']!.isNotEmpty;
         final hasSpecMatch = specMatchScore >= 10; // Size match
-        final hasStrongKeywordMatch = keywordMatches >= (keywords.length * 0.6).ceil();
-        
+        final hasStrongKeywordMatch =
+            keywordMatches >= (keywords.length * 0.6).ceil();
+
         // If original has detectable wheel size, alternative MUST match it (no keyword fallback)
-        final isValidMatch = originalHasSize ? hasSpecMatch : (hasSpecMatch || hasStrongKeywordMatch);
-        
+        final isValidMatch = originalHasSize
+            ? hasSpecMatch
+            : (hasSpecMatch || hasStrongKeywordMatch);
+
         if (isValidMatch) {
           alternatives.add({
             'id': product['id'],
@@ -323,14 +336,15 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
       // Sort by spec score first (most important), then total score
       alternatives.sort((a, b) {
-        final specCompare = (b['spec_score'] as int).compareTo(a['spec_score'] as int);
+        final specCompare =
+            (b['spec_score'] as int).compareTo(a['spec_score'] as int);
         if (specCompare != 0) return specCompare;
         return (b['match_score'] as int).compareTo(a['match_score'] as int);
       });
 
       // Cache the results
       _alternativesCache[item.id] = alternatives;
-      
+
       return alternatives;
     } catch (e) {
       debugPrint('Error finding alternatives: $e');
@@ -341,17 +355,18 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   /// Extract meaningful keywords from product name
   List<String> _extractKeywords(String productName) {
     final name = productName.toLowerCase();
-    
+
     // Common words to ignore (Spanish and English) + TOO GENERIC product types
     final stopWords = {
       'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'para', 'con', 'sin',
       'the', 'a', 'an', 'and', 'or', 'of', 'for', 'with', 'without', 'in', 'on',
-      'camara', 'eje', 'valvula', 'tube', 'axle', 'valve', 'bicicleta', // Too generic
+      'camara', 'eje', 'valvula', 'tube', 'axle', 'valve',
+      'bicicleta', // Too generic
     };
 
     // Split by spaces and special characters
     final words = name.split(RegExp(r'[\s\-\/,]+'));
-    
+
     // Filter out stop words and very short words
     final keywords = words
         .where((word) => word.length >= 2 && !stopWords.contains(word))
@@ -368,19 +383,20 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       'diameters': [], // 9mm, 12mm, 15mm, etc.
       'standards': [], // QR, thru-axle, presta, schrader, etc.
     };
-    
+
     final nameLower = productName.toLowerCase();
-    
+
     // Extract wheel sizes - MUST be preceded by space/start and followed by space/X/x/-
     // This prevents matching "20" in "2.20" or "16" in "M16"
-    final sizePattern = RegExp(r'(?:^|\s)(16|20|24|26|27\.?5?|28|29|700c?)(?:\s|x|X|-|$)');
+    final sizePattern =
+        RegExp(r'(?:^|\s)(16|20|24|26|27\.?5?|28|29|700c?)(?:\s|x|X|-|$)');
     for (final match in sizePattern.allMatches(nameLower)) {
       final size = match.group(1)!;
       if (!specs['sizes']!.contains(size)) {
         specs['sizes']!.add(size);
       }
     }
-    
+
     // Extract widths (1.5, 1.95, 2.0, 2.125, etc.) - the SECOND number in "26 X 1.5" pattern
     final widthPattern = RegExp(r'\b(\d+\.?\d*)\s*(?:x|X|a)\s*(\d+\.?\d*)');
     final widthMatches = widthPattern.allMatches(nameLower);
@@ -392,7 +408,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         }
       }
     }
-    
+
     // Extract diameters (9mm, 12mm, 15mm, 33mm, 48mm, etc.)
     final diameterPattern = RegExp(r'\b(\d+)\s*mm\b');
     for (final match in diameterPattern.allMatches(nameLower)) {
@@ -401,20 +417,22 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         specs['diameters']!.add(diameter);
       }
     }
-    
+
     // Extract valve types and standards
     if (nameLower.contains('presta')) specs['standards']!.add('presta');
     if (nameLower.contains('schrader')) specs['standards']!.add('schrader');
     if (nameLower.contains('auto')) specs['standards']!.add('auto');
-    if (nameLower.contains('qr') || nameLower.contains('quick')) specs['standards']!.add('qr');
-    if (nameLower.contains('thru') || nameLower.contains('eje pasante')) specs['standards']!.add('thru-axle');
-    
+    if (nameLower.contains('qr') || nameLower.contains('quick'))
+      specs['standards']!.add('qr');
+    if (nameLower.contains('thru') || nameLower.contains('eje pasante'))
+      specs['standards']!.add('thru-axle');
+
     return specs;
   }
 
   Future<void> _showCategoryPicker(BuildContext context) async {
     String searchQuery = '';
-    
+
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -422,7 +440,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           final filteredCategories = searchQuery.isEmpty
               ? _categories
               : _categories.where((cat) {
-                  final fullPath = (cat['full_path'] as String? ?? '').toLowerCase();
+                  final fullPath =
+                      (cat['full_path'] as String? ?? '').toLowerCase();
                   final name = (cat['name'] as String? ?? '').toLowerCase();
                   final query = searchQuery.toLowerCase();
                   return fullPath.contains(query) || name.contains(query);
@@ -450,7 +469,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Categories list
                   Expanded(
                     child: ListView(
@@ -482,15 +501,17 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         const Divider(),
                         ...filteredCategories.map((category) {
                           final categoryId = category['id'] as String;
-                          final fullPath = category['full_path'] as String? ?? category['name'] as String;
+                          final fullPath = category['full_path'] as String? ??
+                              category['name'] as String;
                           final name = category['name'] as String;
-                          
+
                           return ListTile(
                             leading: const Icon(Icons.folder),
                             title: Text(name),
                             subtitle: Text(
                               fullPath,
-                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.grey[600]),
                             ),
                             selected: _categoryFilter == categoryId,
                             onTap: () {
@@ -576,14 +597,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Summary
               Text(
                 'Se encontraron ${alternatives.length} alternativas con $totalStock unidades en total:',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              
+
               // Alternatives list
               Expanded(
                 child: ListView.builder(
@@ -592,11 +613,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     final alt = alternatives[index];
                     final stock = alt['stock'] as int;
                     final matchScore = alt['match_score'] as int;
-                    
+
                     return Card(
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: stock > 10 ? Colors.green : Colors.orange,
+                          backgroundColor:
+                              stock > 10 ? Colors.green : Colors.orange,
                           child: Text(
                             '$stock',
                             style: const TextStyle(
@@ -614,12 +636,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (alt['sku'] != null)
-                              Text('SKU: ${alt['sku']}', style: const TextStyle(fontSize: 11)),
+                              Text('SKU: ${alt['sku']}',
+                                  style: const TextStyle(fontSize: 11)),
                             Text(
                               'Stock disponible: $stock unidades',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: stock > 10 ? Colors.green : Colors.orange,
+                                color:
+                                    stock > 10 ? Colors.green : Colors.orange,
                               ),
                             ),
                           ],
@@ -631,13 +655,15 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                             if (alt['price'] != null)
                               Text(
                                 '\$${(alt['price'] as num).toStringAsFixed(0)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: List.generate(
                                 matchScore.clamp(0, 5),
-                                (i) => const Icon(Icons.star, size: 12, color: Colors.amber),
+                                (i) => const Icon(Icons.star,
+                                    size: 12, color: Colors.amber),
                               ),
                             ),
                           ],
@@ -664,7 +690,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   Widget build(BuildContext context) {
     final buildStart = DateTime.now();
     debugPrint('⏱️ [PAGE BUILD] Starting build...');
-    
+
     final widget = Stack(
       children: [
         MainLayout(
@@ -672,204 +698,350 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           child: Column(
             children: [
               // Top actions bar
-              Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Recargar'),
-                  onPressed: () async {
-                    try {
-                      await context.read<SmartPurchaseListService>().refresh();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✅ Lista actualizada'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.scanner),
-                  label: const Text('Escanear Stock Bajo'),
-                  onPressed: _scanLowStockProducts,
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.delete_sweep),
-                  label: const Text('Limpiar Todo'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: _cleanupAllData,
-                ),
-                const SizedBox(width: 8),
-                FloatingActionButton.extended(
-                  onPressed: _showAddItemDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar Producto'),
-                ),
-              ],
-            ),
-          ),
-          // Main content
-          Expanded(
-            child: Consumer<SmartPurchaseListService>(
-              builder: (context, service, _) {
-                if (service.isLoading) {
-                  return const Center(child: BrandedLoading());
-                }
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 600;
 
-                if (service.error != null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  if (isMobile) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // More Actions Menu
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (value) async {
+                              switch (value) {
+                                case 'refresh':
+                                  await context
+                                      .read<SmartPurchaseListService>()
+                                      .refresh();
+                                  break;
+                                case 'scan':
+                                  _scanLowStockProducts();
+                                  break;
+                                case 'clear':
+                                  _cleanupAllData();
+                                  break;
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'refresh',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.refresh, color: Colors.grey),
+                                    SizedBox(width: 8),
+                                    Text('Recargar'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'scan',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.scanner, color: Colors.grey),
+                                    SizedBox(width: 8),
+                                    Text('Escanear Stock Bajo'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'clear',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_sweep, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Limpiar Todo',
+                                        style: TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+
+                          // Add Button (Icon only on mobile)
+                          FloatingActionButton.small(
+                            onPressed: _showAddItemDialog,
+                            child: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  // Desktop View
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text('Error: ${service.error}'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => service.refresh(),
-                          child: const Text('Reintentar'),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Recargar'),
+                          onPressed: () async {
+                            try {
+                              await context
+                                  .read<SmartPurchaseListService>()
+                                  .refresh();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('✅ Lista actualizada'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.scanner),
+                          label: const Text('Escanear Stock Bajo'),
+                          onPressed: _scanLowStockProducts,
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.delete_sweep),
+                          label: const Text('Limpiar Todo'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: _cleanupAllData,
+                        ),
+                        const SizedBox(width: 8),
+                        FloatingActionButton.extended(
+                          onPressed: _showAddItemDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Agregar Producto'),
                         ),
                       ],
                     ),
                   );
-                }
+                },
+              ),
+              // Main content
+              Expanded(
+                child: Consumer<SmartPurchaseListService>(
+                  builder: (context, service, _) {
+                    if (service.isLoading) {
+                      return const Center(child: BrandedLoading());
+                    }
 
-                final filteredItems = _getFilteredItems(service);
+                    if (service.error != null) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Error: ${service.error}'),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () => service.refresh(),
+                              child: const Text('Reintentar'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
 
-                return SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        // Dashboard Summary
-                        _buildDashboard(service),
-                        const SizedBox(height: 16),
-                        
-                        // Filters and Search
-                        _buildFilters(service),
-                        const SizedBox(height: 16),
-                        
-                        // Bulk Actions
-                        if (_selectedItems.isNotEmpty) _buildBulkActions(),
-                        if (_selectedItems.isNotEmpty) const SizedBox(height: 16),
-                        
-                        // Items List
-                        filteredItems.isEmpty
-                            ? _buildEmptyState()
-                            : _buildItemsList(service),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                    final filteredItems = _getFilteredItems(service);
+
+                    return SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            // Dashboard Summary
+                            _buildDashboard(service),
+                            const SizedBox(height: 16),
+
+                            // Filters and Search
+                            _buildFilters(service),
+                            const SizedBox(height: 16),
+
+                            // Bulk Actions
+                            if (_selectedItems.isNotEmpty) _buildBulkActions(),
+                            if (_selectedItems.isNotEmpty)
+                              const SizedBox(height: 16),
+
+                            // Items List
+                            filteredItems.isEmpty
+                                ? _buildEmptyState()
+                                : _buildItemsList(service),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-    
-    // Loading overlay for bulk operations
-    if (_isArchiving)
-      Container(
-        color: Colors.black54,
-        child: const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Archivando productos...',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+
+        // Loading overlay for bulk operations
+        if (_isArchiving)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Archivando productos...',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    ],
+      ],
     );
-    
+
     final buildTime = DateTime.now().difference(buildStart).inMilliseconds;
     debugPrint('✅ [PAGE BUILD] Completed in ${buildTime}ms');
-    
+
     return widget;
   }
 
   Widget _buildDashboard(SmartPurchaseListService service) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Resumen',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        if (isMobile) {
+          // Mobile: 2x2 Grid or vertical stack depending on space
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Resumen',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 1.8,
+                    children: [
+                      _buildDashboardCard(
+                        'Pendientes',
+                        service.totalPendingItems.toString(),
+                        Icons.shopping_cart,
+                        Colors.blue,
+                        isCompact: true,
+                      ),
+                      _buildDashboardCard(
+                        'Urgentes',
+                        service.urgentItemsCount.toString(),
+                        Icons.priority_high,
+                        Colors.red,
+                        isCompact: true,
+                      ),
+                      _buildDashboardCard(
+                        'Sin Stock',
+                        service.outOfStockCount.toString(),
+                        Icons.warning,
+                        Colors.orange,
+                        isCompact: true,
+                      ),
+                      _buildDashboardCard(
+                        'Proveedor Top',
+                        service.topSupplier ?? 'N/A',
+                        Icons.business,
+                        Colors.green,
+                        isNumber: false,
+                        isCompact: true,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            Row(
+          );
+        }
+
+        // Desktop: Row
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _buildDashboardCard(
-                    'Total Pendiente',
-                    service.totalPendingItems.toString(),
-                    Icons.shopping_cart,
-                    Colors.blue,
-                  ),
+                const Text(
+                  'Resumen',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDashboardCard(
-                    'Urgentes',
-                    service.urgentItemsCount.toString(),
-                    Icons.priority_high,
-                    Colors.red,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDashboardCard(
-                    'Sin Stock',
-                    service.outOfStockCount.toString(),
-                    Icons.warning,
-                    Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDashboardCard(
-                    'Proveedor Principal',
-                    service.topSupplier ?? 'N/A',
-                    Icons.business,
-                    Colors.green,
-                    isNumber: false,
-                  ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDashboardCard(
+                        'Total Pendiente',
+                        service.totalPendingItems.toString(),
+                        Icons.shopping_cart,
+                        Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildDashboardCard(
+                        'Urgentes',
+                        service.urgentItemsCount.toString(),
+                        Icons.priority_high,
+                        Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildDashboardCard(
+                        'Sin Stock',
+                        service.outOfStockCount.toString(),
+                        Icons.warning,
+                        Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildDashboardCard(
+                        'Proveedor Principal',
+                        service.topSupplier ?? 'N/A',
+                        Icons.business,
+                        Colors.green,
+                        isNumber: false,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -879,10 +1051,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     IconData icon,
     Color color, {
     bool isNumber = true,
+    bool isCompact = false,
   }) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isCompact ? 12 : 16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
@@ -890,27 +1063,30 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
+              Icon(icon, color: color, size: isCompact ? 16 : 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: isCompact ? 11 : 12,
                     color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isCompact ? 4 : 8),
           Text(
             value,
             style: TextStyle(
-              fontSize: isNumber ? 24 : 14,
+              fontSize:
+                  isNumber ? (isCompact ? 20 : 24) : (isCompact ? 12 : 14),
               fontWeight: FontWeight.bold,
               color: color,
             ),
@@ -923,154 +1099,380 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   }
 
   Widget _buildFilters(SmartPurchaseListService service) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = constraints.maxWidth < 800;
+
+      if (isMobile) {
+        return Row(
           children: [
-            // First row: Search and Status
-            Row(
-              children: [
-                // Search
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar producto',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: (value) {
-                      // Only update local state - client-side filtering via _getFilteredItems()
-                      setState(() {
-                        _searchQuery = value;
-                        _currentPage = 1; // Reset to first page
-                      });
-                    },
+            Expanded(
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Buscar producto...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                    _currentPage = 1;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => _showMobileFilters(service),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.5),
                   ),
                 ),
-                const SizedBox(width: 16),
-                
-                // Status Filter
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                child: Icon(
+                  Icons.tune,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
+      // Desktop Filters (Original Layout)
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // First row: Search and Status
+              Row(
+                children: [
+                  // Search
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar producto',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (value) {
+                        // Only update local state - client-side filtering via _getFilteredItems()
+                        setState(() {
+                          _searchQuery = value;
+                          _currentPage = 1; // Reset to first page
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // Status Filter
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _statusFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(
+                            value: 'pending', child: Text('Pendiente')),
+                        DropdownMenuItem(
+                            value: 'ordered', child: Text('Ordenado')),
+                        DropdownMenuItem(
+                            value: 'received', child: Text('Recibido')),
+                        DropdownMenuItem(
+                            value: 'ignored', child: Text('Ignorado')),
+                        DropdownMenuItem(
+                            value: 'archived', child: Text('Archivado')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _statusFilter = value;
+                            _currentPage = 1; // Reset to first page
+                          });
+                          service.loadItems(
+                            statusFilter: value,
+                            supplierFilter: _supplierFilter,
+                            searchQuery: _searchQuery,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Second row: Supplier and Priority
+              Row(
+                children: [
+                  // Supplier Filter
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _supplierFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Proveedor',
+                        prefixIcon: Icon(Icons.business),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                            value: 'all', child: Text('Todos')),
+                        const DropdownMenuItem(
+                            value: 'none', child: Text('Sin proveedor')),
+                        ..._suppliers.map((supplier) => DropdownMenuItem(
+                              value: supplier.id,
+                              child: Text(supplier.name),
+                            )),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _supplierFilter = value;
+                            _currentPage = 1; // Reset to first page
+                          });
+                          service.loadItems(
+                            statusFilter: _statusFilter,
+                            supplierFilter:
+                                value, // Pass the value as-is ('all', 'none', or supplier_id)
+                            searchQuery: _searchQuery,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // Priority Filter
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _priorityFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Prioridad',
+                        prefixIcon: Icon(Icons.priority_high),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todas')),
+                        DropdownMenuItem(
+                            value: 'critical', child: Text('Crítica (80+)')),
+                        DropdownMenuItem(
+                            value: 'high', child: Text('Alta (60-80)')),
+                        DropdownMenuItem(
+                            value: 'medium', child: Text('Media (40-60)')),
+                        DropdownMenuItem(
+                            value: 'low', child: Text('Baja (<40)')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _priorityFilter = value;
+                            _currentPage = 1; // Reset to first page
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Third row: Category filter
+              Row(
+                children: [
+                  // Category Filter (searchable)
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _showCategoryPicker(context),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Categoría',
+                          prefixIcon: Icon(Icons.category),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        child: Text(
+                          _getCategoryDisplayName(),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                      flex: 1, child: SizedBox()), // Spacer to match layout
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  void _showMobileFilters(SmartPurchaseListService service) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            // Reset filters
+                            _statusFilter = 'pending';
+                            _supplierFilter = 'all';
+                            _priorityFilter = 'all';
+                            _categoryFilter = 'all';
+                            _currentPage = 1;
+                            _searchQuery = '';
+                          });
+                          service.loadItems(
+                            statusFilter: 'pending',
+                            supplierFilter: 'all',
+                            searchQuery: '',
+                          );
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Restablecer'),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 16),
+
+                  // Status
+                  DropdownButtonFormField<String>(
                     value: _statusFilter,
                     decoration: const InputDecoration(
                       labelText: 'Estado',
                       border: OutlineInputBorder(),
-                      isDense: true,
                     ),
                     items: const [
                       DropdownMenuItem(value: 'all', child: Text('Todos')),
-                      DropdownMenuItem(value: 'pending', child: Text('Pendiente')),
-                      DropdownMenuItem(value: 'ordered', child: Text('Ordenado')),
-                      DropdownMenuItem(value: 'received', child: Text('Recibido')),
-                      DropdownMenuItem(value: 'ignored', child: Text('Ignorado')),
-                      DropdownMenuItem(value: 'archived', child: Text('Archivado')),
+                      DropdownMenuItem(
+                          value: 'pending', child: Text('Pendiente')),
+                      DropdownMenuItem(
+                          value: 'ordered', child: Text('Ordenado')),
+                      DropdownMenuItem(
+                          value: 'received', child: Text('Recibido')),
+                      DropdownMenuItem(
+                          value: 'ignored', child: Text('Ignorado')),
+                      DropdownMenuItem(
+                          value: 'archived', child: Text('Archivado')),
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          _statusFilter = value;
-                          _currentPage = 1; // Reset to first page
-                        });
-                        service.loadItems(
-                          statusFilter: value,
-                          supplierFilter: _supplierFilter,
-                          searchQuery: _searchQuery,
-                        );
+                        setModalState(() => _statusFilter = value);
+                        setState(() => _statusFilter = value);
                       }
                     },
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // Second row: Supplier and Priority
-            Row(
-              children: [
-                // Supplier Filter
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                  const SizedBox(height: 16),
+
+                  // Supplier
+                  DropdownButtonFormField<String>(
                     value: _supplierFilter,
                     decoration: const InputDecoration(
                       labelText: 'Proveedor',
-                      prefixIcon: Icon(Icons.business),
                       border: OutlineInputBorder(),
-                      isDense: true,
                     ),
                     items: [
-                      const DropdownMenuItem(value: 'all', child: Text('Todos')),
-                      const DropdownMenuItem(value: 'none', child: Text('Sin proveedor')),
+                      const DropdownMenuItem(
+                          value: 'all', child: Text('Todos')),
+                      const DropdownMenuItem(
+                          value: 'none', child: Text('Sin proveedor')),
                       ..._suppliers.map((supplier) => DropdownMenuItem(
-                        value: supplier.id,
-                        child: Text(supplier.name),
-                      )),
+                            value: supplier.id,
+                            child: Text(supplier.name),
+                          )),
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          _supplierFilter = value;
-                          _currentPage = 1; // Reset to first page
-                        });
-                        service.loadItems(
-                          statusFilter: _statusFilter,
-                          supplierFilter: value,  // Pass the value as-is ('all', 'none', or supplier_id)
-                          searchQuery: _searchQuery,
-                        );
+                        setModalState(() => _supplierFilter = value);
+                        setState(() => _supplierFilter = value);
                       }
                     },
                   ),
-                ),
-                const SizedBox(width: 16),
-                
-                // Priority Filter
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                  const SizedBox(height: 16),
+
+                  // Priority
+                  DropdownButtonFormField<String>(
                     value: _priorityFilter,
                     decoration: const InputDecoration(
                       labelText: 'Prioridad',
-                      prefixIcon: Icon(Icons.priority_high),
                       border: OutlineInputBorder(),
-                      isDense: true,
                     ),
                     items: const [
                       DropdownMenuItem(value: 'all', child: Text('Todas')),
-                      DropdownMenuItem(value: 'critical', child: Text('Crítica (80+)')),
-                      DropdownMenuItem(value: 'high', child: Text('Alta (60-80)')),
-                      DropdownMenuItem(value: 'medium', child: Text('Media (40-60)')),
+                      DropdownMenuItem(
+                          value: 'critical', child: Text('Crítica (80+)')),
+                      DropdownMenuItem(
+                          value: 'high', child: Text('Alta (60-80)')),
+                      DropdownMenuItem(
+                          value: 'medium', child: Text('Media (40-60)')),
                       DropdownMenuItem(value: 'low', child: Text('Baja (<40)')),
                     ],
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          _priorityFilter = value;
-                          _currentPage = 1; // Reset to first page
-                        });
+                        setModalState(() => _priorityFilter = value);
+                        setState(() => _priorityFilter = value);
                       }
                     },
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // Third row: Category filter
-            Row(
-              children: [
-                // Category Filter (searchable)
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _showCategoryPicker(context),
+                  const SizedBox(height: 16),
+
+                  // Category
+                  InkWell(
+                    onTap: () async {
+                      Navigator.pop(
+                          context); // Close sheet temporarily to show dialog
+                      await _showCategoryPicker(context);
+                      // Re-open sheet logic would be complex here, so we just apply and let user reopen if needed
+                      // Alternatively, we could implement an inline category picker or verify if _showCategoryPicker supports being called from here
+                    },
                     child: InputDecorator(
                       decoration: const InputDecoration(
                         labelText: 'Categoría',
-                        prefixIcon: Icon(Icons.category),
                         border: OutlineInputBorder(),
-                        isDense: true,
+                        suffixIcon: Icon(Icons.arrow_forward_ios, size: 16),
                       ),
                       child: Text(
                         _getCategoryDisplayName(),
@@ -1078,11 +1480,26 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                       ),
                     ),
                   ),
-                ),
-                const Expanded(flex: 1, child: SizedBox()), // Spacer to match layout
-              ],
-            ),
-          ],
+
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    onPressed: () {
+                      service.loadItems(
+                        statusFilter: _statusFilter,
+                        supplierFilter: _supplierFilter,
+                        searchQuery: _searchQuery,
+                      );
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Aplicar Filtros'),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -1090,7 +1507,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   Widget _buildBulkActions() {
     final isArchivedView = _statusFilter == 'archived';
-    
+
     return Card(
       color: Theme.of(context).primaryColor.withOpacity(0.1),
       child: Padding(
@@ -1112,8 +1529,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               TextButton.icon(
                 onPressed: _generatePurchaseOrder,
                 icon: const Icon(Icons.shopping_bag),
-              label: const Text('Generar Orden de Compra'),
-            ),
+                label: const Text('Generar Orden de Compra'),
+              ),
             const SizedBox(width: 8),
             TextButton.icon(
               onPressed: _generateExpense,
@@ -1137,7 +1554,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     );
   }
 
-  List<SmartPurchaseListItem> _getFilteredItems(SmartPurchaseListService service) {
+  List<SmartPurchaseListItem> _getFilteredItems(
+      SmartPurchaseListService service) {
     // Get items with current filters applied
     var items = service.getFilteredItems(
       statusFilter: _statusFilter,
@@ -1145,7 +1563,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       categoryFilter: _categoryFilter,
       searchQuery: _searchQuery,
     );
-    
+
     // Apply priority filter
     if (_priorityFilter != 'all') {
       items = items.where((item) {
@@ -1164,27 +1582,28 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         }
       }).toList();
     }
-    
+
     return items;
   }
-  
+
   /// Get paginated items for current page
-  List<SmartPurchaseListItem> _getPaginatedItems(List<SmartPurchaseListItem> allItems) {
+  List<SmartPurchaseListItem> _getPaginatedItems(
+      List<SmartPurchaseListItem> allItems) {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     final endIndex = (startIndex + _itemsPerPage).clamp(0, allItems.length);
-    
+
     if (startIndex >= allItems.length) {
       return [];
     }
-    
+
     return allItems.sublist(startIndex, endIndex);
   }
-  
+
   /// Get total number of pages
   int _getTotalPages(int totalItems) {
     return (totalItems / _itemsPerPage).ceil();
   }
-  
+
   /// Go to specific page
   void _goToPage(int page) {
     setState(() {
@@ -1200,34 +1619,329 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final totalItems = filteredItems.length;
     final totalPages = _getTotalPages(totalItems);
     final paginatedItems = _getPaginatedItems(filteredItems);
-    
-    debugPrint('⏱️ [LIST BUILD] Building page $_currentPage/$totalPages with ${paginatedItems.length} items (${totalItems} total)...');
 
-    final widget = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Pagination info and controls at top
-        if (totalItems > _itemsPerPage) ...[
-          _buildPaginationControls(totalItems, totalPages),
-          const SizedBox(height: 8),
-        ],
-        
-        _buildTableHeader(paginatedItems, filteredItems),
-        ...paginatedItems.map((item) => _buildItemRow(item, service)),
-        
-        // Pagination controls at bottom
-        if (totalItems > _itemsPerPage) ...[
-          const SizedBox(height: 16),
-          _buildPaginationControls(totalItems, totalPages),
-        ],
-      ],
+    debugPrint(
+        '⏱️ [LIST BUILD] Building page $_currentPage/$totalPages with ${paginatedItems.length} items (${totalItems} total)...');
+
+    final widget = LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        // Common Pagination Controls
+        final paginationControls = totalItems > _itemsPerPage
+            ? _buildPaginationControls(totalItems, totalPages)
+            : const SizedBox.shrink();
+
+        if (isMobile) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (totalItems > _itemsPerPage) ...[
+                paginationControls,
+                const SizedBox(height: 8),
+              ],
+
+              // Mobile Cards List
+              ...paginatedItems
+                  .map((item) => _buildMobileItemCard(item, service)),
+
+              if (totalItems > _itemsPerPage) ...[
+                const SizedBox(height: 16),
+                paginationControls,
+              ],
+            ],
+          );
+        }
+
+        // Desktop Table View
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Pagination info and controls at top
+            if (totalItems > _itemsPerPage) ...[
+              paginationControls,
+              const SizedBox(height: 8),
+            ],
+
+            _buildTableHeader(paginatedItems, filteredItems),
+            ...paginatedItems.map((item) => _buildItemRow(item, service)),
+
+            // Pagination controls at bottom
+            if (totalItems > _itemsPerPage) ...[
+              const SizedBox(height: 16),
+              paginationControls,
+            ],
+          ],
+        );
+      },
     );
-    
+
     final buildTime = DateTime.now().difference(buildStart).inMilliseconds;
     debugPrint('✅ [LIST BUILD] Completed in ${buildTime}ms');
-    
+
     return widget;
+  }
+
+  Widget _buildMobileItemCard(
+      SmartPurchaseListItem item, SmartPurchaseListService service) {
+    final isSelected = _selectedItems.contains(item.id);
+    final theme = Theme.of(context);
+    final isReceivedView = _statusFilter == 'received';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isSelected
+            ? BorderSide(color: theme.primaryColor, width: 2)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        onTap: item.isPending
+            ? () {
+                setState(() {
+                  if (isSelected) {
+                    _selectedItems.remove(item.id);
+                    _selectAll = false;
+                  } else {
+                    _selectedItems.add(item.id);
+                  }
+                });
+              }
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: Priority, Name, Selection Checkbox
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isReceivedView)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8, top: 2),
+                      child: _buildPriorityBadge(
+                          item.priority, item.priorityLevel,
+                          isCompact: true),
+                    ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.productName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (item.productSku != null)
+                          Text(
+                            item.productSku!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.textTheme.bodySmall?.color,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (!isReceivedView && item.isPending)
+                    Checkbox(
+                      value: isSelected,
+                      onChanged: (value) {
+                        setState(() {
+                          if (value == true) {
+                            _selectedItems.add(item.id);
+                          } else {
+                            _selectedItems.remove(item.id);
+                            _selectAll = false;
+                          }
+                        });
+                      },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                ],
+              ),
+              const Divider(),
+
+              // Key Metrics Grid
+              Row(
+                children: [
+                  // Stock Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Stock / Min',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        Row(
+                          children: [
+                            Text(
+                              '${item.currentStock}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: item.isOutOfStock ? Colors.red : null,
+                              ),
+                            ),
+                            const Text(' / ',
+                                style: TextStyle(color: Colors.grey)),
+                            Text('${item.minStockLevel}'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Suggested Quantity
+                  if (!isReceivedView)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Sugerido',
+                              style:
+                                  TextStyle(fontSize: 11, color: Colors.grey)),
+                          Text(
+                            '${item.suggestedQuantity} u',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Supplier
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Proveedor',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        Text(
+                          item.supplierName ?? '-',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // Only search alternatives if not received
+              if (!isReceivedView) ...[
+                const SizedBox(height: 8),
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _findAlternatives(item),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final alternatives = snapshot.data!;
+                    final totalStock = alternatives.fold<int>(
+                      0,
+                      (sum, alt) => sum + (alt['stock'] as int),
+                    );
+
+                    return InkWell(
+                      onTap: () =>
+                          _showAlternativesDialog(context, item, alternatives),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.swap_horiz,
+                              size: 14,
+                              color: Colors.blue[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${alternatives.length} alt. disponibles (${totalStock}u)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+
+              // Received View Extras (Dates, Inv #)
+              if (isReceivedView) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    if (item.receivedDate != null)
+                      _buildInfoTag(
+                        Icons.calendar_today,
+                        'Rec: ${item.receivedDate!.day}/${item.receivedDate!.month}',
+                      ),
+                    if (item.linkedPurchaseInvoiceId != null)
+                      Builder(builder: (context) {
+                        final invoiceNumber =
+                            _getInvoiceNumber(item.linkedPurchaseInvoiceId);
+                        return InkWell(
+                          onTap: () =>
+                              _navigateToInvoice(item.linkedPurchaseInvoiceId!),
+                          child: _buildInfoTag(
+                            Icons.receipt,
+                            invoiceNumber ?? 'Ver Fact.',
+                            color: Colors.blue,
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTag(IconData icon, String text, {Color? color}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color ?? Colors.grey[600]),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            color: color ?? Colors.grey[800],
+            fontWeight: color != null ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildTableHeader(
@@ -1238,7 +1952,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final hasMultiplePages = filteredItems.length > _itemsPerPage;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[850] : Colors.grey[200],
@@ -1293,48 +2007,92 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                 ),
               ),
             ],
-            const SizedBox(width: 50, child: Text('Prioridad', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 50,
+                child: Text('Prioridad',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
           ],
-          const Expanded(flex: 2, child: Text('Producto', style: TextStyle(fontWeight: FontWeight.bold))),
+          const Expanded(
+              flex: 2,
+              child: Text('Producto',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
-          const Expanded(child: Text('Categoría', style: TextStyle(fontWeight: FontWeight.bold))),
+          const Expanded(
+              child: Text('Categoría',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
-          const Expanded(child: Text('Proveedor', style: TextStyle(fontWeight: FontWeight.bold))),
+          const Expanded(
+              child: Text('Proveedor',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
-          const SizedBox(width: 120, child: Text('Alternativas', style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(
+              width: 120,
+              child: Text('Alternativas',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
           const SizedBox(width: 16),
           if (isReceivedView) ...[
-            const SizedBox(width: 120, child: Text('Stock Inicial', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 120,
+                child: Text('Stock Inicial',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 120, child: Text('Stock Final', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 120,
+                child: Text('Stock Final',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 100, child: Text('Diferencia', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 100,
+                child: Text('Diferencia',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 130, child: Text('N° Factura', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 130,
+                child: Text('N° Factura',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 120, child: Text('Creado el', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 120,
+                child: Text('Creado el',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 120, child: Text('Recibido el', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 120,
+                child: Text('Recibido el',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
           ] else ...[
-            const SizedBox(width: 80, child: Text('Stock', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 80,
+                child: Text('Stock',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 80, child: Text('Cant. Sug.', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 80,
+                child: Text('Cant. Sug.',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 16),
-            const SizedBox(width: 100, child: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(
+                width: 100,
+                child: Text('Estado',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
           ],
           const SizedBox(width: 16),
-          const SizedBox(width: 120, child: Text('Acciones', style: TextStyle(fontWeight: FontWeight.bold))),
+          const SizedBox(
+              width: 120,
+              child: Text('Acciones',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
         ],
       ),
     );
   }
 
-  Widget _buildItemRow(SmartPurchaseListItem item, SmartPurchaseListService service) {
+  Widget _buildItemRow(
+      SmartPurchaseListItem item, SmartPurchaseListService service) {
     final isSelected = _selectedItems.contains(item.id);
     final isReceivedView = _statusFilter == 'received';
     final theme = Theme.of(context);
-    
+
     return Container(
       decoration: BoxDecoration(
         color: isSelected ? theme.primaryColor.withOpacity(0.05) : null,
@@ -1363,7 +2121,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     : null,
               ),
             ),
-            
+
             // Priority Indicator - only for non-received view
             SizedBox(
               width: 50,
@@ -1371,7 +2129,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
             const SizedBox(width: 16),
           ],
-          
+
           // Product
           Expanded(
             flex: 2,
@@ -1400,7 +2158,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Category
           Expanded(
             flex: 1,
@@ -1414,14 +2172,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Supplier
           Expanded(
             flex: 1,
             child: Text(item.supplierName ?? 'Sin proveedor'),
           ),
           const SizedBox(width: 16),
-          
+
           // Alternatives
           SizedBox(
             width: 120,
@@ -1431,15 +2189,16 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Text('-', style: TextStyle(color: Colors.grey));
                 }
-                
+
                 final alternatives = snapshot.data!;
                 final totalStock = alternatives.fold<int>(
-                  0, 
+                  0,
                   (sum, alt) => sum + (alt['stock'] as int),
                 );
-                
+
                 return InkWell(
-                  onTap: () => _showAlternativesDialog(context, item, alternatives),
+                  onTap: () =>
+                      _showAlternativesDialog(context, item, alternatives),
                   child: Row(
                     children: [
                       Icon(
@@ -1466,7 +2225,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           if (isReceivedView) ...[
             // Stock Inicial (when order was generated)
             SizedBox(
@@ -1480,66 +2239,72 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Stock Final (stock at receipt time, not current stock)
             SizedBox(
               width: 120,
               child: Text(
-                item.stockAtReceipt != null 
-                    ? item.stockAtReceipt.toString() 
+                item.stockAtReceipt != null
+                    ? item.stockAtReceipt.toString()
                     : 'N/A',
                 style: TextStyle(
-                  fontWeight: FontWeight.bold, 
-                  color: item.stockAtReceipt != null ? Colors.green : Colors.grey,
+                  fontWeight: FontWeight.bold,
+                  color:
+                      item.stockAtReceipt != null ? Colors.green : Colors.grey,
                 ),
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Diferencia (Stock Final - Stock Inicial)
             SizedBox(
               width: 100,
               child: Builder(
                 builder: (context) {
-                  if (item.stockAtOrder == null || item.stockAtReceipt == null) {
+                  if (item.stockAtOrder == null ||
+                      item.stockAtReceipt == null) {
                     return const Text(
                       'N/A',
                       style: TextStyle(color: Colors.grey),
                     );
                   }
-                  
+
                   final stockInitial = item.stockAtOrder!;
                   final stockFinal = item.stockAtReceipt!;
                   final difference = stockFinal - stockInitial;
-                  
+
                   return Text(
                     difference >= 0 ? '+$difference' : difference.toString(),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: difference > 0 ? Colors.green : (difference < 0 ? Colors.red : Colors.grey),
+                      color: difference > 0
+                          ? Colors.green
+                          : (difference < 0 ? Colors.red : Colors.grey),
                     ),
                   );
                 },
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // N° Factura (invoice number) - Synchronous cache lookup
             SizedBox(
               width: 130,
               child: Builder(
                 builder: (context) {
-                  final invoiceNumber = _getInvoiceNumber(item.linkedPurchaseInvoiceId);
-                  
+                  final invoiceNumber =
+                      _getInvoiceNumber(item.linkedPurchaseInvoiceId);
+
                   if (invoiceNumber == null) {
                     return Text(
                       '-',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     );
                   }
-                  
+
                   return InkWell(
-                    onTap: () => _navigateToInvoice(item.linkedPurchaseInvoiceId!),
+                    onTap: () =>
+                        _navigateToInvoice(item.linkedPurchaseInvoiceId!),
                     child: Text(
                       invoiceNumber,
                       style: const TextStyle(
@@ -1554,21 +2319,22 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Creado el (invoice creation date) - Synchronous cache lookup
             SizedBox(
               width: 120,
               child: Builder(
                 builder: (context) {
-                  final createdDate = _getInvoiceCreatedDate(item.linkedPurchaseInvoiceId);
-                  
+                  final createdDate =
+                      _getInvoiceCreatedDate(item.linkedPurchaseInvoiceId);
+
                   if (createdDate == null) {
                     return Text(
                       '-',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     );
                   }
-                  
+
                   return Text(
                     '${createdDate.day}/${createdDate.month}/${createdDate.year}',
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -1577,7 +2343,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Recibido el (received date)
             SizedBox(
               width: 120,
@@ -1595,13 +2361,17 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               child: Text(
                 '${item.currentStock} / ${item.minStockLevel}',
                 style: TextStyle(
-                  color: item.currentStock <= item.minStockLevel ? Colors.red : null,
-                  fontWeight: item.currentStock <= item.minStockLevel ? FontWeight.bold : null,
+                  color: item.currentStock <= item.minStockLevel
+                      ? Colors.red
+                      : null,
+                  fontWeight: item.currentStock <= item.minStockLevel
+                      ? FontWeight.bold
+                      : null,
                 ),
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Suggested Quantity
             SizedBox(
               width: 80,
@@ -1611,7 +2381,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Status
             SizedBox(
               width: 100,
@@ -1619,7 +2389,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             ),
           ],
           const SizedBox(width: 16),
-          
+
           // Actions
           SizedBox(
             width: 120,
@@ -1656,10 +2426,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     );
   }
 
-  Widget _buildPriorityBadge(double priority, String level) {
+  Widget _buildPriorityBadge(double priority, String level,
+      {bool isCompact = false}) {
     Color color;
     String label;
-    
+
     switch (level) {
       case 'critical':
         color = Colors.red;
@@ -1677,9 +2448,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         color = Colors.green;
         label = priority.toStringAsFixed(0);
     }
-    
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 4 : 8, vertical: isCompact ? 2 : 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.2),
         borderRadius: BorderRadius.circular(4),
@@ -1688,7 +2460,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: isCompact ? 10 : 12,
           fontWeight: FontWeight.bold,
           color: color,
         ),
@@ -1700,7 +2472,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   Widget _buildStatusChip(String status) {
     Color color;
     String label;
-    
+
     switch (status) {
       case 'pending':
         color = Colors.blue;
@@ -1722,7 +2494,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         color = Colors.grey;
         label = status;
     }
-    
+
     return Chip(
       label: Text(label),
       backgroundColor: color.withOpacity(0.1),
@@ -1785,7 +2557,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Product search/input
                   TextField(
                     controller: productController,
@@ -1804,7 +2576,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                               .select('id, name, sku, supplier_id')
                               .ilike('name', '%$value%')
                               .limit(5);
-                          
+
                           if (products.isNotEmpty && context.mounted) {
                             // Show autocomplete suggestions (simplified)
                             debugPrint('Found ${products.length} products');
@@ -1816,7 +2588,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // SKU
                   TextField(
                     controller: skuController,
@@ -1827,7 +2599,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Quantity
                   TextField(
                     controller: qtyController,
@@ -1838,7 +2610,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Supplier dropdown
                   FutureBuilder<List<Supplier>>(
                     future: context.read<PurchaseService>().getSuppliers(),
@@ -1846,7 +2618,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                       if (!snapshot.hasData) {
                         return const CircularProgressIndicator();
                       }
-                      
+
                       final suppliers = snapshot.data!;
                       return DropdownButtonFormField<String>(
                         value: selectedSupplierId,
@@ -1860,9 +2632,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                             child: Text('Sin proveedor'),
                           ),
                           ...suppliers.map((s) => DropdownMenuItem(
-                            value: s.id,
-                            child: Text(s.name),
-                          )),
+                                value: s.id,
+                                child: Text(s.name),
+                              )),
                         ],
                         onChanged: (value) {
                           setState(() => selectedSupplierId = value);
@@ -1871,7 +2643,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Notes
                   TextField(
                     controller: notesController,
@@ -1895,43 +2667,54 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               onPressed: () async {
                 if (productController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('El nombre del producto es requerido')),
+                    const SnackBar(
+                        content: Text('El nombre del producto es requerido')),
                   );
                   return;
                 }
-                
+
                 final qty = int.tryParse(qtyController.text) ?? 1;
                 if (qty <= 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('La cantidad debe ser mayor a 0')),
+                    const SnackBar(
+                        content: Text('La cantidad debe ser mayor a 0')),
                   );
                   return;
                 }
-                
+
                 try {
                   final service = context.read<SmartPurchaseListService>();
-                  
+
                   // Get supplier name if selected
                   String? supplierName;
                   if (selectedSupplierId != null) {
-                    final suppliers = await context.read<PurchaseService>().getSuppliers();
-                    supplierName = suppliers.firstWhere((s) => s.id == selectedSupplierId).name;
+                    final suppliers =
+                        await context.read<PurchaseService>().getSuppliers();
+                    supplierName = suppliers
+                        .firstWhere((s) => s.id == selectedSupplierId)
+                        .name;
                   }
-                  
+
                   await service.addItem(
                     productId: selectedProductId,
                     productName: productController.text.trim(),
-                    productSku: skuController.text.trim().isEmpty ? null : skuController.text.trim(),
+                    productSku: skuController.text.trim().isEmpty
+                        ? null
+                        : skuController.text.trim(),
                     quantity: qty,
                     supplierId: selectedSupplierId,
                     supplierName: supplierName,
-                    notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                    notes: notesController.text.trim().isEmpty
+                        ? null
+                        : notesController.text.trim(),
                   );
-                  
+
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Producto agregado a la lista de compras')),
+                      const SnackBar(
+                          content:
+                              Text('Producto agregado a la lista de compras')),
                     );
                   }
                 } catch (e) {
@@ -1950,19 +2733,22 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     );
   }
 
-  void _showEditItemDialog(SmartPurchaseListItem item, SmartPurchaseListService service) {
+  void _showEditItemDialog(
+      SmartPurchaseListItem item, SmartPurchaseListService service) {
     // TODO: Implement edit dialog
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Función de editar en desarrollo')),
     );
   }
 
-  void _confirmDelete(SmartPurchaseListItem item, SmartPurchaseListService service) {
+  void _confirmDelete(
+      SmartPurchaseListItem item, SmartPurchaseListService service) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Producto'),
-        content: Text('¿Eliminar "${item.productName}" de la lista de compras?'),
+        content:
+            Text('¿Eliminar "${item.productName}" de la lista de compras?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1983,7 +2769,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   Future<void> _scanLowStockProducts() async {
     final service = context.read<SmartPurchaseListService>();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1999,21 +2785,21 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     );
 
     final result = await service.scanAndAddLowStockProducts();
-    
+
     if (mounted) {
       Navigator.pop(context); // Close loading dialog
-      
+
       // Reload the list to show changes
       await service.loadItems(
         statusFilter: _statusFilter,
         supplierFilter: _supplierFilter,
         searchQuery: _searchQuery,
       );
-      
+
       if (mounted) {
         String message;
         Color color;
-        
+
         if (result.total == 0) {
           message = 'No hay cambios - lista ya está actualizada';
           color = Colors.blue;
@@ -2023,12 +2809,13 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             parts.add('${result.added} agregado${result.added > 1 ? "s" : ""}');
           }
           if (result.removed > 0) {
-            parts.add('${result.removed} eliminado${result.removed > 1 ? "s" : ""}');
+            parts.add(
+                '${result.removed} eliminado${result.removed > 1 ? "s" : ""}');
           }
           message = 'Escaneo completo: ${parts.join(", ")}';
           color = Colors.green;
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -2070,7 +2857,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     if (confirmed != true) return;
 
     final service = context.read<SmartPurchaseListService>();
-    
+
     try {
       // Show loading dialog
       if (mounted) {
@@ -2111,7 +2898,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
       if (mounted) {
         Navigator.pop(context); // Close loading dialog
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Tabla limpiada y filtros restablecidos'),
@@ -2122,7 +2909,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Close loading dialog
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('❌ Error al limpiar: $e'),
@@ -2148,7 +2935,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Archivar productos'),
-        content: Text('¿Archivar ${_selectedItems.length} productos seleccionados?'),
+        content:
+            Text('¿Archivar ${_selectedItems.length} productos seleccionados?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -2171,7 +2959,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     try {
       final service = context.read<SmartPurchaseListService>();
       final count = _selectedItems.length;
-      
+
       // Bulk archive in single query (much faster!)
       await service.bulkUpdateStatus(_selectedItems.toList(), 'archived');
 
@@ -2195,7 +2983,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         setState(() {
           _isArchiving = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al archivar: $e'),
@@ -2221,7 +3009,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Desarchivar productos'),
-        content: Text('¿Desarchivar ${_selectedItems.length} productos seleccionados?'),
+        content: Text(
+            '¿Desarchivar ${_selectedItems.length} productos seleccionados?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -2244,7 +3033,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     try {
       final service = context.read<SmartPurchaseListService>();
       final count = _selectedItems.length;
-      
+
       // Bulk unarchive (set status back to pending)
       await service.bulkUpdateStatus(_selectedItems.toList(), 'pending');
 
@@ -2268,7 +3057,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         setState(() {
           _isArchiving = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al desarchivar: $e'),
@@ -2319,10 +3108,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                   final itemsForSupplier = selectedItemsList
                       .where((item) => item.supplierId == supplierId)
                       .toList();
-                  final supplierName = itemsForSupplier.first.supplierName ?? 'Sin nombre';
+                  final supplierName =
+                      itemsForSupplier.first.supplierName ?? 'Sin nombre';
                   return ListTile(
                     title: Text(supplierName),
-                    subtitle: Text('${itemsForSupplier.length} producto(s) asignado(s)'),
+                    subtitle: Text(
+                        '${itemsForSupplier.length} producto(s) asignado(s)'),
                     trailing: const Icon(Icons.arrow_forward),
                     onTap: () => Navigator.pop(context, supplierId),
                   );
@@ -2357,16 +3148,18 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       );
 
       if (selectedSupplier == 'CANCELLED' || !mounted) return;
-      
+
       // If user wants to select another supplier, show supplier list
       String? finalSupplierId = selectedSupplier;
       if (selectedSupplier == 'SELECT_OTHER') {
         finalSupplierId = await _showSupplierPicker();
-        if (finalSupplierId == null) return; // User cancelled supplier selection
+        if (finalSupplierId == null)
+          return; // User cancelled supplier selection
       }
-      
-      debugPrint('📦 Creating purchase order with ${selectedItemsList.length} items for supplier: $finalSupplierId');
-      
+
+      debugPrint(
+          '📦 Creating purchase order with ${selectedItemsList.length} items for supplier: $finalSupplierId');
+
       // Navigate with ALL selected products, regardless of their assigned supplier
       if (!mounted) return;
       await _navigateToPurchaseForm(selectedItemsList, finalSupplierId);
@@ -2383,7 +3176,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
   Future<String?> _showSupplierPicker() async {
     String searchQuery = '';
-    
+
     return showDialog<String?>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2433,7 +3226,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                 subtitle: supplier.email != null
                                     ? Text(supplier.email!)
                                     : null,
-                                onTap: () => Navigator.pop(context, supplier.id),
+                                onTap: () =>
+                                    Navigator.pop(context, supplier.id),
                               );
                             },
                           ),
@@ -2458,25 +3252,27 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     String? supplierId,
   ) async {
     if (!mounted) return;
-    
+
     try {
       debugPrint('🚀 Navigating to purchase form with ${items.length} items');
-      
+
       // Store data in service to be picked up by the form
       final purchaseService = context.read<PurchaseService>();
       purchaseService.setPendingSmartPurchaseData(
         supplierId: supplierId,
-        lineItems: items.map((item) => {
-          'product_id': item.productId,
-          'product_name': item.productName,
-          'product_sku': item.productSku,
-          'suggested_quantity': item.suggestedQuantity,
-        }).toList(),
+        lineItems: items
+            .map((item) => {
+                  'product_id': item.productId,
+                  'product_name': item.productName,
+                  'product_sku': item.productSku,
+                  'suggested_quantity': item.suggestedQuantity,
+                })
+            .toList(),
       );
-      
+
       // Navigate using GoRouter like everyone else!
       context.go('/purchases/new');
-      
+
       debugPrint('✅ Navigated to purchase form');
     } catch (e) {
       debugPrint('❌ Error navigating to purchase form: $e');
@@ -2509,9 +3305,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           .toList();
 
       final itemNames = selectedItemsList.map((e) => e.productName).join(', ');
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2520,7 +3316,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           duration: const Duration(seconds: 3),
         ),
       );
-      
+
       // Navigate to expense form
       // TODO: Add support for passing pre-filled items to ExpenseFormPage
       context.go('/accounting/expenses/new');
@@ -2534,12 +3330,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       );
     }
   }
-  
+
   /// Build pagination controls with page numbers
   Widget _buildPaginationControls(int totalItems, int totalPages) {
     final startItem = (_currentPage - 1) * _itemsPerPage + 1;
     final endItem = (_currentPage * _itemsPerPage).clamp(0, totalItems);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -2555,7 +3351,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             'Mostrando $startItem-$endItem de $totalItems productos',
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          
+
           // Pagination controls
           Row(
             children: [
@@ -2565,28 +3361,33 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                 onPressed: _currentPage > 1 ? () => _goToPage(1) : null,
                 tooltip: 'Primera página',
               ),
-              
+
               // Previous page button
               IconButton(
                 icon: const Icon(Icons.chevron_left),
-                onPressed: _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
+                onPressed:
+                    _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
                 tooltip: 'Página anterior',
               ),
-              
+
               // Page numbers
               ..._buildPageNumbers(totalPages),
-              
+
               // Next page button
               IconButton(
                 icon: const Icon(Icons.chevron_right),
-                onPressed: _currentPage < totalPages ? () => _goToPage(_currentPage + 1) : null,
+                onPressed: _currentPage < totalPages
+                    ? () => _goToPage(_currentPage + 1)
+                    : null,
                 tooltip: 'Página siguiente',
               ),
-              
+
               // Last page button
               IconButton(
                 icon: const Icon(Icons.last_page),
-                onPressed: _currentPage < totalPages ? () => _goToPage(totalPages) : null,
+                onPressed: _currentPage < totalPages
+                    ? () => _goToPage(totalPages)
+                    : null,
                 tooltip: 'Última página',
               ),
             ],
@@ -2595,15 +3396,15 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       ),
     );
   }
-  
+
   /// Build page number buttons (show current +/- 2 pages)
   List<Widget> _buildPageNumbers(int totalPages) {
     final List<Widget> pageButtons = [];
-    
+
     // Show current page +/- 2 pages
     final startPage = (_currentPage - 2).clamp(1, totalPages);
     final endPage = (_currentPage + 2).clamp(1, totalPages);
-    
+
     // Add ellipsis before if needed
     if (startPage > 1) {
       pageButtons.add(
@@ -2613,7 +3414,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ),
       );
     }
-    
+
     // Add page numbers
     for (int i = startPage; i <= endPage; i++) {
       final isCurrentPage = i == _currentPage;
@@ -2622,7 +3423,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: isCurrentPage
               ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Theme.of(context).primaryColor,
                     borderRadius: BorderRadius.circular(4),
@@ -2638,7 +3440,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               : TextButton(
                   onPressed: () => _goToPage(i),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -2647,7 +3450,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ),
       );
     }
-    
+
     // Add ellipsis after if needed
     if (endPage < totalPages) {
       pageButtons.add(
@@ -2657,7 +3460,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         ),
       );
     }
-    
+
     return pageButtons;
   }
 }

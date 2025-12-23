@@ -709,6 +709,92 @@ class _PegasTablePageState extends State<PegasTablePage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
+        if (availableWidth < 800) {
+          // Mobile: Show Detail View ONLY (full screen)
+          // The list view is handled by the main build method when _selectedJob is null
+          return PegaDetailView(
+            job: _selectedJob!,
+            customer: _customers[_selectedJob!.customerId],
+            bike: _bikes[_selectedJob!.bikeId],
+            items: _selectedJobItems,
+            productImages: _productImages,
+            onClose: () {
+              setState(() {
+                _selectedJob = null;
+                _selectedJobItems = [];
+                _productImages = {};
+              });
+            },
+            onEdit: () async {
+              final result =
+                  await context.push('/taller/pegas/${_selectedJob!.id}');
+              if (!mounted) return;
+              if (result == true) {
+                await _loadData();
+                if (_selectedJob != null) {
+                  await _loadJobDetails(_selectedJob!);
+                }
+              }
+            },
+            onStatusChange: (newStatus) async {
+              // Same logic as desktop...
+              _startLocalOperation();
+              setState(() {
+                final index = _jobs.indexWhere((j) => j.id == _selectedJob!.id);
+                if (index != -1) {
+                  // ... update job logic
+                  final job = _jobs[index];
+                  _jobs[index] = job.copyWith(
+                      status: newStatus, updatedAt: DateTime.now());
+                  _selectedJob = _jobs[index];
+                }
+                _applyFiltersAndSort();
+              });
+
+              try {
+                final updatedJob = _selectedJob!.copyWith(status: newStatus);
+                await _databaseService.update(
+                  'mechanic_jobs',
+                  updatedJob.id!,
+                  updatedJob.toJson(),
+                );
+                if (mounted) {
+                  await _loadJobDetails(_selectedJob!);
+                }
+              } catch (e) {
+                if (mounted) {
+                  await _loadData();
+                  if (_selectedJob != null) {
+                    await _loadJobDetails(_selectedJob!);
+                  }
+                }
+              } finally {
+                _endLocalOperation();
+              }
+            },
+            onItemRemoved: (itemId) async {
+              // Same logic...
+              try {
+                await _bikeshopService.deleteJobItem(itemId);
+                if (_selectedJob != null) {
+                  await _loadJobDetails(_selectedJob!);
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Product removed')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+          );
+        }
+
         final clampedListWidth = _listPaneWidth.clamp(
           _minListPaneWidth,
           availableWidth - _minDetailPaneWidth - 1,
@@ -716,7 +802,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         return Row(
           children: [
-            // Left: Jobs list (tap anywhere to close detail view)
+            // Left: Jobs list
             SizedBox(
               width: clampedListWidth,
               child: Stack(
@@ -913,6 +999,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildModernHeader() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
@@ -928,14 +1016,20 @@ class _PegasTablePageState extends State<PegasTablePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _isAnySelected
-                      ? '${_selectedJobIds.length} seleccionado${_selectedJobIds.length != 1 ? 's' : ''}'
-                      : 'Gestión de Trabajos',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.5,
-                      ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _isAnySelected
+                        ? '${_selectedJobIds.length} seleccionado${_selectedJobIds.length != 1 ? 's' : ''}'
+                        : 'Gestión de Trabajos',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.5,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -943,10 +1037,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+
+          const SizedBox(width: 8),
 
           // Bulk action buttons (shown when items selected)
           if (_isAnySelected) ...[
@@ -956,52 +1054,65 @@ class _PegasTablePageState extends State<PegasTablePage>
               tooltip: 'Deseleccionar todo',
             ),
             const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: _exportSelectedToCSV,
-              icon: const Icon(Icons.file_download, size: 20),
-              label: const Text('Exportar'),
-            ),
-            const SizedBox(width: 8),
+            if (!isMobile) ...[
+              FilledButton.tonalIcon(
+                onPressed: _exportSelectedToCSV,
+                icon: const Icon(Icons.file_download, size: 20),
+                label: const Text('Exportar'),
+              ),
+              const SizedBox(width: 8),
+            ],
             FilledButton.icon(
               onPressed: _bulkUpdateStatus,
               icon: const Icon(Icons.edit, size: 20),
-              label: const Text('Cambiar Estado'),
+              label: Text(isMobile ? 'Estado' : 'Cambiar Estado'),
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
             ),
           ] else ...[
             // Regular action buttons
-            IconButton(
-              icon: Icon(_showColumnPanel
-                  ? Icons.view_column
-                  : Icons.view_column_outlined),
-              onPressed: () =>
-                  setState(() => _showColumnPanel = !_showColumnPanel),
-              tooltip: 'Columnas',
-              isSelected: _showColumnPanel,
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.file_download),
-              onPressed: _exportAllToCSV,
-              tooltip: 'Exportar Todo',
-            ),
-            const SizedBox(width: 8),
+            if (!isMobile) ...[
+              IconButton(
+                icon: Icon(_showColumnPanel
+                    ? Icons.view_column
+                    : Icons.view_column_outlined),
+                onPressed: () =>
+                    setState(() => _showColumnPanel = !_showColumnPanel),
+                tooltip: 'Columnas',
+                isSelected: _showColumnPanel,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.file_download),
+                onPressed: _exportAllToCSV,
+                tooltip: 'Exportar Todo',
+              ),
+              const SizedBox(width: 8),
+            ],
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: _loadData,
               tooltip: 'Actualizar',
             ),
             const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: () {
-                _markNeedsRefresh();
-                context.push('/taller/pegas/nueva');
-              },
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Nuevo Trabajo'),
-            ),
+            if (isMobile)
+              FilledButton(
+                onPressed: () {
+                  _markNeedsRefresh();
+                  context.push('/taller/pegas/nueva');
+                },
+                child: const Icon(Icons.add, size: 20),
+              )
+            else
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  _markNeedsRefresh();
+                  context.push('/taller/pegas/nueva');
+                },
+                icon: const Icon(Icons.add, size: 20),
+                label: const Text('Nuevo Trabajo'),
+              ),
           ],
         ],
       ),
@@ -1019,110 +1130,217 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       child: Column(
         children: [
-          // Main controls row
-          Row(
-            children: [
-              // Status filter
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                    value: 'active',
-                    label: Text('Activos', style: TextStyle(fontSize: 13)),
+          LayoutBuilder(builder: (context, constraints) {
+            if (constraints.maxWidth < 900) {
+              // Mobile/Tablet Toolbar
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Search first on mobile
+                  SizedBox(
+                    height: 48,
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Buscar trabajos...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchTerm.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() => _searchTerm = '');
+                                  _applyFiltersAndSort();
+                                },
+                              )
+                            : null,
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() => _searchTerm = value);
+                        _applyFiltersAndSort();
+                      },
+                    ),
                   ),
-                  ButtonSegment(
-                    value: 'completed',
-                    label: Text('Completados', style: TextStyle(fontSize: 13)),
+                  const SizedBox(height: 12),
+
+                  // Scrollable filters
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                                value: 'active', label: Text('Activos')),
+                            ButtonSegment(
+                                value: 'completed', label: Text('Completados')),
+                            ButtonSegment(
+                                value: 'delivered', label: Text('Entregados')),
+                            ButtonSegment(
+                                value: 'unpaid', label: Text('Sin Pagar')),
+                            ButtonSegment(value: 'all', label: Text('Todos')),
+                          ],
+                          selected: <String>{_statusFilter},
+                          onSelectionChanged: (selected) {
+                            if (selected.isNotEmpty) {
+                              setState(() => _statusFilter = selected.first);
+                              _applyFiltersAndSort();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  ButtonSegment(
-                    value: 'delivered',
-                    label: Text('Entregados', style: TextStyle(fontSize: 13)),
-                  ),
-                  ButtonSegment(
-                    value: 'unpaid',
-                    label: Text('Sin Pagar', style: TextStyle(fontSize: 13)),
-                  ),
-                  ButtonSegment(
-                    value: 'all',
-                    label: Text('Todos', style: TextStyle(fontSize: 13)),
+                  const SizedBox(height: 12),
+
+                  // View toggles
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                                value: 'table',
+                                icon: Icon(Icons.table_rows, size: 16),
+                                label: Text('Tabla')),
+                            ButtonSegment(
+                                value: 'board',
+                                icon: Icon(Icons.view_column, size: 16),
+                                label: Text('Tablero')),
+                            ButtonSegment(
+                                value: 'calendar',
+                                icon: Icon(Icons.calendar_month, size: 16),
+                                label: Text('Calendario')),
+                            ButtonSegment(
+                                value: 'gantt',
+                                icon: Icon(Icons.view_timeline, size: 16),
+                                label: Text('Gantt')),
+                          ],
+                          selected: <String>{_viewMode},
+                          onSelectionChanged: (selected) {
+                            if (selected.isNotEmpty) {
+                              setState(() => _viewMode = selected.first);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-                selected: <String>{_statusFilter},
-                onSelectionChanged: (selected) {
-                  if (selected.isNotEmpty) {
-                    setState(() => _statusFilter = selected.first);
-                    _applyFiltersAndSort();
-                  }
-                },
-              ),
+              );
+            }
 
-              const SizedBox(width: 16),
-
-              // View mode toggle
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                    value: 'table',
-                    icon: Icon(Icons.table_rows, size: 16),
-                    label: Text('Tabla', style: TextStyle(fontSize: 13)),
-                  ),
-                  ButtonSegment(
-                    value: 'board',
-                    icon: Icon(Icons.view_column, size: 16),
-                    label: Text('Tablero', style: TextStyle(fontSize: 13)),
-                  ),
-                  ButtonSegment(
-                    value: 'calendar',
-                    icon: Icon(Icons.calendar_month, size: 16),
-                    label: Text('Calendario', style: TextStyle(fontSize: 13)),
-                  ),
-                  ButtonSegment(
-                    value: 'gantt',
-                    icon: Icon(Icons.view_timeline, size: 16),
-                    label: Text('Gantt', style: TextStyle(fontSize: 13)),
-                  ),
-                ],
-                selected: <String>{_viewMode},
-                onSelectionChanged: (selected) {
-                  if (selected.isNotEmpty) {
-                    setState(() => _viewMode = selected.first);
-                  }
-                },
-              ),
-
-              const SizedBox(width: 16),
-
-              // Search
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Buscar trabajos...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _searchTerm.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 20),
-                              onPressed: () {
-                                setState(() => _searchTerm = '');
-                                _applyFiltersAndSort();
-                              },
-                            )
-                          : null,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+            // Desktop Toolbar
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'active',
+                          label:
+                              Text('Activos', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'completed',
+                          label: Text('Completados',
+                              style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'delivered',
+                          label: Text('Entregados',
+                              style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'unpaid',
+                          label:
+                              Text('Sin Pagar', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'all',
+                          label: Text('Todos', style: TextStyle(fontSize: 13)),
+                        ),
+                      ],
+                      selected: <String>{_statusFilter},
+                      onSelectionChanged: (selected) {
+                        if (selected.isNotEmpty) {
+                          setState(() => _statusFilter = selected.first);
+                          _applyFiltersAndSort();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'table',
+                          icon: Icon(Icons.table_rows, size: 16),
+                          label: Text('Tabla', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'board',
+                          icon: Icon(Icons.view_column, size: 16),
+                          label:
+                              Text('Tablero', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'calendar',
+                          icon: Icon(Icons.calendar_month, size: 16),
+                          label: Text('Calendario',
+                              style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'gantt',
+                          icon: Icon(Icons.view_timeline, size: 16),
+                          label: Text('Gantt', style: TextStyle(fontSize: 13)),
+                        ),
+                      ],
+                      selected: <String>{_viewMode},
+                      onSelectionChanged: (selected) {
+                        if (selected.isNotEmpty) {
+                          setState(() => _viewMode = selected.first);
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SizedBox(
+                        height: 40,
+                        child: TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Buscar trabajos...',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchTerm.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () {
+                                      setState(() => _searchTerm = '');
+                                      _applyFiltersAndSort();
+                                    },
+                                  )
+                                : null,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() => _searchTerm = value);
+                            _applyFiltersAndSort();
+                          },
+                        ),
                       ),
                     ),
-                    onChanged: (value) {
-                      setState(() => _searchTerm = value);
-                      _applyFiltersAndSort();
-                    },
-                  ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
 
           // Filters row
           const SizedBox(height: 12),
@@ -1271,6 +1489,24 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Mobile View (Card List)
+        if (constraints.maxWidth < 800) {
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: paginatedJobs.length,
+                  itemBuilder: (context, index) =>
+                      _buildMobileJobCard(paginatedJobs[index]),
+                ),
+              ),
+              _buildPaginationControls(startIndex, endIndex),
+            ],
+          );
+        }
+
+        // Desktop View (Table)
         // Calculate total width of all visible columns
         final totalColumnsWidth = _columns
             .where((col) => col.visible)
@@ -1322,6 +1558,274 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         );
       },
+    );
+  }
+
+  Widget _buildMobileJobCard(MechanicJob job) {
+    final theme = Theme.of(context);
+    final customer = _customers[job.customerId];
+    final bike = _bikes[job.bikeId];
+    final isSelected = _selectedJobIds.contains(job.id);
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline.withOpacity(0.2),
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      color: isSelected
+          ? theme.colorScheme.primaryContainer.withOpacity(0.1)
+          : null,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          // If in selection mode, toggle selection
+          if (_isAnySelected) {
+            setState(() {
+              if (isSelected) {
+                _selectedJobIds.remove(job.id);
+              } else {
+                _selectedJobIds.add(job.id!);
+              }
+            });
+          } else {
+            // View details
+            setState(() {
+              _selectedJob = job;
+            });
+            _loadJobDetails(job);
+          }
+        },
+        onLongPress: () {
+          setState(() {
+            if (isSelected) {
+              _selectedJobIds.remove(job.id);
+            } else {
+              _selectedJobIds.add(job.id!);
+            }
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: Job # and Status
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    job.jobNumber ?? 'N/A',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  _buildStatusChip(job),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Customer and Bike
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.person_outline,
+                                size: 16,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                customer?.name ?? 'Cliente Desconocido',
+                                style: theme.textTheme.bodyMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.pedal_bike,
+                                size: 16,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                bike?.displayName ?? 'Bicicleta Desconocida',
+                                style: theme.textTheme.bodyMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Dates and Priority
+              Row(
+                children: [
+                  _buildInfoChip(
+                    Icons.calendar_today,
+                    DateFormat('dd/MM', 'es_CL').format(job.arrivalDate),
+                    theme,
+                  ),
+                  const SizedBox(width: 8),
+                  if (job.deadline != null)
+                    _buildInfoChip(
+                      Icons.event,
+                      DateFormat('dd/MM', 'es_CL').format(job.deadline!),
+                      theme,
+                      color: job.isOverdue ? theme.colorScheme.error : null,
+                    ),
+                  const Spacer(),
+                  _buildPriorityChip(job.priority),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Divider(height: 16, color: theme.dividerColor.withOpacity(0.5)),
+              // Footer: Total
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                        .format(job.totalCost),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(MechanicJob job) {
+    final hasCustomStatus = job.statusId != null;
+    Color color;
+    String label;
+
+    if (hasCustomStatus) {
+      if (job.customStatus != null) {
+        color =
+            Color(int.parse(job.customStatus!.color.replaceFirst('#', '0xff')));
+        label = job.customStatus!.name;
+      } else {
+        color = Colors.grey;
+        label = 'Desconocido';
+      }
+    } else {
+      // Legacy status fallback
+      color = _getStatusColor(job.status);
+      label = job.status.name.toUpperCase();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriorityChip(JobPriority priority) {
+    Color color;
+    String label;
+    switch (priority) {
+      case JobPriority.baja:
+        color = Colors.green;
+        label = 'BAJA';
+        break;
+      case JobPriority.normal:
+        color = Colors.blue;
+        label = 'MEDIA';
+        break;
+      case JobPriority.alta:
+        color = Colors.orange;
+        label = 'ALTA';
+        break;
+      case JobPriority.urgente:
+        color = Colors.red;
+        label = 'URGENTE';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String label, ThemeData theme,
+      {Color? color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: (color ?? theme.colorScheme.onSurface).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 12, color: color ?? theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color ?? theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

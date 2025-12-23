@@ -30,14 +30,14 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
-  
+
   Invoice? _selectedInvoice;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
   static const double _maxListPaneWidth = 900.0;
   static const double _minColumnWidth = 80.0;
   static const double _maxColumnWidth = 400.0;
-  
+
   final Map<String, double> _columnWidths = {
     'date': 110.0,
     'invoice_number': 130.0,
@@ -46,7 +46,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     'total': 120.0,
     'balance': 120.0,
   };
-  
+
   final Map<String, bool> _visibleColumns = {
     'date': true,
     'invoice_number': true,
@@ -55,33 +55,33 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     'total': true,
     'balance': true,
   };
-  
+
   String _sortColumn = 'date';
   bool _sortAscending = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadPreferences();
-    
+
     // Sync scroll positions
     _headerScrollController.addListener(() {
       if (_bodyScrollController.offset != _headerScrollController.offset) {
         _bodyScrollController.jumpTo(_headerScrollController.offset);
       }
     });
-    
+
     _bodyScrollController.addListener(() {
       if (_headerScrollController.offset != _bodyScrollController.offset) {
         _headerScrollController.jumpTo(_bodyScrollController.offset);
       }
     });
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SalesService>().loadInvoices();
     });
   }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -89,35 +89,37 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     _bodyScrollController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _listPaneWidth = prefs.getDouble('invoice_list_pane_width') ?? 600.0;
-      
+
       for (var key in _columnWidths.keys.toList()) {
-        _columnWidths[key] = prefs.getDouble('invoice_col_$key') ?? _columnWidths[key]!;
+        _columnWidths[key] =
+            prefs.getDouble('invoice_col_$key') ?? _columnWidths[key]!;
       }
-      
+
       for (var key in _visibleColumns.keys.toList()) {
-        _visibleColumns[key] = prefs.getBool('invoice_visible_$key') ?? _visibleColumns[key]!;
+        _visibleColumns[key] =
+            prefs.getBool('invoice_visible_$key') ?? _visibleColumns[key]!;
       }
     });
   }
-  
+
   Future<void> _saveListPaneWidth(double width) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('invoice_list_pane_width', width);
   }
-  
+
   Future<void> _saveColumnWidth(String column, double width) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('invoice_col_$column', width);
   }
-  
+
   List<Invoice> _getFilteredAndSortedInvoices(List<Invoice> invoices) {
     List<Invoice> filtered = List.from(invoices);
-    
+
     if (_searchTerm.isNotEmpty) {
       final term = _searchTerm.toLowerCase();
       filtered = filtered.where((invoice) {
@@ -126,10 +128,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             (invoice.customerRut?.toLowerCase().contains(term) ?? false);
       }).toList();
     }
-    
+
     filtered.sort((a, b) {
       int comparison = 0;
-      
+
       switch (_sortColumn) {
         case 'date':
           comparison = a.date.compareTo(b.date);
@@ -150,13 +152,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           comparison = a.balance.compareTo(b.balance);
           break;
       }
-      
+
       return _sortAscending ? comparison : -comparison;
     });
-    
+
     return filtered;
   }
-  
+
   void _onSort(String column) {
     setState(() {
       if (_sortColumn == column) {
@@ -167,12 +169,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
     final invoices = _getFilteredAndSortedInvoices(salesService.invoices);
-    
+
     return MainLayout(
       title: 'Facturas',
       child: Column(
@@ -191,8 +193,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 Text(
                   'Facturas de Venta',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const Spacer(),
                 ElevatedButton.icon(
@@ -209,7 +211,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ],
             ),
           ),
-          
+
           // Main content
           Expanded(
             child: _selectedInvoice == null
@@ -220,21 +222,30 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildFullListView(List<Invoice> invoices, SalesService salesService) {
-    return Column(
-      children: [
-        _buildSummaryCards(invoices),
-        const SizedBox(height: 16),
-        _buildSearchBar(),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _buildInvoiceTable(invoices, salesService, isFullWidth: true),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        return Column(
+          children: [
+            _buildSummaryCards(invoices),
+            const SizedBox(height: 16),
+            _buildSearchBar(isMobile),
+            const SizedBox(height: 8),
+            Expanded(
+              child: isMobile
+                  ? _buildInvoiceCardsList(invoices)
+                  : _buildInvoiceTable(invoices, salesService,
+                      isFullWidth: true),
+            ),
+          ],
+        );
+      },
     );
   }
-  
+
   Widget _buildSplitView(List<Invoice> invoices, SalesService salesService) {
     final theme = Theme.of(context);
     return Row(
@@ -268,7 +279,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ],
           ),
         ),
-        
+
         // Resize handle
         MouseRegion(
           cursor: SystemMouseCursors.resizeColumn,
@@ -286,7 +297,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ),
           ),
         ),
-        
+
         // Right pane - Invoice preview
         Expanded(
           child: _buildInvoicePreview(_selectedInvoice!),
@@ -294,72 +305,120 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ],
     );
   }
-  
+
   Widget _buildSummaryCards(List<Invoice> invoices) {
+    if (invoices.isEmpty) return const SizedBox.shrink();
+
     final totalReceivable = invoices
         .where((inv) => inv.status != InvoiceStatus.draft && inv.balance > 0)
         .fold(0.0, (sum, inv) => sum + inv.balance);
-    
+
     final overdue = invoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).fold(0.0, (sum, inv) => sum + inv.balance);
-    
+
     final dueIn30Days = invoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       final now = DateTime.now();
-      return inv.dueDate!.isAfter(now) && 
-             inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
+      return inv.dueDate!.isAfter(now) &&
+          inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
     }).fold(0.0, (sum, inv) => sum + inv.balance);
-    
+
     final overdueCount = invoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).length;
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
+
+    final cards = [
+      _buildSummaryCard(
+        'Por cobrar',
+        ChileanUtils.formatCurrency(totalReceivable),
+        Icons.account_balance_wallet_outlined,
+        Colors.orange,
       ),
-      child: Row(
-        children: [
-          _buildSummaryCard(
-            'Total de cuentas pendientes de cobro',
-            ChileanUtils.formatCurrency(totalReceivable),
-            Icons.account_balance_wallet_outlined,
-            Colors.orange,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Vencidos hoy',
-            ChileanUtils.formatCurrency(overdue),
-            Icons.warning_amber_outlined,
-            Colors.red,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Vence en los próximos 30 días',
-            ChileanUtils.formatCurrency(dueIn30Days),
-            Icons.schedule_outlined,
-            Colors.blue,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Facturas vencidas',
-            '$overdueCount',
-            Icons.receipt_long_outlined,
-            overdueCount > 0 ? Colors.red : Colors.green,
-          ),
-        ],
+      _buildSummaryCard(
+        'Vencidos hoy',
+        ChileanUtils.formatCurrency(overdue),
+        Icons.warning_amber_outlined,
+        Colors.red,
       ),
+      _buildSummaryCard(
+        'Próximos 30 días',
+        ChileanUtils.formatCurrency(dueIn30Days),
+        Icons.schedule_outlined,
+        Colors.blue,
+      ),
+      _buildSummaryCard(
+        'Vencidas (Qt)',
+        '$overdueCount',
+        Icons.receipt_long_outlined,
+        overdueCount > 0 ? Colors.red : Colors.green,
+      ),
+    ];
+
+    // Responsive layout
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          // Mobile/Tablet: 2x2 Grid or vertical stack
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: cards[0]),
+                    const SizedBox(width: 12),
+                    Expanded(child: cards[1]),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: cards[2]),
+                    const SizedBox(width: 12),
+                    Expanded(child: cards[3]),
+                  ],
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Desktop: Single Row
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
+            child: Row(
+              children: [
+                cards[0],
+                const SizedBox(width: 24),
+                cards[1],
+                const SizedBox(width: 24),
+                cards[2],
+                const SizedBox(width: 24),
+                cards[3],
+              ],
+            ),
+          );
+        }
+      },
     );
   }
-  
-  Widget _buildSummaryCard(String label, String value, IconData icon, Color color) {
+
+  Widget _buildSummaryCard(
+      String label, String value, IconData icon, Color color) {
     final theme = Theme.of(context);
     return Expanded(
       child: Row(
@@ -403,7 +462,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildInvoiceCardsList(List<Invoice> invoices) {
     final theme = Theme.of(context);
     if (invoices.isEmpty) {
@@ -421,29 +480,38 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ),
       );
     }
-    
+
     return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 80), // Add padding for FAB
       itemCount: invoices.length,
       itemBuilder: (context, index) {
         final invoice = invoices[index];
         final isSelected = _selectedInvoice?.id == invoice.id;
         final isDark = theme.brightness == Brightness.dark;
-        
+
         return InkWell(
           onTap: () {
-            setState(() {
-              _selectedInvoice = isSelected ? null : invoice;
-            });
+            if (MediaQuery.of(context).size.width < 800) {
+              // Mobile: Navigate to details
+              context.push('/sales/invoices/${invoice.id}');
+            } else {
+              // Desktop/Tablet: Select for split view
+              setState(() {
+                _selectedInvoice = isSelected ? null : invoice;
+              });
+            }
           },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSelected 
-                  ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : Colors.blue[50]) 
+              color: isSelected
+                  ? (isDark
+                      ? theme.colorScheme.primary.withOpacity(0.15)
+                      : Colors.blue[50])
                   : theme.cardColor,
               border: Border(
                 bottom: BorderSide(color: theme.dividerColor),
-                left: isSelected 
+                left: isSelected
                     ? BorderSide(color: theme.colorScheme.primary, width: 3)
                     : BorderSide.none,
               ),
@@ -509,8 +577,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       },
     );
   }
-  
-  Widget _buildSearchBar() {
+
+  Widget _buildSearchBar([bool isMobile = false]) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -535,67 +603,80 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 isDense: true,
               ),
               onChanged: (value) => setState(() => _searchTerm = value),
             ),
           ),
           const SizedBox(width: 12),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.view_column_outlined),
-            tooltip: 'Columnas',
-            itemBuilder: (context) {
-              return _visibleColumns.keys.map((column) {
-                return CheckedPopupMenuItem<String>(
-                  value: column,
-                  checked: _visibleColumns[column] ?? false,
-                  child: Text(_getColumnLabel(column)),
-                );
-              }).toList();
-            },
-            onSelected: (column) {
-              setState(() {
-                _visibleColumns[column] = !(_visibleColumns[column] ?? false);
-              });
-              SharedPreferences.getInstance().then((prefs) {
-                prefs.setBool('invoice_visible_$column', _visibleColumns[column] ?? false);
-              });
-            },
-          ),
+          if (!isMobile) ...[
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.view_column_outlined),
+              tooltip: 'Columnas',
+              itemBuilder: (context) {
+                return _visibleColumns.keys.map((column) {
+                  return CheckedPopupMenuItem<String>(
+                    value: column,
+                    checked: _visibleColumns[column] ?? false,
+                    child: Text(_getColumnLabel(column)),
+                  );
+                }).toList();
+              },
+              onSelected: (column) {
+                setState(() {
+                  _visibleColumns[column] = !(_visibleColumns[column] ?? false);
+                });
+                SharedPreferences.getInstance().then((prefs) {
+                  prefs.setBool('invoice_visible_$column',
+                      _visibleColumns[column] ?? false);
+                });
+              },
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () => context.read<SalesService>().loadInvoices(forceRefresh: true),
+            onPressed: () =>
+                context.read<SalesService>().loadInvoices(forceRefresh: true),
           ),
         ],
       ),
     );
   }
-  
-  Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService, {required bool isFullWidth}) {
+
+  Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService,
+      {required bool isFullWidth}) {
     if (salesService.isLoadingInvoices) {
       return const Center(child: BrandedLoading());
     }
-    
+
     if (invoices.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
+            Icon(Icons.receipt_long_outlined,
+                size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty ? 'No hay facturas' : 'No se encontraron facturas',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey),
+              _searchTerm.isEmpty
+                  ? 'No hay facturas'
+                  : 'No se encontraron facturas',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: Colors.grey),
             ),
           ],
         ),
       );
     }
-    
-    final tableWidth = MediaQuery.of(context).size.width - (isFullWidth ? 0 : 400);
-    
+
+    final tableWidth =
+        MediaQuery.of(context).size.width - (isFullWidth ? 0 : 400);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -635,7 +716,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildTableHeader(bool isFullWidth) {
     return Container(
       decoration: BoxDecoration(
@@ -650,7 +731,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             width: 48,
             height: 38, // Match row height
             child: Checkbox(
-              value: false, 
+              value: false,
               onChanged: (val) {},
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
@@ -658,17 +739,17 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           for (final entry in _columnWidths.entries.toList())
             if (_visibleColumns[entry.key] ?? true)
               _buildColumnHeaderCell(
-                entry.key, 
+                entry.key,
                 isFullWidth ? entry.value * 1.5 : entry.value,
               ),
         ],
       ),
     );
   }
-  
+
   Widget _buildColumnHeaderCell(String columnName, double width) {
     final isSorted = _sortColumn == columnName;
-    
+
     return SizedBox(
       width: width,
       height: 38, // Match row height
@@ -699,7 +780,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       ),
                       if (isSorted)
                         Icon(
-                          _sortAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                          _sortAscending
+                              ? Icons.arrow_drop_up
+                              : Icons.arrow_drop_down,
                           size: 18,
                           color: Colors.grey[700],
                         ),
@@ -720,12 +803,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 child: GestureDetector(
                   onHorizontalDragUpdate: (details) {
                     setState(() {
-                      _columnWidths[columnName] = 
+                      _columnWidths[columnName] =
                           (_columnWidths[columnName]! + details.delta.dx)
                               .clamp(_minColumnWidth, _maxColumnWidth);
                     });
                   },
-                  onHorizontalDragEnd: (_) => _saveColumnWidth(columnName, _columnWidths[columnName]!),
+                  onHorizontalDragEnd: (_) =>
+                      _saveColumnWidth(columnName, _columnWidths[columnName]!),
                   child: Container(
                     width: 8,
                     color: Colors.transparent,
@@ -744,15 +828,17 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   List<Widget> _buildColumnHeaders(bool isFullWidth) {
     final headers = <Widget>[];
-    
+
     for (var entry in _visibleColumns.entries) {
       if (!entry.value) continue;
-      
-      final width = isFullWidth ? _columnWidths[entry.key]! * 1.5 : _columnWidths[entry.key]!;
-      
+
+      final width = isFullWidth
+          ? _columnWidths[entry.key]! * 1.5
+          : _columnWidths[entry.key]!;
+
       headers.add(
         _buildResizableHeader(
           column: entry.key,
@@ -761,10 +847,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ),
       );
     }
-    
+
     return headers;
   }
-  
+
   Widget _buildResizableHeader({
     required String column,
     required String label,
@@ -778,22 +864,26 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             child: InkWell(
               onTap: () => _onSort(column),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         label,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (_sortColumn == column) ...[
                       const SizedBox(width: 4),
                       Icon(
-                        _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                        _sortAscending
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
                         size: 14,
                       ),
                     ],
@@ -802,16 +892,18 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ),
             ),
           ),
-          
           MouseRegion(
             cursor: SystemMouseCursors.resizeColumn,
             child: GestureDetector(
               onHorizontalDragUpdate: (details) {
                 setState(() {
-                  _columnWidths[column] = (_columnWidths[column]! + details.delta.dx).clamp(80.0, 400.0);
+                  _columnWidths[column] =
+                      (_columnWidths[column]! + details.delta.dx)
+                          .clamp(80.0, 400.0);
                 });
               },
-              onHorizontalDragEnd: (_) => _saveColumnWidth(column, _columnWidths[column]!),
+              onHorizontalDragEnd: (_) =>
+                  _saveColumnWidth(column, _columnWidths[column]!),
               child: Container(
                 width: 8,
                 height: 40,
@@ -830,7 +922,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildInvoiceRow(Invoice invoice, bool isSelected, bool isFullWidth) {
     return InkWell(
       onTap: () {
@@ -906,23 +998,25 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   List<Widget> _buildRowCells(Invoice invoice, bool isFullWidth) {
     final cells = <Widget>[];
-    
+
     for (var entry in _visibleColumns.entries) {
       if (!entry.value) continue;
-      
-      final width = isFullWidth ? _columnWidths[entry.key]! * 1.5 : _columnWidths[entry.key]!;
+
+      final width = isFullWidth
+          ? _columnWidths[entry.key]! * 1.5
+          : _columnWidths[entry.key]!;
       cells.add(_buildCell(entry.key, invoice, width));
     }
-    
+
     return cells;
   }
-  
+
   Widget _buildCell(String column, Invoice invoice, double width) {
     Widget content;
-    
+
     switch (column) {
       case 'date':
         content = Text(
@@ -930,7 +1024,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           style: const TextStyle(fontSize: 13, color: Colors.black87),
         );
         break;
-        
+
       case 'invoice_number':
         content = Text(
           invoice.invoiceNumber,
@@ -941,7 +1035,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           ),
         );
         break;
-        
+
       case 'customer':
         content = Text(
           invoice.customerName ?? 'Sin registro',
@@ -949,11 +1043,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           overflow: TextOverflow.ellipsis,
         );
         break;
-        
+
       case 'status':
         content = _buildStatusChip(invoice.status);
         break;
-        
+
       case 'total':
         content = Text(
           ChileanUtils.formatCurrency(invoice.total),
@@ -964,7 +1058,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           ),
         );
         break;
-        
+
       case 'balance':
         content = Text(
           ChileanUtils.formatCurrency(invoice.balance),
@@ -975,11 +1069,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           ),
         );
         break;
-        
+
       default:
         content = const Text('-');
     }
-    
+
     return SizedBox(
       width: width,
       height: 38,
@@ -992,12 +1086,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildStatusChip(InvoiceStatus status) {
     Color bgColor;
     Color textColor;
     String label;
-    
+
     switch (status) {
       case InvoiceStatus.draft:
         bgColor = Colors.grey[200]!;
@@ -1030,7 +1124,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         label = 'ANULADA';
         break;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
@@ -1048,7 +1142,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildInvoicePreview(Invoice invoice) {
     return Container(
       color: Colors.grey[50],
@@ -1059,7 +1153,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final double availableWidth = constraints.maxWidth - 40;
-                
+
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Container(
@@ -1084,7 +1178,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildActionBar(Invoice invoice) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1105,7 +1199,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ),
               ),
               const Spacer(),
-              
+
               // Attachment icon
               IconButton(
                 icon: const Icon(Icons.attach_file, size: 20),
@@ -1115,7 +1209,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 padding: const EdgeInsets.all(8),
               ),
               const SizedBox(width: 4),
-              
+
               // Comment icon
               IconButton(
                 icon: const Icon(Icons.comment_outlined, size: 20),
@@ -1125,7 +1219,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 padding: const EdgeInsets.all(8),
               ),
               const SizedBox(width: 4),
-              
+
               // Close button
               IconButton(
                 icon: const Icon(Icons.close, size: 20),
@@ -1137,7 +1231,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ],
           ),
         ),
-        
+
         // BOTTOM ROW: Action buttons bar (light gray background)
         Container(
           width: double.infinity,
@@ -1161,13 +1255,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   label: const Text('Editar'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // Enviar correo button
                 TextButton.icon(
                   onPressed: () => _sendEmailInvoice(invoice),
@@ -1175,13 +1271,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   label: const Text('Enviar correo electrónico'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // Compartir button
                 TextButton.icon(
                   onPressed: () => _shareInvoice(invoice),
@@ -1189,29 +1287,37 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   label: const Text('Compartir'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // PDF/Imprimir dropdown
                 PopupMenuButton<String>(
                   offset: const Offset(0, 40),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.picture_as_pdf_outlined, size: 16, color: Colors.grey[600]),
+                        Icon(Icons.picture_as_pdf_outlined,
+                            size: 16, color: Colors.grey[600]),
                         const SizedBox(width: 6),
                         Text(
                           'PDF/Imprimir',
-                          style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w400),
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w400),
                         ),
                         const SizedBox(width: 2),
-                        Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey[600]),
+                        Icon(Icons.arrow_drop_down,
+                            size: 18, color: Colors.grey[600]),
                       ],
                     ),
                   ),
@@ -1246,13 +1352,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   },
                 ),
                 const SizedBox(width: 8),
-                
+
                 // Three dots menu
                 PopupMenuButton<String>(
                   offset: const Offset(0, 40),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Icon(Icons.more_horiz, size: 18, color: Colors.grey[600]),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Icon(Icons.more_horiz,
+                        size: 18, color: Colors.grey[600]),
                   ),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
@@ -1269,9 +1377,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                          Icon(Icons.delete_outline,
+                              size: 16, color: Colors.red),
                           SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red, fontSize: 13)),
+                          Text('Eliminar',
+                              style:
+                                  TextStyle(color: Colors.red, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -1291,21 +1402,21 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ],
     );
   }
-  
+
   // Cached logo bytes for PDF generation (avoids re-fetching on each PDF)
   Uint8List? _cachedLogoBytes;
   String? _cachedLogoUrl;
   bool _isGeneratingPdf = false;
-  
+
   Future<void> _downloadInvoicePDF(Invoice invoice) async {
     if (_isGeneratingPdf) return;
-    
+
     setState(() => _isGeneratingPdf = true);
-    
+
     try {
       final pdf = await _generateInvoicePDF(invoice);
       final bytes = await pdf.save();
-      
+
       // Use printing package for cross-platform PDF download/share
       await Printing.sharePdf(
         bytes: bytes,
@@ -1315,22 +1426,24 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       debugPrint('Error generating PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al generar PDF: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al generar PDF: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isGeneratingPdf = false);
     }
   }
-  
+
   Future<void> _printInvoice(Invoice invoice) async {
     if (_isGeneratingPdf) return;
-    
+
     setState(() => _isGeneratingPdf = true);
-    
+
     try {
       final pdf = await _generateInvoicePDF(invoice);
-      
+
       // Use printing package for cross-platform printing
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
@@ -1340,18 +1453,20 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       debugPrint('Error printing PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al imprimir: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al imprimir: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isGeneratingPdf = false);
     }
   }
-  
+
   Future<void> _previewInvoicePDF(Invoice invoice) async {
     try {
       final pdf = await _generateInvoicePDF(invoice);
-      
+
       // Show PDF preview dialog
       await showDialog(
         context: context,
@@ -1366,7 +1481,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Theme.of(context).primaryColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(4)),
                   ),
                   child: Row(
                     children: [
@@ -1375,7 +1491,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       Expanded(
                         child: Text(
                           'Vista previa: ${invoice.invoiceNumber}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
                       IconButton(
@@ -1405,15 +1522,17 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       debugPrint('Error previewing PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al mostrar vista previa: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al mostrar vista previa: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
-  
+
   Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
     final pdf = pw.Document();
-    
+
     // Try to load company logo (use cache if available)
     pw.ImageProvider? logoImage;
     try {
@@ -1436,7 +1555,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     } catch (e) {
       debugPrint('Error loading logo for PDF: $e');
     }
-    
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.letter,
@@ -1451,7 +1570,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               children: [
                 // Company logo or text fallback
                 if (logoImage != null)
-                  pw.Image(logoImage, width: 120, height: 40, fit: pw.BoxFit.contain)
+                  pw.Image(logoImage,
+                      width: 120, height: 40, fit: pw.BoxFit.contain)
                 else
                   pw.Text(
                     'VIÑABIKE',
@@ -1493,16 +1613,22 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ),
               ],
             ),
-            
+
             pw.SizedBox(height: 16),
-            
+
             // Company info - smaller
-            pw.Text('Viñabike', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Valparaíso', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Chile', style: const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            
+            pw.Text('Viñabike',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Valparaíso',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Chile',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+
             pw.SizedBox(height: 16),
-            
+
             // Customer and date info - more compact
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -1552,9 +1678,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ),
               ],
             ),
-            
+
             pw.SizedBox(height: 16),
-            
+
             // Items table - much tighter
             pw.Table(
               border: pw.TableBorder.all(
@@ -1574,7 +1700,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   decoration: const pw.BoxDecoration(color: PdfColors.grey800),
                   children: [
                     _buildPdfTableCell('#', isHeader: true),
-                    _buildPdfTableCell('Artículo & Descripción', isHeader: true),
+                    _buildPdfTableCell('Artículo & Descripción',
+                        isHeader: true),
                     _buildPdfTableCell('Cant.', isHeader: true),
                     _buildPdfTableCell('Tarifa', isHeader: true),
                     _buildPdfTableCell('Cantidad', isHeader: true),
@@ -1589,16 +1716,18 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       _buildPdfTableCell('${index + 1}'),
                       _buildPdfTableCell(item.productName ?? 'Sin nombre'),
                       _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
-                      _buildPdfTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
-                      _buildPdfTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.unitPrice)),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.lineTotal)),
                     ],
                   );
                 }),
               ],
             ),
-            
+
             pw.SizedBox(height: 16),
-            
+
             // Totals - tighter
             pw.Row(
               children: [
@@ -1612,10 +1741,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       _buildPdfTotalRow('Total', invoice.total, isTotal: true),
                       if (invoice.paidAmount > 0) ...[
                         pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                        _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
+                        _buildPdfTotalRow(
+                            'Pago realizado', -invoice.paidAmount),
                       ],
                       pw.Divider(thickness: 1, color: PdfColors.grey800),
-                      _buildPdfTotalRow('Saldo adeudado', invoice.balance, isTotal: true),
+                      _buildPdfTotalRow('Saldo adeudado', invoice.balance,
+                          isTotal: true),
                     ],
                   ),
                 ),
@@ -1625,10 +1756,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ),
       ),
     );
-    
+
     return pdf;
   }
-  
+
   pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -1642,8 +1773,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
-  pw.Widget _buildPdfTotalRow(String label, double amount, {bool isTotal = false}) {
+
+  pw.Widget _buildPdfTotalRow(String label, double amount,
+      {bool isTotal = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 5),
       child: pw.Row(
@@ -1669,27 +1801,28 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   void _sendEmailInvoice(Invoice invoice) {
     // TODO: Implement email sending
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Función de envío de correo próximamente')),
     );
   }
-  
+
   void _shareInvoice(Invoice invoice) {
     // TODO: Implement sharing
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Función de compartir próximamente')),
     );
   }
-  
+
   void _confirmDeleteInvoice(Invoice invoice) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar factura'),
-        content: Text('¿Está seguro que desea eliminar la factura ${invoice.invoiceNumber}?'),
+        content: Text(
+            '¿Está seguro que desea eliminar la factura ${invoice.invoiceNumber}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1701,12 +1834,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               // Delete invoice via service
               try {
                 final salesService = context.read<SalesService>();
-                final messenger = ScaffoldMessenger.of(context); // Capture before async
-                
+                final messenger =
+                    ScaffoldMessenger.of(context); // Capture before async
+
                 await salesService.deleteInvoice(invoice.id!);
                 setState(() => _selectedInvoice = null);
                 await salesService.loadInvoices(); // Reload list
-                
+
                 if (mounted) {
                   messenger.showSnackBar(
                     const SnackBar(
@@ -1732,7 +1866,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ],
       ),
     );
-  }  Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {
+  }
+
+  Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {
     // Calculate responsive sizes based on width
     final double scale = (containerWidth / 800.0).clamp(0.6, 1.0);
     final double padding = 40 * scale;
@@ -1741,12 +1877,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     final double labelSize = 12 * scale;
     final double dataSize = 13 * scale;
     final double spacing = 24 * scale;
-    
+
     // Get company logo URL
     final appearanceService = context.read<AppearanceService>();
     final logoUrl = appearanceService.companyLogoUrl;
     final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
-    
+
     return Padding(
       padding: EdgeInsets.all(padding),
       child: Column(
@@ -1885,7 +2021,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 decoration: BoxDecoration(color: Colors.grey[800]),
                 children: [
                   _buildTableCell('#', isHeader: true, scale: scale),
-                  _buildTableCell('Artículo & Descripción', isHeader: true, scale: scale),
+                  _buildTableCell('Artículo & Descripción',
+                      isHeader: true, scale: scale),
                   _buildTableCell('Cant.', isHeader: true, scale: scale),
                   _buildTableCell('Tarifa', isHeader: true, scale: scale),
                   _buildTableCell('Cantidad', isHeader: true, scale: scale),
@@ -1894,7 +2031,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               ...invoice.items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
-                
+
                 return TableRow(
                   children: [
                     _buildTableCell('${index + 1}', scale: scale),
@@ -1903,9 +2040,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       subtitle: item.description,
                       scale: scale,
                     ),
-                    _buildTableCell('${item.quantity.toStringAsFixed(2)}', scale: scale),
-                    _buildTableCell(ChileanUtils.formatCurrency(item.unitPrice), scale: scale),
-                    _buildTableCell(ChileanUtils.formatCurrency(item.lineTotal), scale: scale),
+                    _buildTableCell('${item.quantity.toStringAsFixed(2)}',
+                        scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(item.unitPrice),
+                        scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(item.lineTotal),
+                        scale: scale),
                   ],
                 );
               }),
@@ -1921,13 +2061,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   children: [
                     _buildTotalRow('Subtotal', invoice.subtotal, scale: scale),
                     const Divider(),
-                    _buildTotalRow('Total', invoice.total, isTotal: true, scale: scale),
+                    _buildTotalRow('Total', invoice.total,
+                        isTotal: true, scale: scale),
                     if (invoice.paidAmount > 0) ...[
                       const Divider(),
-                      _buildTotalRow('Pago realizado', -invoice.paidAmount, isNegative: true, scale: scale),
+                      _buildTotalRow('Pago realizado', -invoice.paidAmount,
+                          isNegative: true, scale: scale),
                     ],
                     const Divider(thickness: 2),
-                    _buildTotalRow('Saldo adeudado', invoice.balance, isTotal: true, scale: scale),
+                    _buildTotalRow('Saldo adeudado', invoice.balance,
+                        isTotal: true, scale: scale),
                   ],
                 ),
               ),
@@ -1937,10 +2080,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
-  Widget _buildTableCell(String text, {bool isHeader = false, String? subtitle, double scale = 1.0}) {
+
+  Widget _buildTableCell(String text,
+      {bool isHeader = false, String? subtitle, double scale = 1.0}) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
+      padding:
+          EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1957,7 +2102,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             Text(
               subtitle,
               style: TextStyle(
-                color: Colors.grey[600], 
+                color: Colors.grey[600],
                 fontSize: 11 * scale,
               ),
             ),
@@ -1966,8 +2111,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
-  Widget _buildTotalRow(String label, double amount, {bool isTotal = false, bool isNegative = false, double scale = 1.0}) {
+
+  Widget _buildTotalRow(String label, double amount,
+      {bool isTotal = false, bool isNegative = false, double scale = 1.0}) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 8 * scale),
       child: Row(
@@ -1981,7 +2127,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ),
           ),
           Text(
-            (isNegative && amount > 0 ? '(-) ' : '') + ChileanUtils.formatCurrency(amount.abs()),
+            (isNegative && amount > 0 ? '(-) ' : '') +
+                ChileanUtils.formatCurrency(amount.abs()),
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
               fontSize: (isTotal ? 16 : 14) * scale,
@@ -1992,7 +2139,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       ),
     );
   }
-  
+
   String _getColumnLabel(String column) {
     switch (column) {
       case 'date':

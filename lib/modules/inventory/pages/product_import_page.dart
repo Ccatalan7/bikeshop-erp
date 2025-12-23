@@ -158,7 +158,8 @@ class _ProductImportPageState extends State<ProductImportPage> {
                       '• Importar con Opciones: Actualiza productos existentes sin duplicar. '
                       'Ideal para actualizar precios, stock, o datos específicos.\n'
                       '• Importar Normal: Inserta nuevos y actualiza existentes por SKU (modo clásico).',
-                      style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
+                      style:
+                          TextStyle(fontSize: 13, color: Colors.blue.shade800),
                     ),
                   ],
                 ),
@@ -200,49 +201,51 @@ class _ProductImportPageState extends State<ProductImportPage> {
                 ),
                 const SizedBox(height: 16),
                 Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                AppButton(
-                  text: 'Descargar plantilla CSV',
-                  icon: Icons.download_outlined,
-                  type: ButtonType.outline,
-                  isLoading: _isDownloadingCsvTemplate,
-                  onPressed:
-                      _isDownloadingCsvTemplate ? null : _downloadTemplateCsv,
-                ),
-                AppButton(
-                  text: 'Descargar plantilla Excel',
-                  icon: Icons.grid_on_outlined,
-                  type: ButtonType.outline,
-                  isLoading: _isDownloadingExcelTemplate,
-                  onPressed: _isDownloadingExcelTemplate
-                      ? null
-                      : _downloadTemplateExcel,
-                ),
-                AppButton(
-                  text: 'Exportar catálogo CSV',
-                  icon: Icons.table_view_outlined,
-                  type: ButtonType.outline,
-                  isLoading: _isExportingCsv,
-                  onPressed:
-                      _isExportingCsv ? null : () => _exportProductsCsv(),
-                ),
-                AppButton(
-                  text: 'Exportar catálogo Excel',
-                  icon: Icons.system_update_alt_outlined,
-                  type: ButtonType.outline,
-                  isLoading: _isExportingExcel,
-                  onPressed:
-                      _isExportingExcel ? null : () => _exportProductsExcel(),
-                ),
-              ], // Wrap children (buttons)
-            ), // Wrap (buttons)
-          ], // Inner Column children
-        ), // Inner Column
-      ), // Padding
-    ), // Card
-    ], // Outer Column children
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    AppButton(
+                      text: 'Descargar plantilla CSV',
+                      icon: Icons.download_outlined,
+                      type: ButtonType.outline,
+                      isLoading: _isDownloadingCsvTemplate,
+                      onPressed: _isDownloadingCsvTemplate
+                          ? null
+                          : _downloadTemplateCsv,
+                    ),
+                    AppButton(
+                      text: 'Descargar plantilla Excel',
+                      icon: Icons.grid_on_outlined,
+                      type: ButtonType.outline,
+                      isLoading: _isDownloadingExcelTemplate,
+                      onPressed: _isDownloadingExcelTemplate
+                          ? null
+                          : _downloadTemplateExcel,
+                    ),
+                    AppButton(
+                      text: 'Exportar catálogo CSV',
+                      icon: Icons.table_view_outlined,
+                      type: ButtonType.outline,
+                      isLoading: _isExportingCsv,
+                      onPressed:
+                          _isExportingCsv ? null : () => _exportProductsCsv(),
+                    ),
+                    AppButton(
+                      text: 'Exportar catálogo Excel',
+                      icon: Icons.system_update_alt_outlined,
+                      type: ButtonType.outline,
+                      isLoading: _isExportingExcel,
+                      onPressed: _isExportingExcel
+                          ? null
+                          : () => _exportProductsExcel(),
+                    ),
+                  ], // Wrap children (buttons)
+                ), // Wrap (buttons)
+              ], // Inner Column children
+            ), // Inner Column
+          ), // Padding
+        ), // Card
+      ], // Outer Column children
     ); // Outer Column
   }
 
@@ -387,46 +390,87 @@ class _ProductImportPageState extends State<ProductImportPage> {
                 final header = parseResult.headers[index];
                 final selection = _mapping[header];
                 final sample = sampleRow != null ? sampleRow[header] ?? '' : '';
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 600) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            header,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                header,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (sample.isNotEmpty)
+                                Text(
+                                  sample,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String?>(
+                            value: selection,
+                            items: _buildDropdownItems(header),
+                            onChanged: (value) => _updateMapping(header, value),
+                            decoration: const InputDecoration(
+                              labelText: 'Campo destino',
+                              border: OutlineInputBorder(),
                             ),
                           ),
-                          if (sample.isNotEmpty)
-                            Text(
-                              sample,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 3,
-                      child: DropdownButtonFormField<String?>(
-                        value: selection,
-                        items: _buildDropdownItems(header),
-                        onChanged: (value) => _updateMapping(header, value),
-                        decoration: const InputDecoration(
-                          labelText: 'Campo destino',
-                          border: OutlineInputBorder(),
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                header,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (sample.isNotEmpty)
+                                Text(
+                                  sample,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: DropdownButtonFormField<String?>(
+                            value: selection,
+                            items: _buildDropdownItems(header),
+                            onChanged: (value) => _updateMapping(header, value),
+                            decoration: const InputDecoration(
+                              labelText: 'Campo destino',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -528,7 +572,8 @@ class _ProductImportPageState extends State<ProductImportPage> {
           icon: Icons.sync_outlined,
           type: ButtonType.secondary,
           isLoading: _isImporting,
-          onPressed: _isImporting || missing.isNotEmpty ? null : _runSmartImport,
+          onPressed:
+              _isImporting || missing.isNotEmpty ? null : _runSmartImport,
         ),
         const SizedBox(width: 12),
         // Classic Import (Insert/Update all)
@@ -797,14 +842,15 @@ class _ProductImportPageState extends State<ProductImportPage> {
           message:
               'Importación completada: ${summary.inserted} nuevos, ${summary.updated} actualizados.');
       _refreshInventoryCaches();
-      
+
       // Navigate back to product list after successful import
       if (mounted) {
         // Small delay to ensure caches are refreshed
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
           // Add timestamp to force route refresh
-          context.go('/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
+          context.go(
+              '/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
         }
       }
     } catch (e) {
@@ -873,10 +919,10 @@ class _ProductImportPageState extends State<ProductImportPage> {
     try {
       // 2. Transform parsed rows to product data maps
       final productRecords = <Map<String, dynamic>>[];
-      
+
       for (final row in parseResult.rows) {
         final productData = <String, dynamic>{};
-        
+
         // Map each field from the file
         _mapping.forEach((fileHeader, fieldKey) {
           if (fieldKey != null && row.containsKey(fileHeader)) {
@@ -886,10 +932,10 @@ class _ProductImportPageState extends State<ProductImportPage> {
             }
           }
         });
-        
+
         // Skip empty records
         if (productData.isEmpty) continue;
-        
+
         debugPrint('📦 Mapped product data: $productData');
         productRecords.add(productData);
       }
@@ -907,7 +953,8 @@ class _ProductImportPageState extends State<ProductImportPage> {
 
       // 4. Show conflict preview if there are changes
       if (preview.hasConflicts || preview.inserted > 0 || preview.updated > 0) {
-        debugPrint('📋 Showing preview dialog: ${preview.conflicts.length} conflicts, ${preview.inserted} inserted, ${preview.updated} updated');
+        debugPrint(
+            '📋 Showing preview dialog: ${preview.conflicts.length} conflicts, ${preview.inserted} inserted, ${preview.updated} updated');
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => ImportConflictPreviewDialog(
@@ -917,19 +964,20 @@ class _ProductImportPageState extends State<ProductImportPage> {
         );
 
         debugPrint('📋 Preview dialog result: $confirmed');
-        
+
         if (confirmed != true || !mounted) {
           debugPrint('⚠️ Import cancelled by user or widget unmounted');
           setState(() => _isImporting = false);
           return;
         }
-        
+
         debugPrint('✅ User confirmed - proceeding with actual import');
       } else {
         // No changes detected
         setState(() {
           _isImporting = false;
-          _errorMessage = 'No se detectaron cambios. Todos los productos ya están actualizados.';
+          _errorMessage =
+              'No se detectaron cambios. Todos los productos ya están actualizados.';
         });
         return;
       }
@@ -942,7 +990,8 @@ class _ProductImportPageState extends State<ProductImportPage> {
         options: options.copyWith(previewMode: false),
       );
 
-      debugPrint('📊 Import result: inserted=${importResult.inserted}, updated=${importResult.updated}, skipped=${importResult.skipped}, failed=${importResult.failed}');
+      debugPrint(
+          '📊 Import result: inserted=${importResult.inserted}, updated=${importResult.updated}, skipped=${importResult.skipped}, failed=${importResult.failed}');
 
       if (!mounted) return;
 
@@ -952,29 +1001,32 @@ class _ProductImportPageState extends State<ProductImportPage> {
           processed: importResult.total,
           inserted: importResult.inserted,
           updated: importResult.updated,
-          errors: importResult.errors.map((e) => ProductImportError(
-            rowNumber: 0,
-            message: e,
-            rowSnapshot: {},
-          )).toList(),
+          errors: importResult.errors
+              .map((e) => ProductImportError(
+                    rowNumber: 0,
+                    message: e,
+                    rowSnapshot: {},
+                  ))
+              .toList(),
           elapsed: Duration.zero,
         );
       });
 
       _showSnack(
         message: 'Importación completada: ${importResult.inserted} nuevos, '
-                 '${importResult.updated} actualizados, ${importResult.skipped} omitidos.',
+            '${importResult.updated} actualizados, ${importResult.skipped} omitidos.',
       );
-      
+
       _refreshInventoryCaches();
-      
+
       // Navigate back to product list after successful import
       if (mounted) {
         // Small delay to ensure caches are refreshed
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
           // Add timestamp to force route refresh
-          context.go('/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
+          context.go(
+              '/inventory/products?refresh=${DateTime.now().millisecondsSinceEpoch}');
         }
       }
     } catch (e) {

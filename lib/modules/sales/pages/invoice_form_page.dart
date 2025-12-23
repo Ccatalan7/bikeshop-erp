@@ -22,6 +22,13 @@ import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../inventory/pages/product_form_page.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data' show Uint8List;
+
+import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
@@ -1032,219 +1039,363 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Widget _buildHeader(ThemeData theme) {
-    final invoiceNumber = _invoiceNumberController.text.trim();
-    final hasExistingInvoice = _currentInvoiceId != null;
-    final title = invoiceNumber.isNotEmpty
-        ? 'Factura $invoiceNumber'
-        : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
 
-    final actionButtons = <Widget>[];
+        final invoiceNumber = _invoiceNumberController.text.trim();
+        final hasExistingInvoice = _currentInvoiceId != null;
+        final title = invoiceNumber.isNotEmpty
+            ? 'Factura $invoiceNumber'
+            : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
 
-    if (_canEditFields) {
-      // Scanner button (only when editing)
-      actionButtons.add(
-        IconButton(
-          onPressed: _toggleScanner,
-          icon: Icon(
-            _scannerEnabled
-                ? Icons.qr_code_scanner
-                : Icons.qr_code_scanner_outlined,
-            color: _scannerEnabled ? Colors.green : null,
-          ),
-          tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-          style: IconButton.styleFrom(
-            backgroundColor:
-                _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
-          ),
-        ),
-      );
-      actionButtons.add(const SizedBox(width: 8));
+        final actionButtons = <Widget>[];
 
-      if (_loadedInvoice != null) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isSaving ? null : _cancelEditing,
-            icon: const Icon(Icons.close),
-            label: const Text('Cancelar'),
-          ),
-        );
-      }
-      actionButtons.add(
-        AppButton(
-          text: 'Guardar borrador',
-          icon: Icons.save_outlined,
-          onPressed: _isSaving ? null : _saveInvoice,
-          isLoading: _isSaving,
-        ),
-      );
-    } else {
-      // Not editing - show workflow buttons based on status
-      if (_status == InvoiceStatus.draft) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : _startEditing,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Editar'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        if (_canMarkAsSent) {
+        if (_canEditFields) {
+          // Scanner button (only when editing)
           actionButtons.add(
-            FilledButton.icon(
-              onPressed: _isUpdatingStatus
-                  ? null
-                  : () => _updateStatus(InvoiceStatus.sent),
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_outlined),
-              label: const Text('Enviar'),
-            ),
-          );
-        }
-      } else if (_status == InvoiceStatus.sent) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(InvoiceStatus.draft),
-            icon: const Icon(Icons.undo_outlined),
-            label: const Text('Volver a borrador'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        actionButtons.add(
-          FilledButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(InvoiceStatus.confirmed),
-            icon: _isUpdatingStatus
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle_outline),
-            label: const Text('Confirmar'),
-          ),
-        );
-      } else if (_status == InvoiceStatus.confirmed) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(InvoiceStatus.sent),
-            icon: const Icon(Icons.undo_outlined),
-            label: const Text('Volver a enviado'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        if (_canRegisterPayment) {
-          actionButtons.add(
-            FilledButton.icon(
-              onPressed: _openPaymentForm,
-              icon: const Icon(Icons.payments_outlined),
-              label: const Text('Registrar pago'),
-            ),
-          );
-        }
-      } else if (_status == InvoiceStatus.paid) {
-        // Paid status: Can only undo payment (which deletes payment record)
-        // Status will auto-revert to 'confirmed' via database trigger
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _undoLastPayment,
-            icon: const Icon(Icons.undo_outlined, color: Colors.red),
-            label: const Text('Deshacer pago',
-                style: TextStyle(color: Colors.red)),
-          ),
-        );
-      }
-    }
-
-    final actionWidgets = <Widget>[
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.payments_outlined,
-                size: 16, color: theme.colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              ChileanUtils.formatCurrency(_total),
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w700,
+            IconButton(
+              onPressed: _toggleScanner,
+              icon: Icon(
+                _scannerEnabled
+                    ? Icons.qr_code_scanner
+                    : Icons.qr_code_scanner_outlined,
+                color: _scannerEnabled ? Colors.green : null,
+              ),
+              tooltip:
+                  _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+              style: IconButton.styleFrom(
+                backgroundColor:
+                    _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
               ),
             ),
-          ],
-        ),
-      ),
-      _buildStatusChip(theme),
-      ...actionButtons,
-    ];
+          );
+          if (!isMobile) actionButtons.add(const SizedBox(width: 8));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () {
-              // Check if we should return to a specific page (e.g., from pegas table)
-              final returnTo =
-                  GoRouterState.of(context).uri.queryParameters['returnTo'];
-              if (returnTo != null && returnTo.isNotEmpty) {
-                context.go(returnTo);
-              } else {
-                // Default: Navigate back to invoice list
-                context.go('/sales/invoices');
-              }
-            },
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Volver',
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+          if (_loadedInvoice != null) {
+            if (isMobile) {
+              actionButtons.add(IconButton(
+                onPressed: _isSaving ? null : _cancelEditing,
+                icon: const Icon(Icons.close),
+                tooltip: 'Cancelar',
+              ));
+            } else {
+              actionButtons.add(
+                OutlinedButton.icon(
+                  onPressed: _isSaving ? null : _cancelEditing,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Cancelar'),
                 ),
-                const SizedBox(height: 4),
+              );
+            }
+          }
+          if (isMobile) {
+            actionButtons.add(
+              IconButton.filled(
+                onPressed: _isSaving ? null : _saveInvoice,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.save),
+                tooltip: 'Guardar borrador',
+              ),
+            );
+          } else {
+            actionButtons.add(
+              AppButton(
+                text: 'Guardar borrador',
+                icon: Icons.save_outlined,
+                onPressed: _isSaving ? null : _saveInvoice,
+                isLoading: _isSaving,
+              ),
+            );
+          }
+        } else {
+          // Not editing - show workflow buttons based on status
+
+          // PDF Download Button (Always available in view mode if invoice exists)
+          if (_loadedInvoice != null) {
+            actionButtons.add(
+              IconButton(
+                onPressed: () => _downloadInvoicePDF(_loadedInvoice!),
+                icon: _isGeneratingPdf
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.picture_as_pdf),
+                tooltip: 'Descargar PDF',
+              ),
+            );
+            if (!isMobile) actionButtons.add(const SizedBox(width: 8));
+          }
+
+          if (_status == InvoiceStatus.draft) {
+            if (isMobile) {
+              // Combine into simplified actions or menu?
+              // For now, just icons
+              actionButtons.add(IconButton.outlined(
+                onPressed: _isUpdatingStatus ? null : _startEditing,
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Editar',
+              ));
+            } else {
+              actionButtons.add(
+                OutlinedButton.icon(
+                  onPressed: _isUpdatingStatus ? null : _startEditing,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar'),
+                ),
+              );
+            }
+
+            if (!isMobile) actionButtons.add(const SizedBox(width: 8));
+
+            if (_canMarkAsSent) {
+              if (isMobile) {
+                actionButtons.add(IconButton.filled(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.sent),
+                  icon: _isUpdatingStatus
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.send_outlined),
+                  tooltip: 'Enviar',
+                ));
+              } else {
+                actionButtons.add(
+                  FilledButton.icon(
+                    onPressed: _isUpdatingStatus
+                        ? null
+                        : () => _updateStatus(InvoiceStatus.sent),
+                    icon: _isUpdatingStatus
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: const Text('Enviar'),
+                  ),
+                );
+              }
+            }
+          } else if (_status == InvoiceStatus.sent) {
+            // Mobile handling for SENT status
+            // ... Similar pattern ...
+            if (isMobile) {
+              actionButtons.add(PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (val) {
+                  if (val == 'undo') _updateStatus(InvoiceStatus.draft);
+                  if (val == 'confirm') _updateStatus(InvoiceStatus.confirmed);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: 'undo', child: Text('Volver a borrador')),
+                  const PopupMenuItem(
+                      value: 'confirm', child: Text('Confirmar')),
+                ],
+              ));
+            } else {
+              actionButtons.add(
+                OutlinedButton.icon(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.draft),
+                  icon: const Icon(Icons.undo_outlined),
+                  label: const Text('Volver a borrador'),
+                ),
+              );
+              actionButtons.add(const SizedBox(width: 8));
+              actionButtons.add(
+                FilledButton.icon(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.confirmed),
+                  icon: _isUpdatingStatus
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: const Text('Confirmar'),
+                ),
+              );
+            }
+          } else if (_status == InvoiceStatus.confirmed) {
+            // Mobile handling for CONFIRMED status
+            if (isMobile) {
+              actionButtons.add(PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (val) {
+                  if (val == 'undo') _updateStatus(InvoiceStatus.sent);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: 'undo', child: Text('Volver a enviado')),
+                ],
+              ));
+              if (_canRegisterPayment) {
+                actionButtons.add(IconButton.filled(
+                  onPressed: _openPaymentForm,
+                  icon: const Icon(Icons.payments_outlined),
+                  tooltip: 'Registrar pago',
+                ));
+              }
+            } else {
+              actionButtons.add(
+                OutlinedButton.icon(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.sent),
+                  icon: const Icon(Icons.undo_outlined),
+                  label: const Text('Volver a enviado'),
+                ),
+              );
+              actionButtons.add(const SizedBox(width: 8));
+              if (_canRegisterPayment) {
+                actionButtons.add(
+                  FilledButton.icon(
+                    onPressed: _openPaymentForm,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Registrar pago'),
+                  ),
+                );
+              }
+            }
+          } else if (_status == InvoiceStatus.paid) {
+            if (isMobile) {
+              actionButtons.add(IconButton.outlined(
+                onPressed: _undoLastPayment,
+                icon: const Icon(Icons.undo_outlined, color: Colors.red),
+                tooltip: 'Deshacer pago',
+              ));
+            } else {
+              actionButtons.add(
+                OutlinedButton.icon(
+                  onPressed: _undoLastPayment,
+                  icon: const Icon(Icons.undo_outlined, color: Colors.red),
+                  label: const Text('Deshacer pago',
+                      style: TextStyle(color: Colors.red)),
+                ),
+              );
+            }
+          }
+        }
+
+        final actionWidgets = <Widget>[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.payments_outlined,
+                    size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
                 Text(
-                  'Emite documentos auditables y con IVA integrado.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  ChileanUtils.formatCurrency(_total),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: actionWidgets,
+          if (!isMobile) _buildStatusChip(theme),
+          ...actionButtons,
+        ];
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      final returnTo = GoRouterState.of(context)
+                          .uri
+                          .queryParameters['returnTo'];
+                      if (returnTo != null && returnTo.isNotEmpty) {
+                        context.go(returnTo);
+                      } else {
+                        context.go('/sales/invoices');
+                      }
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Volver',
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: isMobile ? 20 : null),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (!isMobile)
+                          Text(
+                            'Emite documentos auditables y con IVA integrado.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (!isMobile) ...[
+                    const SizedBox(width: 16),
+                    Flexible(
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: actionWidgets,
+                      ),
+                    ),
+                  ]
+                ],
               ),
-            ),
+              if (isMobile) ...[
+                const SizedBox(height: 12),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildStatusChip(theme),
+                      Flexible(
+                          child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.end,
+                        children:
+                            actionButtons, // Reuse logic but maybe needs filtering if we used widgets
+                      ))
+                    ])
+              ]
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1477,6 +1628,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget _buildLineItemsSection(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          return _buildMobileLineItemsList(theme);
+        }
+
         // Calculate minimum required width based on columns
         const minTableWidth = 800.0; // Reduced from 900
         // Use available width if larger, otherwise use minimum (enables scroll)
@@ -1753,6 +1908,206 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMobileLineItemsList(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_lineEntries.isEmpty && !_canEditFields)
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text(
+              'No hay artículos en esta factura',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ..._lineEntries.asMap().entries.map((entry) =>
+            _buildMobileLineItemCard(theme, entry.key + 1, entry.value)),
+        if (_canEditFields)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: ElevatedButton.icon(
+              onPressed: _showMobileAddLineSheet,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar Artículo'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLineItemCard(
+      ThemeData theme, int index, _InvoiceLineEntry entry) {
+    final line = entry.line;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        line.name,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (line.sku.isNotEmpty)
+                        Text(
+                          line.sku,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_canEditFields)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        // Implement edit dialog
+                      } else if (value == 'delete') {
+                        _removeLine(entry);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar',
+                                style: TextStyle(color: Colors.red))
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Qty & Price
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        '${line.quantity} x ${ChileanUtils.formatCurrency(line.unitPrice)}'),
+                    if (line.discount > 0)
+                      Text('Desc: ${line.discount}%',
+                          style: const TextStyle(
+                              color: Colors.green, fontSize: 12)),
+                  ],
+                ),
+                // Total
+                Text(
+                  ChileanUtils.formatCurrency(line.netAmount),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold, color: theme.primaryColor),
+                ),
+              ],
+            ),
+            if (_canEditFields) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: entry.quantityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Cant.',
+                        isDense: true,
+                        contentPadding: EdgeInsets.all(8),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _handleLinesChanged(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: entry
+                          .unitPriceController, // Assuming this exists or using helper
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio',
+                        isDense: true,
+                        contentPadding: EdgeInsets.all(8),
+                        border: OutlineInputBorder(),
+                        prefixText: '\$ ',
+                      ),
+                      onChanged: (_) => _handleLinesChanged(),
+                    ),
+                  ),
+                ],
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMobileAddLineSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Agregar Artículo',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              SmartProductField(
+                onProductChanged: (selection) {
+                  if (selection == null) return;
+                  Navigator.pop(context);
+                  if (selection.isCatalogProduct && selection.product != null) {
+                    _addProductLine(selection.product!);
+                  } else if (!selection.isCatalogProduct &&
+                      selection.productName != null) {
+                    _addCustomItemLine(selection.productName!);
+                  }
+                },
+                allowCustomItems: true,
+                showCost: false,
+                hintText: 'Buscar por nombre o SKU...',
+                autoFocus: true,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -2146,6 +2501,311 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           color: color,
           fontWeight: FontWeight.w600,
         ),
+      ),
+    );
+  }
+
+  // Cached logo bytes for PDF generation
+  Uint8List? _cachedLogoBytes;
+  String? _cachedLogoUrl;
+  bool _isGeneratingPdf = false;
+
+  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+    if (_isGeneratingPdf) return;
+
+    setState(() => _isGeneratingPdf = true);
+
+    try {
+      final pdf = await _generateInvoicePDF(invoice);
+      final bytes = await pdf.save();
+
+      // Use printing package for cross-platform PDF download/share
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'factura_${invoice.invoiceNumber}.pdf',
+      );
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al generar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
+  }
+
+  Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
+    final pdf = pw.Document();
+
+    // Try to load company logo (use cache if available)
+    pw.ImageProvider? logoImage;
+    try {
+      final appearanceService = context.read<AppearanceService>();
+      final logoUrl = appearanceService.companyLogoUrl;
+      if (logoUrl != null && logoUrl.isNotEmpty) {
+        // Check if we already have cached bytes for this URL
+        if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
+          logoImage = pw.MemoryImage(_cachedLogoBytes!);
+        } else {
+          // Fetch and cache
+          final response = await http.get(Uri.parse(logoUrl));
+          if (response.statusCode == 200) {
+            _cachedLogoBytes = response.bodyBytes;
+            _cachedLogoUrl = logoUrl;
+            logoImage = pw.MemoryImage(_cachedLogoBytes!);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading logo for PDF: $e');
+    }
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.all(40),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header - much more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Company logo or text fallback
+                if (logoImage != null)
+                  pw.Image(logoImage,
+                      width: 120, height: 40, fit: pw.BoxFit.contain)
+                else
+                  pw.Text(
+                    'VIÑABIKE',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
+                  ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      '# ${invoice.invoiceNumber}',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Saldo adeudado',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      ChileanUtils.formatCurrency(invoice.balance),
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Company info - smaller
+            pw.Text('Viñabike',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Valparaíso',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+            pw.Text('Chile',
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
+
+            pw.SizedBox(height: 16),
+
+            // Customer and date info - more compact
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Facturar a',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      invoice.customerName ?? 'Sin registro',
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue700,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Fecha de la factura :',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      ChileanUtils.formatDate(invoice.date),
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Items table - much tighter
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey300,
+                width: 0.3, // Ultra thin borders
+              ),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(35),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FixedColumnWidth(70),
+                4: const pw.FixedColumnWidth(70),
+              },
+              children: [
+                // Header row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
+                  children: [
+                    _buildPdfTableCell('#', isHeader: true),
+                    _buildPdfTableCell('Artículo & Descripción',
+                        isHeader: true),
+                    _buildPdfTableCell('Cant.', isHeader: true),
+                    _buildPdfTableCell('Tarifa', isHeader: true),
+                    _buildPdfTableCell('Cantidad', isHeader: true),
+                  ],
+                ),
+                // Data rows
+                ...invoice.items.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return pw.TableRow(
+                    children: [
+                      _buildPdfTableCell('${index + 1}'),
+                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.unitPrice)),
+                      _buildPdfTableCell(
+                          ChileanUtils.formatCurrency(item.lineTotal)),
+                    ],
+                  );
+                }),
+              ],
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Totals - tighter
+            pw.Row(
+              children: [
+                pw.Spacer(),
+                pw.SizedBox(
+                  width: 250,
+                  child: pw.Column(
+                    children: [
+                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
+                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
+                      if (invoice.paidAmount > 0) ...[
+                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                        _buildPdfTotalRow(
+                            'Pago realizado', -invoice.paidAmount),
+                      ],
+                      pw.Divider(thickness: 1, color: PdfColors.grey800),
+                      _buildPdfTotalRow('Saldo adeudado', invoice.balance,
+                          isTotal: true),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          color: isHeader ? PdfColors.white : PdfColors.black,
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+          fontSize: isHeader ? 9 : 10,
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfTotalRow(String label, double amount,
+      {bool isTotal = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 5),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
+            ),
+          ),
+          pw.Text(
+            ChileanUtils.formatCurrency(amount.abs()),
+            style: pw.TextStyle(
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontSize: isTotal ? 12 : 11,
+              color: PdfColors.black,
+            ),
+          ),
+        ],
       ),
     );
   }

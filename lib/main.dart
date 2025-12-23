@@ -8,6 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'shared/services/notification_service.dart';
 
 import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
@@ -113,6 +116,16 @@ Future<void> main() async {
           'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
     }
 
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      _logTiming('FIREBASE_INIT');
+    } catch (e) {
+      debugPrint('⚠️ Firebase Config missing for this platform: $e');
+      _logTiming('FIREBASE_INIT_SKIPPED');
+    }
+
     await Supabase.initialize(
       url: SupabaseConfig.url,
       anonKey: SupabaseConfig.anonKey,
@@ -123,6 +136,10 @@ Future<void> main() async {
     _logTiming('SUPABASE_INIT');
 
     // Handle deep links for OAuth callbacks on desktop and mobile
+    // Initialize Notifications (FCM for Mobile/Web, Local for Desktop)
+    await NotificationService().init();
+    _logTiming('NOTIFICATIONS_INIT');
+
     if (!kIsWeb) {
       final appLinks = AppLinks();
       appLinks.uriLinkStream.listen((uri) {

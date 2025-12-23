@@ -1366,7 +1366,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         key: _formKey,
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(Theme.of(context)),
             Expanded(
               child: _isLoading
                   ? const Center(child: BrandedLoading())
@@ -1378,110 +1378,183 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
   }
 
-  Widget _buildHeader() {
-    final theme = Theme.of(context);
+  Widget _buildHeader(ThemeData theme) {
+    final title = widget.invoiceId == null
+        ? 'Nueva factura de compra'
+        : 'Factura ${_invoiceNumberController.text}';
 
-    // Determine title based on context
-    String title;
-    if (widget.invoiceId == null) {
-      title = 'Nueva factura de compra';
-    } else if (_isEditing) {
-      title = 'Editando factura de compra';
-    } else {
-      title = 'Factura de compra';
+    // Helper to build the action buttons (Scanner, OCR, Save)
+    List<Widget> buildEditActions() {
+      if (widget.readOnly || !_canEditFields) return [];
+      return [
+        // OCR Scanner Button
+        IconButton(
+          onPressed: _openOCRScanner,
+          icon: const Icon(Icons.document_scanner_outlined),
+          tooltip: 'Escanear Factura (OCR)',
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.blue.withOpacity(0.1),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Barcode Scanner Button
+        IconButton(
+          onPressed: _toggleScanner,
+          icon: Icon(
+            _scannerEnabled
+                ? Icons.qr_code_scanner
+                : Icons.qr_code_scanner_outlined,
+            color: _scannerEnabled ? Colors.green : null,
+          ),
+          tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+          style: IconButton.styleFrom(
+            backgroundColor:
+                _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 0, // Don't force expand in Row, but allow in Column if needed
+          child: AppButton(
+            text: 'Guardar',
+            icon: Icons.save,
+            onPressed: _isSaving ? null : _saveInvoice,
+            isLoading: _isSaving,
+          ),
+        ),
+      ];
     }
 
-    // Workflow buttons based on status and prepayment model
-    final actionButtons = <Widget>[];
+    // Helper to build status/workflow actions
+    List<Widget> buildWorkflowActions() {
+      final actionButtons = <Widget>[];
 
-    if (!widget.readOnly && widget.invoiceId != null) {
-      // Use form's payment model state
-      final isPrepayment = _isPrepaymentModel;
+      if (!widget.readOnly && widget.invoiceId != null) {
+        // Use form's payment model state
+        final isPrepayment = _isPrepaymentModel;
 
-      if (_status == PurchaseInvoiceStatus.draft) {
-        // Draft: Can edit (if not editing), send to supplier, or delete
+        if (_status == PurchaseInvoiceStatus.draft) {
+          // Draft: Can edit (if not editing), send to supplier, or delete
 
-        // Show "Editar" button when viewing draft (not editing)
-        if (!_isEditing) {
+          // Show "Editar" button when viewing draft (not editing)
+          if (!_isEditing) {
+            actionButtons.add(
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isEditing = true;
+                  });
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar'),
+              ),
+            );
+            actionButtons.add(const SizedBox(width: 8));
+          }
+
           actionButtons.add(
             OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _isEditing = true;
-                });
-              },
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Editar'),
+              onPressed: _deleteInvoice,
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              label:
+                  const Text('Eliminar', style: TextStyle(color: Colors.red)),
             ),
           );
           actionButtons.add(const SizedBox(width: 8));
-        }
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.sent),
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_outlined),
+              label: const Text('Enviar'),
+            ),
+          );
+        } else if (_status == PurchaseInvoiceStatus.sent) {
+          // Sent: Can revert to draft or confirm
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.draft),
+              icon: const Icon(Icons.undo_outlined),
+              label: const Text('Volver a borrador'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
+          actionButtons.add(
+            FilledButton.icon(
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+              icon: _isUpdatingStatus
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check_circle_outline),
+              label: const Text('Confirmar'),
+            ),
+          );
+        } else if (_status == PurchaseInvoiceStatus.confirmed) {
+          // Confirmed: Next step depends on prepayment model
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.sent),
+              icon: const Icon(Icons.undo_outlined),
+              label: const Text('Volver a enviado'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
 
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _deleteInvoice,
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            label: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        actionButtons.add(
-          FilledButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(PurchaseInvoiceStatus.sent),
-            icon: _isUpdatingStatus
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_outlined),
-            label: const Text('Enviar'),
-          ),
-        );
-      } else if (_status == PurchaseInvoiceStatus.sent) {
-        // Sent: Can revert to draft or confirm
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(PurchaseInvoiceStatus.draft),
-            icon: const Icon(Icons.undo_outlined),
-            label: const Text('Volver a borrador'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        actionButtons.add(
-          FilledButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
-            icon: _isUpdatingStatus
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle_outline),
-            label: const Text('Confirmar'),
-          ),
-        );
-      } else if (_status == PurchaseInvoiceStatus.confirmed) {
-        // Confirmed: Next step depends on prepayment model
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(PurchaseInvoiceStatus.sent),
-            icon: const Icon(Icons.undo_outlined),
-            label: const Text('Volver a enviado'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-
-        if (isPrepayment) {
-          // Prepayment: Pay first, then receive
+          if (isPrepayment) {
+            // Prepayment: Pay first, then receive
+            actionButtons.add(
+              FilledButton.icon(
+                onPressed: _openPaymentForm,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Registrar pago'),
+              ),
+            );
+          } else {
+            // Standard: Receive first, then pay
+            actionButtons.add(
+              FilledButton.icon(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(PurchaseInvoiceStatus.received),
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.inventory_2_outlined),
+                label: const Text('Marcar como recibida'),
+              ),
+            );
+          }
+        } else if (_status == PurchaseInvoiceStatus.received) {
+          // Received (standard workflow): Can register payment
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: _isUpdatingStatus
+                  ? null
+                  : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+              icon: const Icon(Icons.undo_outlined),
+              label: const Text('Volver a confirmado'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
           actionButtons.add(
             FilledButton.icon(
               onPressed: _openPaymentForm,
@@ -1489,195 +1562,191 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               label: const Text('Registrar pago'),
             ),
           );
-        } else {
-          // Standard: Receive first, then pay
+        } else if (_status == PurchaseInvoiceStatus.paid) {
+          // Paid: Can undo payment or mark as received (prepayment only)
+          final isPrepayment = _isPrepaymentModel;
+
           actionButtons.add(
-            FilledButton.icon(
-              onPressed: _isUpdatingStatus
-                  ? null
-                  : () => _updateStatus(PurchaseInvoiceStatus.received),
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.inventory_2_outlined),
-              label: const Text('Marcar como recibida'),
+            OutlinedButton.icon(
+              onPressed: _undoLastPayment,
+              icon: const Icon(Icons.undo_outlined, color: Colors.red),
+              label: const Text('Deshacer pago',
+                  style: TextStyle(color: Colors.red)),
             ),
           );
-        }
-      } else if (_status == PurchaseInvoiceStatus.received) {
-        // Received (standard workflow): Can register payment
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
-            icon: const Icon(Icons.undo_outlined),
-            label: const Text('Volver a confirmado'),
-          ),
-        );
-        actionButtons.add(const SizedBox(width: 8));
-        actionButtons.add(
-          FilledButton.icon(
-            onPressed: _openPaymentForm,
-            icon: const Icon(Icons.payments_outlined),
-            label: const Text('Registrar pago'),
-          ),
-        );
-      } else if (_status == PurchaseInvoiceStatus.paid) {
-        // Paid: Can undo payment or mark as received (prepayment only)
-        final isPrepayment = _isPrepaymentModel;
 
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _undoLastPayment,
-            icon: const Icon(Icons.undo_outlined, color: Colors.red),
-            label: const Text('Deshacer pago',
-                style: TextStyle(color: Colors.red)),
-          ),
-        );
-
-        if (isPrepayment) {
-          // Prepayment workflow: After payment, can mark as received
-          actionButtons.add(const SizedBox(width: 8));
-          actionButtons.add(
-            FilledButton.icon(
-              onPressed: _isUpdatingStatus
-                  ? null
-                  : () => _updateStatus(PurchaseInvoiceStatus.received),
-              icon: _isUpdatingStatus
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.inventory_2_outlined),
-              label: const Text('Marcar como recibida'),
-            ),
-          );
+          if (isPrepayment) {
+            // Prepayment workflow: After payment, can mark as received
+            actionButtons.add(const SizedBox(width: 8));
+            actionButtons.add(
+              FilledButton.icon(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(PurchaseInvoiceStatus.received),
+                icon: _isUpdatingStatus
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.inventory_2_outlined),
+                label: const Text('Marcar como recibida'),
+              ),
+            );
+          }
         }
       }
-    }
 
-    // Build action widgets with status badge and total
-    final actionWidgets = <Widget>[];
-
-    if (widget.invoiceId != null) {
-      // Total amount badge
-      actionWidgets.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.payments_outlined,
-                  size: 16, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Text(
-                ChileanUtils.formatCurrency(_total),
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // Status chip
-      actionWidgets.add(_buildStatusChip(theme));
-    }
-
-    actionWidgets.addAll(actionButtons);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Volver',
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      // Add status chip and total badge if not new
+      final widgets = <Widget>[];
+      if (widget.invoiceId != null) {
+        widgets.add(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(Icons.payments_outlined,
+                    size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
                 Text(
-                  title,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _isPrepaymentModel
-                      ? 'Prepago: pagar antes de recibir mercancía'
-                      : 'Flujo estándar: recibir y luego pagar',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  ChileanUtils.formatCurrency(_total),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          if (!widget.readOnly && _canEditFields) ...[
-            // OCR Scanner Button
-            IconButton(
-              onPressed: _openOCRScanner,
-              icon: const Icon(Icons.document_scanner_outlined),
-              tooltip: 'Escanear Factura (OCR)',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.blue.withOpacity(0.1),
-              ),
+        );
+        widgets.add(_buildStatusChip(theme));
+      }
+      widgets.addAll(actionButtons);
+      return widgets;
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        if (isMobile) {
+          // Mobile Layout: Stacked
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Icons.arrow_back),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20, // Slightly smaller on mobile
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 36), // Align with title
+                  child: Text(
+                    _isPrepaymentModel
+                        ? 'Prepago: pagar antes de recibir'
+                        : 'Estándar: recibir antes de pagar',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Actions in a horizontal scroll if needed, or wrapped
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ...buildEditActions(),
+                      if (buildEditActions().isNotEmpty &&
+                          buildWorkflowActions().isNotEmpty)
+                        const SizedBox(width: 12),
+                      ...buildWorkflowActions().map((w) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: w,
+                          )),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            // Barcode Scanner Button
-            IconButton(
-              onPressed: _toggleScanner,
-              icon: Icon(
-                _scannerEnabled
-                    ? Icons.qr_code_scanner
-                    : Icons.qr_code_scanner_outlined,
-                color: _scannerEnabled ? Colors.green : null,
-              ),
-              tooltip:
-                  _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
-              style: IconButton.styleFrom(
-                backgroundColor:
-                    _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
-              ),
+          );
+        } else {
+          // Desktop/Tablet Layout: Row
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isPrepaymentModel
+                            ? 'Prepago: pagar antes de recibir mercancía'
+                            : 'Flujo estándar: recibir y luego pagar',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ...buildEditActions(),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: buildWorkflowActions(),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            AppButton(
-              text: 'Guardar',
-              icon: Icons.save,
-              onPressed: _isSaving ? null : _saveInvoice,
-              isLoading: _isSaving,
-            ),
-            const SizedBox(width: 16),
-          ],
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: actionWidgets,
-              ),
-            ),
-          ),
-        ],
-      ),
+          );
+        }
+      },
     );
   }
 
@@ -2079,9 +2148,72 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildLineItemsSection(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate minimum required width based on columns
+        // Mobile Breakpoint for Form Items
+        if (constraints.maxWidth < 700) {
+          return Column(
+            children: [
+              if (_lineEntries.isNotEmpty)
+                ..._lineEntries.asMap().entries.map((entry) =>
+                    _buildMobileItemCard(theme, entry.key + 1, entry.value)),
+              if (_canEditFields) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => _addEmptyLine(shouldAutoFocus: true),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color:
+                          theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_circle_outline,
+                            size: 20, color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Agregar producto',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (_lineEntries.isEmpty && !_canEditFields)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.remove_shopping_cart_outlined,
+                            size: 48, color: theme.colorScheme.outline),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hay artículos',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }
+
+        // Desktop Table View (Existing Logic)
         const minTableWidth = 800.0;
-        // Use available width if larger, otherwise use minimum (enables scroll)
         final tableWidth = constraints.maxWidth > minTableWidth
             ? constraints.maxWidth
             : minTableWidth;
@@ -2288,6 +2420,197 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMobileItemCard(
+      ThemeData theme, int index, _PurchaseLineEntry entry) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header with Product Name and Delete Action
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: entry.buildSmartProductField(
+                    context,
+                    theme,
+                    _canEditFields,
+                    () {},
+                    () => _autoAddEmptyLineIfNeeded(),
+                  ),
+                ),
+                if (_canEditFields)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    color: theme.colorScheme.error,
+                    onPressed: () => _removeLine(entry),
+                  ),
+              ],
+            ),
+          ),
+
+          // Details Grid (Qty, Price, Discount, Total)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // Quantity
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Cantidad', style: theme.textTheme.labelSmall),
+                          const SizedBox(height: 4),
+                          _canEditFields
+                              ? SizedBox(
+                                  height: 40,
+                                  child: TextField(
+                                    controller: entry.quantityController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding:
+                                          EdgeInsets.symmetric(horizontal: 8),
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                              : Text(entry.quantityController.text,
+                                  style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Price
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Costo Unit.',
+                              style: theme.textTheme.labelSmall),
+                          const SizedBox(height: 4),
+                          _canEditFields
+                              ? SizedBox(
+                                  height: 40,
+                                  child: TextField(
+                                    controller: entry.unitCostController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      prefixText: '\$',
+                                      contentPadding:
+                                          EdgeInsets.symmetric(horizontal: 8),
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    textAlign: TextAlign.right,
+                                  ),
+                                )
+                              : Text(
+                                  ChileanUtils.formatCurrency(
+                                      entry.line.unitCost),
+                                  style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    // Discount
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Descuento', style: theme.textTheme.labelSmall),
+                          const SizedBox(height: 4),
+                          _canEditFields
+                              ? SizedBox(
+                                  height: 40,
+                                  child: TextField(
+                                    controller: entry.discountController,
+                                    decoration: InputDecoration(
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8),
+                                      suffixIcon: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            entry.toggleDiscountType();
+                                            _recalculateTotals();
+                                          });
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text(
+                                            entry.discountType ==
+                                                    DiscountType.amount
+                                                ? '\$'
+                                                : '%',
+                                            style: TextStyle(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                              : Text(
+                                  '${entry.discountController.text} ${entry.discountType == DiscountType.amount ? '\$' : '%'}',
+                                  style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Total
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Total Línea',
+                              style: theme.textTheme.labelSmall),
+                          const SizedBox(height: 4),
+                          Container(
+                            alignment: Alignment.centerRight,
+                            height: 40, // Height matching input fields
+                            child: Text(
+                              ChileanUtils.formatCurrency(
+                                  entry.line.netAmountClamped),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

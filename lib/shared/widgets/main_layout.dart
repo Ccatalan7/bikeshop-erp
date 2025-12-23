@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
 
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
+import '../services/notification_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
+import '../../modules/messaging/providers/chat_provider.dart';
 import 'expandable_menu_item.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
@@ -250,6 +253,17 @@ const String _posSectionKey = 'pos';
 void _openInWorkspace(BuildContext context, String route, String title) {
   debugPrint(
       '🚀 [MainLayout] _openInWorkspace called: route=$route, title=$title');
+
+  // Check for mobile/tablet screen width (< 800px)
+  // If small screen, use standard navigation instead of workspace tabs
+  final isSmallScreen = MediaQuery.of(context).size.width < 800;
+  if (isSmallScreen) {
+    debugPrint(
+        '📱 [MainLayout] Small screen detected, using standard navigation.');
+    context.push(route);
+    return;
+  }
+
   try {
     final workspaceManager = context.read<WorkspaceManager>();
     debugPrint(
@@ -586,7 +600,7 @@ class _OptionTile extends StatelessWidget {
   }
 }
 
-class MainLayout extends StatelessWidget {
+class MainLayout extends StatefulWidget {
   final Widget? child;
   final Widget? body;
   final String? title;
@@ -599,6 +613,124 @@ class MainLayout extends StatelessWidget {
     this.title,
     this.onBackPressed,
   });
+
+  @override
+  State<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends State<MainLayout> {
+  OverlayEntry? _currentNotificationOverlay;
+  Timer? _notificationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for incoming messages to show in-app notification
+    NotificationService().messageStream.listen((message) {
+      if (!mounted) return;
+
+      // FORCE ChatProvider refresh to ensure badge updates immediately
+      // This covers cases where ChatProvider's internal listener might have missed it
+      context.read<ChatProvider>().loadConversations();
+
+      final notification = message.notification;
+      final title = notification?.title ?? 'Nuevo Mensaje';
+      final body = notification?.body ?? '';
+
+      _showTopNotification(title, body);
+    });
+  }
+
+  void _showTopNotification(String title, String body) {
+    _notificationTimer?.cancel();
+    _currentNotificationOverlay?.remove();
+
+    final overlay = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 10, // Very close to the top edge
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: -100, end: 0), // Start further up
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutQuart, // Smoother curve
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(0, value),
+                  child: Opacity(
+                    // Fade in as it slides down (simple mapping)
+                    opacity: (1 - (value / -100)).clamp(0.0, 1.0),
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 400),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.inverseSurface,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: InkWell(
+                  onTap: () {
+                    context.go('/chat');
+                    _currentNotificationOverlay?.remove();
+                    _currentNotificationOverlay = null;
+                  },
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chat_bubble_outline,
+                            size: 18,
+                            color:
+                                Theme.of(context).colorScheme.onInverseSurface),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            '$title: $body',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onInverseSurface,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(overlay);
+    _currentNotificationOverlay = overlay;
+
+    _notificationTimer = Timer(const Duration(seconds: 4), () {
+      _currentNotificationOverlay?.remove();
+      _currentNotificationOverlay = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -647,7 +779,7 @@ class MainLayout extends StatelessWidget {
                             ),
                           )
                         : null,
-                    child: body ?? child,
+                    child: widget.body ?? widget.child,
                   ),
                   // Invisible resize handle on left edge (12px wide)
                   if (navigationService.isDrawerVisible)
@@ -710,35 +842,62 @@ class MainLayout extends StatelessWidget {
       // Mobile layout with drawer
       return Scaffold(
         appBar: AppBar(
-          leading: onBackPressed != null
+          leading: widget.onBackPressed != null
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: onBackPressed,
+                  onPressed: widget.onBackPressed,
+                  color: Theme.of(context).colorScheme.onSurface,
                 )
-              : null,
-          title: Text(title ?? 'Vinabike ERP'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+              : Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+          title: Text(
+            widget.title ?? 'Vinabike ERP',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          elevation: 0,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1.0),
+            child: Container(
+              color: Theme.of(context).dividerColor,
+              height: 1.0,
+            ),
+          ),
+          iconTheme: IconThemeData(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.notifications),
+              icon: const Icon(Icons.notifications_outlined),
               onPressed: () {
                 // TODO: Implement notifications
               },
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             IconButton(
-              icon: const Icon(Icons.settings),
+              icon: const Icon(Icons.settings_outlined),
               onPressed: () {
                 context.push('/settings');
               },
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             IconButton(
-              icon: const Icon(Icons.logout),
+              icon: const Icon(Icons.logout_outlined),
               onPressed: () => _handleLogout(context),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ],
         ),
         drawer: const AppDrawer(),
-        body: body ?? child,
+        body: widget.body ?? widget.child,
       );
     }
   }
@@ -799,17 +958,22 @@ class _AppSidebarState extends State<AppSidebar> {
               _handleExpansionChange(_taxReportsSectionKey, expand, navService),
         );
       case 'chat':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.chat_outlined,
-          activeIcon: Icons.chat,
-          title: 'Mensajería',
-          currentLocation: currentLocation,
-          subItems: _chatMenuItems,
-          isExpanded: expandedSection == _chatSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_chatSectionKey, expand, navService),
-          isSingleItem: true,
+        return Consumer<ChatProvider>(
+          builder: (context, chatProvider, _) {
+            return ExpandableMenuItem(
+              key: ValueKey(moduleKey),
+              icon: Icons.chat_outlined,
+              activeIcon: Icons.chat,
+              title: 'Mensajería',
+              currentLocation: currentLocation,
+              subItems: _chatMenuItems,
+              isExpanded: expandedSection == _chatSectionKey,
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange(_chatSectionKey, expand, navService),
+              isSingleItem: true,
+              badgeCount: chatProvider.totalUnreadCount,
+            );
+          },
         );
       case 'customers':
         return ExpandableMenuItem(
@@ -1514,8 +1678,51 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 }
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
+
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  String? _expandedSection;
+
+  void _handleExpansionChange(String sectionKey, bool isExpanded) {
+    setState(() {
+      if (isExpanded) {
+        _expandedSection = sectionKey;
+      } else if (_expandedSection == sectionKey) {
+        _expandedSection = null;
+      }
+    });
+  }
+
+  void _handleMobileNavigation(
+      BuildContext context, String route, String title) {
+    // Check for mobile/tablet screen width (< 800px)
+    // If small screen, use standard navigation instead of workspace tabs
+    final isSmallScreen = MediaQuery.of(context).size.width < 800;
+
+    if (isSmallScreen) {
+      context.push(route);
+    } else {
+      // Logic from _openInWorkspace but safe to call
+      try {
+        final workspaceManager = context.read<WorkspaceManager>();
+        final existingFound =
+            workspaceManager.switchToExistingWorkspaceWithRoute(route);
+        if (!existingFound) {
+          workspaceManager.addWorkspace(
+            title: title,
+            initialRoute: route,
+          );
+        }
+      } catch (e) {
+        context.go(route);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1524,7 +1731,6 @@ class AppDrawer extends StatelessWidget {
     try {
       currentLocation = GoRouterState.of(context).uri.path;
     } catch (e) {
-      // Not in GoRouter context
       currentLocation = '';
     }
 
@@ -1534,13 +1740,12 @@ class AppDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).primaryColor,
-                  Theme.of(context).primaryColor.withOpacity(0.8),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: 1,
+                ),
               ),
             ),
             child: Consumer<AppearanceService>(
@@ -1549,7 +1754,7 @@ class AppDrawer extends StatelessWidget {
                   onTap: () {
                     // Navigate to dashboard when header is clicked
                     Navigator.pop(context); // Close drawer first
-                    _openInWorkspace(context, '/dashboard', 'Dashboard');
+                    _handleMobileNavigation(context, '/dashboard', 'Dashboard');
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: appearanceService.hasCustomLogo
@@ -1567,160 +1772,286 @@ class AppDrawer extends StatelessWidget {
                               final theme = Theme.of(context);
                               return Center(
                                 child: CircularProgressIndicator(
-                                  color: theme.colorScheme.onPrimary,
+                                  color: theme.colorScheme.primary,
                                 ),
                               );
                             },
                             errorWidget: (context, url, error) =>
-                                _buildDefaultDrawerHeader(
+                                _Helper.buildDefaultDrawerHeader(
                                     context, appearanceService),
                           ),
                         )
-                      : _buildDefaultDrawerHeader(context, appearanceService),
+                      : _Helper.buildDefaultDrawerHeader(
+                          context, appearanceService),
                 );
               },
             ),
           ),
 
           // Dashboard
-          _buildDrawerItem(
-            context,
-            icon: Icons.dashboard,
+          ExpandableMenuItem(
+            icon: Icons.dashboard_outlined,
+            activeIcon: Icons.dashboard,
             title: 'Dashboard',
-            route: '/dashboard',
+            subItems: const [
+              MenuSubItem(
+                  icon: Icons.dashboard,
+                  title: 'Dashboard',
+                  route: '/dashboard')
+            ],
             currentLocation: currentLocation,
+            isSingleItem: true,
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Dashboard');
+            },
           ),
 
           const Divider(),
 
           // Core Modules
-          _buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
+          _Helper.buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.account_balance,
+          // Mensajería (Chat)
+          Consumer<ChatProvider>(
+            builder: (context, chatProvider, child) {
+              return ExpandableMenuItem(
+                icon: Icons.chat_bubble_outline,
+                activeIcon: Icons.chat_bubble,
+                title: 'Mensajería',
+                subItems: const [
+                  MenuSubItem(
+                      icon: Icons.chat, title: 'Mensajería', route: '/chat')
+                ],
+                currentLocation: currentLocation,
+                isSingleItem: true,
+                badgeCount: chatProvider.totalUnreadCount,
+                onNavigate: (route) {
+                  Navigator.pop(context);
+                  _handleMobileNavigation(context, route, 'Mensajería');
+                },
+              );
+            },
+          ),
+
+          ExpandableMenuItem(
+            icon: Icons.account_balance_outlined,
+            activeIcon: Icons.account_balance,
             title: 'Contabilidad',
             subItems: _accountingMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'accounting',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('accounting', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Contabilidad');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.people,
+          ExpandableMenuItem(
+            icon: Icons.people_outline,
+            activeIcon: Icons.people,
             title: 'Clientes',
             subItems: _customersMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'customers',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('customers', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Clientes');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.pedal_bike,
+          ExpandableMenuItem(
+            icon: Icons.pedal_bike_outlined,
+            activeIcon: Icons.pedal_bike,
             title: 'Taller',
             subItems: _workshopMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'workshop',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('workshop', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Taller');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.lightbulb,
+          ExpandableMenuItem(
+            icon: Icons.lightbulb_outlined,
+            activeIcon: Icons.lightbulb,
             title: 'Smart Features',
             subItems: _smartFeaturesMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'smart_features',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('smart_features', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Smart Features');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.inventory,
+          ExpandableMenuItem(
+            icon: Icons.inventory_2_outlined,
+            activeIcon: Icons.inventory_2,
             title: 'Inventario',
             subItems: _inventoryMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'inventory',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('inventory', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Inventario');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.point_of_sale,
+          ExpandableMenuItem(
+            icon: Icons.receipt_long_outlined,
+            activeIcon: Icons.receipt_long,
             title: 'Ventas',
             subItems: _salesMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'sales',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('sales', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Ventas');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.shopping_cart,
+          ExpandableMenuItem(
+            icon: Icons.shopping_cart_outlined,
+            activeIcon: Icons.shopping_cart,
             title: 'Compras',
             subItems: _purchasesMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'purchases',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('purchases', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Compras');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.store,
+          ExpandableMenuItem(
+            icon: Icons.point_of_sale_outlined,
+            activeIcon: Icons.point_of_sale,
             title: 'POS',
             subItems: _posMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'pos',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('pos', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'POS');
+            },
           ),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.badge,
+          ExpandableMenuItem(
+            icon: Icons.people_outline,
+            activeIcon: Icons.people,
             title: 'RR.HH.',
             subItems: _hrMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'hr',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('hr', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'RR.HH.');
+            },
           ),
 
           const Divider(),
 
           // Tools (WebView Modules)
-          _buildSectionHeader(context, 'HERRAMIENTAS'),
+          _Helper.buildSectionHeader(context, 'HERRAMIENTAS'),
 
-          _buildDrawerExpandableItem(
-            context,
-            icon: Icons.build_circle,
+          ExpandableMenuItem(
+            icon: Icons.build_circle_outlined,
+            activeIcon: Icons.build_circle,
             title: 'Herramientas Web',
             subItems: _toolsMenuItems,
             currentLocation: currentLocation,
+            isExpanded: _expandedSection == 'tools',
+            onExpansionChanged: (expand) =>
+                _handleExpansionChange('tools', expand),
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Herramientas');
+            },
           ),
 
           const Divider(),
 
           // Secondary Modules
-          _buildSectionHeader(context, 'OTROS MÓDULOS'),
+          _Helper.buildSectionHeader(context, 'OTROS MÓDULOS'),
 
-          _buildDrawerItem(
-            context,
-            icon: Icons.build,
+          ExpandableMenuItem(
+            icon: Icons.build_outlined,
+            activeIcon: Icons.build,
             title: 'Mantención',
-            route: '/maintenance',
+            subItems: const [
+              MenuSubItem(
+                  icon: Icons.build, title: 'Mantención', route: '/maintenance')
+            ],
             currentLocation: currentLocation,
+            isSingleItem: true,
             enabled: false,
+            onNavigate: (_) {},
           ),
 
-          _buildDrawerItem(
-            context,
-            icon: Icons.analytics,
+          ExpandableMenuItem(
+            icon: Icons.analytics_outlined,
+            activeIcon: Icons.analytics,
             title: 'Análisis',
-            route: '/analytics',
+            subItems: const [
+              MenuSubItem(
+                  icon: Icons.analytics, title: 'Análisis', route: '/analytics')
+            ],
             currentLocation: currentLocation,
+            isSingleItem: true,
             enabled: false,
+            onNavigate: (_) {},
           ),
 
           const Divider(),
 
           // Settings
-          _buildDrawerItem(
-            context,
-            icon: Icons.settings,
+          ExpandableMenuItem(
+            icon: Icons.settings_outlined,
+            activeIcon: Icons.settings,
             title: 'Configuración',
-            route: '/settings',
+            subItems: const [
+              MenuSubItem(
+                  icon: Icons.settings,
+                  title: 'Configuración',
+                  route: '/settings')
+            ],
             currentLocation: currentLocation,
-            enabled: false,
+            isSingleItem: true,
+            enabled: true, // Enabled!
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Configuración');
+            },
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(BuildContext context, String title) {
+class _Helper {
+  static Widget buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
@@ -1733,130 +2064,7 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildDrawerExpandableItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required List<MenuSubItem> subItems,
-    required String currentLocation,
-  }) {
-    final theme = Theme.of(context);
-    final isExpanded = subItems.any(
-      (item) => currentLocation.startsWith(item.route),
-    );
-
-    return Theme(
-      data: theme.copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        leading: Icon(
-          icon,
-          color: theme.colorScheme.primary,
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        collapsedIconColor: theme.colorScheme.onSurface.withOpacity(0.6),
-        iconColor: theme.colorScheme.primary,
-        initiallyExpanded: isExpanded,
-        children: subItems
-            .map(
-              (item) => _buildDrawerSubItem(
-                context,
-                item: item,
-                currentLocation: currentLocation,
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _buildDrawerSubItem(
-    BuildContext context, {
-    required MenuSubItem item,
-    required String currentLocation,
-  }) {
-    final theme = Theme.of(context);
-    final isSelected = currentLocation.startsWith(item.route);
-
-    return ListTile(
-      contentPadding: const EdgeInsets.only(left: 56, right: 16),
-      leading: Icon(
-        item.icon,
-        size: 18,
-        color: isSelected
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurface.withOpacity(0.6),
-      ),
-      title: Text(
-        item.title,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.onSurface,
-        ),
-      ),
-      selected: isSelected,
-      selectedTileColor: theme.colorScheme.primary.withOpacity(0.08),
-      onTap: () {
-        if (!isSelected) {
-          _openInWorkspace(context, item.route, item.title);
-        }
-        Navigator.pop(context);
-      },
-    );
-  }
-
-  Widget _buildDrawerItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String route,
-    required String currentLocation,
-    bool enabled = true,
-  }) {
-    final isSelected = currentLocation.startsWith(route);
-
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: enabled
-            ? (isSelected ? Theme.of(context).colorScheme.primary : null)
-            : Theme.of(context).disabledColor,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: enabled
-              ? (isSelected ? Theme.of(context).colorScheme.primary : null)
-              : Theme.of(context).disabledColor,
-        ),
-      ),
-      selected: isSelected,
-      selectedTileColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-      onTap: enabled
-          ? () {
-              if (!isSelected) {
-                // Dashboard always navigates directly (not in workspace tab)
-                if (route == '/dashboard') {
-                  context.go(route);
-                } else {
-                  _openInWorkspace(context, route, title);
-                }
-              }
-              Navigator.pop(context);
-            }
-          : null,
-    );
-  }
-
-  Widget _buildDefaultDrawerHeader(
+  static Widget buildDefaultDrawerHeader(
       BuildContext context, AppearanceService appearanceService) {
     final theme = Theme.of(context);
     return Column(
@@ -1867,7 +2075,7 @@ class AppDrawer extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           child: Icon(
             appearanceService.homeIcon,
-            color: theme.colorScheme.onPrimary,
+            color: theme.colorScheme.primary,
             size: 48,
           ),
         ),
@@ -1875,7 +2083,7 @@ class AppDrawer extends StatelessWidget {
         Text(
           'Vinabike ERP',
           style: TextStyle(
-            color: theme.colorScheme.onPrimary,
+            color: theme.colorScheme.onSurface,
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
@@ -1883,7 +2091,7 @@ class AppDrawer extends StatelessWidget {
         Text(
           'Sistema Integral de Gestión',
           style: TextStyle(
-            color: theme.colorScheme.onPrimary.withOpacity(0.7),
+            color: theme.colorScheme.onSurface.withOpacity(0.7),
             fontSize: 14,
           ),
         ),

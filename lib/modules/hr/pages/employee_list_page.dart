@@ -37,7 +37,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
 
   Future<void> _loadData() async {
     final hrService = context.read<HRService>();
-    
+
     // 🚀 INSTANT RENDER: Show cached data immediately if available
     if (hrService.hasEmployeesCache && _employees.isEmpty) {
       setState(() {
@@ -94,17 +94,17 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
 
     if (result != null) {
       _loadData();
-      
+
       // Show invitation link dialog if present
       final invitationLink = result['invitationLink'] as String?;
       final email = result['email'] as String?;
-      
+
       if (invitationLink != null && email != null && mounted) {
         // Wait a frame for the form dialog to fully close
         await Future.delayed(const Duration(milliseconds: 150));
-        
+
         if (!mounted) return;
-        
+
         _showInvitationLinkDialog(invitationLink, email);
       }
     }
@@ -253,87 +253,185 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SearchWidget(
-                    onSearchChanged: _onSearchChanged,
-                    hintText: 'Buscar por nombre, RUT, número...',
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Status filter
-                Flexible(
-                  child: DropdownButtonFormField<EmployeeStatus?>(
-                    value: _selectedStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Estado',
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('Todos')),
-                      ...EmployeeStatus.values.map((status) {
-                        String label = '';
-                        switch (status) {
-                          case EmployeeStatus.active:
-                            label = 'Activo';
-                            break;
-                          case EmployeeStatus.inactive:
-                            label = 'Inactivo';
-                            break;
-                          case EmployeeStatus.onLeave:
-                            label = 'Con licencia';
-                            break;
-                          case EmployeeStatus.terminated:
-                            label = 'Desvinculado';
-                            break;
-                        }
-                        return DropdownMenuItem(
-                            value: status, child: Text(label));
-                      }),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 800) {
+                  // Mobile: Stack elements
+                  return Column(
+                    children: [
+                      SearchWidget(
+                        onSearchChanged: _onSearchChanged,
+                        hintText: 'Buscar por nombre, RUT, número...',
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<EmployeeStatus?>(
+                              value: _selectedStatus,
+                              decoration: const InputDecoration(
+                                labelText: 'Estado',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                    value: null, child: Text('Todos')),
+                                ...EmployeeStatus.values.map((status) {
+                                  String label = '';
+                                  switch (status) {
+                                    case EmployeeStatus.active:
+                                      label = 'Activo';
+                                      break;
+                                    case EmployeeStatus.inactive:
+                                      label = 'Inactivo';
+                                      break;
+                                    case EmployeeStatus.onLeave:
+                                      label = 'Con licencia';
+                                      break;
+                                    case EmployeeStatus.terminated:
+                                      label = 'Desvinculado';
+                                      break;
+                                  }
+                                  return DropdownMenuItem(
+                                      value: status, child: Text(label));
+                                }),
+                              ],
+                              onChanged: (value) {
+                                setState(() => _selectedStatus = value);
+                                _loadData();
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String?>(
+                              value: _selectedDepartmentId,
+                              decoration: const InputDecoration(
+                                labelText: 'Depto',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                    value: null, child: Text('Todos')),
+                                ..._departments.map((dept) => DropdownMenuItem(
+                                      value: dept.id,
+                                      child: Text(dept.name),
+                                    )),
+                              ],
+                              onChanged: (value) {
+                                setState(() => _selectedDepartmentId = value);
+                                _loadData();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Nuevo Empleado',
+                          onPressed: () => _showEmployeeForm(),
+                          icon: Icons.add,
+                          type: ButtonType.primary,
+                        ),
+                      ),
                     ],
-                    onChanged: (value) {
-                      setState(() => _selectedStatus = value);
-                      _loadData();
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Department filter
-                Flexible(
-                  child: DropdownButtonFormField<String?>(
-                    value: _selectedDepartmentId,
-                    decoration: const InputDecoration(
-                      labelText: 'Departamento',
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(),
+                  );
+                }
+
+                // Desktop: Row
+                return Row(
+                  children: [
+                    Expanded(
+                      child: SearchWidget(
+                        onSearchChanged: _onSearchChanged,
+                        hintText: 'Buscar por nombre, RUT, número...',
+                      ),
                     ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('Todos')),
-                      ..._departments.map((dept) => DropdownMenuItem(
-                            value: dept.id,
-                            child: Text(dept.name),
-                          )),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedDepartmentId = value);
-                      _loadData();
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                AppButton(
-                  text: 'Nuevo Empleado',
-                  onPressed: () => _showEmployeeForm(),
-                  icon: Icons.add,
-                  type: ButtonType.primary,
-                ),
-              ],
+                    const SizedBox(width: 16),
+                    // Status filter
+                    Flexible(
+                      child: DropdownButtonFormField<EmployeeStatus?>(
+                        value: _selectedStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado',
+                          isDense: true,
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('Todos')),
+                          ...EmployeeStatus.values.map((status) {
+                            String label = '';
+                            switch (status) {
+                              case EmployeeStatus.active:
+                                label = 'Activo';
+                                break;
+                              case EmployeeStatus.inactive:
+                                label = 'Inactivo';
+                                break;
+                              case EmployeeStatus.onLeave:
+                                label = 'Con licencia';
+                                break;
+                              case EmployeeStatus.terminated:
+                                label = 'Desvinculado';
+                                break;
+                            }
+                            return DropdownMenuItem(
+                                value: status, child: Text(label));
+                          }),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedStatus = value);
+                          _loadData();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Department filter
+                    Flexible(
+                      child: DropdownButtonFormField<String?>(
+                        value: _selectedDepartmentId,
+                        decoration: const InputDecoration(
+                          labelText: 'Departamento',
+                          isDense: true,
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('Todos')),
+                          ..._departments.map((dept) => DropdownMenuItem(
+                                value: dept.id,
+                                child: Text(dept.name),
+                              )),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedDepartmentId = value);
+                          _loadData();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    AppButton(
+                      text: 'Nuevo Empleado',
+                      onPressed: () => _showEmployeeForm(),
+                      icon: Icons.add,
+                      type: ButtonType.primary,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           // Employee list
@@ -641,7 +739,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
       _status = emp.status;
       _birthDate = emp.birthDate;
       _hireDate = emp.hireDate;
-      
+
       // Load suggested titles if role exists
       if (emp.systemRole != null) {
         _loadSuggestedTitles(emp.systemRole!);
@@ -693,7 +791,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
       if (_emailController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Se requiere un email para otorgar acceso al sistema'),
+            content:
+                Text('Se requiere un email para otorgar acceso al sistema'),
             backgroundColor: Colors.red,
           ),
         );
@@ -715,7 +814,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
     try {
       final hrService = context.read<HRService>();
       final jobRoleService = context.read<JobRoleService>();
-      
+
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
@@ -750,11 +849,14 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
 
       // If granting system access, create user account
       String? invitationLink;
-      if (_grantSystemAccess && saved.id != null && _selectedSystemRole != null) {
+      if (_grantSystemAccess &&
+          saved.id != null &&
+          _selectedSystemRole != null) {
         try {
           // Get default permissions for the role
-          final permissions = await jobRoleService.getDefaultPermissions(_selectedSystemRole!);
-          
+          final permissions =
+              await jobRoleService.getDefaultPermissions(_selectedSystemRole!);
+
           // Create user invitation (will send email with setup link)
           invitationLink = await hrService.createUserForEmployee(
             employeeId: saved.id!,
@@ -766,7 +868,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
           );
 
           if (!mounted) return;
-          
+
           if (invitationLink == null) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -781,7 +883,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         } catch (inviteError) {
           // Employee was created but user invitation failed
           if (!mounted) return;
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -958,14 +1060,15 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                               child: Center(child: BrandedLoading(size: 32)),
                             );
                           }
-                          
+
                           final roleOptions = snapshot.data!;
-                          
+
                           return DropdownButtonFormField<String?>(
                             value: _selectedSystemRole,
                             decoration: const InputDecoration(
                               labelText: 'Rol del Sistema',
-                              helperText: 'Opcional: vincula al empleado con permisos predefinidos',
+                              helperText:
+                                  'Opcional: vincula al empleado con permisos predefinidos',
                               border: OutlineInputBorder(),
                             ),
                             items: [
@@ -1006,18 +1109,21 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                         : null,
                                   )
                                 : DropdownButtonFormField<String>(
-                                    value: _suggestedTitles.contains(_jobTitleController.text)
+                                    value: _suggestedTitles
+                                            .contains(_jobTitleController.text)
                                         ? _jobTitleController.text
                                         : null,
                                     decoration: const InputDecoration(
-                                      labelText: 'Cargo * (sugerencias del rol)',
+                                      labelText:
+                                          'Cargo * (sugerencias del rol)',
                                       border: OutlineInputBorder(),
                                     ),
                                     items: [
-                                      ..._suggestedTitles.map((title) => DropdownMenuItem(
-                                            value: title,
-                                            child: Text(title),
-                                          )),
+                                      ..._suggestedTitles
+                                          .map((title) => DropdownMenuItem(
+                                                value: title,
+                                                child: Text(title),
+                                              )),
                                       const DropdownMenuItem(
                                         value: 'custom',
                                         child: Text('Otro (personalizado)...'),
@@ -1027,10 +1133,12 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                       if (value == 'custom') {
                                         setState(() {
                                           _jobTitleController.clear();
-                                          _suggestedTitles = []; // Switch to text field
+                                          _suggestedTitles =
+                                              []; // Switch to text field
                                         });
                                       } else if (value != null) {
-                                        setState(() => _jobTitleController.text = value);
+                                        setState(() =>
+                                            _jobTitleController.text = value);
                                       }
                                     },
                                     validator: (value) {
@@ -1159,7 +1267,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                       ),
                       const SizedBox(height: 24),
                       // Grant System Access section
-                      if (widget.employee == null || widget.employee?.userId == null)
+                      if (widget.employee == null ||
+                          widget.employee?.userId == null)
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -1172,7 +1281,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.security, color: Colors.blue[700], size: 20),
+                                  Icon(Icons.security,
+                                      color: Colors.blue[700], size: 20),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Acceso al Sistema',
@@ -1188,26 +1298,34 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                               CheckboxListTile(
                                 value: _grantSystemAccess,
                                 onChanged: _selectedSystemRole != null
-                                    ? (value) => setState(() => _grantSystemAccess = value ?? false)
+                                    ? (value) => setState(() =>
+                                        _grantSystemAccess = value ?? false)
                                     : null,
-                                title: const Text('Otorgar acceso al sistema ERP'),
+                                title:
+                                    const Text('Otorgar acceso al sistema ERP'),
                                 subtitle: Text(
                                   _selectedSystemRole == null
                                       ? 'Primero selecciona un rol del sistema arriba'
                                       : 'Se creará una cuenta de usuario con permisos de ${JobRole.getRoleDisplayName(_selectedSystemRole!)}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: _selectedSystemRole == null ? Colors.red[700] : Colors.grey[700],
+                                    color: _selectedSystemRole == null
+                                        ? Colors.red[700]
+                                        : Colors.grey[700],
                                   ),
                                 ),
-                                controlAffinity: ListTileControlAffinity.leading,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
                               ),
-                              if (_grantSystemAccess && _emailController.text.isEmpty)
+                              if (_grantSystemAccess &&
+                                  _emailController.text.isEmpty)
                                 Padding(
-                                  padding: const EdgeInsets.only(left: 16, top: 8),
+                                  padding:
+                                      const EdgeInsets.only(left: 16, top: 8),
                                   child: Text(
                                     '⚠️ Se requiere un email válido para crear la cuenta de usuario',
-                                    style: TextStyle(color: Colors.red[700], fontSize: 12),
+                                    style: TextStyle(
+                                        color: Colors.red[700], fontSize: 12),
                                   ),
                                 ),
                             ],

@@ -36,45 +36,114 @@ class ChatThreadList extends StatelessWidget {
         final conversation = conversations[index];
         final isSelected = conversation.id == selectedId;
 
-        return ListTile(
-          selected: isSelected,
-          selectedTileColor: Theme.of(context).primaryColor.withOpacity(0.1),
-          leading: CircleAvatar(
-            backgroundColor: _getTypeColor(conversation.type),
-            child: Icon(
-              _getTypeIcon(conversation.type),
-              color: Colors.white,
-              size: 20,
-            ),
+        final hasUnread = conversation.unreadCount > 0;
+
+        return Dismissible(
+          key: Key(conversation.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red,
+            child: const Icon(Icons.delete, color: Colors.white),
           ),
-          title: Text(
-            provider.getChatTitle(conversation),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          confirmDismiss: (direction) async {
+            return await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Eliminar conversación'),
+                    content: Text(
+                      '¿Estás seguro de que deseas eliminar esta conversación con ${provider.getChatTitle(conversation)}?\n\nSe eliminarán todos los mensajes permanentemente.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style:
+                            TextButton.styleFrom(foregroundColor: Colors.red),
+                        child: const Text('Eliminar'),
+                      ),
+                    ],
+                  ),
+                ) ??
+                false;
+          },
+          onDismissed: (direction) async {
+            final success = await provider.deleteConversation(conversation.id);
+            if (context.mounted && !success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Error al eliminar la conversación'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: ListTile(
+            selected: isSelected,
+            selectedTileColor: Theme.of(context).primaryColor.withOpacity(0.1),
+            leading: CircleAvatar(
+              backgroundColor: _getTypeColor(conversation.type),
+              child: Icon(
+                _getTypeIcon(conversation.type),
+                color: Colors.white,
+                size: 20,
+              ),
             ),
-          ),
-          subtitle: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  conversation.type.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w600,
+            title: Text(
+              provider.getChatTitle(conversation),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: (isSelected || hasUnread)
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+            ),
+            subtitle: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    conversation.type.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              if (conversation.lastMessageAt != null)
-                Text(
-                  _formatDate(conversation.lastMessageAt!),
-                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                ),
-            ],
+                if (conversation.lastMessageAt != null)
+                  Text(
+                    _formatDate(conversation.lastMessageAt!),
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+              ],
+            ),
+            trailing: hasUnread
+                ? Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      conversation.unreadCount > 99
+                          ? '99+'
+                          : '${conversation.unreadCount}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                : null,
+            onTap: () => onSelected(conversation),
           ),
-          onTap: () => onSelected(conversation),
         );
       },
     );

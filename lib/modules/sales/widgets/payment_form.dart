@@ -83,23 +83,25 @@ class _PaymentFormState extends State<PaymentForm> {
   /// Check if there's a mismatch between invoice tax treatment and payment method
   String? _checkTaxMismatch() {
     if (_selectedPaymentMethod == null) return null;
-    
-    final invoiceHasTax = widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
-    final paymentMethodExpectsTax = _selectedPaymentMethod!.defaultTaxTreatment == TaxTreatment.taxIncluded;
-    
+
+    final invoiceHasTax =
+        widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
+    final paymentMethodExpectsTax =
+        _selectedPaymentMethod!.defaultTaxTreatment == TaxTreatment.taxIncluded;
+
     if (!invoiceHasTax && paymentMethodExpectsTax) {
       return 'no_tax_with_card';
     } else if (invoiceHasTax && !paymentMethodExpectsTax) {
       return 'has_tax_without_card';
     }
-    
+
     return null;
   }
 
   /// Show warning dialog with option to fix IVA
   Future<bool> _showTaxMismatchWarning(String mismatchType) async {
     final isNoTaxWithCard = mismatchType == 'no_tax_with_card';
-    
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -164,7 +166,7 @@ class _PaymentFormState extends State<PaymentForm> {
   /// Revert invoice to 'sent' status, update IVA, and navigate to form
   Future<void> _fixInvoiceTaxAndNavigate(bool shouldAddTax) async {
     final salesService = context.read<SalesService>();
-    
+
     try {
       // Step 1: Change status back to 'sent' (triggers journal entry deletion)
       await salesService.updateInvoiceStatus(
@@ -173,15 +175,16 @@ class _PaymentFormState extends State<PaymentForm> {
       );
 
       // Step 2: Update the tax treatment AND recalculate amounts
-      final newTaxTreatment = shouldAddTax ? TaxTreatment.taxIncluded : TaxTreatment.noTax;
-      
+      final newTaxTreatment =
+          shouldAddTax ? TaxTreatment.taxIncluded : TaxTreatment.noTax;
+
       // Get current invoice total
       final currentTotal = widget.invoice.total;
-      
+
       // Calculate new amounts based on tax treatment
       final double newNetAmount;
       final double newIvaAmount;
-      
+
       if (shouldAddTax) {
         // Adding tax: divide total by 1.19 to get net
         newNetAmount = currentTotal / 1.19;
@@ -191,19 +194,16 @@ class _PaymentFormState extends State<PaymentForm> {
         newNetAmount = currentTotal;
         newIvaAmount = 0;
       }
-      
-      await Supabase.instance.client
-          .from('sales_invoices')
-          .update({
-            'tax_treatment': newTaxTreatment.value,
-            'net_amount': newNetAmount,
-            'iva_amount': newIvaAmount,
-          })
-          .eq('id', widget.invoice.id!);
+
+      await Supabase.instance.client.from('sales_invoices').update({
+        'tax_treatment': newTaxTreatment.value,
+        'net_amount': newNetAmount,
+        'iva_amount': newIvaAmount,
+      }).eq('id', widget.invoice.id!);
 
       // Step 3: Wait a moment for database write to complete
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       // Step 4: Reload the invoice from database to get fresh data
       await salesService.loadInvoices();
 
@@ -280,12 +280,13 @@ class _PaymentFormState extends State<PaymentForm> {
     final effectiveAmount = amount > balance ? balance : amount;
 
     final salesService = context.read<SalesService>();
-    
+
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: No se pudo obtener el tenant ID')),
+          const SnackBar(
+              content: Text('Error: No se pudo obtener el tenant ID')),
         );
       }
       return;
@@ -343,204 +344,200 @@ class _PaymentFormState extends State<PaymentForm> {
     final invoice = widget.invoice;
     final paymentMethodService = context.watch<PaymentMethodService>();
 
-    return SizedBox(
-      width: 480,
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pagar factura',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              invoice.customerName ?? 'Cliente',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            
-            // Invoice breakdown card
-            Card(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildBreakdownRow(
-                      'Subtotal:',
-                      ChileanUtils.formatCurrency(invoice.netAmount),
-                      context,
-                    ),
-                    if (invoice.taxTreatment == TaxTreatment.taxIncluded) ...[
-                      const SizedBox(height: 4),
-                      _buildBreakdownRow(
-                        'IVA (19%):',
-                        ChileanUtils.formatCurrency(invoice.ivaAmount),
-                        context,
-                      ),
-                    ],
-                    const Divider(height: 16),
-                    _buildBreakdownRow(
-                      'Total factura:',
-                      ChileanUtils.formatCurrency(invoice.total),
-                      context,
-                      isBold: true,
-                    ),
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pagar factura',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            invoice.customerName ?? 'Cliente',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+
+          // Invoice breakdown card
+          Card(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildBreakdownRow(
+                    'Subtotal:',
+                    ChileanUtils.formatCurrency(invoice.netAmount),
+                    context,
+                  ),
+                  if (invoice.taxTreatment == TaxTreatment.taxIncluded) ...[
                     const SizedBox(height: 4),
                     _buildBreakdownRow(
-                      'Saldo pendiente:',
-                      ChileanUtils.formatCurrency(invoice.balance),
+                      'IVA (19%):',
+                      ChileanUtils.formatCurrency(invoice.ivaAmount),
                       context,
-                      isBold: true,
-                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ],
-                ),
+                  const Divider(height: 16),
+                  _buildBreakdownRow(
+                    'Total factura:',
+                    ChileanUtils.formatCurrency(invoice.total),
+                    context,
+                    isBold: true,
+                  ),
+                  const SizedBox(height: 4),
+                  _buildBreakdownRow(
+                    'Saldo pendiente:',
+                    ChileanUtils.formatCurrency(invoice.balance),
+                    context,
+                    isBold: true,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Monto',
-                prefixText: '\$ ',
-              ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _amountController,
+            decoration: const InputDecoration(
+              labelText: 'Monto',
+              prefixText: '\$ ',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Ingresa el monto del pago';
+              }
+              final normalizedValue =
+                  value.replaceAll('.', '').replaceAll(',', '.');
+              final parsed = double.tryParse(normalizedValue);
+              if (parsed == null || parsed <= 0) {
+                return 'Monto inválido';
+              }
+              final parsedInt = parsed.round();
+              final balanceInt = invoice.balance.round();
+              if (parsedInt - balanceInt > 1) {
+                return 'No puede superar el saldo';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_isLoadingMethods)
+            const LinearProgressIndicator()
+          else if (paymentMethodService.paymentMethods.isEmpty)
+            const Text(
+              'No hay métodos de pago disponibles',
+              style: TextStyle(color: Colors.red),
+            )
+          else
+            DropdownButtonFormField<PaymentMethod>(
+              value: _selectedPaymentMethod,
+              decoration: const InputDecoration(labelText: 'Medio de pago'),
+              items: paymentMethodService.paymentMethods
+                  .map((method) => DropdownMenuItem(
+                        value: method,
+                        child: Row(
+                          children: [
+                            if (method.icon != null) ...[
+                              Icon(_getIconForPaymentMethod(method.icon!),
+                                  size: 18),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(method.name),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedPaymentMethod = value);
+                }
+              },
               validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Ingresa el monto del pago';
-                }
-                final normalizedValue =
-                    value.replaceAll('.', '').replaceAll(',', '.');
-                final parsed = double.tryParse(normalizedValue);
-                if (parsed == null || parsed <= 0) {
-                  return 'Monto inválido';
-                }
-                final parsedInt = parsed.round();
-                final balanceInt = invoice.balance.round();
-                if (parsedInt - balanceInt > 1) {
-                  return 'No puede superar el saldo';
+                if (value == null) {
+                  return 'Selecciona un método de pago';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            if (_isLoadingMethods)
-              const LinearProgressIndicator()
-            else if (paymentMethodService.paymentMethods.isEmpty)
-              const Text(
-                'No hay métodos de pago disponibles',
-                style: TextStyle(color: Colors.red),
-              )
-            else
-              DropdownButtonFormField<PaymentMethod>(
-                value: _selectedPaymentMethod,
-                decoration: const InputDecoration(labelText: 'Medio de pago'),
-                items: paymentMethodService.paymentMethods
-                    .map((method) => DropdownMenuItem(
-                          value: method,
-                          child: Row(
-                            children: [
-                              if (method.icon != null) ...[
-                                Icon(_getIconForPaymentMethod(method.icon!),
-                                    size: 18),
-                                const SizedBox(width: 8),
-                              ],
-                              Text(method.name),
-                            ],
-                          ),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedPaymentMethod = value);
-                  }
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Selecciona un método de pago';
-                  }
-                  return null;
-                },
-              ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: _selectDate,
-              borderRadius: BorderRadius.circular(8),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Fecha de pago',
-                  border: OutlineInputBorder(),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.event),
-                    const SizedBox(width: 8),
-                    Text(ChileanUtils.formatDate(_paymentDate)),
-                    const Spacer(),
-                    const Icon(Icons.keyboard_arrow_down),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_selectedPaymentMethod?.requiresReference == true) ...[
-              TextFormField(
-                controller: _referenceController,
-                decoration: const InputDecoration(
-                  labelText: 'Referencia *',
-                  hintText: 'Número de transferencia, cheque, etc.',
-                ),
-                validator: (value) {
-                  if (_selectedPaymentMethod?.requiresReference == true &&
-                      (value == null || value.trim().isEmpty)) {
-                    return 'Este método de pago requiere una referencia';
-                  }
-                  return null;
-                },
-              ),
-            ] else ...[
-              TextFormField(
-                controller: _referenceController,
-                decoration: const InputDecoration(
-                  labelText: 'Referencia',
-                  hintText: 'Número de documento, comprobante, etc. (opcional)',
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _notesController,
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _selectDate,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
               decoration: const InputDecoration(
-                labelText: 'Notas internas',
+                labelText: 'Fecha de pago',
+                border: OutlineInputBorder(),
               ),
-              maxLines: 3,
+              child: Row(
+                children: [
+                  const Icon(Icons.event),
+                  const SizedBox(width: 8),
+                  Text(ChileanUtils.formatDate(_paymentDate)),
+                  const Spacer(),
+                  const Icon(Icons.keyboard_arrow_down),
+                ],
+              ),
             ),
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _isSaving ? null : _submit,
-                icon: _isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: const Text('Registrar pago'),
+          ),
+          const SizedBox(height: 12),
+          if (_selectedPaymentMethod?.requiresReference == true) ...[
+            TextFormField(
+              controller: _referenceController,
+              decoration: const InputDecoration(
+                labelText: 'Referencia *',
+                hintText: 'Número de transferencia, cheque, etc.',
+              ),
+              validator: (value) {
+                if (_selectedPaymentMethod?.requiresReference == true &&
+                    (value == null || value.trim().isEmpty)) {
+                  return 'Este método de pago requiere una referencia';
+                }
+                return null;
+              },
+            ),
+          ] else ...[
+            TextFormField(
+              controller: _referenceController,
+              decoration: const InputDecoration(
+                labelText: 'Referencia',
+                hintText: 'Número de documento, comprobante, etc. (opcional)',
               ),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _notesController,
+            decoration: const InputDecoration(
+              labelText: 'Notas internas',
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _isSaving ? null : _submit,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              label: const Text('Registrar pago'),
+            ),
+          ),
+        ],
       ),
     );
   }

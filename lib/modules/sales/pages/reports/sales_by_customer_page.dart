@@ -108,30 +108,69 @@ class _SalesByCustomerPageState extends State<SalesByCustomerPage> {
                 bottom: BorderSide(color: theme.dividerColor),
               ),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.filter_list),
-                const SizedBox(width: 8),
-                Text('Filtros:', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(_dateRange == null
-                      ? 'Todo el periodo'
-                      : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
-                  onPressed: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                      initialDateRange: _dateRange,
-                    );
-                    if (picked != null) {
-                      setState(() => _dateRange = picked);
-                    }
-                  },
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 600) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.filter_list),
+                          const SizedBox(width: 8),
+                          Text('Filtros:', style: theme.textTheme.titleSmall),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        label: Text(_dateRange == null
+                            ? 'Todo el periodo'
+                            : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 365)),
+                            initialDateRange: _dateRange,
+                          );
+                          if (picked != null) {
+                            setState(() => _dateRange = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    const Icon(Icons.filter_list),
+                    const SizedBox(width: 8),
+                    Text('Filtros:', style: theme.textTheme.titleSmall),
+                    const SizedBox(width: 16),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(_dateRange == null
+                          ? 'Todo el periodo'
+                          : '${DateFormat('dd/MM/yyyy').format(_dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(_dateRange!.end)}'),
+                      onPressed: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2020),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
+                          initialDateRange: _dateRange,
+                        );
+                        if (picked != null) {
+                          setState(() => _dateRange = picked);
+                        }
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -143,51 +182,131 @@ class _SalesByCustomerPageState extends State<SalesByCustomerPage> {
                     ? const Center(
                         child:
                             Text('No hay datos para el periodo seleccionado'))
-                    : SingleChildScrollView(
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: DataTable(
-                            sortColumnIndex: _sortColumnIndex,
-                            sortAscending: _sortAscending,
-                            columns: [
-                              DataColumn(
-                                label: const Text('Nombre del cliente'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                              ),
-                              DataColumn(
-                                label: const Text('Recuento de facturas'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                                numeric: true,
-                              ),
-                              DataColumn(
-                                label: const Text('Ventas totales'),
-                                onSort: (idx, asc) => _updateSort(idx, asc),
-                                numeric: true,
-                              ),
-                            ],
-                            rows: sortedList.map((data) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
-                                      data.customerName,
-                                      style: TextStyle(
-                                        color: theme.colorScheme.primary,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                    : LayoutBuilder(builder: (context, constraints) {
+                        if (constraints.maxWidth < 600) {
+                          return ListView.builder(
+                            itemCount: sortedList.length,
+                            padding: const EdgeInsets.all(16),
+                            itemBuilder: (context, index) {
+                              final data = sortedList[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: InkWell(
+                                  // TODO: Add drill-down
+                                  onTap: () {},
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          data.customerName,
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        ),
+                                        const Divider(),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Facturas',
+                                                  style: theme
+                                                      .textTheme.labelSmall,
+                                                ),
+                                                Text(
+                                                  data.invoiceCount.toString(),
+                                                  style:
+                                                      theme.textTheme.bodyLarge,
+                                                ),
+                                              ],
+                                            ),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  'Ventas Totales',
+                                                  style: theme
+                                                      .textTheme.labelSmall,
+                                                ),
+                                                Text(
+                                                  currencyFormat
+                                                      .format(data.totalSales),
+                                                  style: theme
+                                                      .textTheme.titleMedium
+                                                      ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
-                                    // TODO: Add drill-down to customer details/history if needed
-                                    onTap: () {},
                                   ),
-                                  DataCell(Text(data.invoiceCount.toString())),
-                                  DataCell(Text(
-                                      currencyFormat.format(data.totalSales))),
-                                ],
+                                ),
                               );
-                            }).toList(),
+                            },
+                          );
+                        }
+
+                        return SingleChildScrollView(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: DataTable(
+                              sortColumnIndex: _sortColumnIndex,
+                              sortAscending: _sortAscending,
+                              columns: [
+                                DataColumn(
+                                  label: const Text('Nombre del cliente'),
+                                  onSort: (idx, asc) => _updateSort(idx, asc),
+                                ),
+                                DataColumn(
+                                  label: const Text('Recuento de facturas'),
+                                  onSort: (idx, asc) => _updateSort(idx, asc),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: const Text('Ventas totales'),
+                                  onSort: (idx, asc) => _updateSort(idx, asc),
+                                  numeric: true,
+                                ),
+                              ],
+                              rows: sortedList.map((data) {
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      Text(
+                                        data.customerName,
+                                        style: TextStyle(
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      // TODO: Add drill-down to customer details/history if needed
+                                      onTap: () {},
+                                    ),
+                                    DataCell(
+                                        Text(data.invoiceCount.toString())),
+                                    DataCell(Text(currencyFormat
+                                        .format(data.totalSales))),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
           ),
         ],
       ),

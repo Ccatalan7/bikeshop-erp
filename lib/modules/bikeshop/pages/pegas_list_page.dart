@@ -40,7 +40,7 @@ class _PegasListPageState extends State<PegasListPage> {
 
   // View mode: 'cards' or 'table'
   String _viewMode = 'cards';
-  
+
   // Table pagination
   int _currentPage = 0;
   int _rowsPerPage = 25;
@@ -99,7 +99,7 @@ class _PegasListPageState extends State<PegasListPage> {
     } else {
       setState(() => _isLoading = true);
     }
-    
+
     try {
       // Fetch fresh data (will use cache if still valid)
       final jobs =
@@ -125,7 +125,8 @@ class _PegasListPageState extends State<PegasListPage> {
       MechanicJob? updatedSelection;
       if (_selectedJob != null) {
         try {
-          updatedSelection = jobs.firstWhere((job) => job.id == _selectedJob!.id);
+          updatedSelection =
+              jobs.firstWhere((job) => job.id == _selectedJob!.id);
         } catch (_) {
           updatedSelection = null;
         }
@@ -227,8 +228,9 @@ class _PegasListPageState extends State<PegasListPage> {
     // Apply search
     if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((job) {
-        final matchesJobNumber =
-            (job.jobNumber ?? '').toLowerCase().contains(_searchTerm.toLowerCase());
+        final matchesJobNumber = (job.jobNumber ?? '')
+            .toLowerCase()
+            .contains(_searchTerm.toLowerCase());
         final matchesRequest = job.clientRequest
                 ?.toLowerCase()
                 .contains(_searchTerm.toLowerCase()) ??
@@ -338,221 +340,282 @@ class _PegasListPageState extends State<PegasListPage> {
     final stats = _calculateStats();
 
     return MainLayout(
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Pegas (Trabajos en Curso)',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+      child: LayoutBuilder(builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        // Force cards view on mobile
+        if (isMobile && _viewMode == 'table') {
+          // We don't change state here to avoid rebuild loops during build,
+          // but we'll render as cards or hide the table option in UI
+        }
+
+        return Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Pegas (Trabajos en Curso)',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                AppButton(
-                  text: 'Nuevo Trabajo',
-                  icon: Icons.add_circle,
-                  onPressed: () {
-                    context.push('/taller/pegas/new').then((_) => _loadData());
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Search
-          SearchWidget(
-            hintText: 'Buscar por trabajo, cliente, o bicicleta...',
-            onSearchChanged: _onSearchChanged,
-          ),
-
-          // Filters and controls
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                // Status filters
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildFilterChip('Todos', null, isStatus: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Pendiente', JobStatus.pendiente,
-                          isStatus: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Diagnóstico', JobStatus.diagnostico,
-                          isStatus: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('En Curso', JobStatus.enCurso,
-                          isStatus: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                          'Esperando Repuestos', JobStatus.esperandoRepuestos,
-                          isStatus: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Finalizado', JobStatus.finalizado,
-                          isStatus: true),
-                    ],
+                  AppButton(
+                    text: isMobile ? 'Nuevo' : 'Nuevo Trabajo',
+                    icon: Icons.add_circle,
+                    onPressed: () {
+                      context
+                          .push('/taller/pegas/new')
+                          .then((_) => _loadData());
+                    },
                   ),
-                ),
-                const SizedBox(height: 8),
-                // Priority filters
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      const Text('Prioridad: ',
-                          style: TextStyle(fontSize: 13)),
-                      _buildFilterChip('Todas', null, isStatus: false),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Urgente', JobPriority.urgente,
-                          isStatus: false),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Alta', JobPriority.alta,
-                          isStatus: false),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Normal', JobPriority.normal,
-                          isStatus: false),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Controls row
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      // Sort dropdown
-                      DropdownButton<String>(
-                        value: _sortBy,
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'arrival_date',
-                              child: Text('Fecha Ingreso')),
-                          DropdownMenuItem(
-                              value: 'deadline', child: Text('Plazo')),
-                          DropdownMenuItem(
-                              value: 'priority', child: Text('Prioridad')),
-                          DropdownMenuItem(
-                              value: 'status', child: Text('Estado')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _sortBy = value!;
-                            _applyFiltersAndSort();
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      // Show completed toggle
-                      FilterChip(
-                        label: Text('Ver completados'),
-                        selected: _showCompleted,
-                        onSelected: (selected) {
-                          setState(() {
-                            _showCompleted = selected;
-                          });
-                          _loadData();
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      // View mode toggle
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'cards',
-                            icon: Icon(Icons.view_agenda, size: 16),
-                            label: Text('Tarjetas'),
-                          ),
-                          ButtonSegment(
-                            value: 'table',
-                            icon: Icon(Icons.table_rows, size: 16),
-                            label: Text('Tabla'),
-                          ),
-                        ],
-                        selected: {_viewMode},
-                        onSelectionChanged: (Set<String> selected) {
-                          setState(() {
-                            _viewMode = selected.first;
-                            _currentPage = 0;
-                          });
-                          _saveViewMode(_viewMode);
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Calendar view button
-                      OutlinedButton.icon(
-                        onPressed: () => context.push('/taller/calendario'),
-                        icon: const Icon(Icons.calendar_month, size: 16),
-                        label: const Text('Calendario'),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Stats
-          if (!_isLoading)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue[50]!, Colors.blue[100]!],
-                ),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                      'Total', stats['total'].toString(), Icons.view_list),
-                  _buildStatItem('Urgente', stats['urgente'].toString(),
-                      Icons.priority_high,
-                      color: Colors.red),
-                  _buildStatItem(
-                      'En Curso', stats['en_curso'].toString(), Icons.build,
-                      color: Colors.green),
-                  _buildStatItem(
-                      'Atrasados', stats['overdue'].toString(), Icons.warning,
-                      color: Colors.orange),
-                  _buildStatItem('Mostrando', _filteredJobs.length.toString(),
-                      Icons.filter_list),
                 ],
               ),
             ),
-          const SizedBox(height: 16),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : Builder(
-                    builder: (context) {
-                      print('🔵 DEBUG: Building content. _selectedJob: ${_selectedJob?.jobNumber ?? "NULL"}');
-                      return _selectedJob == null
-                          ? _buildFullView()
-                          : _buildSplitView();
-                    },
+            // Search
+            SearchWidget(
+              hintText: 'Buscar por trabajo, cliente, o bicicleta...',
+              onSearchChanged: _onSearchChanged,
+            ),
+
+            // Filters and controls
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  // Status filters
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('Todos', null, isStatus: true),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Pendiente', JobStatus.pendiente,
+                            isStatus: true),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Diagnóstico', JobStatus.diagnostico,
+                            isStatus: true),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('En Curso', JobStatus.enCurso,
+                            isStatus: true),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                            'Esperando Repuestos', JobStatus.esperandoRepuestos,
+                            isStatus: true),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Finalizado', JobStatus.finalizado,
+                            isStatus: true),
+                      ],
+                    ),
                   ),
-          ),
-        ],
-      ),
+                  const SizedBox(height: 8),
+                  // Priority filters
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const Text('Prioridad: ',
+                            style: TextStyle(fontSize: 13)),
+                        _buildFilterChip('Todas', null, isStatus: false),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Urgente', JobPriority.urgente,
+                            isStatus: false),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Alta', JobPriority.alta,
+                            isStatus: false),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Normal', JobPriority.normal,
+                            isStatus: false),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Controls row
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // Sort dropdown
+                        DropdownButton<String>(
+                          value: _sortBy,
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'arrival_date',
+                                child: Text('Fecha Ingreso')),
+                            DropdownMenuItem(
+                                value: 'deadline', child: Text('Plazo')),
+                            DropdownMenuItem(
+                                value: 'priority', child: Text('Prioridad')),
+                            DropdownMenuItem(
+                                value: 'status', child: Text('Estado')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _sortBy = value!;
+                              _applyFiltersAndSort();
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        // Show completed toggle
+                        FilterChip(
+                          label: Text('Ver completados'),
+                          selected: _showCompleted,
+                          onSelected: (selected) {
+                            setState(() {
+                              _showCompleted = selected;
+                            });
+                            _loadData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+
+                        // View mode toggle - Hide on mobile
+                        if (!isMobile) ...[
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'cards',
+                                icon: Icon(Icons.view_agenda, size: 16),
+                                label: Text('Tarjetas'),
+                              ),
+                              ButtonSegment(
+                                value: 'table',
+                                icon: Icon(Icons.table_rows, size: 16),
+                                label: Text('Tabla'),
+                              ),
+                            ],
+                            selected: {_viewMode},
+                            onSelectionChanged: (Set<String> selected) {
+                              setState(() {
+                                _viewMode = selected.first;
+                                _currentPage = 0;
+                              });
+                              _saveViewMode(_viewMode);
+                            },
+                            style: ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+
+                        // Calendar view button
+                        OutlinedButton.icon(
+                          onPressed: () => context.push('/taller/calendario'),
+                          icon: const Icon(Icons.calendar_month, size: 16),
+                          label: const Text('Calendario'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Stats
+            if (!_isLoading)
+              isMobile
+                  ? SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.blue[50]!, Colors.blue[100]!],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildStatItem('Total', stats['total'].toString(),
+                                Icons.view_list),
+                            const SizedBox(width: 16),
+                            _buildStatItem(
+                                'Urgente',
+                                stats['urgente'].toString(),
+                                Icons.priority_high,
+                                color: Colors.red),
+                            const SizedBox(width: 16),
+                            _buildStatItem('En Curso',
+                                stats['en_curso'].toString(), Icons.build,
+                                color: Colors.green),
+                            const SizedBox(width: 16),
+                            _buildStatItem('Atrasados',
+                                stats['overdue'].toString(), Icons.warning,
+                                color: Colors.orange),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.blue[50]!, Colors.blue[100]!],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatItem('Total', stats['total'].toString(),
+                              Icons.view_list),
+                          _buildStatItem('Urgente', stats['urgente'].toString(),
+                              Icons.priority_high,
+                              color: Colors.red),
+                          _buildStatItem('En Curso',
+                              stats['en_curso'].toString(), Icons.build,
+                              color: Colors.green),
+                          _buildStatItem('Atrasados',
+                              stats['overdue'].toString(), Icons.warning,
+                              color: Colors.orange),
+                          _buildStatItem(
+                              'Mostrando',
+                              _filteredJobs.length.toString(),
+                              Icons.filter_list),
+                        ],
+                      ),
+                    ),
+            const SizedBox(height: 16),
+
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: BrandedLoading())
+                  : Builder(
+                      builder: (context) {
+                        // Mobile: show list or full detail if selected (no split)
+                        if (isMobile) {
+                          if (_selectedJob != null) {
+                            return _buildDetailView(isMobile: true);
+                          }
+                          return _buildJobsList(); // Always cards on mobile
+                        }
+
+                        // Desktop: split view or full view
+                        return _selectedJob == null
+                            ? _buildFullView()
+                            : _buildSplitView();
+                      },
+                    ),
+            ),
+          ],
+        );
+      }),
     );
   }
 
@@ -607,63 +670,84 @@ class _PegasListPageState extends State<PegasListPage> {
 
         // Right pane - Detail view
         Expanded(
-          child: Stack(
-            children: [
-              PegaDetailView(
-                job: _selectedJob!,
-                customer: _customers[_selectedJob!.customerId],
-                bike: _bikes[_selectedJob!.bikeId],
-                items: _selectedJobItems,
-                productImages: _productImages,
-                onClose: () {
+          child: _buildDetailView(isMobile: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailView({required bool isMobile}) {
+    return Stack(
+      children: [
+        PegaDetailView(
+          job: _selectedJob!,
+          customer: _customers[_selectedJob!.customerId],
+          bike: _bikes[_selectedJob!.bikeId],
+          items: _selectedJobItems,
+          productImages: _productImages,
+          onClose: () {
+            setState(() {
+              _selectedJob = null;
+              _selectedJobItems = [];
+              _productImages = {};
+            });
+          },
+          onEdit: () {
+            context
+                .push('/taller/pegas/${_selectedJob!.id}/edit')
+                .then((_) => _loadData());
+          },
+          onStatusChange: (newStatus) {
+            _updateJobStatus(_selectedJob!, newStatus);
+          },
+          onItemRemoved: (itemId) async {
+            try {
+              await _bikeshopService.deleteJobItem(itemId);
+              if (_selectedJob != null) {
+                setState(() => _loadingDetails = true);
+                await _loadJobDetails(_selectedJob!);
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Producto o servicio eliminado')),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error eliminando ítem: $e')),
+                );
+              }
+            }
+          },
+        ),
+        if (isMobile)
+          Positioned(
+            left: 16,
+            top: 16,
+            child: CircleAvatar(
+              backgroundColor: Colors.white,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
                   setState(() {
                     _selectedJob = null;
-                    _selectedJobItems = [];
-                    _productImages = {};
                   });
                 },
-                onEdit: () {
-                  context
-                      .push('/taller/pegas/${_selectedJob!.id}')
-                      .then((_) => _loadData());
-                },
-                onStatusChange: (newStatus) {
-                  _updateJobStatus(_selectedJob!, newStatus);
-                },
-                onItemRemoved: (itemId) async {
-                  try {
-                    await _bikeshopService.deleteJobItem(itemId);
-                    if (_selectedJob != null) {
-                      setState(() => _loadingDetails = true);
-                      await _loadJobDetails(_selectedJob!);
-                    }
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Producto o servicio eliminado')),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error eliminando ítem: $e')),
-                      );
-                    }
-                  }
-                },
               ),
-              if (_loadingDetails)
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: LinearProgressIndicator(minHeight: 2),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
+        if (_loadingDetails)
+          const Positioned.fill(
+            child: IgnorePointer(
+              ignoring: true,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -802,7 +886,7 @@ class _PegasListPageState extends State<PegasListPage> {
     final isOverdue = job.deadline != null &&
         job.deadline!.isBefore(DateTime.now()) &&
         job.status != JobStatus.finalizado;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
       elevation: 3,
@@ -1144,7 +1228,7 @@ class _PegasListPageState extends State<PegasListPage> {
   }
 
   // ========== TABLE VIEW ==========
-  
+
   Widget _buildTableView() {
     if (_filteredJobs.isEmpty) {
       return Center(
@@ -1359,7 +1443,8 @@ class _PegasListPageState extends State<PegasListPage> {
                               ),
                               if (isOverdue) ...[
                                 const SizedBox(width: 4),
-                                Icon(Icons.warning, size: 16, color: Colors.red),
+                                Icon(Icons.warning,
+                                    size: 16, color: Colors.red),
                               ],
                             ],
                           ),

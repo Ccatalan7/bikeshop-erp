@@ -1176,6 +1176,87 @@ class _ProductFormPageState extends State<ProductFormPage> {
   Widget _buildHeader(ThemeData theme) {
     final title =
         _existingProduct != null ? 'Editar producto' : 'Nuevo producto';
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (_existingProduct != null)
+                  IconButton(
+                    onPressed: _isSaving ? null : _confirmDeleteProduct,
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Eliminar producto',
+                    color: theme.colorScheme.error,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Mantén los datos comerciales y de inventario al día.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.percent,
+                            size: 16, color: theme.colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Margen ${_marginPercentage.toStringAsFixed(1)}%',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                AppButton(
+                  text: 'Guardar',
+                  icon: Icons.save_outlined,
+                  onPressed: _isSaving ? null : _saveProduct,
+                  isLoading: _isSaving,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -1256,6 +1337,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isWide = constraints.maxWidth > 1080;
+
           if (isWide) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1733,11 +1815,25 @@ class _ProductFormPageState extends State<ProductFormPage> {
     ];
   }
 
+  // ... _buildForm ... (omitted, assuming no changes here, or handled separately)
+  // Wait, I need to check where _buildForm ends relative to this replacement.
+  // No, I am replacing _buildHeader and subsequent methods. I should break this down.
+
+  // Let's replace _buildHeader separately first to be safe, but since I have a large chunk target,
+  // I will just replace the methods I need to change.
+
+  // Actually, I can use LayoutBuilder inside the helper methods _buildPricingFields and _buildInventoryFields.
+  // The tool call replaced the content up to line 1862.
+
+  // Re-reading code... I will replace _buildHeader, _buildPricingFields, and _buildInventoryFields.
+
   List<Widget> _buildPricingFields(ThemeData theme) {
     return [
-      Row(
-        children: [
+      LayoutBuilder(builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        final children = [
           Expanded(
+            flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _priceController,
               decoration: const InputDecoration(
@@ -1758,8 +1854,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
               },
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16, height: isMobile ? 16 : 0),
           Expanded(
+            flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _costController,
               decoration: const InputDecoration(
@@ -1780,8 +1877,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
               },
             ),
           ),
-        ],
-      ),
+        ];
+
+        return isMobile
+            ? Column(
+                children: children
+                    .map((w) => w is Expanded
+                        ? SizedBox(width: double.infinity, child: w.child)
+                        : w)
+                    .toList())
+            : Row(children: children);
+      }),
       const SizedBox(height: 16),
       Container(
         padding: const EdgeInsets.all(16),
@@ -1829,9 +1935,11 @@ class _ProductFormPageState extends State<ProductFormPage> {
         ),
       ),
       const SizedBox(height: 16),
-      Row(
-        children: [
+      LayoutBuilder(builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        final children = [
           Expanded(
+            flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _inventoryQtyController,
               decoration: const InputDecoration(
@@ -1843,8 +1951,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16, height: isMobile ? 16 : 0),
           Expanded(
+            flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _minStockController,
               decoration: const InputDecoration(
@@ -1856,8 +1965,17 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ],
             ),
           ),
-        ],
-      ),
+        ];
+
+        return isMobile
+            ? Column(
+                children: children
+                    .map((w) => w is Expanded
+                        ? SizedBox(width: double.infinity, child: w.child)
+                        : w)
+                    .toList())
+            : Row(children: children);
+      }),
     ];
   }
 
@@ -2182,105 +2300,113 @@ class _CategorySearchDialogState extends State<_CategorySearchDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 500,
-        height: 600,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Seleccionar Categoría',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Search bar
-            TextField(
-              controller: _searchController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Buscar categoría',
-                hintText: 'Escriba para filtrar...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _filterCategories();
-                        },
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Results count
-            Text(
-              '${_filteredCategories.length} categoría${_filteredCategories.length != 1 ? 's' : ''} encontrada${_filteredCategories.length != 1 ? 's' : ''}',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            const Divider(),
-            // Category list
-            Expanded(
-              child: _filteredCategories.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No se encontraron categorías',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _filteredCategories.length,
-                      itemBuilder: (context, index) {
-                        final category = _filteredCategories[index];
-                        final indent = category.level * 16.0;
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = MediaQuery.of(context).size.width < 600;
 
-                        return ListTile(
-                          contentPadding: EdgeInsets.only(
-                            left: 16 + indent,
-                            right: 16,
-                          ),
-                          leading: Icon(
-                            category.level == 0
-                                ? Icons.folder
-                                : Icons.subdirectory_arrow_right,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                          title: Text(
-                            category.name,
-                            style: TextStyle(
-                              fontWeight: category.level == 0
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                          subtitle: category.level > 0
-                              ? Text(
-                                  category.fullPath,
-                                  style: const TextStyle(fontSize: 12),
-                                )
-                              : null,
-                          onTap: () => Navigator.pop(context, category),
-                        );
-                      },
+      return Dialog(
+        insetPadding: isMobile
+            ? const EdgeInsets.all(16)
+            : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        child: Container(
+          width: isMobile ? double.infinity : 500,
+          height: 600,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Seleccionar Categoría',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-            ),
-          ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Search bar
+              TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Buscar categoría',
+                  hintText: 'Escriba para filtrar...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _filterCategories();
+                          },
+                        )
+                      : null,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Results count
+              Text(
+                '${_filteredCategories.length} categoría${_filteredCategories.length != 1 ? 's' : ''} encontrada${_filteredCategories.length != 1 ? 's' : ''}',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              // Category list
+              Expanded(
+                child: _filteredCategories.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No se encontraron categorías',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filteredCategories.length,
+                        itemBuilder: (context, index) {
+                          final category = _filteredCategories[index];
+                          final indent = category.level * 16.0;
+
+                          return ListTile(
+                            contentPadding: EdgeInsets.only(
+                              left: 16 + indent,
+                              right: 16,
+                            ),
+                            leading: Icon(
+                              category.level == 0
+                                  ? Icons.folder
+                                  : Icons.subdirectory_arrow_right,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                            title: Text(
+                              category.name,
+                              style: TextStyle(
+                                fontWeight: category.level == 0
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            subtitle: category.level > 0
+                                ? Text(
+                                    category.fullPath,
+                                    style: const TextStyle(fontSize: 12),
+                                  )
+                                : null,
+                            onTap: () => Navigator.pop(context, category),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 }

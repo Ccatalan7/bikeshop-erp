@@ -58,7 +58,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   onPressed: () => context.go('/website'),
                 ),
                 const SizedBox(width: 8),
-                Text('Pedidos Online', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                Text('Pedidos Online',
+                    style: theme.textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.refresh),
@@ -72,54 +74,126 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           Container(
             padding: const EdgeInsets.all(16),
             color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-            child: Row(
-              children: [
-                const Text('Estado: '),
-                const SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: _selectedStatus,
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('Todos')),
-                    DropdownMenuItem(
-                        value: 'pending', child: Text('Pendiente')),
-                    DropdownMenuItem(
-                        value: 'confirmed', child: Text('Confirmado')),
-                    DropdownMenuItem(
-                        value: 'processing', child: Text('En Proceso')),
-                    DropdownMenuItem(value: 'shipped', child: Text('Enviado')),
-                    DropdownMenuItem(
-                        value: 'delivered', child: Text('Entregado')),
-                    DropdownMenuItem(
-                        value: 'cancelled', child: Text('Cancelado')),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 600) {
+                  // Mobile
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: _selectedStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado del Pedido',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('Todos')),
+                          DropdownMenuItem(
+                              value: 'pending', child: Text('Pendiente')),
+                          DropdownMenuItem(
+                              value: 'confirmed', child: Text('Confirmado')),
+                          DropdownMenuItem(
+                              value: 'processing', child: Text('En Proceso')),
+                          DropdownMenuItem(
+                              value: 'shipped', child: Text('Enviado')),
+                          DropdownMenuItem(
+                              value: 'delivered', child: Text('Entregado')),
+                          DropdownMenuItem(
+                              value: 'cancelled', child: Text('Cancelado')),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedStatus = value ?? 'all');
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _selectedPaymentStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'Estado de Pago',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('Todos')),
+                          DropdownMenuItem(
+                              value: 'pending', child: Text('Pendiente')),
+                          DropdownMenuItem(
+                              value: 'paid', child: Text('Pagado')),
+                          DropdownMenuItem(
+                              value: 'failed', child: Text('Fallido')),
+                          DropdownMenuItem(
+                              value: 'refunded', child: Text('Reembolsado')),
+                        ],
+                        onChanged: (value) {
+                          setState(
+                              () => _selectedPaymentStatus = value ?? 'all');
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${orders.length} pedidos encontrados',
+                        style: theme.textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  );
+                }
+
+                // Desktop
+                return Row(
+                  children: [
+                    const Text('Estado: '),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: _selectedStatus,
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(
+                            value: 'pending', child: Text('Pendiente')),
+                        DropdownMenuItem(
+                            value: 'confirmed', child: Text('Confirmado')),
+                        DropdownMenuItem(
+                            value: 'processing', child: Text('En Proceso')),
+                        DropdownMenuItem(
+                            value: 'shipped', child: Text('Enviado')),
+                        DropdownMenuItem(
+                            value: 'delivered', child: Text('Entregado')),
+                        DropdownMenuItem(
+                            value: 'cancelled', child: Text('Cancelado')),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedStatus = value ?? 'all');
+                      },
+                    ),
+                    const SizedBox(width: 24),
+                    const Text('Pago: '),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: _selectedPaymentStatus,
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('Todos')),
+                        DropdownMenuItem(
+                            value: 'pending', child: Text('Pendiente')),
+                        DropdownMenuItem(value: 'paid', child: Text('Pagado')),
+                        DropdownMenuItem(
+                            value: 'failed', child: Text('Fallido')),
+                        DropdownMenuItem(
+                            value: 'refunded', child: Text('Reembolsado')),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedPaymentStatus = value ?? 'all');
+                      },
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${orders.length} pedidos',
+                      style: theme.textTheme.bodyMedium,
+                    ),
                   ],
-                  onChanged: (value) {
-                    setState(() => _selectedStatus = value ?? 'all');
-                  },
-                ),
-                const SizedBox(width: 24),
-                const Text('Pago: '),
-                const SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: _selectedPaymentStatus,
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('Todos')),
-                    DropdownMenuItem(
-                        value: 'pending', child: Text('Pendiente')),
-                    DropdownMenuItem(value: 'paid', child: Text('Pagado')),
-                    DropdownMenuItem(value: 'failed', child: Text('Fallido')),
-                    DropdownMenuItem(
-                        value: 'refunded', child: Text('Reembolsado')),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _selectedPaymentStatus = value ?? 'all');
-                  },
-                ),
-                const Spacer(),
-                Text(
-                  '${orders.length} pedidos',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
+                );
+              },
             ),
           ),
 

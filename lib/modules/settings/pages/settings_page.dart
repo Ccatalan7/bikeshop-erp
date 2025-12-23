@@ -98,7 +98,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(_userEmail ?? 'No disponible'),
                   trailing: IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () => _copyToClipboard(_userEmail ?? '', 'Email'),
+                    onPressed: () =>
+                        _copyToClipboard(_userEmail ?? '', 'Email'),
                   ),
                 ),
                 ListTile(
@@ -107,7 +108,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(_subdomain ?? 'No disponible'),
                   trailing: IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () => _copyToClipboard(_subdomain ?? '', 'Subdomain'),
+                    onPressed: () =>
+                        _copyToClipboard(_subdomain ?? '', 'Subdomain'),
                   ),
                 ),
                 ListTile(
@@ -121,7 +123,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(_tenantId ?? 'No disponible'),
                   trailing: IconButton(
                     icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () => _copyToClipboard(_tenantId ?? '', 'Tenant ID'),
+                    onPressed: () =>
+                        _copyToClipboard(_tenantId ?? '', 'Tenant ID'),
                   ),
                 ),
               ],
@@ -138,6 +141,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: 'Crear respaldos automáticos y restaurar datos',
                 iconColor: Colors.blue,
                 onTap: () => context.push('/settings/backup'),
+              ),
+              _buildSettingTile(
+                context,
+                icon: Icons.notifications,
+                title: 'Notificaciones',
+                subtitle: 'Configurar alertas y dispositivos',
+                iconColor: Colors.orange,
+                onTap: () => context.push('/settings/notifications'),
               ),
               _buildSettingTile(
                 context,

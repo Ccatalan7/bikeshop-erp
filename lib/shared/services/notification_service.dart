@@ -1,0 +1,474 @@
+import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Top-level function required by firebase_messaging for background handling.
+/// Must be outside any class and cannot be an anonymous function.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Ensure Firebase is initialized (required for background isolate)
+  await Firebase.initializeApp();
+
+  debugPrint('🔔 Background message received: ${message.messageId}');
+  debugPrint('🔔 Data: ${message.data}');
+
+  // Process the message using the singleton instance
+  // Note: In background, some services may not be available
+  try {
+    await NotificationService().handleIncomingMessage(message);
+  } catch (e) {
+    debugPrint('❌ Background handler error: $e');
+  }
+}
+
+class NotificationService {
+  // Singleton pattern
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final _supabase = Supabase.instance.client;
+  final _localNotifications = FlutterLocalNotificationsPlugin();
+  final _audioPlayer = AudioPlayer();
+
+  String? _fcmToken;
+  String? get fcmToken => _fcmToken;
+
+  bool _isInitialized = false;
+
+  // Cache for messaging style notifications to support grouping
+  // Key: conversation_id (or sender_id if 1:1)
+  final Map<String, List<Message>> _activeConversations = {};
+
+  // Cache for sender names to avoid repeated DB lookups
+  final Map<String, String> _senderNames = {};
+
+  // User Settings
+  bool _soundEnabled = true;
+  bool _vibrationEnabled = true;
+
+  bool get soundEnabled => _soundEnabled;
+  bool get vibrationEnabled => _vibrationEnabled;
+
+  final _messageStreamController = StreamController<RemoteMessage>.broadcast();
+
+  /// Stream of incoming messages (foreground & background)
+  /// Listen to this to update UI badges or show in-app alerts
+  Stream<RemoteMessage> get onMessageReceived =>
+      _messageStreamController.stream;
+
+  // Deprecated getter, keeping for backward compatibility if needed, map to new stream
+  Stream<RemoteMessage> get messageStream => _messageStreamController.stream;
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _soundEnabled = prefs.getBool('notification_sound') ?? true;
+    _vibrationEnabled = prefs.getBool('notification_vibration') ?? true;
+  }
+
+  Future<void> setSoundEnabled(bool value) async {
+    _soundEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notification_sound', value);
+  }
+
+  Future<void> setVibrationEnabled(bool value) async {
+    _vibrationEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notification_vibration', value);
+  }
+
+  Future<void> playNotificationSound() async {
+    if (!_soundEnabled) return;
+
+    try {
+      // Use a simple system beep or bundled sound
+      // For cross-platform, we use a URL approach or asset
+      await _audioPlayer.play(AssetSource('sounds/notification.mp3'),
+          volume: 1.0);
+    } catch (e) {
+      // On Web, browsers block audio if not triggered by user interaction.
+      // We catch this to prevent the app from crashing.
+      debugPrint('⚠️ Audio playback failed (likely browser policy): $e');
+    }
+  }
+
+  void _triggerVibration() {
+    if (!_vibrationEnabled || kIsWeb) return;
+
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      debugPrint('⚠️ Could not trigger vibration: $e');
+    }
+  }
+
+  Future<void> init() async {
+    if (_isInitialized) return;
+
+    // 1. Initialize Local Notifications for ALL platforms
+    const initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettingsMacOS = DarwinInitializationSettings();
+    const initializationSettingsLinux =
+        LinuxInitializationSettings(defaultActionName: 'Open notification');
+    const initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      macOS: initializationSettingsMacOS,
+      linux: initializationSettingsLinux,
+    );
+
+    await _localNotifications.initialize(initializationSettings);
+    _isInitialized = true;
+
+    // Load user settings
+    await _loadSettings();
+
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      await _initMobile();
+    } else {
+      // await _initDesktop();
+    }
+  }
+
+  Future<void> _initMobile() async {
+    // Safety check: specific platforms might be misidentified or init might have failed
+    if (Firebase.apps.isEmpty) {
+      debugPrint(
+          '⚠️ Firebase not initialized, skipping mobile notification setup.');
+      return;
+    }
+
+    final firebaseMessaging = FirebaseMessaging.instance;
+
+    // 1. Request Permission
+    NotificationSettings settings = await firebaseMessaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('User granted permission');
+
+      // 2. Register Background Handler
+      FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler);
+
+      // 3. Get Token
+      _fcmToken = await firebaseMessaging.getToken(
+        vapidKey: kIsWeb
+            ? 'BEiJc0XNBT3YycnP1Rk1_lojF3EKAEQzyiOceq1vWM20OmeoS4bkDShbVSHIuVCuNP6uHDHYhpaFbNayxv24Iws'
+            : null,
+      );
+
+      debugPrint('\n\n##################################################');
+      debugPrint('### FCM TOKEN: $_fcmToken');
+      debugPrint('##################################################\n\n');
+
+      // 4. Save Token to Database
+      if (_fcmToken != null) {
+        await _saveTokenToDatabase(_fcmToken!);
+      }
+
+      // 5. Listen for token refreshes
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        _saveTokenToDatabase(newToken);
+      });
+
+      // 6. Listen for Foreground Messages
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('Got a message whilst in the foreground!');
+        debugPrint('Message data: ${message.data}');
+
+        // Handle both notification+data and data-only messages
+        final hasNotification = message.notification != null;
+        final hasData = message.data.isNotEmpty;
+
+        if (hasNotification) {
+          debugPrint(
+              'Message also contained a notification: ${message.notification}');
+        }
+
+        if (hasData || hasNotification) {
+          // Notify in-app listeners (Snackbar)
+          _messageStreamController.add(message);
+
+          // Play sound and vibrate
+          playNotificationSound();
+          _triggerVibration();
+
+          handleIncomingMessage(message);
+        }
+      });
+    } else {
+      debugPrint('User declined or has not accepted permission');
+    }
+  }
+
+  Future<void> _initDesktop() async {
+    debugPrint('🖥️ Initializing Desktop Notifications...');
+
+    // const initializationSettingsLinux =
+    //     LinuxInitializationSettings(defaultActionName: 'Open notification');
+    // const initializationSettings = InitializationSettings(
+    //   macOS: initializationSettingsMacOS,
+    //   linux: initializationSettingsLinux,
+    // );
+    // await _localNotifications.initialize(initializationSettings);
+
+    // Request Permissions explicitly for macOS
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+
+    // 2. Listen to Realtime Messages
+    debugPrint('🔔 Setting up Realtime subscription for public:messages...');
+    _supabase
+        .channel('public:messages')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          callback: (payload) {
+            final newMessage = payload.newRecord;
+            final currentUserId = _supabase.auth.currentUser?.id;
+            final senderId = newMessage['sender_id'];
+
+            // Show notification only if:
+            // 1. We are logged in
+            // 2. The sender is NOT us (incoming message)
+            if (currentUserId != null && senderId != currentUserId) {
+              final content = newMessage['content'] ?? 'New Image';
+
+              // Notify in-app listeners (Desktop)
+              _messageStreamController.add(RemoteMessage(
+                notification: RemoteNotification(
+                  title: 'New Message',
+                  body: content,
+                ),
+                data: newMessage,
+              ));
+
+              // Play sound and vibrate
+              playNotificationSound();
+              _triggerVibration();
+
+              showLocalNotification('New Message', content);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  /// Handles an incoming FCM message and decides how to show it
+  // Made public to be accessible from top-level background handler
+  Future<void> handleIncomingMessage(RemoteMessage message) async {
+    final data = message.data;
+    final notification = message.notification;
+
+    // Data-only messages have no notification field, so don't return early
+    // if (notification == null) return;
+
+    // Try to get conversation ID and Sender ID from data
+    // Fallback: Use 'general' if missing
+    final String conversationId =
+        data['conversation_id'] ?? data['chat_id'] ?? 'general';
+    final String senderId = data['sender_id'] ?? 'unknown_sender';
+
+    debugPrint(
+        '🔔 HandleIncomingMessage: conversationId=$conversationId, senderId=$senderId');
+    debugPrint('🔔 Raw Data: $data');
+
+    try {
+      // Determine sender name from data (preferred) or cache or DB
+      String? senderName = data['sender_name'] ?? _senderNames[senderId];
+
+      if (senderName == null) {
+        // Attempt to fetch if we have a senderId (senderId = auth.users.id)
+        if (senderId != 'unknown_sender') {
+          try {
+            // Get user_profile to find employee_id
+            final userProfile = await _supabase
+                .from('user_profiles')
+                .select('employee_id')
+                .eq('user_id', senderId)
+                .maybeSingle()
+                .timeout(const Duration(seconds: 2));
+
+            if (userProfile != null && userProfile['employee_id'] != null) {
+              // Get employee name
+              final employee = await _supabase
+                  .from('employees')
+                  .select('first_name, last_name')
+                  .eq('id', userProfile['employee_id'])
+                  .maybeSingle()
+                  .timeout(const Duration(seconds: 2));
+
+              if (employee != null) {
+                senderName =
+                    '${employee['first_name']} ${employee['last_name']}'.trim();
+                _senderNames[senderId] = senderName!;
+              }
+            }
+          } catch (e) {
+            debugPrint('Error fetching sender name: $e');
+          }
+        }
+        // Final fallback
+        senderName ??= data['title'] ?? notification?.title ?? 'Nuevo Mensaje';
+      }
+
+      // Get body from data first, then notification
+      final String body = data['body'] ?? notification?.body ?? '';
+
+      // Create the Message object for MessagingStyle
+      final Person person = Person(
+        key: senderId,
+        name: senderName,
+        // icon: // Could load avatar if needed
+      );
+
+      final Message newMessage = Message(
+        body,
+        DateTime.now(),
+        person,
+      );
+
+      // Update conversation cache
+      if (!_activeConversations.containsKey(conversationId)) {
+        _activeConversations[conversationId] = [];
+      }
+      _activeConversations[conversationId]!.add(newMessage);
+
+      // Limit cache size per conversation (e.g. last 5 messages)
+      if (_activeConversations[conversationId]!.length > 5) {
+        _activeConversations[conversationId]!.removeAt(0);
+      }
+
+      await _showMessagingNotification(
+        conversationId: conversationId,
+        conversationTitle: data['group_name'], // Null if 1:1
+        messages: _activeConversations[conversationId]!,
+      );
+    } catch (e) {
+      debugPrint(
+          '⚠️ MessagingStyle failed, falling back to simple notification: $e');
+      showLocalNotification(
+        data['title'] ?? notification?.title ?? 'New Message',
+        data['body'] ?? notification?.body ?? '',
+        notificationId: conversationId.hashCode,
+      );
+    }
+  }
+
+  Future<void> _showMessagingNotification({
+    required String conversationId,
+    String? conversationTitle,
+    required List<Message> messages,
+  }) async {
+    // Generate a consistent ID based on conversationId hash
+    // This allows updating the *same* notification slot instead of creating new ones
+    final int notificationId = conversationId.hashCode;
+
+    final MessagingStyleInformation styleInfo = MessagingStyleInformation(
+      messages.last.person ??
+          const Person(
+              name:
+                  'User'), // Main persona (usually user, but here sender works)
+      groupConversation: conversationTitle != null,
+      conversationTitle: conversationTitle,
+      messages: messages,
+    );
+
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'default_channel', // Reverted to default to ensure it shows up
+      'General Notifications', // Reverted name
+      channelDescription: 'Notificaciones generales',
+      importance: Importance.max,
+      priority: Priority.high,
+      styleInformation: styleInfo,
+      groupKey: 'com.bikeshop.messages', // Group grouping key
+      setAsGroupSummary: false, // Individual conversation
+      color: const Color(0xFF000000), // Brand color ideally
+    );
+
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      macOS: const DarwinNotificationDetails(),
+      linux: const LinuxNotificationDetails(),
+    );
+
+    try {
+      await _localNotifications.show(
+        notificationId,
+        conversationTitle ??
+            messages.last.person?.name ??
+            'Chat', // Title: Group Name or Sender Name
+        messages.last.text, // Body: Last message text
+        details,
+      );
+      debugPrint('✅ Messaging notification updated for $conversationId');
+    } catch (e) {
+      debugPrint('❌ Error showing messaging notification: $e');
+    }
+  }
+
+  // Legacy method kept for simple alerts or errors
+  Future<void> showLocalNotification(String title, String body,
+      {int? notificationId}) async {
+    if (kIsWeb) return;
+    try {
+      const notificationDetails = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'default_channel',
+          'General Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        macOS: DarwinNotificationDetails(),
+        linux: LinuxNotificationDetails(),
+      );
+
+      await _localNotifications.show(
+        notificationId ?? DateTime.now().millisecond,
+        title,
+        body,
+        notificationDetails,
+      );
+    } catch (e) {
+      debugPrint('❌ Error: $e');
+    }
+  }
+
+  Future<void> _saveTokenToDatabase(String token) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await _supabase.from('user_fcm_tokens').upsert({
+        'user_id': userId,
+        'fcm_token': token,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id, fcm_token');
+
+      debugPrint('✅ FCM Token saved to Supabase');
+    } catch (e) {
+      debugPrint('❌ Error saving FCM token: $e');
+    }
+  }
+}

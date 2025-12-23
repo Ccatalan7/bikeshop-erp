@@ -70,12 +70,12 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     if (_expense == null) return;
     setState(() => _isProcessing = true);
     try {
-  await _expenseService.postExpense(_expense!.id!);
-  _hasChanges = true;
-  await _loadExpense(refresh: true);
+      await _expenseService.postExpense(_expense!.id!);
+      _hasChanges = true;
+      await _loadExpense(refresh: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gasto contabilizado correctamente')), 
+          const SnackBar(content: Text('Gasto contabilizado correctamente')),
         );
       }
     } catch (e) {
@@ -95,12 +95,12 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     if (_expense == null) return;
     setState(() => _isProcessing = true);
     try {
-  await _expenseService.revertExpenseToDraft(_expense!.id!);
-  _hasChanges = true;
-  await _loadExpense(refresh: true);
+      await _expenseService.revertExpenseToDraft(_expense!.id!);
+      _hasChanges = true;
+      await _loadExpense(refresh: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gasto movido a borrador')), 
+          const SnackBar(content: Text('Gasto movido a borrador')),
         );
       }
     } catch (e) {
@@ -120,12 +120,12 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     if (_expense == null) return;
     setState(() => _isProcessing = true);
     try {
-  await _expenseService.markExpensePaid(_expense!.id!);
-  _hasChanges = true;
-  await _loadExpense(refresh: true);
+      await _expenseService.markExpensePaid(_expense!.id!);
+      _hasChanges = true;
+      await _loadExpense(refresh: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gasto marcado como pagado')), 
+          const SnackBar(content: Text('Gasto marcado como pagado')),
         );
       }
     } catch (e) {
@@ -560,37 +560,117 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('#')),
-                  DataColumn(label: Text('Cuenta')),
-                  DataColumn(label: Text('Descripción')),
-                  DataColumn(label: Text('Cantidad')),
-                  DataColumn(label: Text('Precio unitario')),
-                  DataColumn(label: Text('Subtotal')),
-                  DataColumn(label: Text('IVA')),
-                  DataColumn(label: Text('Total')),
-                ],
-                rows: [
-                  for (var i = 0; i < lines.length; i++)
-                    DataRow(
-                      cells: [
-                        DataCell(Text((i + 1).toString())),
-                        DataCell(Text(
-                            '${lines[i].accountCode} · ${lines[i].accountName}')),
-                        DataCell(Text(lines[i].description ?? '—')),
-                        DataCell(Text(lines[i].quantity.toStringAsFixed(2))),
-                        DataCell(Text(_currencyFormat.format(lines[i].unitPrice))),
-                        DataCell(Text(_currencyFormat.format(lines[i].subtotal))),
-                        DataCell(Text(
-                            '${lines[i].taxRate.toStringAsFixed(0)}% (${_currencyFormat.format(lines[i].taxAmount)})')),
-                        DataCell(Text(_currencyFormat.format(lines[i].total))),
-                      ],
-                    ),
-                ],
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 800) {
+                  return Column(
+                    children: lines
+                        .map((line) => _buildMobileLineCard(context, line))
+                        .toList(),
+                  );
+                }
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('#')),
+                      DataColumn(label: Text('Cuenta')),
+                      DataColumn(label: Text('Descripción')),
+                      DataColumn(label: Text('Cantidad')),
+                      DataColumn(label: Text('Precio unitario')),
+                      DataColumn(label: Text('Subtotal')),
+                      DataColumn(label: Text('IVA')),
+                      DataColumn(label: Text('Total')),
+                    ],
+                    rows: [
+                      for (var i = 0; i < lines.length; i++)
+                        DataRow(
+                          cells: [
+                            DataCell(Text((i + 1).toString())),
+                            DataCell(Text(
+                                '${lines[i].accountCode} · ${lines[i].accountName}')),
+                            DataCell(Text(lines[i].description ?? '—')),
+                            DataCell(
+                                Text(lines[i].quantity.toStringAsFixed(2))),
+                            DataCell(Text(
+                                _currencyFormat.format(lines[i].unitPrice))),
+                            DataCell(Text(
+                                _currencyFormat.format(lines[i].subtotal))),
+                            DataCell(Text(
+                                '${lines[i].taxRate.toStringAsFixed(0)}% (${_currencyFormat.format(lines[i].taxAmount)})')),
+                            DataCell(
+                                Text(_currencyFormat.format(lines[i].total))),
+                          ],
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLineCard(BuildContext context, ExpenseLine line) {
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${line.accountCode} · ${line.accountName}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Text(
+                  _currencyFormat.format(line.total),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            if (line.description != null && line.description!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(line.description!,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Cantidad',
+                        style: Theme.of(context).textTheme.labelSmall),
+                    Text(line.quantity.toStringAsFixed(2)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Precio Unit.',
+                        style: Theme.of(context).textTheme.labelSmall),
+                    Text(_currencyFormat.format(line.unitPrice)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('IVA (${line.taxRate.toStringAsFixed(0)}%)',
+                        style: Theme.of(context).textTheme.labelSmall),
+                    Text(_currencyFormat.format(line.taxAmount)),
+                  ],
+                ),
+              ],
             ),
           ],
         ),

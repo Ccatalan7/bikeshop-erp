@@ -1495,75 +1495,143 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final isEditing = widget.jobId != null;
     final title = isEditing ? 'Editar Trabajo' : 'Nuevo Trabajo';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.dividerColor,
+                width: 1,
+              ),
             ),
           ),
-          const Spacer(),
-          // WhatsApp button (only when editing and customer selected)
-          if (isEditing &&
-              _selectedCustomer != null &&
-              _selectedBike != null) ...[
-            // Show "Ready for Pickup" button if job is finished
-            if (_selectedStatus == JobStatus.finalizado ||
-                _selectedStatus == JobStatus.entregado)
-              OutlinedButton.icon(
-                onPressed: () => _sendReadyForPickupMessage(),
-                icon: const Icon(Icons.check_circle, color: Colors.green),
-                label: const Text('Avisar Cliente'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green,
-                ),
-              )
-            else
-              // Otherwise show status update button
-              OutlinedButton.icon(
-                onPressed: () => _sendWhatsAppUpdate(),
-                icon: const Icon(Icons.message, color: Colors.green),
-                label: const Text('WhatsApp'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green,
-                ),
-              ),
-            const SizedBox(width: 12),
-          ],
-          OutlinedButton.icon(
-            onPressed: _isSaving ? null : () => context.pop(),
-            icon: const Icon(Icons.close),
-            label: const Text('Cancelar'),
-          ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: _isSaving ? null : _saveJob,
-            icon: _isSaving
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  )
-                : const Icon(Icons.save),
-            label: const Text('Guardar'),
-          ),
-        ],
-      ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        if (isEditing &&
+                            _selectedCustomer != null &&
+                            _selectedBike != null) ...[
+                          if (_selectedStatus == JobStatus.finalizado ||
+                              _selectedStatus == JobStatus.entregado)
+                            OutlinedButton.icon(
+                              onPressed: () => _sendReadyForPickupMessage(),
+                              icon: const Icon(Icons.check_circle,
+                                  color: Colors.green),
+                              label: const Text('Avisar Cliente'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.green,
+                              ),
+                            )
+                          else
+                            OutlinedButton.icon(
+                              onPressed: () => _sendWhatsAppUpdate(),
+                              icon: const Icon(Icons.message,
+                                  color: Colors.green),
+                              label: const Text('WhatsApp'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.green,
+                              ),
+                            ),
+                        ],
+                        OutlinedButton.icon(
+                          onPressed: _isSaving ? null : () => context.pop(),
+                          icon: const Icon(Icons.close),
+                          label: const Text('Cancelar'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _isSaving ? null : _saveJob,
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.save),
+                          label: const Text('Guardar'),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (isEditing &&
+                        _selectedCustomer != null &&
+                        _selectedBike != null) ...[
+                      if (_selectedStatus == JobStatus.finalizado ||
+                          _selectedStatus == JobStatus.entregado)
+                        OutlinedButton.icon(
+                          onPressed: () => _sendReadyForPickupMessage(),
+                          icon: const Icon(Icons.check_circle,
+                              color: Colors.green),
+                          label: const Text('Avisar Cliente'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green,
+                          ),
+                        )
+                      else
+                        OutlinedButton.icon(
+                          onPressed: () => _sendWhatsAppUpdate(),
+                          icon: const Icon(Icons.message, color: Colors.green),
+                          label: const Text('WhatsApp'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green,
+                          ),
+                        ),
+                      const SizedBox(width: 12),
+                    ],
+                    OutlinedButton.icon(
+                      onPressed: _isSaving ? null : () => context.pop(),
+                      icon: const Icon(Icons.close),
+                      label: const Text('Cancelar'),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: _isSaving ? null : _saveJob,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save),
+                      label: const Text('Guardar'),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 
@@ -1744,26 +1812,43 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Header with icon, title, and bike tabs
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
-                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                // Bike tabs on the right side of header
-                if (hasBikeTabs) ...[
-                  const Spacer(),
-                  _buildInlineBikeTabs(theme),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 600;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor:
+                            theme.colorScheme.primary.withOpacity(0.12),
+                        child: Icon(icon,
+                            color: theme.colorScheme.primary, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      // Bike tabs on the right side of header - ONLY defaults to this on desktop
+                      if (hasBikeTabs && !isNarrow) ...[
+                        const SizedBox(width: 12),
+                        _buildInlineBikeTabs(theme),
+                      ],
+                    ],
+                  ),
+                  // Mobile bike tabs below title
+                  if (hasBikeTabs && isNarrow) ...[
+                    const SizedBox(height: 12),
+                    _buildInlineBikeTabs(theme),
+                  ],
                 ],
-              ],
-            ),
+              );
+            }),
           ),
           const SizedBox(height: 20),
           // Content
@@ -1784,86 +1869,91 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ..._bikeTabs.asMap().entries.map((entry) {
-            final index = entry.key;
-            final tab = entry.value;
-            final isSelected = index == _selectedBikeTabIndex;
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ..._bikeTabs.asMap().entries.map((entry) {
+              final index = entry.key;
+              final tab = entry.value;
+              final isSelected = index == _selectedBikeTabIndex;
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: Material(
-                color:
-                    isSelected ? theme.colorScheme.surface : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                child: InkWell(
-                  onTap: () => setState(() => _selectedBikeTabIndex = index),
+              return Padding(
+                padding: const EdgeInsets.only(right: 2),
+                child: Material(
+                  color: isSelected
+                      ? theme.colorScheme.surface
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.pedal_bike,
-                          size: 14,
-                          color: isSelected
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          tab.bike?.displayName ?? 'Bici ${index + 1}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight:
-                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedBikeTabIndex = index),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.pedal_bike,
+                            size: 14,
                             color: isSelected
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                        if (_bikeTabs.length > 1) ...[
-                          const SizedBox(width: 4),
-                          InkWell(
-                            onTap: () => _removeBikeTab(index),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Icon(
-                              Icons.close,
-                              size: 14,
-                              color: theme.colorScheme.onSurfaceVariant
-                                  .withOpacity(0.6),
+                          const SizedBox(width: 6),
+                          Text(
+                            tab.bike?.displayName ?? 'Bici ${index + 1}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
+                          if (_bikeTabs.length > 1) ...[
+                            const SizedBox(width: 4),
+                            InkWell(
+                              onTap: () => _removeBikeTab(index),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Icon(
+                                Icons.close,
+                                size: 14,
+                                color: theme.colorScheme.onSurfaceVariant
+                                    .withOpacity(0.6),
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-          // Add bike button
-          Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            child: InkWell(
-              onTap: _showAddBikeSelector,
+              );
+            }),
+            // Add bike button
+            Material(
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                child: Icon(
-                  Icons.add,
-                  size: 16,
-                  color: theme.colorScheme.onSurfaceVariant,
+              child: InkWell(
+                onTap: _showAddBikeSelector,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.add,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2404,65 +2494,210 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildPartsSection() {
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Responsive grid table (same as sales invoice)
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const minTableWidth = 800.0;
-            final tableWidth = constraints.maxWidth > minTableWidth
-                ? constraints.maxWidth
-                : minTableWidth;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
 
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: tableWidth,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: theme.colorScheme.outline.withOpacity(0.2)),
-                    borderRadius: BorderRadius.circular(8),
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Mobile Header
+              Text(
+                'Repuestos y Partes',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              // Mobile List
+              if (_currentPartItems.isNotEmpty)
+                ..._currentPartItems.asMap().entries.map((entry) =>
+                    _buildMobilePartRow(
+                        theme, entry.key + 1, entry.value, entry.key)),
+
+              const SizedBox(height: 8),
+
+              // Add Item Button (Mobile-styled)
+              Container(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _showAddItemPicker, // Use the bottom sheet picker on mobile
+                  icon: const Icon(Icons.add),
+                  label: const Text('Agregar Repuesto o Parte'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.all(16),
+                    alignment: Alignment.centerLeft,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Table header
-                      Container(
-                        decoration: BoxDecoration(
-                          color:
-                              theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(8)),
+                ),
+              ),
+            ],
+          );
+        }
+
+        const minTableWidth = 800.0;
+        final tableWidth = constraints.maxWidth > minTableWidth
+            ? constraints.maxWidth
+            : minTableWidth;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Table header
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(8)),
+                    ),
+                    child: Row(
+                      children: [
+                        // # column
+                        Container(
+                          width: _colIndexWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text('#',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            // # column
-                            Container(
-                              width: _colIndexWidth,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  right: BorderSide(
-                                      color: theme.colorScheme.outline
-                                          .withOpacity(0.2)),
-                                ),
-                              ),
-                              child: Center(
-                                child: Text('#',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                        fontWeight: FontWeight.w600)),
+
+                        // Repuesto column (flex)
+                        Expanded(
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 250),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                right: BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2)),
                               ),
                             ),
+                            child: Text(
+                              'PRODUCTO / SERVICIO',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
 
-                            // Repuesto column (flex)
-                            Expanded(
-                              child: Container(
-                                constraints:
-                                    const BoxConstraints(minWidth: 250),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
+                        // Cantidad column
+                        Container(
+                          width: _colQuantityWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text('CANTIDAD',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+
+                        // Precio column
+                        Container(
+                          width: _colPriceWidth,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(
+                                  color: theme.colorScheme.outline
+                                      .withOpacity(0.2)),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text('PRECIO UNIT.',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+
+                        // Total column
+                        Container(
+                          width: _colTotalWidth,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Text('TOTAL',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              textAlign: TextAlign.right),
+                        ),
+
+                        // Actions column
+                        SizedBox(width: _colActionsWidth),
+                      ],
+                    ),
+                  ),
+
+                  // Header/Content divider
+                  Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.outline.withOpacity(0.2)),
+
+                  // Part items, labor items, and add row
+                  Column(
+                    children: [
+                      // Existing part items (from current bike tab or legacy)
+                      if (_currentPartItems.isNotEmpty)
+                        ..._currentPartItems.asMap().entries.map((entry) =>
+                            _buildPartRow(
+                                theme, entry.key + 1, entry.value, entry.key)),
+
+                      // Existing service items (displayed after parts)
+                      if (_serviceItems.isNotEmpty)
+                        ..._serviceItems.asMap().entries.map((entry) =>
+                            _buildServiceRow(
+                                theme,
+                                _currentPartItems.length + entry.key + 1,
+                                entry.value,
+                                entry.key)),
+
+                      // Add new part row (always show)
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: _currentPartItems.isNotEmpty
+                                ? BorderSide(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.2))
+                                : BorderSide.none,
+                          ),
+                        ),
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Empty # column
+                              Container(
+                                width: _colIndexWidth,
                                 decoration: BoxDecoration(
                                   border: Border(
                                     right: BorderSide(
@@ -2470,194 +2705,336 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                             .withOpacity(0.2)),
                                   ),
                                 ),
-                                child: Text(
-                                  'PRODUCTO / SERVICIO',
-                                  style: theme.textTheme.labelSmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+
+                              // Product autocomplete field
+                              Expanded(
+                                child: Container(
+                                  constraints:
+                                      const BoxConstraints(minWidth: 250),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      right: BorderSide(
+                                          color: theme.colorScheme.outline
+                                              .withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  child: ProductAutocompleteField(
+                                    key: ValueKey(_partAutocompleteKey),
+                                    focusNode: _partAutocompleteFocus,
+                                    onProductSelected: (selection) {
+                                      if (selection.isCatalogProduct &&
+                                          selection.product != null) {
+                                        _addCatalogPart(selection.product!);
+                                      } else if (!selection.isCatalogProduct) {
+                                        _addCustomPart(selection.displayText);
+                                      }
+                                    },
+                                    allowCustomItems: true,
+                                    labelText: 'Agregar repuesto o parte',
+                                    hintText:
+                                        'Buscar en catálogo o escribir personalizado...',
+                                  ),
                                 ),
                               ),
-                            ),
 
-                            // Cantidad column
-                            Container(
-                              width: _colQuantityWidth,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  right: BorderSide(
-                                      color: theme.colorScheme.outline
-                                          .withOpacity(0.2)),
-                                ),
-                              ),
-                              child: Center(
-                                child: Text('CANTIDAD',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                        fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-
-                            // Precio column
-                            Container(
-                              width: _colPriceWidth,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  right: BorderSide(
-                                      color: theme.colorScheme.outline
-                                          .withOpacity(0.2)),
-                                ),
-                              ),
-                              child: Center(
-                                child: Text('PRECIO UNIT.',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                        fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-
-                            // Total column
-                            Container(
-                              width: _colTotalWidth,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              child: Text('TOTAL',
-                                  style: theme.textTheme.labelSmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                  textAlign: TextAlign.right),
-                            ),
-
-                            // Actions column
-                            SizedBox(width: _colActionsWidth),
-                          ],
-                        ),
-                      ),
-
-                      // Header/Content divider
-                      Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: theme.colorScheme.outline.withOpacity(0.2)),
-
-                      // Part items, labor items, and add row
-                      Column(
-                        children: [
-                          // Existing part items (from current bike tab or legacy)
-                          if (_currentPartItems.isNotEmpty)
-                            ..._currentPartItems.asMap().entries.map((entry) =>
-                                _buildPartRow(theme, entry.key + 1, entry.value,
-                                    entry.key)),
-
-                          // Existing service items (displayed after parts)
-                          if (_serviceItems.isNotEmpty)
-                            ..._serviceItems.asMap().entries.map((entry) =>
-                                _buildServiceRow(
-                                    theme,
-                                    _currentPartItems.length + entry.key + 1,
-                                    entry.value,
-                                    entry.key)),
-
-                          // Add new part row (always show)
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                top: _currentPartItems.isNotEmpty
-                                    ? BorderSide(
+                              // Empty columns for alignment
+                              Container(
+                                width: _colQuantityWidth,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    right: BorderSide(
                                         color: theme.colorScheme.outline
-                                            .withOpacity(0.2))
-                                    : BorderSide.none,
+                                            .withOpacity(0.2)),
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Empty # column
-                                  Container(
-                                    width: _colIndexWidth,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        right: BorderSide(
-                                            color: theme.colorScheme.outline
-                                                .withOpacity(0.2)),
-                                      ),
-                                    ),
+                              Container(
+                                width: _colPriceWidth,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    right: BorderSide(
+                                        color: theme.colorScheme.outline
+                                            .withOpacity(0.2)),
                                   ),
-
-                                  // Product autocomplete field
-                                  Expanded(
-                                    child: Container(
-                                      constraints:
-                                          const BoxConstraints(minWidth: 250),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        border: Border(
-                                          right: BorderSide(
-                                              color: theme.colorScheme.outline
-                                                  .withOpacity(0.2)),
-                                        ),
-                                      ),
-                                      child: ProductAutocompleteField(
-                                        key: ValueKey(_partAutocompleteKey),
-                                        focusNode: _partAutocompleteFocus,
-                                        onProductSelected: (selection) {
-                                          if (selection.isCatalogProduct &&
-                                              selection.product != null) {
-                                            _addCatalogPart(selection.product!);
-                                          } else if (!selection
-                                              .isCatalogProduct) {
-                                            _addCustomPart(
-                                                selection.displayText);
-                                          }
-                                        },
-                                        allowCustomItems: true,
-                                        labelText: 'Agregar repuesto o parte',
-                                        hintText:
-                                            'Buscar en catálogo o escribir personalizado...',
-                                      ),
-                                    ),
-                                  ),
-
-                                  // Empty columns for alignment
-                                  Container(
-                                    width: _colQuantityWidth,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        right: BorderSide(
-                                            color: theme.colorScheme.outline
-                                                .withOpacity(0.2)),
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: _colPriceWidth,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        right: BorderSide(
-                                            color: theme.colorScheme.outline
-                                                .withOpacity(0.2)),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: _colTotalWidth),
-                                  SizedBox(width: _colActionsWidth),
-                                ],
+                                ),
                               ),
-                            ),
+                              SizedBox(width: _colTotalWidth),
+                              SizedBox(width: _colActionsWidth),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-            );
-          },
-        ),
-      ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  /// Builds a part row using the universal LineRowWrapper.
-  /// Provides hover-based reorder arrows and consistent styling.
+  /// Builds a mobile-friendly card for a part item
+  Widget _buildMobilePartRow(
+      ThemeData theme, int index, _JobPartItem item, int itemIndex) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            // Top row: Name and Delete button
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SmartProductField(
+                    key: ValueKey('smart_product_mobile_${item.id}'),
+                    initialData: item.product != null || item.name.isNotEmpty
+                        ? ProductFieldData(
+                            product: item.product,
+                            productName: item.displayName.isNotEmpty
+                                ? item.displayName
+                                : null,
+                            productSku: item.sku,
+                            isCatalogProduct: item.isCatalogProduct,
+                            description: item.notes,
+                          )
+                        : null,
+                    enabled: true,
+                    showCost: false,
+                    allowCustomItems: true,
+                    onProductChanged: (selection) {
+                      final partItems = _currentPartItems;
+                      if (selection == null) {
+                        setState(() {
+                          partItems[itemIndex] = item.copyWith(
+                            clearProduct: true,
+                            name: '',
+                            isCatalogProduct: false,
+                            quantity: 1,
+                            unitPrice: 0,
+                            notes: null,
+                          );
+                        });
+                      } else if (selection.price == 0 &&
+                          selection.description != null) {
+                        item.notes = selection.description;
+                      } else {
+                        setState(() {
+                          partItems[itemIndex] = item.copyWith(
+                            product: selection.product,
+                            name: selection.productName ?? '',
+                            isCatalogProduct: selection.isCatalogProduct,
+                            unitPrice:
+                                selection.product?.price ?? item.unitPrice,
+                            notes: selection.description,
+                          );
+                        });
+                      }
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () =>
+                      setState(() => _currentPartItems.removeAt(itemIndex)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Second row: Qty, Price, Total
+            Row(
+              children: [
+                // Quantity
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    initialValue: item.quantity.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Cant.',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (value) {
+                      final newQty = int.tryParse(value) ?? 1;
+                      item.quantity = newQty;
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Price
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    initialValue: item.unitPrice.toStringAsFixed(0),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Precio',
+                      prefixText: '\$ ',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
+                    ],
+                    onChanged: (value) {
+                      final newPrice = double.tryParse(value) ?? 0;
+                      item.unitPrice = newPrice;
+                      setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Total
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                          .format(item.quantity * item.unitPrice),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds a mobile-friendly card for a service item
+  Widget _buildMobileServiceRow(
+      ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.work_outline, color: Colors.blue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.displayName,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      if (item.hasCustomDescription)
+                        Text(
+                          item.description,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () =>
+                      setState(() => _serviceItems.removeAt(itemIndex)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                // Quantity (Hours)
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    initialValue:
+                        item.hours.toString(), // Simplified for mobile
+                    readOnly:
+                        true, // Simplified: services usually added via dialog
+                    decoration: const InputDecoration(
+                      labelText: 'Horas',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Price
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    initialValue: item.hourlyRate.toStringAsFixed(0),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Tarifa',
+                      prefixText: '\$ ',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
+                    ],
+                    onChanged: (value) {
+                      final newPrice = double.tryParse(value) ?? 0;
+                      setState(() {
+                        _serviceItems[itemIndex] = _JobServiceItem(
+                          serviceProduct: item.serviceProduct,
+                          description: item.description,
+                          hours: item.hours,
+                          hourlyRate: newPrice,
+                          date: item.date,
+                        );
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Total
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                          .format(item.total),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPartRow(
       ThemeData theme, int index, _JobPartItem item, int itemIndex) {
     final partItems = _currentPartItems; // Get current bike's items
@@ -2832,6 +3209,41 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildLaborSection() {
     final theme = Theme.of(context);
 
+    // If on mobile, show mobile layout (cards)
+    // We can detect mobile by screen width context
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mano de Obra',
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          if (_serviceItems.isNotEmpty)
+            ..._serviceItems.asMap().entries.map((entry) =>
+                _buildMobileServiceRow(
+                    theme, entry.key + 1, entry.value, entry.key)),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _addServiceItem,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar Mano de Obra'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                alignment: Alignment.centerLeft,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -2870,7 +3282,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           // Table header
                           Container(
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceVariant
+                              color: theme.colorScheme.surfaceContainerHighest
                                   .withOpacity(0.3),
                               borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(8)),
@@ -3503,11 +3915,17 @@ class _PartItemDialogState extends State<_PartItemDialog> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return AlertDialog(
+      insetPadding: isMobile
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
       title: const Text('Agregar Repuesto o Parte'),
       content: SizedBox(
-        width: 500,
+        width: isMobile ? double.maxFinite : 500,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3918,13 +4336,18 @@ class _ServiceEntryDialogState extends State<_ServiceEntryDialog> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return AlertDialog(
+      insetPadding: isMobile
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
       title: const Text('Agregar Mano de Obra'),
       content: SizedBox(
-        width: 420,
+        width: isMobile ? double.maxFinite : 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

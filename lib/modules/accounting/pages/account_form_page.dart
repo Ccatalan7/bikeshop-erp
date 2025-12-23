@@ -129,7 +129,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
     try {
       final accountingService = context.read<AccountingService>();
       final tenantId = await TenantService().getTenantId();
-      
+
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
       }
@@ -193,33 +193,78 @@ class _AccountFormPageState extends State<AccountFormPage> {
         child: Column(
           children: [
             // Header
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  Expanded(
-                    child: Text(
-                      widget.accountId != null
-                          ? 'Editar Cuenta'
-                          : 'Nueva Cuenta',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 600;
+
+                if (isMobile) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => context.pop(),
+                              icon: const Icon(Icons.arrow_back),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                widget.accountId != null
+                                    ? 'Editar Cuenta'
+                                    : 'Nueva Cuenta',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        AppButton(
+                          text: 'Guardar',
+                          icon: Icons.save,
+                          onPressed: _saveAccount,
+                          isLoading: _isSaving,
+                        ),
+                      ],
                     ),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.accountId != null
+                              ? 'Editar Cuenta'
+                              : 'Nueva Cuenta',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        text: 'Guardar',
+                        icon: Icons.save,
+                        onPressed: _saveAccount,
+                        isLoading: _isSaving,
+                      ),
+                    ],
                   ),
-                  AppButton(
-                    text: 'Guardar',
-                    icon: Icons.save,
-                    onPressed: _saveAccount,
-                    isLoading: _isSaving,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
 
             // Form Content

@@ -38,9 +38,9 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
 
   Future<void> _loadTransactions() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
@@ -80,7 +80,8 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
       double creditTotal = 0.0;
       for (final transaction in transactions) {
         debitTotal += (transaction['debit_amount'] as num?)?.toDouble() ?? 0.0;
-        creditTotal += (transaction['credit_amount'] as num?)?.toDouble() ?? 0.0;
+        creditTotal +=
+            (transaction['credit_amount'] as num?)?.toDouble() ?? 0.0;
       }
 
       if (!mounted) return;
@@ -94,9 +95,9 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error cargando transacciones: $e'),
@@ -135,7 +136,8 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
     final body = Column(
       children: [
@@ -191,131 +193,144 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
         ),
 
         // Summary cards
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    color: Colors.green[50],
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Débitos',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Card(
+                  color: Colors.green[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Débitos',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            currencyFormat.format(_debitTotal),
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Card(
-                    color: Colors.red[50],
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Créditos',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            currencyFormat.format(_creditTotal),
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Card(
-                    color: Colors.blue[50],
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Saldo',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            currencyFormat.format(_balance),
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Transactions table
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _transactions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.receipt_long_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No hay transacciones',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
                         ),
-                      )
-                    : Card(
+                        const SizedBox(height: 4),
+                        Text(
+                          currencyFormat.format(_debitTotal),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Card(
+                  color: Colors.red[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Créditos',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currencyFormat.format(_creditTotal),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Card(
+                  color: Colors.blue[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Saldo',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currencyFormat.format(_balance),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Transactions table
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _transactions.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No hay transacciones',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : LayoutBuilder(builder: (context, constraints) {
+                      if (constraints.maxWidth < 600) {
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _transactions.length,
+                          itemBuilder: (context, index) {
+                            return _buildMobileTransactionCard(
+                              _transactions[index],
+                              currencyFormat,
+                            );
+                          },
+                        );
+                      }
+                      return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
@@ -334,21 +349,34 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
                               ),
                             ],
                             rows: _transactions.map((transaction) {
-                              final entryData = transaction['journal_entries'] as Map<String, dynamic>?;
-                              final entryNumber = entryData?['entry_number'] as String? ?? '';
+                              final entryData = transaction['journal_entries']
+                                  as Map<String, dynamic>?;
+                              final entryNumber =
+                                  entryData?['entry_number'] as String? ?? '';
                               final entryDate = entryData?['entry_date'] != null
-                                  ? DateTime.parse(entryData!['entry_date'] as String)
+                                  ? DateTime.parse(
+                                      entryData!['entry_date'] as String)
                                   : null;
-                              final description = entryData?['notes'] as String? ?? transaction['description'] as String? ?? '';
-                              final debit = (transaction['debit_amount'] as num?)?.toDouble() ?? 0.0;
-                              final credit = (transaction['credit_amount'] as num?)?.toDouble() ?? 0.0;
+                              final description =
+                                  entryData?['notes'] as String? ??
+                                      transaction['description'] as String? ??
+                                      '';
+                              final debit =
+                                  (transaction['debit_amount'] as num?)
+                                          ?.toDouble() ??
+                                      0.0;
+                              final credit =
+                                  (transaction['credit_amount'] as num?)
+                                          ?.toDouble() ??
+                                      0.0;
 
                               return DataRow(
                                 cells: [
                                   DataCell(
                                     Text(
                                       entryDate != null
-                                          ? DateFormat('dd/MM/yyyy').format(entryDate)
+                                          ? DateFormat('dd/MM/yyyy')
+                                              .format(entryDate)
                                           : '-',
                                     ),
                                   ),
@@ -389,12 +417,13 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
                             }).toList(),
                           ),
                         ),
-                      ),
-          ),
+                      );
+                    }),
+        ),
 
-          const SizedBox(height: 16),
-        ],
-      );
+        const SizedBox(height: 16),
+      ],
+    );
 
     // Return with or without Scaffold wrapper
     if (widget.isEmbedded) {
@@ -417,5 +446,84 @@ class _AccountLedgerPageState extends State<AccountLedgerPage> {
         body: body,
       );
     }
+  }
+
+  Widget _buildMobileTransactionCard(
+    Map<String, dynamic> transaction,
+    NumberFormat currencyFormat,
+  ) {
+    final entryData = transaction['journal_entries'] as Map<String, dynamic>?;
+    final entryNumber = entryData?['entry_number'] as String? ?? '';
+    final entryDate = entryData?['entry_date'] != null
+        ? DateTime.parse(entryData!['entry_date'] as String)
+        : null;
+    final description = entryData?['notes'] as String? ??
+        transaction['description'] as String? ??
+        '';
+    final debit = (transaction['debit_amount'] as num?)?.toDouble() ?? 0.0;
+    final credit = (transaction['credit_amount'] as num?)?.toDouble() ?? 0.0;
+
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  entryDate != null
+                      ? DateFormat('dd/MM/yy').format(entryDate)
+                      : '-',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(entryNumber,
+                    style: TextStyle(
+                        fontFamily: 'monospace', color: Colors.grey[700])),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 8),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (debit > 0)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('DÉBITO',
+                          style: TextStyle(fontSize: 10, color: Colors.green)),
+                      Text(currencyFormat.format(debit),
+                          style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  )
+                else
+                  const SizedBox(),
+                if (credit > 0)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('CRÉDITO',
+                          style: TextStyle(fontSize: 10, color: Colors.red)),
+                      Text(currencyFormat.format(credit),
+                          style: const TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
+                  )
+                else
+                  const SizedBox(),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

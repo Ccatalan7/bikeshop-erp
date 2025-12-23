@@ -802,6 +802,10 @@ class _IncomeExpenseCard extends StatelessWidget {
     // Use nice round intervals
     final axisInterval = _calculateAxisInterval(chartMax);
 
+    // Calculate dynamic bar width based on data density
+    final double rodWidth =
+        displayData.length > 20 ? 6 : (displayData.length > 10 ? 10 : 16);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 12, 24),
@@ -948,6 +952,8 @@ class _IncomeExpenseCard extends StatelessWidget {
                           }
 
                           final date = displayData[index].periodStart;
+                          final isSmallScreen =
+                              MediaQuery.of(context).size.width < 600;
 
                           // Check if this is a daily view (same start and end date)
                           final isDailyView =
@@ -958,11 +964,17 @@ class _IncomeExpenseCard extends StatelessWidget {
 
                           if (isDailyView) {
                             // Daily view: show day number and weekday
-                            // Show fewer labels if there are many days
-                            if (displayData.length > 14 && index % 2 == 1) {
-                              return const SizedBox.shrink();
+                            int skipInterval = 1;
+                            if (displayData.length > 7) {
+                              skipInterval = isSmallScreen ? 3 : 2;
                             }
-                            if (displayData.length > 21 && index % 3 != 0) {
+                            // More aggressive skipping for long lists
+                            if (displayData.length > 14) skipInterval = 2;
+                            if (displayData.length > 21) skipInterval = 3;
+                            if (isSmallScreen && displayData.length > 10)
+                              skipInterval = 3;
+
+                            if (index % skipInterval != 0) {
                               return const SizedBox.shrink();
                             }
 
@@ -985,18 +997,37 @@ class _IncomeExpenseCard extends StatelessWidget {
                             );
                           } else {
                             // Monthly view: show month and year
-                            // Show fewer labels if there are many months
-                            if (displayData.length > 12 && index % 2 == 1) {
-                              return const SizedBox.shrink();
+
+                            // Logic for skipping labels to prevent overlap
+                            // For 12 months (standard view):
+                            // Desktop: Show all (skipInterval = 1)
+                            // Mobile: Show every 2nd or 3rd (skipInterval = 2 or 3)
+
+                            int skipInterval = 1;
+                            if (isSmallScreen) {
+                              if (displayData.length >= 10)
+                                skipInterval =
+                                    2; // e.g., 12 months -> show 6 labels
+                              if (displayData.length >= 20) skipInterval = 3;
+                            } else {
+                              if (displayData.length > 12) skipInterval = 2;
+                              if (displayData.length > 24) skipInterval = 3;
                             }
-                            if (displayData.length > 18 && index % 3 != 0) {
+
+                            if (index % skipInterval != 0) {
                               return const SizedBox.shrink();
                             }
 
                             final month = DateFormat('MMM', 'es_CL')
                                 .format(date)
-                                .toUpperCase();
-                            final year = DateFormat('yyyy').format(date);
+                                .toUpperCase(); // e.g. ENE
+                            final year =
+                                DateFormat('yy').format(date); // e.g. 24
+
+                            // On mobile, maybe just show Month if Year is redundant?
+                            // But Year is needed for crossover.
+                            // Let's use 'MMM\nyy' (shorter year)
+
                             return Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
@@ -1007,13 +1038,13 @@ class _IncomeExpenseCard extends StatelessWidget {
                                     .bodySmall
                                     ?.copyWith(
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 10,
+                                      fontSize: 9, // Slightly smaller font
                                     ),
                               ),
                             );
                           }
                         },
-                        reservedSize: 42, // Increased from 30 to prevent cutoff
+                        reservedSize: 42,
                       ),
                     ),
                   ),
@@ -1021,12 +1052,12 @@ class _IncomeExpenseCard extends StatelessWidget {
                     for (var i = 0; i < displayData.length; i++)
                       BarChartGroupData(
                         x: i,
-                        barsSpace: 8,
+                        barsSpace: 4, // Reduced spacing
                         barRods: [
                           BarChartRodData(
                             toY: displayData[i].income,
                             color: const Color(0xFF4CAF50),
-                            width: 12,
+                            width: rodWidth,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(4),
                               topRight: Radius.circular(4),
@@ -1035,7 +1066,7 @@ class _IncomeExpenseCard extends StatelessWidget {
                           BarChartRodData(
                             toY: displayData[i].expense,
                             color: const Color(0xFFFF5252),
-                            width: 12,
+                            width: rodWidth,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(4),
                               topRight: Radius.circular(4),

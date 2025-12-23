@@ -61,6 +61,7 @@ dependencies:
   path: ^1.9.1
   mime: ^2.0.0
   shared_preferences: ^2.2.3
+  audioplayers: ^6.0.0  # For notification sounds
   csv: ^5.1.1
   excel: ^4.0.2
   file_saver: ^0.2.8
@@ -78,11 +79,15 @@ dependencies:
   
   # PDF Processing (digital PDFs only - text extraction)
   syncfusion_flutter_pdf: ^24.1.41  # Direct text extraction from digital PDFs
+  firebase_messaging: ^16.1.0
+  firebase_core: ^4.3.0
+  flutter_local_notifications: ^19.5.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -91,4 +96,16 @@ flutter:
     - .env
     - assets/images/
     - assets/icons/
+    - assets/sounds/
     - assets/block_marketplace/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/app_icon_source.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/images/app_icon_source.png"
+    background_color: "#ffffff"
+    theme_color: "#ffffff"

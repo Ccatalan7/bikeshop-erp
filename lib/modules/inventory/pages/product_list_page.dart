@@ -450,11 +450,17 @@ class _ProductListPageState extends State<ProductListPage> {
 
         // 3. Main Content
         Expanded(
-          child: _filteredProducts.isEmpty
-              ? _buildEmptyState(theme)
-              : _viewMode == ProductViewMode.table
-                  ? _buildTableViewWithScrollableHeader(theme)
-                  : _buildCardGridView(theme),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 800;
+              if (_filteredProducts.isEmpty) {
+                return _buildEmptyState(theme);
+              }
+              return isMobile || _viewMode == ProductViewMode.cards
+                  ? _buildCardGridView(theme)
+                  : _buildTableViewWithScrollableHeader(theme);
+            },
+          ),
         ),
       ],
     );
@@ -566,6 +572,78 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildSmartFilterBar(ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
+    if (isMobile) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar productos...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _hasActiveFilters
+                        ? IconButton(
+                            icon: Icon(Icons.filter_list_off,
+                                color: theme.colorScheme.error),
+                            onPressed: _resetFilters,
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                    filled: true,
+                    fillColor:
+                        theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            InkWell(
+              onTap: () => _showMobileFilters(theme),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _hasActiveFilters
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _hasActiveFilters
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Icon(Icons.tune,
+                    color: _hasActiveFilters
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
@@ -2248,6 +2326,226 @@ class _ProductListPageState extends State<ProductListPage> {
         const SizedBox(height: 8),
         ...children,
       ],
+    );
+  }
+
+  void _showMobileFilters(ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                              color: theme.colorScheme.outlineVariant),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.tune),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Filtros',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                _resetFilters();
+                              });
+                              // Also update main state
+                              setState(() {});
+                            },
+                            child: const Text('Limpiar'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Categoría',
+                                style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            _buildSearchableMenu<Category>(
+                              theme: theme,
+                              hint: 'Seleccionar categoría...',
+                              value: _categories.cast<Category?>().firstWhere(
+                                    (c) => c!.id == _selectedCategoryId,
+                                    orElse: () => null,
+                                  ),
+                              items: _categories,
+                              labelBuilder: (c) => c.name,
+                              onChanged: (val) {
+                                setModalState(
+                                    () => _selectedCategoryId = val?.id);
+                                setState(() {
+                                  _selectedCategoryId = val?.id;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+
+                            Text('Proveedor',
+                                style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            _buildSearchableMenu<Supplier>(
+                              theme: theme,
+                              hint: 'Seleccionar proveedor...',
+                              value: _suppliers.cast<Supplier?>().firstWhere(
+                                    (s) => s!.id == _selectedSupplierId,
+                                    orElse: () => null,
+                                  ),
+                              items: _suppliers,
+                              labelBuilder: (s) => s.name,
+                              onChanged: (val) {
+                                setModalState(
+                                    () => _selectedSupplierId = val?.id);
+                                setState(() {
+                                  _selectedSupplierId = val?.id;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+
+                            Text('Tipo de Producto',
+                                style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            _buildProductTypeFilterDropdown(theme),
+
+                            const SizedBox(height: 24),
+
+                            Text('Inventario',
+                                style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            // Custom segment control for stock
+                            LayoutBuilder(builder: (context, constraints) {
+                              return ToggleButtons(
+                                isSelected: [
+                                  _stockFilter == StockFilter.all,
+                                  _stockFilter == StockFilter.inStock,
+                                  _stockFilter == StockFilter.lowStock,
+                                  _stockFilter == StockFilter.outOfStock,
+                                ],
+                                onPressed: (index) {
+                                  final newFilter = StockFilter.values[index];
+                                  setModalState(() => _stockFilter = newFilter);
+                                  setState(() {
+                                    _stockFilter = newFilter;
+                                    _applyFilters();
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                constraints: BoxConstraints(
+                                  minWidth: (constraints.maxWidth - 6) / 4,
+                                  minHeight: 40,
+                                ),
+                                children: const [
+                                  Text('Todos', style: TextStyle(fontSize: 12)),
+                                  Text('Con Stock',
+                                      style: TextStyle(fontSize: 12)),
+                                  Text('Bajo', style: TextStyle(fontSize: 12)),
+                                  Text('Sin Stock',
+                                      style: TextStyle(fontSize: 12)),
+                                ],
+                              );
+                            }),
+
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 16),
+
+                            SwitchListTile(
+                              title: const Text('Publicado en Web'),
+                              value: _filterWebPublished,
+                              onChanged: (val) {
+                                setModalState(() => _filterWebPublished = val);
+                                setState(() {
+                                  _filterWebPublished = val;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                            SwitchListTile(
+                              title: const Text('Google Merchant'),
+                              value: _filterGoogleMerchant,
+                              onChanged: (val) {
+                                setModalState(
+                                    () => _filterGoogleMerchant = val);
+                                setState(() {
+                                  _filterGoogleMerchant = val;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                            SwitchListTile(
+                              title: const Text('Mostrar Inactivos'),
+                              value: _showInactive,
+                              onChanged: (val) {
+                                setModalState(() => _showInactive = val);
+                                setState(() {
+                                  _showInactive = val;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Footer
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(context),
+                          child:
+                              Text('Ver ${_filteredProducts.length} productos'),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -151,513 +151,824 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      title: 'Asientos Contables',
-      body: Column(
-        children: [
-          // Search and Filter Bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = constraints.maxWidth < 800;
+
+      return MainLayout(
+        title: 'Asientos Contables',
+        body: Column(
+          children: [
+            // Search and Filter Bar
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                border: Border(
+                  bottom: BorderSide(color: Theme.of(context).dividerColor),
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: SearchWidget(
-                        hintText: 'Buscar por número, descripción, módulo...',
-                        onSearchChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<JournalEntryType?>(
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+              child: Column(
+                children: [
+                  if (isMobile)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SearchWidget(
+                          hintText: 'Buscar...',
+                          onSearchChanged: _onSearchChanged,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<JournalEntryType?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          value: _selectedType,
+                          items: [
+                            const DropdownMenuItem<JournalEntryType?>(
+                              value: null,
+                              child: Text('Todos'),
+                            ),
+                            ...JournalEntryType.values.map(
+                              (type) => DropdownMenuItem<JournalEntryType?>(
+                                value: type,
+                                child: Text(type.displayName),
+                              ),
+                            ),
+                          ],
+                          onChanged: _onTypeFilterChanged,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppButton(
+                                text: 'Nuevo Asiento',
+                                onPressed: () => context
+                                    .push('/accounting/journal-entries/new'),
+                                icon: Icons.add,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed:
+                                  _isLoading ? null : _loadJournalEntries,
+                              icon: const Icon(Icons.refresh),
+                              tooltip: 'Actualizar',
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: SearchWidget(
+                            hintText:
+                                'Buscar por número, descripción, módulo...',
+                            onSearchChanged: _onSearchChanged,
                           ),
                         ),
-                        value: _selectedType,
-                        items: [
-                          const DropdownMenuItem<JournalEntryType?>(
-                            value: null,
-                            child: Text('Todos'),
-                          ),
-                          ...JournalEntryType.values.map(
-                            (type) => DropdownMenuItem<JournalEntryType?>(
-                              value: type,
-                              child: Text(type.displayName),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<JournalEntryType?>(
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
+                            value: _selectedType,
+                            items: [
+                              const DropdownMenuItem<JournalEntryType?>(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...JournalEntryType.values.map(
+                                (type) => DropdownMenuItem<JournalEntryType?>(
+                                  value: type,
+                                  child: Text(type.displayName),
+                                ),
+                              ),
+                            ],
+                            onChanged: _onTypeFilterChanged,
                           ),
-                        ],
-                        onChanged: _onTypeFilterChanged,
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          onPressed: _isLoading ? null : _loadJournalEntries,
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Actualizar',
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        AppButton(
+                          text: 'Nuevo Asiento',
+                          onPressed: () =>
+                              context.push('/accounting/journal-entries/new'),
+                          icon: Icons.add,
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Total: ${_filteredEntries.length} asientos',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    IconButton(
-                      onPressed: _isLoading ? null : _loadJournalEntries,
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Actualizar',
-                      style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AppButton(
-                      text: 'Nuevo Asiento',
-                      onPressed: () =>
-                          context.push('/accounting/journal-entries/new'),
-                      icon: Icons.add,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Total: ${_filteredEntries.length} asientos',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const Spacer(),
-                    if (_isLoading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-              ],
+                      const Spacer(),
+                      if (_isLoading)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Entries List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _filteredEntries.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.receipt_long,
-                              size: 64,
-                              color: Theme.of(context).disabledColor,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchTerm.isEmpty && _selectedType == null
-                                  ? 'No hay asientos contables registrados'
-                                  : 'No se encontraron asientos que coincidan con los filtros',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).disabledColor,
-                                  ),
-                            ),
-                            if (_searchTerm.isEmpty &&
-                                _selectedType == null) ...[
-                              const SizedBox(height: 8),
+            // Entries List
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: BrandedLoading())
+                  : _filteredEntries.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.receipt_long,
+                                size: 64,
+                                color: Theme.of(context).disabledColor,
+                              ),
+                              const SizedBox(height: 16),
                               Text(
-                                'Los asientos se crean automáticamente con las ventas y compras',
+                                _searchTerm.isEmpty && _selectedType == null
+                                    ? 'No hay asientos contables registrados'
+                                    : 'No se encontraron asientos que coincidan con los filtros',
                                 style: Theme.of(context)
                                     .textTheme
-                                    .bodyMedium
+                                    .titleMedium
                                     ?.copyWith(
                                       color: Theme.of(context).disabledColor,
                                     ),
                               ),
+                              if (_searchTerm.isEmpty &&
+                                  _selectedType == null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Los asientos se crean automáticamente con las ventas y compras',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context).disabledColor,
+                                      ),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _filteredEntries.length,
-                        itemBuilder: (context, index) {
-                          final entry = _filteredEntries[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ExpansionTile(
-                              title: Row(
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _filteredEntries.length,
+                          itemBuilder: (context, index) {
+                            final entry = _filteredEntries[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ExpansionTile(
+                                title: isMobile
+                                    ? Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                entry.entryNumber,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                              Text(
+                                                _currencyFormat
+                                                    .format(entry.totalDebit),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: entry.isBalanced
+                                                          ? null
+                                                          : Colors.red,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _dateFormat.format(entry.date),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            entry.description,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      _getTypeColor(entry.type)
+                                                          .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                      color: _getTypeColor(
+                                                          entry.type)),
+                                                ),
+                                                child: Text(
+                                                  entry.type.displayName,
+                                                  style: TextStyle(
+                                                    color: _getTypeColor(
+                                                        entry.type),
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: _getStatusColor(
+                                                          entry.status)
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                      color: _getStatusColor(
+                                                          entry.status)),
+                                                ),
+                                                child: Text(
+                                                  entry.status.displayName,
+                                                  style: TextStyle(
+                                                    color: _getStatusColor(
+                                                        entry.status),
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      )
+                                    : Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 2,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  entry.entryNumber,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                ),
+                                                Text(
+                                                  _dateFormat
+                                                      .format(entry.date),
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              entry.description,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 1,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: _getTypeColor(entry.type)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color:
+                                                      _getTypeColor(entry.type),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                entry.type.displayName,
+                                                style: TextStyle(
+                                                  color:
+                                                      _getTypeColor(entry.type),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  _getStatusColor(entry.status)
+                                                      .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: _getStatusColor(
+                                                    entry.status),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              entry.status.displayName,
+                                              style: TextStyle(
+                                                color: _getStatusColor(
+                                                    entry.status),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _currencyFormat
+                                                .format(entry.totalDebit),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: entry.isBalanced
+                                                      ? null
+                                                      : Colors.red,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                subtitle: entry.sourceModule != null ||
+                                        entry.sourceReference != null
+                                    ? Text(
+                                        '${entry.sourceModule ?? ''} ${entry.sourceReference ?? ''}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .secondary,
+                                            ),
+                                      )
+                                    : null,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () => _quickDeleteEntry(entry),
+                                      icon: const Icon(Icons.delete_forever,
+                                          color: Colors.red, size: 20),
+                                      tooltip: 'Eliminar (Testing)',
+                                    ),
+                                  ],
+                                ),
                                 children: [
-                                  Expanded(
-                                    flex: 2,
+                                  Container(
+                                    margin: const EdgeInsets.fromLTRB(
+                                        16, 0, 16, 16),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
+                                        const Divider(),
                                         Text(
-                                          entry.entryNumber,
+                                          'Líneas del Asiento',
                                           style: Theme.of(context)
                                               .textTheme
-                                              .titleMedium
+                                              .titleSmall
                                               ?.copyWith(
                                                 fontWeight: FontWeight.bold,
                                               ),
                                         ),
-                                        Text(
-                                          _dateFormat.format(entry.date),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      entry.description,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 1,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getTypeColor(entry.type)
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: _getTypeColor(entry.type),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        entry.type.displayName,
-                                        style: TextStyle(
-                                          color: _getTypeColor(entry.type),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(entry.status)
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: _getStatusColor(entry.status),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      entry.status.displayName,
-                                      style: TextStyle(
-                                        color: _getStatusColor(entry.status),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _currencyFormat.format(entry.totalDebit),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: entry.isBalanced
-                                              ? null
-                                              : Colors.red,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: entry.sourceModule != null ||
-                                      entry.sourceReference != null
-                                  ? Text(
-                                      '${entry.sourceModule ?? ''} ${entry.sourceReference ?? ''}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .secondary,
-                                          ),
-                                    )
-                                  : null,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // 🗑️ TEMP: Quick delete button for testing
-                                  IconButton(
-                                    onPressed: () => _quickDeleteEntry(entry),
-                                    icon: const Icon(Icons.delete_forever,
-                                        color: Colors.red, size: 20),
-                                    tooltip: 'Eliminar (Testing)',
-                                  ),
-                                ],
-                              ),
-                              children: [
-                                Container(
-                                  margin:
-                                      const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Divider(),
-                                      Text(
-                                        'Líneas del Asiento',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
+                                        const SizedBox(height: 12),
+                                        if (!isMobile)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceVariant,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      // Column headers for journal lines
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surfaceVariant,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                'Cuenta',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            const Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                'Descripción',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              width: 120,
-                                              child: Text(
-                                                'Debe',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelMedium
-                                                    ?.copyWith(
+                                            child: Row(
+                                              children: [
+                                                const Expanded(
+                                                  flex: 3,
+                                                  child: Text(
+                                                    'Cuenta',
+                                                    style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                    ),
-                                                textAlign: TextAlign.right,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            SizedBox(
-                                              width: 120,
-                                              child: Text(
-                                                'Haber',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                textAlign: TextAlign.right,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ...entry.lines
-                                          .map((line) => Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 8),
-                                                decoration: BoxDecoration(
-                                                  border: Border(
-                                                    bottom: BorderSide(
-                                                      color: Theme.of(context)
-                                                          .dividerColor,
-                                                      width: 0.5,
+                                                      fontSize: 12,
                                                     ),
                                                   ),
                                                 ),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      flex: 3,
-                                                      child: Text(
-                                                        '${line.accountCode} - ${line.accountName}',
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w500,
-                                                            ),
-                                                      ),
+                                                const Expanded(
+                                                  flex: 3,
+                                                  child: Text(
+                                                    'Descripción',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
                                                     ),
-                                                    Expanded(
-                                                      flex: 3,
-                                                      child: Text(
-                                                        line.description,
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodySmall,
-                                                      ),
-                                                    ),
-                                                    SizedBox(
-                                                      width: 120,
-                                                      child: Text(
-                                                        line.debitAmount > 0
-                                                            ? _currencyFormat
-                                                                .format(line
-                                                                    .debitAmount)
-                                                            : '',
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                        textAlign:
-                                                            TextAlign.right,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 16),
-                                                    SizedBox(
-                                                      width: 120,
-                                                      child: Text(
-                                                        line.creditAmount > 0
-                                                            ? _currencyFormat
-                                                                .format(line
-                                                                    .creditAmount)
-                                                            : '',
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                        textAlign:
-                                                            TextAlign.right,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                  ),
                                                 ),
-                                              ))
-                                          .toList(),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: entry.isBalanced
-                                              ? Colors.green.withOpacity(0.1)
-                                              : Colors.red.withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: entry.isBalanced
-                                                ? Colors.green
-                                                : Colors.red,
-                                            width: 1,
+                                                SizedBox(
+                                                  width: 120,
+                                                  child: Text(
+                                                    'Debe',
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                    textAlign: TextAlign.right,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                SizedBox(
+                                                  width: 120,
+                                                  child: Text(
+                                                    'Haber',
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                    textAlign: TextAlign.right,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              entry.isBalanced
-                                                  ? Icons.check_circle
-                                                  : Icons.error,
+                                        const SizedBox(height: 8),
+                                        ...entry.lines
+                                            .map((line) => isMobile
+                                                ? Card(
+                                                    elevation: 0,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceVariant
+                                                        .withOpacity(0.3),
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                            bottom: 8),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              12),
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            '${line.accountCode} - ${line.accountName}',
+                                                            style: const TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold),
+                                                          ),
+                                                          if (line.description
+                                                              .isNotEmpty)
+                                                            Text(
+                                                                line
+                                                                    .description,
+                                                                style: Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .bodySmall),
+                                                          const SizedBox(
+                                                              height: 8),
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .spaceBetween,
+                                                            children: [
+                                                              if (line.debitAmount >
+                                                                  0)
+                                                                Text(
+                                                                    'Debe: ${_currencyFormat.format(line.debitAmount)}',
+                                                                    style: const TextStyle(
+                                                                        color: Colors
+                                                                            .green)),
+                                                              if (line.creditAmount >
+                                                                  0)
+                                                                Text(
+                                                                    'Haber: ${_currencyFormat.format(line.creditAmount)}',
+                                                                    style: const TextStyle(
+                                                                        color: Colors
+                                                                            .red)),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8),
+                                                    decoration: BoxDecoration(
+                                                      border: Border(
+                                                        bottom: BorderSide(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .dividerColor,
+                                                          width: 0.5,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          flex: 3,
+                                                          child: Text(
+                                                            '${line.accountCode} - ${line.accountName}',
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                        Expanded(
+                                                          flex: 3,
+                                                          child: Text(
+                                                            line.description,
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodySmall,
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 120,
+                                                          child: Text(
+                                                            line.debitAmount > 0
+                                                                ? _currencyFormat
+                                                                    .format(line
+                                                                        .debitAmount)
+                                                                : '',
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                            textAlign:
+                                                                TextAlign.right,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 16),
+                                                        SizedBox(
+                                                          width: 120,
+                                                          child: Text(
+                                                            line.creditAmount >
+                                                                    0
+                                                                ? _currencyFormat
+                                                                    .format(line
+                                                                        .creditAmount)
+                                                                : '',
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                            textAlign:
+                                                                TextAlign.right,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ))
+                                            .toList(),
+                                        const SizedBox(height: 8),
+                                        if (isMobile)
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              if (!entry.isBalanced)
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.all(8),
+                                                  color: Colors.red
+                                                      .withOpacity(0.1),
+                                                  child: Row(
+                                                    children: [
+                                                      const Icon(Icons.error,
+                                                          color: Colors.red),
+                                                      const SizedBox(width: 8),
+                                                      Text('Desbalanceado',
+                                                          style: TextStyle(
+                                                              color:
+                                                                  Colors.red)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('Total Debe:',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                  Text(_currencyFormat.format(
+                                                      entry.totalDebit)),
+                                                ],
+                                              ),
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('Total Haber:',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                  Text(_currencyFormat.format(
+                                                      entry.totalCredit)),
+                                                ],
+                                              ),
+                                            ],
+                                          )
+                                        else
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
                                               color: entry.isBalanced
                                                   ? Colors.green
-                                                  : Colors.red,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              entry.isBalanced
-                                                  ? 'Asiento balanceado'
-                                                  : 'Asiento desbalanceado',
-                                              style: TextStyle(
+                                                      .withOpacity(0.1)
+                                                  : Colors.red.withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
                                                 color: entry.isBalanced
                                                     ? Colors.green
                                                     : Colors.red,
-                                                fontWeight: FontWeight.w500,
+                                                width: 1,
                                               ),
                                             ),
-                                            const Spacer(),
-                                            Text(
-                                              'Debe: ${_currencyFormat.format(entry.totalDebit)}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  entry.isBalanced
+                                                      ? Icons.check_circle
+                                                      : Icons.error,
+                                                  color: entry.isBalanced
+                                                      ? Colors.green
+                                                      : Colors.red,
+                                                  size: 16,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  entry.isBalanced
+                                                      ? 'Asiento balanceado'
+                                                      : 'Asiento desbalanceado',
+                                                  style: TextStyle(
+                                                    color: entry.isBalanced
+                                                        ? Colors.green
+                                                        : Colors.red,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                Text(
+                                                  'Debe: ${_currencyFormat.format(entry.totalDebit)}',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Text(
+                                                  'Haber: ${_currencyFormat.format(entry.totalCredit)}',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 16),
-                                            Text(
-                                              'Haber: ${_currencyFormat.format(entry.totalCredit)}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                          ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Color _getTypeColor(JournalEntryType type) {

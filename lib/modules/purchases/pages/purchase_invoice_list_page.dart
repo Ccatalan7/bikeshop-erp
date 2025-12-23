@@ -14,7 +14,8 @@ class PurchaseInvoiceListPage extends StatefulWidget {
   const PurchaseInvoiceListPage({super.key});
 
   @override
-  State<PurchaseInvoiceListPage> createState() => _PurchaseInvoiceListPageState();
+  State<PurchaseInvoiceListPage> createState() =>
+      _PurchaseInvoiceListPageState();
 }
 
 class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
@@ -22,14 +23,14 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
-  
+
   PurchaseInvoice? _selectedInvoice;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
   static const double _maxListPaneWidth = 900.0;
   static const double _minColumnWidth = 80.0;
   static const double _maxColumnWidth = 400.0;
-  
+
   final Map<String, double> _columnWidths = {
     'date': 110.0,
     'invoice_number': 130.0,
@@ -38,7 +39,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     'total': 120.0,
     'balance': 120.0,
   };
-  
+
   final Map<String, bool> _visibleColumns = {
     'date': true,
     'invoice_number': true,
@@ -47,33 +48,35 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     'total': true,
     'balance': true,
   };
-  
+
   String _sortColumn = 'date';
   bool _sortAscending = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadPreferences();
-    
+
     // Sync scroll positions
     _headerScrollController.addListener(() {
       if (_bodyScrollController.offset != _headerScrollController.offset) {
         _bodyScrollController.jumpTo(_headerScrollController.offset);
       }
     });
-    
+
     _bodyScrollController.addListener(() {
       if (_headerScrollController.offset != _bodyScrollController.offset) {
         _headerScrollController.jumpTo(_bodyScrollController.offset);
       }
     });
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PurchaseService>().getPurchaseInvoices(); // Uses cache if valid
+      context
+          .read<PurchaseService>()
+          .getPurchaseInvoices(); // Uses cache if valid
     });
   }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -81,35 +84,39 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     _bodyScrollController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _listPaneWidth = prefs.getDouble('purchase_invoice_list_pane_width') ?? 600.0;
-      
+      _listPaneWidth =
+          prefs.getDouble('purchase_invoice_list_pane_width') ?? 600.0;
+
       for (var key in _columnWidths.keys.toList()) {
-        _columnWidths[key] = prefs.getDouble('purchase_invoice_col_$key') ?? _columnWidths[key]!;
+        _columnWidths[key] =
+            prefs.getDouble('purchase_invoice_col_$key') ?? _columnWidths[key]!;
       }
-      
+
       for (var key in _visibleColumns.keys.toList()) {
-        _visibleColumns[key] = prefs.getBool('purchase_invoice_visible_$key') ?? _visibleColumns[key]!;
+        _visibleColumns[key] = prefs.getBool('purchase_invoice_visible_$key') ??
+            _visibleColumns[key]!;
       }
     });
   }
-  
+
   Future<void> _saveListPaneWidth(double width) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('purchase_invoice_list_pane_width', width);
   }
-  
+
   Future<void> _saveColumnWidth(String column, double width) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('purchase_invoice_col_$column', width);
   }
-  
-  List<PurchaseInvoice> _getFilteredAndSortedInvoices(List<PurchaseInvoice> invoices) {
+
+  List<PurchaseInvoice> _getFilteredAndSortedInvoices(
+      List<PurchaseInvoice> invoices) {
     List<PurchaseInvoice> filtered = List.from(invoices);
-    
+
     if (_searchTerm.isNotEmpty) {
       final term = _searchTerm.toLowerCase();
       filtered = filtered.where((invoice) {
@@ -118,10 +125,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             (invoice.supplierRut?.toLowerCase().contains(term) ?? false);
       }).toList();
     }
-    
+
     filtered.sort((a, b) {
       int comparison = 0;
-      
+
       switch (_sortColumn) {
         case 'date':
           comparison = a.date.compareTo(b.date);
@@ -144,13 +151,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           comparison = aBalance.compareTo(bBalance);
           break;
       }
-      
+
       return _sortAscending ? comparison : -comparison;
     });
-    
+
     return filtered;
   }
-  
+
   void _onSort(String column) {
     setState(() {
       if (_sortColumn == column) {
@@ -161,12 +168,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final purchaseService = context.watch<PurchaseService>();
-    final invoices = _getFilteredAndSortedInvoices(purchaseService.purchaseInvoices);
-    
+    final invoices =
+        _getFilteredAndSortedInvoices(purchaseService.purchaseInvoices);
+
     return MainLayout(
       title: 'Facturas de Compra',
       child: Column(
@@ -185,8 +193,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 Text(
                   'Facturas de Compra',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const Spacer(),
                 ElevatedButton.icon(
@@ -201,7 +209,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               ],
             ),
           ),
-          
+
           // Main content
           Expanded(
             child: _selectedInvoice == null
@@ -212,28 +220,39 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Future<void> _createNewInvoice() async {
     // Navigate directly to form - payment model is now selected inside the form
     // Default is prepayment (true), but user can change it in the form
     context.push('/purchases/new?prepayment=true');
   }
-  
-  Widget _buildFullListView(List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
-    return Column(
-      children: [
-        _buildSummaryCards(invoices),
-        const SizedBox(height: 16),
-        _buildSearchBar(),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _buildInvoiceTable(invoices, purchaseService, isFullWidth: true),
-        ),
-      ],
+
+  Widget _buildFullListView(
+      List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        return Column(
+          children: [
+            _buildSummaryCards(invoices),
+            const SizedBox(height: 16),
+            _buildSearchBar(isMobile),
+            const SizedBox(height: 8),
+            Expanded(
+              child: isMobile
+                  ? _buildInvoiceCardsList(invoices)
+                  : _buildInvoiceTable(invoices, purchaseService,
+                      isFullWidth: true),
+            ),
+          ],
+        );
+      },
     );
   }
-  
-  Widget _buildSplitView(List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
+
+  Widget _buildSplitView(
+      List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
     final theme = Theme.of(context);
     return Row(
       children: [
@@ -266,7 +285,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ],
           ),
         ),
-        
+
         // Resize handle
         MouseRegion(
           cursor: SystemMouseCursors.resizeColumn,
@@ -284,7 +303,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ),
           ),
         ),
-        
+
         // Right pane - Invoice preview
         Expanded(
           child: _buildInvoicePreview(_selectedInvoice!),
@@ -292,72 +311,120 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ],
     );
   }
-  
+
   Widget _buildSummaryCards(List<PurchaseInvoice> invoices) {
     final totalPayable = invoices
-        .where((inv) => inv.status != PurchaseInvoiceStatus.draft && inv.paidAmount < inv.total)
+        .where((inv) =>
+            inv.status != PurchaseInvoiceStatus.draft &&
+            inv.paidAmount < inv.total)
         .fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
-    
+
     final overdue = invoices.where((inv) {
       if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
-    
+
     final dueIn30Days = invoices.where((inv) {
       if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
       final now = DateTime.now();
-      return inv.dueDate!.isAfter(now) && 
-             inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
+      return inv.dueDate!.isAfter(now) &&
+          inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
     }).fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
-    
+
     final overdueCount = invoices.where((inv) {
       if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).length;
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
+
+    final cards = [
+      _buildSummaryCard(
+        'Por pagar',
+        ChileanUtils.formatCurrency(totalPayable),
+        Icons.account_balance_wallet_outlined,
+        Colors.orange,
       ),
-      child: Row(
-        children: [
-          _buildSummaryCard(
-            'Total de cuentas pendientes de pago',
-            ChileanUtils.formatCurrency(totalPayable),
-            Icons.account_balance_wallet_outlined,
-            Colors.orange,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Vencidos hoy',
-            ChileanUtils.formatCurrency(overdue),
-            Icons.warning_amber_outlined,
-            Colors.red,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Vence en los próximos 30 días',
-            ChileanUtils.formatCurrency(dueIn30Days),
-            Icons.schedule_outlined,
-            Colors.blue,
-          ),
-          const SizedBox(width: 24),
-          _buildSummaryCard(
-            'Facturas vencidas',
-            '$overdueCount',
-            Icons.receipt_long_outlined,
-            overdueCount > 0 ? Colors.red : Colors.green,
-          ),
-        ],
+      _buildSummaryCard(
+        'Vencidos hoy',
+        ChileanUtils.formatCurrency(overdue),
+        Icons.warning_amber_outlined,
+        Colors.red,
       ),
+      _buildSummaryCard(
+        'Próximos 30 días',
+        ChileanUtils.formatCurrency(dueIn30Days),
+        Icons.schedule_outlined,
+        Colors.blue,
+      ),
+      _buildSummaryCard(
+        'Vencidas (Qt)',
+        '$overdueCount',
+        Icons.receipt_long_outlined,
+        overdueCount > 0 ? Colors.red : Colors.green,
+      ),
+    ];
+
+    // Responsive layout
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          // Mobile/Tablet: 2x2 Grid or vertical stack
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: cards[0]),
+                    const SizedBox(width: 12),
+                    Expanded(child: cards[1]),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: cards[2]),
+                    const SizedBox(width: 12),
+                    Expanded(child: cards[3]),
+                  ],
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Desktop: Single Row
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
+            child: Row(
+              children: [
+                cards[0],
+                const SizedBox(width: 24),
+                cards[1],
+                const SizedBox(width: 24),
+                cards[2],
+                const SizedBox(width: 24),
+                cards[3],
+              ],
+            ),
+          );
+        }
+      },
     );
   }
-  
-  Widget _buildSummaryCard(String label, String value, IconData icon, Color color) {
+
+  Widget _buildSummaryCard(
+      String label, String value, IconData icon, Color color) {
     final theme = Theme.of(context);
     return Expanded(
       child: Row(
@@ -401,7 +468,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildInvoiceCardsList(List<PurchaseInvoice> invoices) {
     final theme = Theme.of(context);
     if (invoices.isEmpty) {
@@ -419,7 +486,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         ),
       );
     }
-    
+
     return ListView.builder(
       itemCount: invoices.length,
       itemBuilder: (context, index) {
@@ -427,25 +494,34 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         final isSelected = _selectedInvoice?.id == invoice.id;
         final balance = invoice.total - invoice.paidAmount;
         final isDark = theme.brightness == Brightness.dark;
-        
+
         return Container(
           decoration: BoxDecoration(
-            color: isSelected 
-                ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : Colors.blue[50]) 
+            color: isSelected
+                ? (isDark
+                    ? theme.colorScheme.primary.withOpacity(0.15)
+                    : Colors.blue[50])
                 : theme.cardColor,
             border: Border(
               bottom: BorderSide(color: theme.dividerColor),
               left: BorderSide(
-                color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+                color:
+                    isSelected ? theme.colorScheme.primary : Colors.transparent,
                 width: 3,
               ),
             ),
           ),
           child: InkWell(
             onTap: () {
-              setState(() {
-                _selectedInvoice = invoice;
-              });
+              if (MediaQuery.of(context).size.width < 800) {
+                // Mobile: Navigate to details (using same route as edit/view)
+                context.push('/purchases/${invoice.id}');
+              } else {
+                // Desktop: Select
+                setState(() {
+                  _selectedInvoice = invoice;
+                });
+              }
             },
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -469,14 +545,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   Text(
                     invoice.supplierName ?? 'Sin proveedor',
                     style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
+                      color:
+                          theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 13, color: theme.hintColor),
+                      Icon(Icons.calendar_today,
+                          size: 13, color: theme.hintColor),
                       const SizedBox(width: 4),
                       Text(
                         ChileanUtils.formatDate(invoice.date),
@@ -511,46 +589,101 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       },
     );
   }
-  
-  Widget _buildSearchBar() {
-    return TextField(
-      controller: _searchController,
-      onChanged: (value) => setState(() => _searchTerm = value),
-      decoration: InputDecoration(
-        hintText: 'Buscar por número, proveedor o RUT...',
-        prefixIcon: const Icon(Icons.search, size: 20),
-        suffixIcon: _searchTerm.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 20),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() => _searchTerm = '');
-                },
-              )
-            : null,
-        isDense: true,
-        filled: true,
-        fillColor: Theme.of(context).brightness == Brightness.dark 
-            ? Theme.of(context).colorScheme.surfaceContainerHighest 
-            : Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Theme.of(context).dividerColor),
+
+  Widget _buildSearchBar([bool isMobile = false]) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchTerm = value),
+            decoration: InputDecoration(
+              hintText: 'Buscar por número, proveedor o RUT...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _searchTerm.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchTerm = '');
+                      },
+                    )
+                  : null,
+              isDense: true,
+              filled: true,
+              fillColor: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surfaceContainerHighest
+                  : Colors.grey[50],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    BorderSide(color: Theme.of(context).colorScheme.primary),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Theme.of(context).dividerColor),
+        if (!isMobile) ...[
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.view_column_outlined),
+            tooltip: 'Columnas',
+            itemBuilder: (context) {
+              return _visibleColumns.keys.map((column) {
+                return CheckedPopupMenuItem<String>(
+                  value: column,
+                  checked: _visibleColumns[column] ?? false,
+                  child: Text(column == 'date'
+                      ? 'Fecha'
+                      : column == 'invoice_number'
+                          ? 'N° Factura'
+                          : column == 'supplier'
+                              ? 'Proveedor'
+                              : column == 'status'
+                                  ? 'Estado'
+                                  : column == 'total'
+                                      ? 'Total'
+                                      : column == 'balance'
+                                          ? 'Saldo'
+                                          : column),
+                );
+              }).toList();
+            },
+            onSelected: (column) {
+              setState(() {
+                _visibleColumns[column] = !(_visibleColumns[column] ?? false);
+              });
+              SharedPreferences.getInstance().then((prefs) {
+                prefs.setBool('purchase_invoice_visible_$column',
+                    _visibleColumns[column] ?? false);
+              });
+            },
+          ),
+        ],
+        const SizedBox(width: 8),
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Actualizar',
+          onPressed: () => context
+              .read<PurchaseService>()
+              .getPurchaseInvoices(forceRefresh: true),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      ),
+      ],
     );
   }
-  
-  Widget _buildInvoiceTable(List<PurchaseInvoice> invoices, PurchaseService purchaseService, {required bool isFullWidth}) {
+
+  Widget _buildInvoiceTable(
+      List<PurchaseInvoice> invoices, PurchaseService purchaseService,
+      {required bool isFullWidth}) {
     final theme = Theme.of(context);
     if (invoices.isEmpty) {
       return Center(
@@ -560,16 +693,20 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             Icon(Icons.receipt_long_outlined, size: 64, color: theme.hintColor),
             const SizedBox(height: 16),
             Text(
-              _searchTerm.isEmpty ? 'No hay facturas de compra' : 'No se encontraron facturas',
-              style: theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
+              _searchTerm.isEmpty
+                  ? 'No hay facturas de compra'
+                  : 'No se encontraron facturas',
+              style:
+                  theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
             ),
           ],
         ),
       );
     }
-    
-    final tableWidth = MediaQuery.of(context).size.width - (isFullWidth ? 0 : 400);
-    
+
+    final tableWidth =
+        MediaQuery.of(context).size.width - (isFullWidth ? 0 : 400);
+
     return Container(
       decoration: BoxDecoration(
         color: theme.cardColor,
@@ -609,7 +746,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildTableHeader(bool isFullWidth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -640,7 +777,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildColumnHeaderCell(String columnName, double width) {
     final labels = {
       'date': 'Fecha',
@@ -650,9 +787,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       'total': 'Total',
       'balance': 'Saldo',
     };
-    
+
     final isSorted = _sortColumn == columnName;
-    
+
     return SizedBox(
       width: width,
       height: 38,
@@ -682,7 +819,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       ),
                       if (isSorted)
                         Icon(
-                          _sortAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                          _sortAscending
+                              ? Icons.arrow_drop_up
+                              : Icons.arrow_drop_down,
                           size: 18,
                           color: Colors.grey[700],
                         ),
@@ -702,11 +841,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 child: GestureDetector(
                   onHorizontalDragUpdate: (details) {
                     setState(() {
-                      _columnWidths[columnName] = (_columnWidths[columnName]! + details.delta.dx)
-                          .clamp(_minColumnWidth, _maxColumnWidth);
+                      _columnWidths[columnName] =
+                          (_columnWidths[columnName]! + details.delta.dx)
+                              .clamp(_minColumnWidth, _maxColumnWidth);
                     });
                   },
-                  onHorizontalDragEnd: (_) => _saveColumnWidth(columnName, _columnWidths[columnName]!),
+                  onHorizontalDragEnd: (_) =>
+                      _saveColumnWidth(columnName, _columnWidths[columnName]!),
                   child: Container(
                     width: 8,
                     color: Colors.transparent,
@@ -725,8 +866,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
-  Widget _buildInvoiceRow(PurchaseInvoice invoice, bool isSelected, bool isFullWidth) {
+
+  Widget _buildInvoiceRow(
+      PurchaseInvoice invoice, bool isSelected, bool isFullWidth) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return InkWell(
@@ -738,8 +880,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       hoverColor: isDark ? Colors.grey[800] : Colors.grey[50],
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected 
-              ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : Colors.blue[50]) 
+          color: isSelected
+              ? (isDark
+                  ? theme.colorScheme.primary.withOpacity(0.15)
+                  : Colors.blue[50])
               : null,
           border: Border(
             bottom: BorderSide(color: theme.dividerColor, width: 1),
@@ -766,23 +910,25 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   List<Widget> _buildRowCells(PurchaseInvoice invoice, bool isFullWidth) {
     final cells = <Widget>[];
-    
+
     for (var entry in _visibleColumns.entries) {
       if (!entry.value) continue;
-      
-      final width = isFullWidth ? _columnWidths[entry.key]! * 1.5 : _columnWidths[entry.key]!;
+
+      final width = isFullWidth
+          ? _columnWidths[entry.key]! * 1.5
+          : _columnWidths[entry.key]!;
       cells.add(_buildCell(entry.key, invoice, width));
     }
-    
+
     return cells;
   }
-  
+
   Widget _buildCell(String column, PurchaseInvoice invoice, double width) {
     final balance = invoice.total - invoice.paidAmount;
-    
+
     Widget content;
     switch (column) {
       case 'date':
@@ -849,7 +995,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       default:
         content = const Text('');
     }
-    
+
     return SizedBox(
       width: width,
       height: 38,
@@ -862,7 +1008,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildStatusChip(PurchaseInvoiceStatus status) {
     final labels = {
       PurchaseInvoiceStatus.draft: 'Borrador',
@@ -872,7 +1018,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       PurchaseInvoiceStatus.paid: 'Pagada',
       PurchaseInvoiceStatus.cancelled: 'Anulada',
     };
-    
+
     final colors = {
       PurchaseInvoiceStatus.draft: Colors.grey,
       PurchaseInvoiceStatus.sent: Colors.blue,
@@ -881,9 +1027,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       PurchaseInvoiceStatus.paid: Colors.blue,
       PurchaseInvoiceStatus.cancelled: Colors.red,
     };
-    
+
     final color = colors[status] ?? Colors.grey;
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -900,7 +1046,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildInvoicePreview(PurchaseInvoice invoice) {
     return Container(
       color: Colors.grey[50],
@@ -911,7 +1057,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final double availableWidth = constraints.maxWidth - 40;
-                
+
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Container(
@@ -936,7 +1082,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
+
   Widget _buildActionBar(PurchaseInvoice invoice) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -957,7 +1103,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 ),
               ),
               const Spacer(),
-              
+
               // Attachment icon
               IconButton(
                 icon: const Icon(Icons.attach_file, size: 20),
@@ -967,7 +1113,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 padding: const EdgeInsets.all(8),
               ),
               const SizedBox(width: 4),
-              
+
               // Comment icon
               IconButton(
                 icon: const Icon(Icons.comment_outlined, size: 20),
@@ -977,7 +1123,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 padding: const EdgeInsets.all(8),
               ),
               const SizedBox(width: 4),
-              
+
               // Close button
               IconButton(
                 icon: const Icon(Icons.close, size: 20),
@@ -989,7 +1135,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ],
           ),
         ),
-        
+
         // BOTTOM ROW: Action buttons bar (light gray background)
         Container(
           width: double.infinity,
@@ -1011,13 +1157,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label: const Text('Editar'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // Enviar correo button
                 TextButton.icon(
                   onPressed: () => debugPrint('TODO: Send email'),
@@ -1025,13 +1173,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label: const Text('Enviar correo electrónico'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // Compartir button
                 TextButton.icon(
                   onPressed: () => debugPrint('TODO: Share'),
@@ -1039,29 +1189,37 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label: const Text('Compartir'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF666666),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w400),
                   ),
                 ),
-                
+
                 // PDF/Imprimir dropdown
                 PopupMenuButton<String>(
                   offset: const Offset(0, 40),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.picture_as_pdf_outlined, size: 16, color: Colors.grey[600]),
+                        Icon(Icons.picture_as_pdf_outlined,
+                            size: 16, color: Colors.grey[600]),
                         const SizedBox(width: 6),
                         Text(
                           'PDF/Imprimir',
-                          style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w400),
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w400),
                         ),
                         const SizedBox(width: 2),
-                        Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey[600]),
+                        Icon(Icons.arrow_drop_down,
+                            size: 18, color: Colors.grey[600]),
                       ],
                     ),
                   ),
@@ -1096,13 +1254,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   },
                 ),
                 const SizedBox(width: 8),
-                
+
                 // Three dots menu
                 PopupMenuButton<String>(
                   offset: const Offset(0, 40),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Icon(Icons.more_horiz, size: 18, color: Colors.grey[600]),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Icon(Icons.more_horiz,
+                        size: 18, color: Colors.grey[600]),
                   ),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
@@ -1119,9 +1279,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                          Icon(Icons.delete_outline,
+                              size: 16, color: Colors.red),
                           SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red, fontSize: 13)),
+                          Text('Eliminar',
+                              style:
+                                  TextStyle(color: Colors.red, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -1141,10 +1304,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ],
     );
   }
-  
+
   Widget _buildInvoiceDocument(PurchaseInvoice invoice, double containerWidth) {
     final balance = invoice.total - invoice.paidAmount;
-    
+
     // Calculate responsive sizes based on width
     final double scale = (containerWidth / 800.0).clamp(0.6, 1.0);
     final double padding = 40 * scale;
@@ -1153,7 +1316,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final double labelSize = 12 * scale;
     final double dataSize = 13 * scale;
     final double spacing = 24 * scale;
-    
+
     return Padding(
       padding: EdgeInsets.all(padding),
       child: Column(
@@ -1275,7 +1438,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 decoration: BoxDecoration(color: Colors.grey[800]),
                 children: [
                   _buildTableCell('#', isHeader: true, scale: scale),
-                  _buildTableCell('Artículo & Descripción', isHeader: true, scale: scale),
+                  _buildTableCell('Artículo & Descripción',
+                      isHeader: true, scale: scale),
                   _buildTableCell('Cant.', isHeader: true, scale: scale),
                   _buildTableCell('Tarifa', isHeader: true, scale: scale),
                   _buildTableCell('Cantidad', isHeader: true, scale: scale),
@@ -1284,19 +1448,27 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               ...invoice.items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
-                final itemTotal = item.quantity * item.unitCost * (1 - item.discount) * (1 + item.ivaRate);
-                
+                final itemTotal = item.quantity *
+                    item.unitCost *
+                    (1 - item.discount) *
+                    (1 + item.ivaRate);
+
                 return TableRow(
                   children: [
                     _buildTableCell('${index + 1}', scale: scale),
                     _buildTableCell(
                       item.productName ?? 'Sin nombre',
-                      subtitle: item.productSku != null ? 'SKU: ${item.productSku}' : null,
+                      subtitle: item.productSku != null
+                          ? 'SKU: ${item.productSku}'
+                          : null,
                       scale: scale,
                     ),
-                    _buildTableCell('${item.quantity.toStringAsFixed(2)}', scale: scale),
-                    _buildTableCell(ChileanUtils.formatCurrency(item.unitCost), scale: scale),
-                    _buildTableCell(ChileanUtils.formatCurrency(itemTotal), scale: scale),
+                    _buildTableCell('${item.quantity.toStringAsFixed(2)}',
+                        scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(item.unitCost),
+                        scale: scale),
+                    _buildTableCell(ChileanUtils.formatCurrency(itemTotal),
+                        scale: scale),
                   ],
                 );
               }),
@@ -1312,13 +1484,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   children: [
                     _buildTotalRow('Subtotal', invoice.subtotal, scale: scale),
                     const Divider(),
-                    _buildTotalRow('Total', invoice.total, isTotal: true, scale: scale),
+                    _buildTotalRow('Total', invoice.total,
+                        isTotal: true, scale: scale),
                     if (invoice.paidAmount > 0) ...[
                       const Divider(),
-                      _buildTotalRow('Pago realizado', -invoice.paidAmount, isNegative: true, scale: scale),
+                      _buildTotalRow('Pago realizado', -invoice.paidAmount,
+                          isNegative: true, scale: scale),
                     ],
                     const Divider(thickness: 2),
-                    _buildTotalRow('Saldo adeudado', balance, isTotal: true, scale: scale),
+                    _buildTotalRow('Saldo adeudado', balance,
+                        isTotal: true, scale: scale),
                   ],
                 ),
               ),
@@ -1328,10 +1503,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
-  Widget _buildTableCell(String text, {bool isHeader = false, String? subtitle, double scale = 1.0}) {
+
+  Widget _buildTableCell(String text,
+      {bool isHeader = false, String? subtitle, double scale = 1.0}) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
+      padding:
+          EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1348,7 +1525,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             Text(
               subtitle,
               style: TextStyle(
-                color: Colors.grey[600], 
+                color: Colors.grey[600],
                 fontSize: 11 * scale,
               ),
             ),
@@ -1357,8 +1534,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ),
     );
   }
-  
-  Widget _buildTotalRow(String label, double amount, {bool isTotal = false, bool isNegative = false, double scale = 1.0}) {
+
+  Widget _buildTotalRow(String label, double amount,
+      {bool isTotal = false, bool isNegative = false, double scale = 1.0}) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 8 * scale),
       child: Row(
@@ -1372,7 +1550,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ),
           ),
           Text(
-            (isNegative && amount > 0 ? '(-) ' : '') + ChileanUtils.formatCurrency(amount.abs()),
+            (isNegative && amount > 0 ? '(-) ' : '') +
+                ChileanUtils.formatCurrency(amount.abs()),
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
               fontSize: (isTotal ? 16 : 14) * scale,

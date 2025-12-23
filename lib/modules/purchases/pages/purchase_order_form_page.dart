@@ -25,34 +25,60 @@ class _PurchaseOrderFormPageState extends State<PurchaseOrderFormPage> {
         child: Column(
           children: [
             // Header
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  Expanded(
-                    child: Text(
-                      widget.orderId != null ? 'Editar Orden' : 'Nueva Orden',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 600;
+
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.arrow_back),
                       ),
-                    ),
+                      Expanded(
+                        child: Text(
+                          widget.orderId != null
+                              ? 'Editar Orden'
+                              : 'Nueva Orden',
+                          style: TextStyle(
+                            fontSize: isMobile ? 20 : 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isMobile)
+                        IconButton(
+                          onPressed: _isSaving
+                              ? null
+                              : () {
+                                  // TODO: Implement save
+                                  context.pop();
+                                },
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.save, color: Colors.blue),
+                        )
+                      else
+                        AppButton(
+                          text: 'Guardar',
+                          icon: Icons.save,
+                          onPressed: () {
+                            // TODO: Implement save
+                            context.pop();
+                          },
+                          isLoading: _isSaving,
+                        ),
+                    ],
                   ),
-                  AppButton(
-                    text: 'Guardar',
-                    icon: Icons.save,
-                    onPressed: () {
-                      // TODO: Implement save
-                      context.pop();
-                    },
-                    isLoading: _isSaving,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
 
             Expanded(

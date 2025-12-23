@@ -52,14 +52,15 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
 
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       if (widget.categoryId != null) {
         // Edit mode
         await _loadCategory();
       } else if (widget.parentCategoryId != null) {
         // Create mode with context
-        _selectedParent = await _categoryService.getCategoryById(widget.parentCategoryId!);
+        _selectedParent =
+            await _categoryService.getCategoryById(widget.parentCategoryId!);
       }
     } catch (e) {
       if (mounted) {
@@ -93,7 +94,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
           _descriptionController.text = category.description ?? '';
           _isActive = category.isActive;
           _imageUrl = category.imageUrl;
-          
+
           // Load parent if exists
           if (category.parentId != null) {
             _categoryService.getCategoryById(category.parentId!).then((parent) {
@@ -163,12 +164,12 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       }
 
       final categoryName = _nameController.text.trim();
-      
+
       // Build full path from parent + name
       String fullPath;
       String? parentId;
       int level;
-      
+
       if (_selectedParent != null) {
         fullPath = '${_selectedParent!.fullPath} / $categoryName';
         parentId = _selectedParent!.id;
@@ -178,10 +179,11 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         parentId = null;
         level = 0;
       }
-      
+
       // For new categories: Use placeholder tenant_id, DatabaseService will auto-inject
       // For updates: Keep existing tenant_id
-      String tenantId = _existingCategory?.tenantId ?? '00000000-0000-0000-0000-000000000000';
+      String tenantId =
+          _existingCategory?.tenantId ?? '00000000-0000-0000-0000-000000000000';
 
       final category = Category(
         id: _existingCategory?.id,
@@ -239,7 +241,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
         excludeId: widget.categoryId, // Don't allow selecting self or children
       ),
     );
-    
+
     if (selected != null || selected == null && _selectedParent != null) {
       // User made a selection or cleared it
       setState(() => _selectedParent = selected);
@@ -249,9 +251,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _buildForm(),
+      child: _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),
     );
   }
 
@@ -261,37 +261,88 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
       child: Column(
         children: [
           // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    debugPrint('🔙 [FORM] Back button clicked, popping...');
-                    context.pop();
-                  },
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _existingCategory != null
-                        ? 'Editar Categoría'
-                        : 'Nueva Categoría',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 600;
+
+              if (isMobile) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () {
+                              debugPrint(
+                                  '🔙 [FORM] Back button clicked, popping...');
+                              context.pop();
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _existingCategory != null
+                                  ? 'Editar Categoría'
+                                  : 'Nueva Categoría',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: 'Guardar',
+                          icon: Icons.save,
+                          onPressed: _isSaving ? null : _saveCategory,
+                          isLoading: _isSaving,
+                        ),
+                      ),
+                    ],
                   ),
+                );
+              }
+
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () {
+                        debugPrint('🔙 [FORM] Back button clicked, popping...');
+                        context.pop();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _existingCategory != null
+                            ? 'Editar Categoría'
+                            : 'Nueva Categoría',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    AppButton(
+                      text: 'Guardar',
+                      icon: Icons.save,
+                      onPressed: _isSaving ? null : _saveCategory,
+                      isLoading: _isSaving,
+                    ),
+                  ],
                 ),
-                AppButton(
-                  text: 'Guardar',
-                  icon: Icons.save,
-                  onPressed: _isSaving ? null : _saveCategory,
-                  isLoading: _isSaving,
-                ),
-              ],
-            ),
+              );
+            },
           ),
 
           // Form content
@@ -312,7 +363,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    
+
                     // Interactive Parent Selector
                     InkWell(
                       onTap: _showParentPicker,
@@ -327,7 +378,9 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                         child: Row(
                           children: [
                             Icon(
-                              _selectedParent != null ? Icons.folder : Icons.folder_open,
+                              _selectedParent != null
+                                  ? Icons.folder
+                                  : Icons.folder_open,
                               color: Theme.of(context).colorScheme.primary,
                               size: 32,
                             ),
@@ -348,7 +401,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    _selectedParent?.fullPath ?? '📁 Nivel superior',
+                                    _selectedParent?.fullPath ??
+                                        '📁 Nivel superior',
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -362,11 +416,12 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                         ),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 8),
                     Text(
                       '💡 Toca para elegir dónde crear esta categoría. Puedes navegar por la jerarquía completa.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
 
                     const SizedBox(height: 24),
@@ -392,7 +447,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                     ),
 
                     const SizedBox(height: 8),
-                    
+
                     // Preview of full path
                     if (_nameController.text.isNotEmpty)
                       Container(
@@ -403,7 +458,8 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                            Icon(Icons.check_circle,
+                                color: Colors.green.shade700, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -647,7 +703,8 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
     try {
       final categories = await widget.categoryService.getRootCategories();
       setState(() {
-        _rootCategories = categories.where((c) => c.id != widget.excludeId).toList();
+        _rootCategories =
+            categories.where((c) => c.id != widget.excludeId).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -664,7 +721,8 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
     try {
       final categories = await widget.categoryService.getCategories();
       setState(() {
-        _allCategories = categories.where((c) => c.id != widget.excludeId).toList();
+        _allCategories =
+            categories.where((c) => c.id != widget.excludeId).toList();
       });
     } catch (e) {
       // Silent fail, search just won't work
@@ -675,7 +733,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
     if (_childrenCache.containsKey(parentId)) {
       return _childrenCache[parentId]!;
     }
-    
+
     final children = await widget.categoryService.getSubcategories(parentId);
     final filtered = children.where((c) => c.id != widget.excludeId).toList();
     _childrenCache[parentId] = filtered;
@@ -701,7 +759,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
         ),
       );
     }
-    
+
     return ListView(
       children: _rootCategories.map((category) {
         return _buildCategoryTile(category, 0);
@@ -712,7 +770,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
   Widget _buildSearchResults() {
     final filteredCategories = _allCategories.where((category) {
       return category.name.toLowerCase().contains(_searchTerm) ||
-             category.fullPath.toLowerCase().contains(_searchTerm);
+          category.fullPath.toLowerCase().contains(_searchTerm);
     }).toList();
 
     if (filteredCategories.isEmpty) {
@@ -729,7 +787,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
       itemBuilder: (context, index) {
         final category = filteredCategories[index];
         final isSelected = _selectedCategory?.id == category.id;
-        
+
         return ListTile(
           leading: Icon(
             Icons.folder,
@@ -767,155 +825,171 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 500,
-        height: 600,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                const Icon(Icons.folder_open, size: 28),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Seleccionar Categoría Padre',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = MediaQuery.of(context).size.width < 600;
+
+      return Dialog(
+        insetPadding: isMobile
+            ? const EdgeInsets.all(16)
+            : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        child: Container(
+          width: isMobile ? double.infinity : 500,
+          height: 600,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  const Icon(Icons.folder_open, size: 28),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Seleccionar Categoría Padre',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const Divider(),
-            
-            // Current selection breadcrumb
-            if (_selectedCategory != null)
-              Container(
-                padding: const EdgeInsets.all(8),
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: Colors.blue, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Seleccionado: ${_selectedCategory!.fullPath}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.blue,
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+
+              // Current selection breadcrumb
+              if (_selectedCategory != null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle,
+                          color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Seleccionado: ${_selectedCategory!.fullPath}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar categoría...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchTerm.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchTerm = '');
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ],
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _searchTerm = value.toLowerCase());
+                  },
                 ),
               ),
 
-            // Search bar
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Buscar categoría...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchTerm.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchTerm = '');
-                          },
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              // Root option
+              ListTile(
+                leading: Icon(
+                  Icons.home,
+                  color: _selectedCategory == null ? Colors.blue : Colors.grey,
                 ),
-                onChanged: (value) {
-                  setState(() => _searchTerm = value.toLowerCase());
+                title: Text(
+                  'Categoría Raíz (sin padre)',
+                  style: TextStyle(
+                    fontWeight: _selectedCategory == null
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _selectedCategory == null ? Colors.blue : null,
+                  ),
+                ),
+                tileColor: _selectedCategory == null
+                    ? Colors.blue.withOpacity(0.1)
+                    : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: _selectedCategory == null
+                        ? Colors.blue
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                onTap: () {
+                  setState(() => _selectedCategory = null);
                 },
               ),
-            ),
+              const SizedBox(height: 8),
+              const Divider(),
 
-            // Root option
-            ListTile(
-              leading: Icon(
-                Icons.home,
-                color: _selectedCategory == null ? Colors.blue : Colors.grey,
+              // Tree view or search results
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: BrandedLoading())
+                    : _searchTerm.isNotEmpty
+                        ? _buildSearchResults()
+                        : _buildTreeView(),
               ),
-              title: Text(
-                'Categoría Raíz (sin padre)',
-                style: TextStyle(
-                  fontWeight: _selectedCategory == null ? FontWeight.bold : FontWeight.normal,
-                  color: _selectedCategory == null ? Colors.blue : null,
-                ),
+
+              const Divider(),
+
+              // Action buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop(_selectedCategory);
+                    },
+                    icon: const Icon(Icons.check),
+                    label: const Text('Seleccionar'),
+                  ),
+                ],
               ),
-              tileColor: _selectedCategory == null ? Colors.blue.withOpacity(0.1) : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                  color: _selectedCategory == null ? Colors.blue : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              onTap: () {
-                setState(() => _selectedCategory = null);
-              },
-            ),
-            const SizedBox(height: 8),
-            const Divider(),
-            
-            // Tree view or search results
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: BrandedLoading())
-                  : _searchTerm.isNotEmpty
-                      ? _buildSearchResults()
-                      : _buildTreeView(),
-            ),
-            
-            const Divider(),
-            
-            // Action buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop(_selectedCategory);
-                  },
-                  icon: const Icon(Icons.check),
-                  label: const Text('Seleccionar'),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildCategoryTile(Category category, int depth) {
     final isExpanded = _expandedCategories.contains(category.id);
     final isSelected = _selectedCategory?.id == category.id;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -938,13 +1012,15 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
                       ),
                     );
                   }
-                  
-                  final hasChildren = snapshot.hasData && snapshot.data!.isNotEmpty;
-                  
+
+                  final hasChildren =
+                      snapshot.hasData && snapshot.data!.isNotEmpty;
+
                   if (!hasChildren) {
-                    return const SizedBox(width: 24); // Empty space for alignment
+                    return const SizedBox(
+                        width: 24); // Empty space for alignment
                   }
-                  
+
                   return IconButton(
                     icon: Icon(
                       isExpanded ? Icons.expand_more : Icons.chevron_right,
@@ -982,7 +1058,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
             setState(() => _selectedCategory = category);
           },
         ),
-        
+
         // Children (if expanded)
         if (isExpanded)
           FutureBuilder<List<Category>>(
@@ -994,11 +1070,11 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
                   child: const LinearProgressIndicator(),
                 );
               }
-              
+
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return const SizedBox.shrink();
               }
-              
+
               return Column(
                 children: snapshot.data!.map((child) {
                   return _buildCategoryTile(child, depth + 1);

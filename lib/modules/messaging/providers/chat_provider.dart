@@ -5,6 +5,7 @@ import '../../../shared/services/user_management_service.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 import '../services/messaging_service.dart';
+import '../../../shared/services/notification_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
@@ -16,7 +17,10 @@ class ChatProvider extends ChangeNotifier {
   Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   bool _isLoading = false;
   String? _activeConversationId;
-  RealtimeChannel? _subscription;
+
+  // Subscriptions
+  StreamSubscription? _messagesSubscription;
+  RealtimeChannel? _conversationsSubscription;
 
   // Getters
   List<Conversation> get conversations => _conversations;
@@ -24,8 +28,13 @@ class ChatProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get activeConversationId => _activeConversationId;
 
+  /// Total unread messages across all conversations
+  int get totalUnreadCount =>
+      _conversations.fold(0, (sum, c) => sum + c.unreadCount);
+
   ChatProvider(this._userService) {
     _loadUserCache();
+    _initConversationsListener();
   }
 
   /// Load user cache for resolving names
@@ -39,6 +48,23 @@ class ChatProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading user cache: $e');
     }
+  }
+
+  /// Initialize listener for conversation list updates
+  void _initConversationsListener() {
+    loadConversations(); // Initial load
+
+    _conversationsSubscription = _service.subscribeToConversationsUpdates(() {
+      loadConversations(); // Re-fetch on any change
+    });
+
+    // Also listen to NotificationService for realtime alerts (triggers badge update)
+    NotificationService().onMessageReceived.listen((_) {
+      // Small delay to ensure DB view is updated by trigger
+      Future.delayed(const Duration(milliseconds: 500), () {
+        loadConversations();
+      });
+    });
   }
 
   /// Get display title for a conversation
@@ -68,48 +94,72 @@ class ChatProvider extends ChangeNotifier {
 
   /// Load conversations list
   Future<void> loadConversations({String? type}) async {
-    _isLoading = true;
-    notifyListeners();
-
+    // Don't set global loading here to avoid screen flickering on updates
     try {
-      _conversations = await _service.getConversations(type: type);
-      // Refresh cache if needed, or rely on distinct fetch
+      final newConversations = await _service.getConversations(type: type);
+      _conversations = newConversations;
+      notifyListeners();
+
+      // Refresh cache if needed
       if (_userCache.isEmpty) await _loadUserCache();
     } catch (e) {
       debugPrint('❌ Error loading conversations: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
   /// Open a conversation and subscribe to updates
-  Future<void> setActiveConversation(String conversationId) async {
+  void setActiveConversation(String conversationId) {
     if (_activeConversationId == conversationId) return;
 
     _activeConversationId = conversationId;
-    _activeMessages = []; // Clear previous chat
-    _isLoading = true;
+    _activeMessages = []; // Clear previous chat immediately
+    _isLoading = true; // Show loader while stream connects
     notifyListeners();
 
-    // 1. Unsubscribe from old
-    _subscription?.unsubscribe();
+    // Optimistically update local state to clear badge immediately
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index != -1) {
+      final old = _conversations[index];
+      // Create copy with unreadCount = 0
+      _conversations[index] = Conversation(
+        id: old.id,
+        type: old.type,
+        title: old.title,
+        contextType: old.contextType,
+        contextId: old.contextId,
+        lastMessageAt: old.lastMessageAt,
+        updatedAt: old.updatedAt,
+        participantIds: old.participantIds,
+        unreadCount: 0, // Force clear
+      );
+      notifyListeners();
+    }
 
+    // Mark conversation as read on server
+    _service.markAsRead(conversationId).then((_) {
+      // Refresh conversations to ensure server sync (optional but good for consistency)
+      loadConversations();
+    });
+
+    // 1. Unsubscribe from old message stream
+    _messagesSubscription?.cancel();
+
+    // 2. Subscribe to new message stream
     try {
-      // 2. Load history
-      _activeMessages = await _service.getMessages(conversationId);
-
-      // 3. Subscribe to new
-      _subscription = _service.subscribeToConversation(
-        conversationId,
-        (newMessage) {
-          _activeMessages.add(newMessage);
+      _messagesSubscription = _service.getMessagesStream(conversationId).listen(
+        (messages) {
+          _activeMessages = messages;
+          _isLoading = false;
+          notifyListeners();
+        },
+        onError: (error) {
+          debugPrint('❌ Error stream messages: $error');
+          _isLoading = false;
           notifyListeners();
         },
       );
     } catch (e) {
-      debugPrint('❌ Error loading messages: $e');
-    } finally {
+      debugPrint('❌ Error setting up message stream: $e');
       _isLoading = false;
       notifyListeners();
     }
@@ -122,14 +172,18 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
 
       final conversationId = await _service.createInternalChat(otherUserId);
-      await loadConversations();
+      // No need to manually load conversations, the realtime listener will pick it up
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error creating internal chat: $e');
       rethrow;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      // _isLoading handled by stream listener in setActiveConversation
+      // But if we fail before that:
+      if (_activeConversationId == null) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -138,6 +192,23 @@ class ChatProvider extends ChangeNotifier {
       {String type = 'text', Map<String, dynamic>? metadata}) async {
     if (_activeConversationId == null || content.trim().isEmpty) return;
 
+    final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
+
+    // 1. Optimistic Update: Add message immediately
+    final tempMessage = Message(
+      id: tempId,
+      conversationId: _activeConversationId!,
+      senderId: _service.currentUserId,
+      content: content,
+      type: type,
+      metadata: metadata ?? {},
+      createdAt: DateTime.now(),
+      isMe: true,
+    );
+
+    _activeMessages.add(tempMessage);
+    notifyListeners();
+
     try {
       await _service.sendMessage(
         conversationId: _activeConversationId!,
@@ -145,10 +216,13 @@ class ChatProvider extends ChangeNotifier {
         type: type,
         metadata: metadata,
       );
-      // Realtime subscription will handle the UI update
+      // Realtime stream will handle the validation/replacement
     } catch (e) {
       debugPrint('❌ Error sending message: $e');
-      // TODO: Handle error UI
+      // On error, remove the temp message
+      _activeMessages.removeWhere((m) => m.id == tempId);
+      notifyListeners();
+      // TODO: Show error toast
     }
   }
 
@@ -156,16 +230,41 @@ class ChatProvider extends ChangeNotifier {
   Future<void> createTicket(String title) async {
     try {
       final id = await _service.createSupportTicket(title: title);
-      await loadConversations(); // Refresh list
-      setActiveConversation(id); // Open it
+      setActiveConversation(id);
     } catch (e) {
       debugPrint('❌ Error creating ticket: $e');
     }
   }
 
+  /// Delete a conversation
+  Future<bool> deleteConversation(String conversationId) async {
+    try {
+      // If deleting the active conversation, clear it first
+      if (_activeConversationId == conversationId) {
+        _messagesSubscription?.cancel();
+        _activeConversationId = null;
+        _activeMessages = [];
+      }
+
+      // Optimistic update - remove from local list immediately
+      _conversations.removeWhere((c) => c.id == conversationId);
+      notifyListeners();
+
+      // Delete from server
+      await _service.deleteConversation(conversationId);
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error deleting conversation: $e');
+      // Reload to restore state on error
+      await loadConversations();
+      return false;
+    }
+  }
+
   @override
   void dispose() {
-    _subscription?.unsubscribe();
+    _messagesSubscription?.cancel();
+    _conversationsSubscription?.unsubscribe();
     super.dispose();
   }
 }

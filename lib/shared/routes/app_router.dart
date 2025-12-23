@@ -72,6 +72,7 @@ import '../../modules/settings/pages/payment_methods_settings_page.dart';
 import '../../modules/settings/pages/bluetooth_scanner_page.dart';
 import '../../modules/settings/pages/keyboard_scanner_page.dart';
 import '../../modules/settings/pages/remote_scanner_page.dart';
+import '../../modules/settings/pages/notification_settings_page.dart';
 import '../../modules/hr/pages/employee_list_page.dart';
 import '../../modules/hr/pages/attendances_page.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
@@ -1713,6 +1714,14 @@ class AppRouter {
             context,
             state,
             const RemoteScannerPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/notifications',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const NotificationSettingsPage(),
           ),
         ),
 

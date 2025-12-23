@@ -865,10 +865,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                           ),
                         ),
                       ),
-                      // Cashier panel
-                      SizedBox(
-                        width: double.infinity,
-                        child: const _CashierPanel(),
+                      // Mobile Cart Summary (Sticky Bottom)
+                      _MobileCartSummary(
+                        onTap: _showMobileCheckout,
                       ),
                     ],
                   ),
@@ -1167,6 +1166,36 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                 ),
         ),
       ],
+    );
+  }
+  void _showMobileCheckout() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Handle for better UX
+            Container(
+              height: 4,
+              width: 40,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(child: const _CashierPanel()),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3130,6 +3159,79 @@ class _CashierPanelState extends State<_CashierPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MobileCartSummary extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _MobileCartSummary({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Consumer<POSService>(
+      builder: (context, posService, _) {
+        final itemCount = posService.cartItems.fold(0, (sum, item) => sum + item.quantity);
+        final total = posService.cartTotal;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$itemCount items',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          '\$${total.toStringAsFixed(0)}',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.shopping_cart_checkout),
+                    label: const Text('Ver Carrito'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

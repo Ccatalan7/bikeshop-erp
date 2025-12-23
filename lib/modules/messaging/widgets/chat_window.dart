@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/services/sales_service.dart';
 import '../models/conversation.dart';
@@ -28,12 +34,16 @@ class ChatWindow extends StatefulWidget {
 class _ChatWindowState extends State<ChatWindow> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
 
   // Autocomplete State
   List<AutocompleteSuggestion> _suggestions = [];
   Timer? _debounce;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
+
+  // Scroll State
+  int _previousMessageCount = 0;
 
   @override
   void didUpdateWidget(covariant ChatWindow oldWidget) {
@@ -55,10 +65,13 @@ class _ChatWindowState extends State<ChatWindow> {
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     _debounce?.cancel();
     _removeOverlay();
     super.dispose();
   }
+
+  // ... (keeping _onTextChanged and others same)
 
   void _onTextChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -239,6 +252,9 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _loadMessages() {
+    // Reset count when loading new chat so it triggers scroll on build
+    _previousMessageCount = 0;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context
           .read<ChatProvider>()
@@ -251,20 +267,176 @@ class _ChatWindowState extends State<ChatWindow> {
     if (text.isNotEmpty) {
       context.read<ChatProvider>().sendMessage(text);
       _messageController.clear();
-      _scrollToBottom();
+      // Keep focus on the text field after sending
+      // On Web, post-frame callback isn't always enough due to engine/DOM sync.
+      // A small delay ensures the focus request happens after the UI settles.
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          FocusScope.of(context).requestFocus(_focusNode);
+        }
+      });
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+  /// Pick and send a file (image, PDF, document, etc.)
+  Future<void> _pickAndSendFile() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galería'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Cámara'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file),
+              title: const Text('Archivo (PDF, Doc, etc.)'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    try {
+      String? fileName;
+      Uint8List? bytes;
+
+      if (choice == 'camera') {
+        // Use ImagePicker for camera
+        final picker = ImagePicker();
+        final XFile? pickedFile = await picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1200,
+          imageQuality: 85,
         );
+        if (pickedFile == null) return;
+        fileName = pickedFile.name;
+        bytes = await pickedFile.readAsBytes();
+      } else if (choice == 'gallery') {
+        // Use ImagePicker for gallery (better image handling)
+        final picker = ImagePicker();
+        final XFile? pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1200,
+          imageQuality: 85,
+        );
+        if (pickedFile == null) return;
+        fileName = pickedFile.name;
+        bytes = await pickedFile.readAsBytes();
+      } else {
+        // Use FilePicker for documents
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: [
+            'pdf',
+            'doc',
+            'docx',
+            'xls',
+            'xlsx',
+            'txt',
+            'png',
+            'jpg',
+            'jpeg',
+            'gif'
+          ],
+          withData: true,
+        );
+        if (result == null || result.files.isEmpty) return;
+        final file = result.files.first;
+        fileName = file.name;
+        bytes = file.bytes;
       }
-    });
+
+      if (bytes == null || fileName == null || !mounted) return;
+
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('Subiendo archivo...'),
+          ]),
+          duration: Duration(seconds: 60),
+        ),
+      );
+
+      // Determine file type and MIME
+      final ext = fileName.split('.').last.toLowerCase();
+      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext);
+      final isPdf = ext == 'pdf';
+
+      String contentType;
+      if (isImage) {
+        contentType = 'image/$ext';
+      } else if (isPdf) {
+        contentType = 'application/pdf';
+      } else if (['doc', 'docx'].contains(ext)) {
+        contentType = 'application/msword';
+      } else if (['xls', 'xlsx'].contains(ext)) {
+        contentType = 'application/vnd.ms-excel';
+      } else {
+        contentType = 'application/octet-stream';
+      }
+
+      final storagePath =
+          'chat/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+      // Upload to Supabase Storage (vinabike-assets bucket)
+      final supabase = Supabase.instance.client;
+      await supabase.storage.from('vinabike-assets').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType),
+          );
+
+      // Get public URL
+      final publicUrl =
+          supabase.storage.from('vinabike-assets').getPublicUrl(storagePath);
+
+      if (!mounted) return;
+
+      // Dismiss loading snackbar
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Determine message type
+      final msgType = isImage ? 'image' : 'file';
+
+      // Send as file message
+      context.read<ChatProvider>().sendMessage(
+        publicUrl,
+        type: msgType,
+        metadata: {
+          'url': publicUrl,
+          'filename': fileName,
+          'extension': ext,
+          'contentType': contentType,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Error al subir archivo: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -272,6 +444,16 @@ class _ChatWindowState extends State<ChatWindow> {
     final chatProvider = context.watch<ChatProvider>();
     final messages = chatProvider.activeMessages;
     final isLoading = chatProvider.isLoading;
+
+    // Detect new messages
+    if (messages.length > _previousMessageCount) {
+      _previousMessageCount = messages.length;
+    }
+
+    // Handle case where messages might be cleared (e.g. switching chats)
+    if (messages.length < _previousMessageCount) {
+      _previousMessageCount = messages.length;
+    }
 
     return Column(
       children: [
@@ -321,10 +503,12 @@ class _ChatWindowState extends State<ChatWindow> {
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     controller: _scrollController,
+                    reverse: true, // Start from bottom
                     padding: const EdgeInsets.all(16),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
-                      final msg = messages[index];
+                      // Reverse index to show newest at bottom
+                      final msg = messages[messages.length - 1 - index];
                       // Check continuity for bubble grouping (optional enhancement space)
                       return _buildMessageBubble(context, msg);
                     },
@@ -343,15 +527,14 @@ class _ChatWindowState extends State<ChatWindow> {
             children: [
               IconButton(
                 icon: const Icon(Icons.attach_file),
-                onPressed: () {
-                  // TODO: File upload
-                },
+                onPressed: _pickAndSendFile,
               ),
               Expanded(
                 child: CompositedTransformTarget(
                   link: _layerLink,
                   child: TextField(
                     controller: _messageController,
+                    focusNode: _focusNode,
                     decoration: const InputDecoration(
                       hintText: 'Escribe un mensaje... (# para ref)',
                       contentPadding: EdgeInsets.symmetric(
@@ -410,15 +593,133 @@ class _ChatWindowState extends State<ChatWindow> {
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            ParsedMessageText(
-              text: msg.content,
-              isMe: isMe,
-              onReferenceTap: widget.onReferenceTap,
-              style: TextStyle(
-                color: isMe ? Colors.white : Colors.black87,
-                fontSize: 14,
+            // Render image or text based on message type
+            if (msg.type == 'image')
+              GestureDetector(
+                onTap: () {
+                  // Show full-screen image preview
+                  showDialog(
+                    context: context,
+                    builder: (_) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: Stack(
+                        children: [
+                          InteractiveViewer(
+                            child: Image.network(msg.content),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.white, size: 32),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    msg.content,
+                    width: 200,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        color: Colors.grey[300],
+                        child: const Center(child: CircularProgressIndicator()),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 200,
+                      height: 150,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image, size: 48),
+                    ),
+                  ),
+                ),
+              )
+            else if (msg.type == 'file')
+              // File attachment (PDF, doc, etc.)
+              GestureDetector(
+                onTap: () async {
+                  // Open URL in browser
+                  final url = Uri.parse(msg.content);
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } else {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isMe ? Colors.blue[700] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getFileIcon(msg.metadata['extension'] ?? ''),
+                        color: isMe ? Colors.white : Colors.blue[600],
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              msg.metadata['filename'] ?? 'Archivo',
+                              style: TextStyle(
+                                color: isMe ? Colors.white : Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              (msg.metadata['extension'] ?? '').toUpperCase(),
+                              style: TextStyle(
+                                color: isMe ? Colors.white70 : Colors.grey[600],
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.download,
+                        color: isMe ? Colors.white70 : Colors.grey[500],
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ParsedMessageText(
+                text: msg.content,
+                isMe: isMe,
+                onReferenceTap: widget.onReferenceTap,
+                style: TextStyle(
+                  color: isMe ? Colors.white : Colors.black87,
+                  fontSize: 14,
+                ),
               ),
-            ),
             const SizedBox(height: 4),
             Text(
               DateFormat('HH:mm').format(msg.createdAt),
@@ -431,5 +732,28 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
       ),
     );
+  }
+
+  /// Get appropriate icon for file extension
+  IconData _getFileIcon(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'txt':
+        return Icons.text_snippet;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return Icons.image;
+      default:
+        return Icons.insert_drive_file;
+    }
   }
 }

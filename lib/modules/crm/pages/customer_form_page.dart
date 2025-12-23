@@ -135,7 +135,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
 
         finalImageUrl = uploadUrl;
       }
-      
+
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
@@ -205,260 +205,323 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _buildForm(),
+      child: _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),
     );
   }
 
   Widget _buildForm() {
     return Form(
       key: _formKey,
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back),
-                ),
-                Expanded(
-                  child: Text(
-                    _existingCustomer != null
-                        ? 'Editar Cliente'
-                        : 'Nuevo Cliente',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                AppButton(
-                  text: 'Guardar',
-                  icon: Icons.save,
-                  onPressed: _saveCustomer,
-                  isLoading: _isSaving,
-                ),
-              ],
-            ),
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Image section
-                  Center(
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _selectImage,
-                          child: Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.grey[300]!,
-                                width: 2,
+          return Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: isMobile
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                onPressed: () => context.pop(),
+                                icon: const Icon(Icons.arrow_back),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _existingCustomer != null
+                                      ? 'Editar Cliente'
+                                      : 'Nuevo Cliente',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: AppButton(
+                              text: 'Guardar',
+                              icon: Icons.save,
+                              onPressed: _saveCustomer,
+                              isLoading: _isSaving,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => context.pop(),
+                            icon: const Icon(Icons.arrow_back),
+                          ),
+                          Expanded(
+                            child: Text(
+                              _existingCustomer != null
+                                  ? 'Editar Cliente'
+                                  : 'Nuevo Cliente',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            child: _selectedImageBytes != null
-                                ? ClipOval(
-                                    child: Image.memory(
-                                      _selectedImageBytes!,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  )
-                                : ImageService.buildAvatarImage(
-                                    imageUrl: _imageUrl,
-                                    radius: 60,
-                                    initials:
-                                        '?', // Temporarily disabled to debug freeze
-                                  ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: _selectImage,
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text('Cambiar Foto'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                          AppButton(
+                            text: 'Guardar',
+                            icon: Icons.save,
+                            onPressed: _saveCustomer,
+                            isLoading: _isSaving,
+                          ),
+                        ],
+                      ),
+              ),
 
-                  // Personal information
-                  const Text(
-                    'Información Personal',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre Completo',
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'El nombre es requerido';
-                      }
-                      return null;
-                    },
-                    // No onChanged - avatar updates via ListenableBuilder
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _rutController,
-                    decoration: const InputDecoration(
-                      labelText: 'RUT (opcional)',
-                      prefixIcon: Icon(Icons.badge),
-                      hintText: '12.345.678-9',
-                    ),
-                    validator: _validateRut,
-                    onChanged: (value) {
-                      // Auto-format RUT as user types
-                      final formatted = ChileanUtils.formatRut(value);
-                      if (formatted != value) {
-                        _rutController.value = TextEditingValue(
-                          text: formatted,
-                          selection:
-                              TextSelection.collapsed(offset: formatted.length),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo Electrónico (Opcional)',
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: (value) {
-                      if (value != null &&
-                          value.isNotEmpty &&
-                          !value.contains('@')) {
-                        return 'Ingrese un correo válido';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Teléfono (Opcional)',
-                      prefixIcon: Icon(Icons.phone),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Address information
-                  const Text(
-                    'Información de Ubicación',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    value: _selectedRegion,
-                    decoration: const InputDecoration(
-                      labelText: 'Región',
-                      prefixIcon: Icon(Icons.location_on),
-                    ),
-                    items: ChileanUtils.getChileanRegions().map((region) {
-                      return DropdownMenuItem<String>(
-                        value: region,
-                        child: Text(region),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() => _selectedRegion = value);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _addressController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Dirección (Opcional)',
-                      prefixIcon: Icon(Icons.home),
-                      hintText: 'Calle, número, comuna',
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Status
-                  const Text(
-                    'Estado del Cliente',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  SwitchListTile(
-                    title: const Text('Cliente Activo'),
-                    subtitle: Text(_isActive
-                        ? 'El cliente puede realizar compras'
-                        : 'Cliente deshabilitado'),
-                    value: _isActive,
-                    onChanged: (value) {
-                      setState(() => _isActive = value);
-                    },
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Actions
-                  Row(
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: AppButton(
-                          text: 'Cancelar',
-                          type: ButtonType.outline,
-                          onPressed: () => context.pop(),
+                      // Image section
+                      Center(
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              onTap: _selectImage,
+                              child: Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.grey[300]!,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: _selectedImageBytes != null
+                                    ? ClipOval(
+                                        child: Image.memory(
+                                          _selectedImageBytes!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : ImageService.buildAvatarImage(
+                                        imageUrl: _imageUrl,
+                                        radius: 60,
+                                        initials:
+                                            '?', // Temporarily disabled to debug freeze
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: _selectImage,
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Cambiar Foto'),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: AppButton(
-                          text: _existingCustomer != null
-                              ? 'Actualizar'
-                              : 'Crear Cliente',
-                          onPressed: _saveCustomer,
-                          isLoading: _isSaving,
+                      const SizedBox(height: 32),
+
+                      // Personal information
+                      const Text(
+                        'Información Personal',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre Completo',
+                          prefixIcon: Icon(Icons.person),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'El nombre es requerido';
+                          }
+                          return null;
+                        },
+                        // No onChanged - avatar updates via ListenableBuilder
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _rutController,
+                        decoration: const InputDecoration(
+                          labelText: 'RUT (opcional)',
+                          prefixIcon: Icon(Icons.badge),
+                          hintText: '12.345.678-9',
+                        ),
+                        validator: _validateRut,
+                        onChanged: (value) {
+                          // Auto-format RUT as user types
+                          final formatted = ChileanUtils.formatRut(value);
+                          if (formatted != value) {
+                            _rutController.value = TextEditingValue(
+                              text: formatted,
+                              selection: TextSelection.collapsed(
+                                  offset: formatted.length),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Correo Electrónico (Opcional)',
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                        validator: (value) {
+                          if (value != null &&
+                              value.isNotEmpty &&
+                              !value.contains('@')) {
+                            return 'Ingrese un correo válido';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Teléfono (Opcional)',
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Address information
+                      const Text(
+                        'Información de Ubicación',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      DropdownButtonFormField<String>(
+                        value: _selectedRegion,
+                        decoration: const InputDecoration(
+                          labelText: 'Región',
+                          prefixIcon: Icon(Icons.location_on),
+                        ),
+                        items: ChileanUtils.getChileanRegions().map((region) {
+                          return DropdownMenuItem<String>(
+                            value: region,
+                            child: Text(region),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => _selectedRegion = value);
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _addressController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Dirección (Opcional)',
+                          prefixIcon: Icon(Icons.home),
+                          hintText: 'Calle, número, comuna',
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Status
+                      const Text(
+                        'Estado del Cliente',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      SwitchListTile(
+                        title: const Text('Cliente Activo'),
+                        subtitle: Text(_isActive
+                            ? 'El cliente puede realizar compras'
+                            : 'Cliente deshabilitado'),
+                        value: _isActive,
+                        onChanged: (value) {
+                          setState(() => _isActive = value);
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Actions
+                      isMobile
+                          ? Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: AppButton(
+                                    text: 'Cancelar',
+                                    type: ButtonType.outline,
+                                    onPressed: () => context.pop(),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: AppButton(
+                                    text: _existingCustomer != null
+                                        ? 'Actualizar'
+                                        : 'Crear Cliente',
+                                    onPressed: _saveCustomer,
+                                    isLoading: _isSaving,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: AppButton(
+                                    text: 'Cancelar',
+                                    type: ButtonType.outline,
+                                    onPressed: () => context.pop(),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: AppButton(
+                                    text: _existingCustomer != null
+                                        ? 'Actualizar'
+                                        : 'Crear Cliente',
+                                    onPressed: _saveCustomer,
+                                    isLoading: _isSaving,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

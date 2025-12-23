@@ -213,292 +213,492 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
       title: 'Nuevo Asiento Contable',
       body: _isLoading
           ? const Center(child: BrandedLoading())
-          : Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(color: Colors.red),
-                            ),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 800;
+
+                return Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  color: Colors.red),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  // Header form
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      border: Border(
-                        bottom:
-                            BorderSide(color: Theme.of(context).dividerColor),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
+                        ),
+                      // Header form
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          border: Border(
+                            bottom: BorderSide(
+                                color: Theme.of(context).dividerColor),
+                          ),
+                        ),
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _dateController,
-                                decoration: InputDecoration(
-                                  labelText: 'Fecha *',
-                                  border: const OutlineInputBorder(),
-                                  suffixIcon: IconButton(
-                                    icon: const Icon(Icons.calendar_today),
-                                    onPressed: _selectDate,
+                            if (isMobile)
+                              Column(
+                                children: [
+                                  TextFormField(
+                                    controller: _dateController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Fecha *',
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: IconButton(
+                                        icon: const Icon(Icons.calendar_today),
+                                        onPressed: _selectDate,
+                                      ),
+                                    ),
+                                    readOnly: true,
+                                    validator: (value) => value?.isEmpty == true
+                                        ? 'La fecha es requerida'
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  DropdownButtonFormField<JournalEntryType>(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Tipo *',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    value: _selectedType,
+                                    items: JournalEntryType.values
+                                        .map(
+                                          (type) => DropdownMenuItem<
+                                              JournalEntryType>(
+                                            value: type,
+                                            child: Text(type.displayName),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() => _selectedType = value);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              )
+                            else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _dateController,
+                                      decoration: InputDecoration(
+                                        labelText: 'Fecha *',
+                                        border: const OutlineInputBorder(),
+                                        suffixIcon: IconButton(
+                                          icon:
+                                              const Icon(Icons.calendar_today),
+                                          onPressed: _selectDate,
+                                        ),
+                                      ),
+                                      readOnly: true,
+                                      validator: (value) =>
+                                          value?.isEmpty == true
+                                              ? 'La fecha es requerida'
+                                              : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: DropdownButtonFormField<
+                                        JournalEntryType>(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Tipo *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      value: _selectedType,
+                                      items: JournalEntryType.values
+                                          .map(
+                                            (type) => DropdownMenuItem<
+                                                JournalEntryType>(
+                                              value: type,
+                                              child: Text(type.displayName),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          setState(() => _selectedType = value);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _descriptionController,
+                              decoration: const InputDecoration(
+                                labelText: 'Descripción *',
+                                border: OutlineInputBorder(),
+                                hintText: 'Descripción del asiento contable',
+                              ),
+                              maxLines: 2,
+                              validator: (value) =>
+                                  value?.trim().isEmpty == true
+                                      ? 'La descripción es requerida'
+                                      : null,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Lines section
+                      Expanded(
+                        child: Column(
+                          children: [
+                            // Lines header (Hidden on Mobile)
+                            if (!isMobile)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surface,
+                                  border: Border(
+                                    bottom: BorderSide(
+                                        color: Theme.of(context).dividerColor),
                                   ),
                                 ),
-                                readOnly: true,
-                                validator: (value) => value?.isEmpty == true
-                                    ? 'La fecha es requerida'
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: DropdownButtonFormField<JournalEntryType>(
-                                decoration: const InputDecoration(
-                                  labelText: 'Tipo *',
-                                  border: OutlineInputBorder(),
+                                child: Row(
+                                  children: [
+                                    const Expanded(
+                                      flex: 3,
+                                      child: Text('Cuenta',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                    const Expanded(
+                                      flex: 3,
+                                      child: Text('Descripción',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                    const Expanded(
+                                      flex: 2,
+                                      child: Text('Debe',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                          textAlign: TextAlign.right),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Expanded(
+                                      flex: 2,
+                                      child: Text('Haber',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                          textAlign: TextAlign.right),
+                                    ),
+                                    const SizedBox(
+                                        width: 48), // Space for delete button
+                                  ],
                                 ),
-                                value: _selectedType,
-                                items: JournalEntryType.values
-                                    .map(
-                                      (type) =>
-                                          DropdownMenuItem<JournalEntryType>(
-                                        value: type,
-                                        child: Text(type.displayName),
+                              ),
+
+                            // Lines list
+                            Expanded(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _lines.length,
+                                itemBuilder: (context, index) {
+                                  if (isMobile) {
+                                    // Mobile Card View
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                    child: _lines[index]
+                                                        .buildAccountSelector()),
+                                                IconButton(
+                                                  icon: const Icon(Icons.delete,
+                                                      color: Colors.red),
+                                                  onPressed: _lines.length > 2
+                                                      ? () => _removeLine(index)
+                                                      : null,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            _lines[index]
+                                                .buildDescriptionField(),
+                                            const SizedBox(height: 12),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                    child: _lines[index]
+                                                        .buildDebitField()),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                    child: _lines[index]
+                                                        .buildCreditField()),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() => _selectedType = value);
+                                    );
+                                  } else {
+                                    // Desktop Row View
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color:
+                                                Theme.of(context).dividerColor),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 3,
+                                            child: _lines[index]
+                                                .buildAccountSelector(),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            flex: 3,
+                                            child: _lines[index]
+                                                .buildDescriptionField(),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            flex: 2,
+                                            child:
+                                                _lines[index].buildDebitField(),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            flex: 2,
+                                            child: _lines[index]
+                                                .buildCreditField(),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete,
+                                                color: Colors.red),
+                                            onPressed: _lines.length > 2
+                                                ? () => _removeLine(index)
+                                                : null,
+                                          ),
+                                        ],
+                                      ),
+                                    );
                                   }
                                 },
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _descriptionController,
-                          decoration: const InputDecoration(
-                            labelText: 'Descripción *',
-                            border: OutlineInputBorder(),
-                            hintText: 'Descripción del asiento contable',
-                          ),
-                          maxLines: 2,
-                          validator: (value) => value?.trim().isEmpty == true
-                              ? 'La descripción es requerida'
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Lines section
-                  Expanded(
-                    child: Column(
-                      children: [
-                        // Lines header
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            border: Border(
-                              bottom: BorderSide(
-                                  color: Theme.of(context).dividerColor),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                flex: 3,
-                                child: Text('Cuenta',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                              const Expanded(
-                                flex: 3,
-                                child: Text('Descripción',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                              const Expanded(
-                                flex: 2,
-                                child: Text('Debe',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
-                                    textAlign: TextAlign.right),
-                              ),
-                              const SizedBox(width: 16),
-                              const Expanded(
-                                flex: 2,
-                                child: Text('Haber',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
-                                    textAlign: TextAlign.right),
-                              ),
-                              const SizedBox(
-                                  width: 48), // Space for delete button
-                            ],
-                          ),
-                        ),
-
-                        // Lines list
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _lines.length,
-                            itemBuilder: (context, index) {
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                      color: Theme.of(context).dividerColor),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child:
-                                          _lines[index].buildAccountSelector(),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      flex: 3,
-                                      child:
-                                          _lines[index].buildDescriptionField(),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      flex: 2,
-                                      child: _lines[index].buildDebitField(),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      flex: 2,
-                                      child: _lines[index].buildCreditField(),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.red),
-                                      onPressed: _lines.length > 2
-                                          ? () => _removeLine(index)
-                                          : null,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Footer with totals and actions
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      border: Border(
-                        top: BorderSide(color: Theme.of(context).dividerColor),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        // Totals
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _isBalanced
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: _isBalanced ? Colors.green : Colors.red,
-                              width: 1,
-                            ),
+
+                      // Footer with totals and actions
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          border: Border(
+                            top: BorderSide(
+                                color: Theme.of(context).dividerColor),
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _isBalanced ? Icons.check_circle : Icons.error,
-                                color: _isBalanced ? Colors.green : Colors.red,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _isBalanced
-                                    ? 'Asiento balanceado'
-                                    : 'Asiento desbalanceado',
-                                style: TextStyle(
+                        ),
+                        child: Column(
+                          children: [
+                            // Totals
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: _isBalanced
+                                    ? Colors.green.withOpacity(0.1)
+                                    : Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
                                   color:
                                       _isBalanced ? Colors.green : Colors.red,
-                                  fontWeight: FontWeight.bold,
+                                  width: 1,
                                 ),
                               ),
-                              const Spacer(),
-                              Text(
-                                'Debe: ${_currencyFormat.format(_totalDebits)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 32),
-                              Text(
-                                'Haber: ${_currencyFormat.format(_totalCredits)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                              child: isMobile
+                                  ? Column(
+                                      // Mobile Totals
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              _isBalanced
+                                                  ? Icons.check_circle
+                                                  : Icons.error,
+                                              color: _isBalanced
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              _isBalanced
+                                                  ? 'Asiento balanceado'
+                                                  : 'Desbalanceado',
+                                              style: TextStyle(
+                                                color: _isBalanced
+                                                    ? Colors.green
+                                                    : Colors.red,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text('Debe:'),
+                                            Text(
+                                              _currencyFormat
+                                                  .format(_totalDebits),
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text('Haber:'),
+                                            Text(
+                                              _currencyFormat
+                                                  .format(_totalCredits),
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      // Desktop Totals
+                                      children: [
+                                        Icon(
+                                          _isBalanced
+                                              ? Icons.check_circle
+                                              : Icons.error,
+                                          color: _isBalanced
+                                              ? Colors.green
+                                              : Colors.red,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _isBalanced
+                                              ? 'Asiento balanceado'
+                                              : 'Asiento desbalanceado',
+                                          style: TextStyle(
+                                            color: _isBalanced
+                                                ? Colors.green
+                                                : Colors.red,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          'Debe: ${_currencyFormat.format(_totalDebits)}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(width: 32),
+                                        Text(
+                                          'Haber: ${_currencyFormat.format(_totalCredits)}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                            const SizedBox(height: 16),
 
-                        // Actions
-                        Row(
-                          children: [
-                            AppButton(
-                              text: 'Agregar Línea',
-                              onPressed: _addEmptyLine,
-                              icon: Icons.add,
-                              type: ButtonType.secondary,
-                            ),
-                            const Spacer(),
-                            AppButton(
-                              text: 'Cancelar',
-                              onPressed: () => context.pop(),
-                              type: ButtonType.outline,
-                            ),
-                            const SizedBox(width: 16),
-                            AppButton(
-                              text: _isSaving
-                                  ? 'Guardando...'
-                                  : 'Guardar Asiento',
-                              onPressed: _isSaving ? null : _saveJournalEntry,
-                              icon: _isSaving ? null : Icons.save,
-                            ),
+                            // Actions
+                            if (isMobile)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  AppButton(
+                                    text: 'Agregar Línea',
+                                    onPressed: _addEmptyLine,
+                                    icon: Icons.add,
+                                    type: ButtonType.secondary,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppButton(
+                                    text: _isSaving
+                                        ? 'Guardando...'
+                                        : 'Guardar Asiento',
+                                    onPressed:
+                                        _isSaving ? null : _saveJournalEntry,
+                                    icon: _isSaving ? null : Icons.save,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AppButton(
+                                    text: 'Cancelar',
+                                    onPressed: () => context.pop(),
+                                    type: ButtonType.outline,
+                                  ),
+                                ],
+                              )
+                            else
+                              Row(
+                                children: [
+                                  AppButton(
+                                    text: 'Agregar Línea',
+                                    onPressed: _addEmptyLine,
+                                    icon: Icons.add,
+                                    type: ButtonType.secondary,
+                                  ),
+                                  const Spacer(),
+                                  AppButton(
+                                    text: 'Cancelar',
+                                    onPressed: () => context.pop(),
+                                    type: ButtonType.outline,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  AppButton(
+                                    text: _isSaving
+                                        ? 'Guardando...'
+                                        : 'Guardar Asiento',
+                                    onPressed:
+                                        _isSaving ? null : _saveJournalEntry,
+                                    icon: _isSaving ? null : Icons.save,
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
     );
   }
