@@ -9,6 +9,7 @@ import '../../shared/utils/chilean_utils.dart';
 // import '../providers/cart_provider.dart'; // Unused
 import '../../shared/widgets/branded_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../shared/services/tenant_service.dart';
 
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
@@ -21,7 +22,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
-  
+
   // Pagination state
   int _currentPage = 1;
   int _itemsPerPage = 20; // Default: 20 items per page
@@ -32,6 +33,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   double _minPrice = 0;
   double _maxPrice = 1000000;
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
+  bool _isGridView = true; // Grid view vs list view
 
   @override
   void initState() {
@@ -40,32 +42,41 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   }
 
   Future<void> _loadProducts() async {
+    // Check if we're in edit mode (admin editing website)
+    final editProvider = context.read<WebsiteEditModeProvider>();
+
     // Get tenant from provider (detected from subdomain)
     final tenantProvider = context.read<PublicStoreTenantProvider>();
-    final tenantId = tenantProvider.tenantId;
+    String? tenantId = tenantProvider.tenantId;
+
+    // FALLBACK: In editor context, subdomain detection doesn't work.
+    // Use the authenticated user's tenant instead.
+    if (tenantId == null && editProvider.isInEditorContext) {
+      final tenantService = context.read<TenantService>();
+      tenantId = tenantService.currentTenantId;
+      debugPrint('[ProductCatalogPage] Using authenticated tenant: $tenantId');
+    }
 
     if (tenantId == null) {
+      debugPrint('[ProductCatalogPage] No tenant ID available');
       setState(() => _isLoading = false);
       return;
     }
 
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
-    
-    // Check if we're in edit mode (admin editing website) - show all products including out of stock
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
-    
+
     setState(() => _isLoading = true);
 
     try {
       // Load ALL products at once (no pagination) so search works across entire catalog
       var products = await publicInventoryService.getProductsForTenant(
         tenantId: tenantId,
-        onlyInStock: !isEditMode, // Filter by stock unless in edit mode
+        onlyInStock: !editProvider
+            .isInEditorContext, // Show all products in edit/preview mode
         // No limit - fetch all products
       );
-      
+
       _allProducts = products;
       debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
 
@@ -93,7 +104,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     setState(() {
       // Reset to first page when filters change
       _currentPage = 1;
-      
+
       _filteredProducts = _allProducts.where((product) {
         // Search filter
         if (_searchQuery.isNotEmpty) {
@@ -132,6 +143,139 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     });
   }
 
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Filtros',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Filter content
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(16),
+                child: _buildFilters(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSortSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Ordenar por',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Sort options
+            _buildSortOption(context, 'name', 'Nombre'),
+            _buildSortOption(context, 'price_asc', 'Precio, menor a mayor'),
+            _buildSortOption(context, 'price_desc', 'Precio, mayor a menor'),
+            _buildSortOption(context, 'newest', 'Más recientes'),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOption(BuildContext context, String value, String label) {
+    final isSelected = _sortBy == value;
+    return ListTile(
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      trailing:
+          isSelected ? const Icon(Icons.check, color: Colors.black) : null,
+      onTap: () {
+        setState(() => _sortBy = value);
+        _applyFilters();
+        Navigator.pop(context);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -143,32 +287,170 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1400),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Sidebar Filters
-                SizedBox(
-                  width: 260,
-                  child: _buildFilters(),
-                ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Mobile: stacked layout, hide sidebar
+              final isMobile = constraints.maxWidth < 700;
 
-                const SizedBox(width: 40),
-
-                // Main Content
-                Expanded(
+              if (isMobile) {
+                return SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildHeader(),
-                      const SizedBox(height: 32),
-                      _buildProductGrid(),
+                      // Header section - clean white
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 24,
+                                  color: Colors.black,
+                                  margin: const EdgeInsets.only(right: 12),
+                                ),
+                                const Text(
+                                  'PRODUCTOS',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${_filteredProducts.length} productos',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Controls bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            bottom: BorderSide(color: Colors.grey.shade200),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Filter button
+                            InkWell(
+                              onTap: () => _showFilterSheet(context),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.tune,
+                                      size: 20, color: Colors.grey.shade700),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Filtro',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            // Sort button
+                            InkWell(
+                              onTap: () => _showSortSheet(context),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Ordenar por',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.keyboard_arrow_down,
+                                      size: 20, color: Colors.grey.shade700),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            // View toggles
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.grid_view,
+                                      size: 20,
+                                      color: _isGridView
+                                          ? Colors.black
+                                          : Colors.grey.shade400),
+                                  onPressed: () =>
+                                      setState(() => _isGridView = true),
+                                  constraints: const BoxConstraints(),
+                                  padding: const EdgeInsets.all(8),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.view_list,
+                                      size: 20,
+                                      color: !_isGridView
+                                          ? Colors.black
+                                          : Colors.grey.shade400),
+                                  onPressed: () =>
+                                      setState(() => _isGridView = false),
+                                  constraints: const BoxConstraints(),
+                                  padding: const EdgeInsets.all(8),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Product grid
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: _buildProductGrid(),
+                      ),
                     ],
                   ),
+                );
+              }
+
+              // Desktop: sidebar layout
+              return Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sidebar Filters
+                    SizedBox(
+                      width: 260,
+                      child: _buildFilters(),
+                    ),
+                    const SizedBox(width: 40),
+                    // Main Content
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 32),
+                          _buildProductGrid(),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -194,14 +476,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
           decoration: InputDecoration(
             hintText: 'Buscar productos',
             hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-            prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+            prefixIcon:
+                Icon(Icons.search, color: Colors.grey.shade400, size: 20),
             filled: true,
             fillColor: Colors.grey.shade100,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(0),
               borderSide: BorderSide.none,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
           style: const TextStyle(fontSize: 14),
           onChanged: (value) {
@@ -237,7 +521,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
         categoriesMap[p.categoryId!] = p.categoryName ?? 'Sin categoría';
       }
     }
-    
+
     // Sort categories alphabetically by name
     final sortedCategories = categoriesMap.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
@@ -246,7 +530,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
       children: [
         _buildCategoryOption(null, 'Todas', _allProducts.length),
         ...sortedCategories.map((entry) {
-          final count = _allProducts.where((p) => p.categoryId == entry.key).length;
+          final count =
+              _allProducts.where((p) => p.categoryId == entry.key).length;
           return _buildCategoryOption(entry.key, entry.value, count);
         }),
       ],
@@ -294,119 +579,127 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
 
   Widget _buildHeader() {
     final totalProducts = _filteredProducts.length;
-    final totalPages = (totalProducts / _itemsPerPage).ceil();
     final startIndex = ((_currentPage - 1) * _itemsPerPage) + 1;
     final endIndex = (_currentPage * _itemsPerPage).clamp(0, totalProducts);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Title section
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              width: 4,
+              height: 24,
+              color: Colors.black,
+              margin: const EdgeInsets.only(right: 12),
+            ),
+            const Text(
+              'PRODUCTOS',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          totalProducts > 0
+              ? 'Mostrando $startIndex - $endIndex de $totalProducts productos'
+              : '0 productos encontrados',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Controls - use Wrap to prevent overflow on mobile
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            // Items per page selector
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 24,
-                      color: Colors.black,
-                      margin: const EdgeInsets.only(right: 12),
-                    ),
-                    const Text(
-                      'PRODUCTOS',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
                 Text(
-                  totalProducts > 0 
-                      ? 'Mostrando $startIndex - $endIndex de $totalProducts productos'
-                      : '0 productos encontrados',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
+                  'Mostrar:',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _itemsPerPage,
+                      isDense: true,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.black87),
+                      items: _itemsPerPageOptions.map((count) {
+                        return DropdownMenuItem(
+                          value: count,
+                          child: Text('$count por página'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _itemsPerPage = value;
+                            _currentPage = 1;
+                          });
+                        }
+                      },
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        // Controls row: Items per page, Sort, View toggle
-        Row(
-          children: [
-            // Items per page selector
-            Text(
-              'Mostrar:',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _itemsPerPage,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                  items: _itemsPerPageOptions.map((count) {
-                    return DropdownMenuItem(
-                      value: count,
-                      child: Text('$count por página'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _itemsPerPage = value;
-                        _currentPage = 1; // Reset to first page
-                      });
-                    }
-                  },
-                ),
-              ),
-            ),
-            const Spacer(),
             // Sort Dropdown
-            Text(
-              'Ordenar por:',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _sortBy,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                  items: const [
-                    DropdownMenuItem(value: 'name', child: Text('Nombre')),
-                    DropdownMenuItem(value: 'price_asc', child: Text('Precio, menor a mayor')),
-                    DropdownMenuItem(value: 'price_desc', child: Text('Precio, mayor a menor')),
-                    DropdownMenuItem(value: 'newest', child: Text('Más recientes')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _sortBy = value);
-                      _applyFilters();
-                    }
-                  },
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Ordenar por:',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _sortBy,
+                      isDense: true,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.black87),
+                      items: const [
+                        DropdownMenuItem(value: 'name', child: Text('Nombre')),
+                        DropdownMenuItem(
+                            value: 'price_asc', child: Text('Precio ↑')),
+                        DropdownMenuItem(
+                            value: 'price_desc', child: Text('Precio ↓')),
+                        DropdownMenuItem(
+                            value: 'newest', child: Text('Recientes')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _sortBy = value);
+                          _applyFilters();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -456,29 +749,62 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
     final endIndex = (startIndex + _itemsPerPage).clamp(0, totalProducts);
     final paginatedProducts = _filteredProducts.sublist(startIndex, endIndex);
 
-    return Column(
-      children: [
-        // Product Grid
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 0.72,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
-          ),
-          itemCount: paginatedProducts.length,
-          itemBuilder: (context, index) {
-            return _CatalogProductCard(product: paginatedProducts[index]);
-          },
-        ),
-        
-        // Pagination Controls
-        if (totalPages > 1) ...[          const SizedBox(height: 32),
-          _buildPaginationControls(totalPages),
-        ],
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive grid settings
+        final width = constraints.maxWidth;
+        int crossAxisCount;
+        double childAspectRatio;
+        double spacing;
+
+        if (width < 400) {
+          // Mobile small: 2 columns, taller cards
+          crossAxisCount = 2;
+          childAspectRatio = 0.58;
+          spacing = 12;
+        } else if (width < 600) {
+          // Mobile/tablet: 2 columns
+          crossAxisCount = 2;
+          childAspectRatio = 0.65;
+          spacing = 16;
+        } else if (width < 900) {
+          // Tablet: 3 columns
+          crossAxisCount = 3;
+          childAspectRatio = 0.68;
+          spacing = 20;
+        } else {
+          // Desktop: 3-4 columns
+          crossAxisCount = 3;
+          childAspectRatio = 0.72;
+          spacing = 20;
+        }
+
+        return Column(
+          children: [
+            // Product Grid
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: childAspectRatio,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+              ),
+              itemCount: paginatedProducts.length,
+              itemBuilder: (context, index) {
+                return _CatalogProductCard(product: paginatedProducts[index]);
+              },
+            ),
+
+            // Pagination Controls
+            if (totalPages > 1) ...[
+              const SizedBox(height: 32),
+              _buildPaginationControls(totalPages),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -499,22 +825,24 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
           )
         else
           const SizedBox(width: 100),
-        
+
         const SizedBox(width: 16),
-        
+
         // Page numbers
         ..._buildPageNumbers(totalPages),
-        
+
         const SizedBox(width: 16),
-        
+
         // Next button
         if (_currentPage < totalPages)
           TextButton(
             onPressed: () => setState(() => _currentPage++),
             child: Row(
               children: [
-                Text('Siguiente', style: TextStyle(color: Colors.grey.shade700)),
-                Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade700),
+                Text('Siguiente',
+                    style: TextStyle(color: Colors.grey.shade700)),
+                Icon(Icons.chevron_right,
+                    size: 20, color: Colors.grey.shade700),
               ],
             ),
           )
@@ -526,40 +854,40 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
 
   List<Widget> _buildPageNumbers(int totalPages) {
     final List<Widget> pages = [];
-    
+
     // Show first page, last page, current page, and neighbors
     // Pattern: 1 2 3 ... 28 29 30 (when on page 1-3)
     // Pattern: 1 ... 5 6 7 ... 30 (when on page 6)
     // Pattern: 1 ... 28 29 30 (when on page 28-30)
-    
+
     final Set<int> pagesToShow = {};
-    
+
     // Always show first and last page
     pagesToShow.add(1);
     pagesToShow.add(totalPages);
-    
+
     // Show current page and neighbors
     for (int i = _currentPage - 1; i <= _currentPage + 1; i++) {
       if (i >= 1 && i <= totalPages) {
         pagesToShow.add(i);
       }
     }
-    
+
     // Show pages 2, 3 if we're near the start
     if (_currentPage <= 3) {
       pagesToShow.addAll([2, 3].where((p) => p <= totalPages));
     }
-    
+
     // Show last few pages if we're near the end
     if (_currentPage >= totalPages - 2) {
       pagesToShow.addAll([totalPages - 2, totalPages - 1].where((p) => p >= 1));
     }
-    
+
     final sortedPages = pagesToShow.toList()..sort();
-    
+
     for (int i = 0; i < sortedPages.length; i++) {
       final page = sortedPages[i];
-      
+
       // Add ellipsis if there's a gap
       if (i > 0 && page - sortedPages[i - 1] > 1) {
         pages.add(
@@ -569,10 +897,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
           ),
         );
       }
-      
+
       pages.add(_buildPageButton(page));
     }
-    
+
     return pages;
   }
 
@@ -607,9 +935,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
 // Premium product card for catalog page
 class _CatalogProductCard extends StatefulWidget {
   final Product product;
-  
+
   const _CatalogProductCard({required this.product});
-  
+
   @override
   State<_CatalogProductCard> createState() => _CatalogProductCardState();
 }
@@ -674,7 +1002,8 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                         top: 8,
                         left: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           color: Colors.black87,
                           child: const Text(
                             'AGOTADO',
@@ -695,7 +1024,8 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                         right: 0,
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                             color: Colors.black,
                             child: const Text(
                               'VER PRODUCTO',

@@ -99,7 +99,7 @@ import '../../public_store/pages/checkout_page.dart';
 import '../../public_store/pages/order_confirmation_page.dart';
 import '../../public_store/pages/contact_page.dart';
 import '../../public_store/pages/customer_auth_page.dart';
-import '../../public_store/pages/customer_account_page.dart';
+
 import '../../public_store/pages/customer_profile_page.dart';
 import '../../public_store/pages/customer_addresses_page.dart';
 import '../../public_store/pages/customer_orders_page.dart';
@@ -109,6 +109,7 @@ import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/pages/static_policy_page.dart';
 import '../../public_store/pages/customer_chat_list_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
+import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../modules/messaging/pages/employee_chat_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
@@ -556,7 +557,7 @@ class AppRouter {
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerAccountPage()),
+            const PublicStoreWrapper(child: CustomerDashboardPage()),
           ),
         ),
         GoRoute(
@@ -758,7 +759,7 @@ class AppRouter {
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerAccountPage()),
+            const PublicStoreWrapper(child: CustomerDashboardPage()),
           ),
         ),
 

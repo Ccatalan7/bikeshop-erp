@@ -8,10 +8,12 @@ import '../theme/public_store_theme.dart';
 /// Shows login button when not authenticated, or account menu when logged in
 class CustomerAccountMenu extends StatelessWidget {
   final Color? textColor;
-  
+  final bool isMobile;
+
   const CustomerAccountMenu({
     super.key,
     this.textColor,
+    this.isMobile = false,
   });
 
   @override
@@ -27,6 +29,7 @@ class CustomerAccountMenu extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: PublicStoreTheme.primaryBlue,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          minimumSize: isMobile ? const Size(double.infinity, 48) : null,
         ),
       );
     }
@@ -34,6 +37,42 @@ class CustomerAccountMenu extends StatelessWidget {
     final profile = accountService.customerProfile;
     final userName = profile?['name'] as String? ?? 'Usuario';
     final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+
+    if (isMobile) {
+      return Column(
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
+              child: Text(
+                userInitial,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            title: Text(userName,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('Mi Cuenta'),
+          ),
+          _buildMobileMenuItem(context, Icons.dashboard_outlined,
+              'Panel de cuenta', '/tienda/cuenta'),
+          _buildMobileMenuItem(context, Icons.shopping_bag_outlined,
+              'Mis pedidos', '/tienda/cuenta/pedidos'),
+          _buildMobileMenuItem(context, Icons.location_on_outlined,
+              'Mis direcciones', '/tienda/cuenta/direcciones'),
+          _buildMobileMenuItem(context, Icons.person_outline, 'Mi perfil',
+              '/tienda/cuenta/perfil'),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Cerrar sesión',
+                style: TextStyle(color: Colors.red)),
+            onTap: () async {
+              await accountService.signOut();
+              if (context.mounted) context.go('/');
+            },
+          ),
+        ],
+      );
+    }
 
     return PopupMenuButton<String>(
       offset: const Offset(0, 50),
@@ -43,7 +82,7 @@ class CustomerAccountMenu extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: textColor?.withValues(alpha: 0.1) ?? 
+            backgroundColor: textColor?.withValues(alpha: 0.1) ??
                 PublicStoreTheme.primaryBlue.withOpacity(0.1),
             child: Text(
               userInitial,
@@ -152,6 +191,15 @@ class CustomerAccountMenu extends StatelessWidget {
             break;
         }
       },
+    );
+  }
+
+  Widget _buildMobileMenuItem(
+      BuildContext context, IconData icon, String label, String path) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      onTap: () => context.go(path),
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +21,9 @@ import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../shared/services/tenant_service.dart';
+import '../../shared/utils/file_download_web.dart'
+    if (dart.library.io) '../../shared/utils/file_download_stub.dart';
+import 'customer_chat_widget.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -63,6 +68,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const String _actionPageOpenNewTab = 'page_open_new_tab';
   static const String _actionPageManagePages = 'page_manage_pages';
 
+  // Screenshot capture state
+  bool _isCapturingScreenshot = false;
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +78,67 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // No need to load here - just watch the service
   }
 
-  _DevicePreviewMode _devicePreviewMode = _DevicePreviewMode.desktop;
+  /// Capture the full page as a screenshot
+  Future<void> _captureFullPageScreenshot(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) async {
+    // Show loading state
+    setState(() => _isCapturingScreenshot = true);
+
+    try {
+      // Wait for the layout to rebuild without scroll constraints
+      await Future.delayed(const Duration(milliseconds: 100));
+      // Wait for another frame to ensure painting is complete
+      await WidgetsBinding.instance.endOfFrame;
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      final boundary = editProvider.screenshotKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
+
+      if (boundary == null) {
+        throw Exception('No se encontró el área de captura (RepaintBoundary)');
+      }
+
+      // Capture image at 2x resolution for crisp output
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'website-preview-$timestamp.png';
+
+      await downloadFile(
+        bytes: pngBytes,
+        fileName: fileName,
+        mimeType: 'image/png',
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Captura descargada: $fileName'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Screenshot error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al capturar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // Restore normal scroll view
+      if (mounted) {
+        setState(() => _isCapturingScreenshot = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -187,6 +255,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final isEditMode = editProvider.isEditMode;
     final isPreviewMode = editProvider.isPreviewMode;
     final isInEditorContext = editProvider.isInEditorContext;
+    final devicePreviewMode = editProvider.devicePreviewMode;
 
     // If the site is unpublished, show a holding page to visitors.
     // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
@@ -212,6 +281,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       primaryColor: primaryColor,
       accentColor: accentColor,
       isEditMode: isEditMode,
+      logoUrl: logoUrl, // Pass logoUrl
     );
 
     // Build header widget builder for special layouts
@@ -258,29 +328,36 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ? const _NoDragScrollBehavior()
             : const MaterialScrollBehavior(),
         child: SingleChildScrollView(
-          child: Stack(
-            children: [
-              // Content starts from top (behind header)
-              Column(
-                children: [
-                  widget.child,
-                  footerWidget,
-                ],
-              ),
-              // Header floats on top (positioned at top, scrolls with content)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: buildHeaderWidget(
-                  isOverlay: true,
-                  overrideBgColor: Colors.transparent,
-                  overrideColorMode:
-                      headerColorMode, // Use configured color mode (dark = white text)
-                  overrideShadow: false,
+          clipBehavior: _isCapturingScreenshot ? Clip.none : Clip.hardEdge,
+          physics: _isCapturingScreenshot
+              ? const NeverScrollableScrollPhysics()
+              : null,
+          child: RepaintBoundary(
+            key: editProvider.screenshotKey,
+            child: Stack(
+              children: [
+                // Content starts from top (behind header)
+                Column(
+                  children: [
+                    widget.child,
+                    footerWidget,
+                  ],
                 ),
-              ),
-            ],
+                // Header floats on top (positioned at top, scrolls with content)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: buildHeaderWidget(
+                    isOverlay: true,
+                    overrideBgColor: Colors.transparent,
+                    overrideColorMode:
+                        headerColorMode, // Use configured color mode (dark = white text)
+                    overrideShadow: false,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -361,7 +438,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In full edit mode, use Row layout with side panel
     if (isEditMode) {
-      final editorViewport = _buildEditorViewport(context, pageContent);
+      final editorViewport =
+          _buildEditorViewport(context, pageContent, devicePreviewMode);
       return Scaffold(
         backgroundColor: backgroundColor,
         body: Column(
@@ -399,7 +477,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In preview mode, show top bar with "Editar" button
     if (isPreviewMode) {
-      final editorViewport = _buildEditorViewport(context, pageContent);
+      final editorViewport =
+          _buildEditorViewport(context, pageContent, devicePreviewMode);
       return Scaffold(
         backgroundColor: backgroundColor,
         body: Column(
@@ -420,7 +499,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       body: Stack(
         children: [
           pageContent,
-          if (hasWhatsApp)
+          // Internal Chat System (replaces WhatsApp for richer interaction)
+          const CustomerChatWidget(),
+          if (hasWhatsApp &&
+              1 ==
+                  0) // Disable WhatsApp button in favor of new chat (or make it configurable)
             Positioned(
               bottom: 24,
               right: 24,
@@ -694,13 +777,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           const SizedBox(width: 16),
 
           // Mobile preview button
-          PopupMenuButton<_DevicePreviewMode>(
+          PopupMenuButton<DevicePreviewMode>(
             tooltip: 'Vista (dispositivo)',
-            initialValue: _devicePreviewMode,
-            onSelected: (mode) => setState(() => _devicePreviewMode = mode),
+            initialValue: editProvider.devicePreviewMode,
+            onSelected: (mode) => editProvider.setDevicePreviewMode(mode),
             itemBuilder: (context) => const [
               PopupMenuItem(
-                value: _DevicePreviewMode.desktop,
+                value: DevicePreviewMode.desktop,
                 child: ListTile(
                   dense: true,
                   leading: Icon(Icons.desktop_windows_outlined),
@@ -708,7 +791,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 ),
               ),
               PopupMenuItem(
-                value: _DevicePreviewMode.tablet,
+                value: DevicePreviewMode.tablet,
                 child: ListTile(
                   dense: true,
                   leading: Icon(Icons.tablet_mac_outlined),
@@ -716,7 +799,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 ),
               ),
               PopupMenuItem(
-                value: _DevicePreviewMode.mobile,
+                value: DevicePreviewMode.mobile,
                 child: ListTile(
                   dense: true,
                   leading: Icon(Icons.phone_android_outlined),
@@ -727,15 +810,37 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Icon(
-                _devicePreviewMode == _DevicePreviewMode.desktop
+                editProvider.devicePreviewMode == DevicePreviewMode.desktop
                     ? Icons.desktop_windows
-                    : _devicePreviewMode == _DevicePreviewMode.tablet
+                    : editProvider.devicePreviewMode == DevicePreviewMode.tablet
                         ? Icons.tablet_mac
                         : Icons.phone_android,
                 color: Colors.white70,
                 size: 20,
               ),
             ),
+          ),
+          const SizedBox(width: 4),
+
+          // Screenshot button
+          IconButton(
+            onPressed: _isCapturingScreenshot
+                ? null
+                : () => _captureFullPageScreenshot(context, editProvider),
+            icon: _isCapturingScreenshot
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white70,
+                    ),
+                  )
+                : const Icon(Icons.camera_alt_outlined,
+                    color: Colors.white70, size: 20),
+            tooltip: 'Capturar página',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
           const SizedBox(width: 8),
 
@@ -1351,13 +1456,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildEditorViewport(BuildContext context, Widget child) {
+  Widget _buildEditorViewport(
+      BuildContext context, Widget child, DevicePreviewMode mode) {
     // Desktop mode is the default "no constraint" viewport.
-    if (_devicePreviewMode == _DevicePreviewMode.desktop) return child;
+    if (mode == DevicePreviewMode.desktop) return child;
 
     final screenSize = MediaQuery.sizeOf(context);
-    final targetWidth =
-        _devicePreviewMode == _DevicePreviewMode.tablet ? 820.0 : 390.0;
+    final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
     final targetHeight = screenSize.height;
 
     return Container(
@@ -1709,266 +1814,299 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }) {
     final cart = context.watch<CartProvider>();
 
-    // Determine colors based on mode
-    final isDarkMode = headerColorMode == 'dark' || isOverlay;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final iconColor = isDarkMode ? Colors.white : primaryColor;
-    final bgColor = isOverlay ? Colors.transparent : headerBgColor;
+    return LayoutBuilder(builder: (context, constraints) {
+      // Determine colors based on mode
+      final isDarkMode = headerColorMode == 'dark' || isOverlay;
+      final textColor = isDarkMode ? Colors.white : Colors.black87;
+      final iconColor = isDarkMode ? Colors.white : primaryColor;
+      final bgColor = isOverlay ? Colors.transparent : headerBgColor;
 
-    final headerContent = Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        boxShadow: headerShadow && !isOverlay
-            ? [
-                BoxShadow(
-                  color: PublicStoreTheme.shadow,
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        children: [
-          // Top banner - customizable (only show if enabled and not in overlay mode)
-          if (showTopBanner && !isOverlay)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: primaryColor,
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 24,
-                runSpacing: 8,
-                children: [
-                  if (topBannerText.isNotEmpty)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.local_shipping_outlined,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          topBannerText,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  if (contactPhone.isNotEmpty)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.support_agent_outlined,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Contáctanos: $contactPhone',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  if (contactEmail.isNotEmpty)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.mail_outline,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          contactEmail,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          // Main header with logo
-          Container(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Row(
-              children: [
-                // Logo - uses URL if set, otherwise falls back to asset, then text
-                InkWell(
-                  onTap: () => context.go('/tienda'),
-                  child: SizedBox(
-                    height: 48,
-                    child: logoUrl.isNotEmpty
-                        ? Image.network(
-                            logoUrl,
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
-                            color: isDarkMode ? Colors.white : null,
-                            colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                            errorBuilder: (context, error, stackTrace) =>
-                                _buildTextLogo(context, storeName, textColor),
-                          )
-                        : Image.asset(
-                            'assets/images/vinabike_logo.png',
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
-                            color: isDarkMode ? Colors.white : null,
-                            colorBlendMode: isDarkMode ? BlendMode.srcIn : null,
-                            errorBuilder: (context, error, stackTrace) =>
-                                _buildTextLogo(context, storeName, textColor),
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: Row(
-                    children: navLinks.isEmpty
-                        ? [
-                            _buildNavLink(
-                                context, 'Inicio', '/tienda', textColor),
-                            const SizedBox(width: 24),
-                            _buildNavLink(context, 'Productos',
-                                '/tienda/productos', textColor),
-                            const SizedBox(width: 24),
-                            _buildInfoDropdown(context, textColor),
-                          ]
-                        : [
-                            ...navLinks.map((link) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 24),
-                                child: _buildNavLink(
-                                    context,
-                                    link['label'] ?? '',
-                                    link['url'] ?? '/',
-                                    textColor),
-                              );
-                            }),
-                            _buildInfoDropdown(context, textColor),
-                          ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.search),
-                      color: iconColor,
-                      onPressed: () => context.go('/tienda/productos'),
-                      tooltip: 'Buscar',
-                    ),
-                    const SizedBox(width: 8),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.shopping_cart_outlined),
-                          color: iconColor,
-                          onPressed: () => context.go('/tienda/carrito'),
-                          tooltip: 'Carrito',
-                        ),
-                        if (cart.itemCount > 0)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: IgnorePointer(
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: accentColor,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                    minWidth: 18, minHeight: 18),
-                                child: Text(
-                                  '${cart.itemCount}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-                    CustomerAccountMenu(textColor: textColor),
+      final screenWidth = constraints.maxWidth;
+      final useMobileGradient = screenWidth < 900 && isOverlay;
+
+      final headerContent = Container(
+        decoration: BoxDecoration(
+          color: useMobileGradient ? null : bgColor,
+          gradient: useMobileGradient
+              ? LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.transparent,
                   ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // Wrap with edit mode indicator if in edit mode
-    if (isEditMode) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          // Select header for editing in the "Editar" tab
-          final editProvider = context.read<WebsiteEditModeProvider>();
-          editProvider.selectBlock('header');
-        },
-        child: Stack(
-          children: [
-            headerContent,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.blue.withOpacity(0.5),
-                      width: 2,
-                    ),
+                )
+              : null,
+          boxShadow: headerShadow && !isOverlay
+              ? [
+                  BoxShadow(
+                    color: PublicStoreTheme.shadow,
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      margin: const EdgeInsets.all(4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Row(
+                ]
+              : null,
+        ),
+        child: Column(
+          children: [
+            // Top banner - customizable (only show if enabled and not in overlay mode)
+            if (showTopBanner && !isOverlay)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                color: primaryColor,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 24,
+                  runSpacing: 8,
+                  children: [
+                    if (topBannerText.isNotEmpty)
+                      Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.edit, color: Colors.white, size: 14),
-                          SizedBox(width: 4),
+                          const Icon(Icons.local_shipping_outlined,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
                           Text(
-                            'Header',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            topBannerText,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                           ),
                         ],
                       ),
+                    if (contactPhone.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.support_agent_outlined,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Contáctanos: $contactPhone',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                          ),
+                        ],
+                      ),
+                    if (contactEmail.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.mail_outline,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            contactEmail,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            // Main header with logo
+            Container(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
+                children: [
+                  // Logo - uses URL if set, otherwise falls back to asset, then text
+                  InkWell(
+                    onTap: () => context.go('/tienda'),
+                    child: SizedBox(
+                      height: 48,
+                      child: logoUrl.isNotEmpty
+                          ? Image.network(
+                              logoUrl,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                              color: isDarkMode ? Colors.white : null,
+                              colorBlendMode:
+                                  isDarkMode ? BlendMode.srcIn : null,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildTextLogo(context, storeName, textColor),
+                            )
+                          : Image.asset(
+                              'assets/images/vinabike_logo.png',
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                              color: isDarkMode ? Colors.white : null,
+                              colorBlendMode:
+                                  isDarkMode ? BlendMode.srcIn : null,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildTextLogo(context, storeName, textColor),
+                            ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 24),
+                  // Only show nav links on desktop, use Spacer on mobile
+                  if (screenWidth >= 900)
+                    Expanded(
+                      child: Row(
+                        children: navLinks.isEmpty
+                            ? [
+                                _buildNavLink(
+                                    context, 'Inicio', '/tienda', textColor),
+                                const SizedBox(width: 24),
+                                _buildNavLink(context, 'Productos',
+                                    '/tienda/productos', textColor),
+                                const SizedBox(width: 24),
+                                _buildInfoDropdown(context, textColor),
+                              ]
+                            : [
+                                ...navLinks.map((link) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 24),
+                                    child: _buildNavLink(
+                                        context,
+                                        link['label'] ?? '',
+                                        link['url'] ?? '/',
+                                        textColor),
+                                  );
+                                }),
+                                _buildInfoDropdown(context, textColor),
+                              ],
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.search),
+                        color: iconColor,
+                        onPressed: () => context.go('/tienda/productos'),
+                        tooltip: 'Buscar',
+                      ),
+                      const SizedBox(width: 8),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.shopping_cart_outlined),
+                            color: iconColor,
+                            onPressed: () => context.go('/tienda/carrito'),
+                            tooltip: 'Carrito',
+                          ),
+                          if (cart.itemCount > 0)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: IgnorePointer(
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: accentColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 18, minHeight: 18),
+                                  child: Text(
+                                    '${cart.itemCount}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (screenWidth >= 900) ...[
+                        const SizedBox(width: 16),
+                        CustomerAccountMenu(textColor: textColor),
+                      ] else ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.menu),
+                          color: iconColor,
+                          onPressed: () => _showMobileMenu(context, navLinks),
+                          tooltip: 'Menú',
+                        ),
+                      ]
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
         ),
       );
-    }
 
-    return headerContent;
+      // Wrap with edit mode indicator if in edit mode
+      if (isEditMode) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            // Select header for editing in the "Editar" tab
+            final editProvider = context.read<WebsiteEditModeProvider>();
+            editProvider.selectBlock('header');
+          },
+          child: Stack(
+            children: [
+              headerContent,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.blue.withOpacity(0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        margin: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.edit, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Header',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return headerContent;
+    });
   }
 
   /// Builds a layout where the header stays fixed at the top while scrolling
@@ -2013,6 +2151,446 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
+  Widget _buildMobileFooter({
+    required BuildContext context,
+    required String storeName,
+    required String storeDescription,
+    required String contactEmail,
+    required String contactPhone,
+    required String contactAddress,
+    required String? facebookUrl,
+    required String? instagramUrl,
+    required String? twitterUrl,
+    required String? youtubeUrl,
+    required Color primaryColor,
+    required Color accentColor,
+    required String logoUrl,
+    bool isEditMode = false,
+    bool isPreviewMode = false, // Added for preview visibility
+  }) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final dividerColor = Colors.white24;
+    // final iconColor = primaryColor; // Unused now, switching to white
+
+    return Container(
+      color: PublicStoreTheme.textPrimary,
+      padding:
+          const EdgeInsets.fromLTRB(16, 32, 16, 24), // Reduced bottom padding
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Store Logo
+          Center(
+            child: SizedBox(
+              height: 50,
+              child: logoUrl.isNotEmpty
+                  ? Stack(
+                      children: [
+                        // Outline layers (simulated stroke)
+                        for (final offset in const [
+                          Offset(-1, -1),
+                          Offset(1, -1),
+                          Offset(-1, 1),
+                          Offset(1, 1),
+                        ])
+                          Transform.translate(
+                            offset: offset,
+                            child: Image.network(
+                              logoUrl,
+                              fit: BoxFit.contain,
+                              color: Colors.white,
+                              colorBlendMode: BlendMode.srcIn,
+                            ),
+                          ),
+                        // Main Image
+                        Image.network(
+                          logoUrl,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          errorBuilder: (context, error, stackTrace) => Text(
+                            storeName,
+                            style: textTheme.headlineSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Image.asset(
+                      'assets/images/vinabike_logo.png',
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                      errorBuilder: (context, error, stackTrace) => Text(
+                        storeName.isNotEmpty ? storeName : 'VINABIKE',
+                        style: textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Collapsible: Links
+          Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: Text(
+                'ENLACES RÁPIDOS',
+                style: textTheme.titleSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              iconColor: Colors.white,
+              collapsedIconColor: Colors.white,
+              childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
+              children: [
+                _buildFooterLinkMobile(context, 'Inicio', '/tienda'),
+                _buildFooterLinkMobile(
+                    context, 'Productos', '/tienda/productos'),
+                _buildFooterLinkMobile(
+                    context, 'Servicios', '/tienda/servicios'),
+                _buildFooterLinkMobile(context, 'Contacto', '/tienda/contacto'),
+              ],
+            ),
+          ),
+          Divider(color: dividerColor),
+
+          // Collapsible: Information
+          Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: Text(
+                'INFORMACIÓN',
+                style: textTheme.titleSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              iconColor: Colors.white,
+              collapsedIconColor: Colors.white,
+              childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
+              children: [
+                _buildFooterLinkMobile(context, 'Sobre Nosotros', '/nosotros'),
+                _buildFooterLinkMobile(
+                    context, 'Términos y Condiciones', '/terminos'),
+                _buildFooterLinkMobile(
+                    context, 'Política de Devolución', '/devoluciones'),
+              ],
+            ),
+          ),
+          Divider(color: dividerColor),
+
+          // Collapsible: Contact
+          Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: Text(
+                'CONTACTO',
+                style: textTheme.titleSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              iconColor: Colors.white,
+              collapsedIconColor: Colors.white,
+              childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
+              children: [
+                if (contactAddress.isNotEmpty)
+                  _buildFooterContactItem(context, Icons.location_on_outlined,
+                      contactAddress, null),
+                if (contactPhone.isNotEmpty)
+                  _buildFooterContactItem(
+                      context,
+                      Icons.phone_outlined,
+                      contactPhone,
+                      () => _launchUri(Uri(scheme: 'tel', path: contactPhone))),
+                if (contactEmail.isNotEmpty)
+                  _buildFooterContactItem(
+                      context,
+                      Icons.email_outlined,
+                      contactEmail,
+                      () => _launchUri(
+                          Uri(scheme: 'mailto', path: contactEmail))),
+              ],
+            ),
+          ),
+          Divider(color: dividerColor),
+
+          const SizedBox(height: 32),
+
+          const SizedBox(height: 32),
+
+          // Social Icons
+          Text(
+            'SÍGUENOS',
+            style: textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (facebookUrl != null || isEditMode || isPreviewMode) ...[
+                _buildSocialIconMobile(
+                  Icons.facebook,
+                  facebookUrl,
+                  isEditMode, // Only edit in edit mode
+                  settingKey: 'facebook',
+                  label: 'Facebook',
+                ),
+                const SizedBox(width: 16),
+              ],
+              if (instagramUrl != null || isEditMode || isPreviewMode) ...[
+                _buildSocialIconMobile(
+                  Icons.camera_alt,
+                  instagramUrl,
+                  isEditMode, // Only edit in edit mode
+                  settingKey: 'instagram',
+                  label: 'Instagram',
+                ),
+                const SizedBox(width: 16),
+              ],
+              if (twitterUrl != null || isEditMode || isPreviewMode) ...[
+                _buildSocialIconMobile(
+                  Icons.alternate_email,
+                  twitterUrl,
+                  isEditMode, // Only edit in edit mode
+                  settingKey: 'twitter',
+                  label: 'Twitter/X',
+                ),
+                const SizedBox(width: 16),
+              ],
+              if (youtubeUrl != null || isEditMode || isPreviewMode) ...[
+                _buildSocialIconMobile(
+                  Icons.play_circle_fill,
+                  youtubeUrl,
+                  isEditMode, // Only edit in edit mode
+                  settingKey: 'youtube',
+                  label: 'YouTube',
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
+              style: textTheme.bodySmall?.copyWith(color: Colors.white54),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 24), // Reduced bottom space
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterLinkMobile(
+      BuildContext context, String text, String route) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: InkWell(
+          onTap: () => context.go(route),
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white70,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterContactItem(
+      BuildContext context, IconData icon, String text, VoidCallback? onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white70, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              onTap: onTap,
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white70,
+                    ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialIconMobile(
+    IconData icon,
+    String? url,
+    bool isEditMode, {
+    required String settingKey,
+    required String label,
+  }) {
+    if (url == null && !isEditMode) {
+      return const SizedBox.shrink();
+    }
+
+    final hasUrl = url != null && url.isNotEmpty;
+
+    return InkWell(
+      onTap: () async {
+        if (isEditMode) {
+          // Show edit dialog
+          await _showSocialMediaEditDialog(context, settingKey, label, url);
+        } else if (hasUrl) {
+          _launchUri(Uri.parse(url));
+        }
+      },
+      child: Stack(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: hasUrl
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.05),
+              border: isEditMode && !hasUrl
+                  ? Border.all(
+                      color: Colors.white38,
+                      width: 1,
+                      strokeAlign: BorderSide.strokeAlignInside)
+                  : null,
+            ),
+            child: Icon(
+              icon,
+              color: hasUrl ? Colors.white : Colors.white38,
+              size: 20,
+            ),
+          ),
+          if (isEditMode)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: hasUrl ? Colors.green : Colors.orange,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  hasUrl ? Icons.check : Icons.edit,
+                  color: Colors.white,
+                  size: 10,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSocialMediaEditDialog(
+    BuildContext context,
+    String settingKey,
+    String label,
+    String? currentValue,
+  ) async {
+    final websiteService = context.read<WebsiteService>();
+    final controller = TextEditingController(text: currentValue ?? '');
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Editar $label'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: 'Usuario o URL de $label',
+                  hintText: _getHintForSetting(settingKey),
+                  prefixIcon: const Icon(Icons.link_outlined),
+                  helperText: 'Puedes ingresar el @usuario o la URL completa',
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              final value = controller.text.trim();
+              try {
+                await websiteService.saveSetting(settingKey, value);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al guardar: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true && mounted) {
+      setState(() {}); // Refresh to show updated value
+    }
+  }
+
+  String _getHintForSetting(String key) {
+    switch (key) {
+      case 'facebook':
+        return '@vinabike o https://facebook.com/vinabike';
+      case 'instagram':
+        return '@vinabike o https://instagram.com/vinabike';
+      case 'twitter':
+        return '@vinabike o https://twitter.com/vinabike';
+      case 'youtube':
+        return '@vinabikechannel o https://youtube.com/@vinabike';
+      default:
+        return '';
+    }
+  }
+
   Widget _buildFooter({
     required BuildContext context,
     required String storeName,
@@ -2026,182 +2604,244 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String youtubeHandle,
     required Color primaryColor,
     required Color accentColor,
+    required String logoUrl, // Added parameter
     bool isEditMode = false,
   }) {
-    final facebookUrl =
-        _buildSocialUrl(facebookHandle, 'https://facebook.com/');
-    final instagramUrl =
-        _buildSocialUrl(instagramHandle, 'https://instagram.com/');
-    final twitterUrl = _buildSocialUrl(twitterHandle, 'https://twitter.com/');
-    final youtubeUrl = _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
+    return LayoutBuilder(builder: (context, constraints) {
+      final screenWidth = MediaQuery.of(context).size.width;
+      final isMobile = screenWidth < 800;
 
-    final footerContent = Container(
-      width: double.infinity,
-      color: PublicStoreTheme.textPrimary,
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          storeName.isNotEmpty ? storeName : 'VINABIKE',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          storeDescription.isNotEmpty
-                              ? storeDescription
-                              : 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.white70,
-                                  ),
-                        ),
-                        const SizedBox(height: 24),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.mail_outline,
-                                  color: Colors.white70),
-                              onPressed: contactEmail.isEmpty
-                                  ? null
-                                  : () => _launchUri(Uri(
-                                      scheme: 'mailto', path: contactEmail)),
-                              tooltip: 'Email',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.phone_outlined,
-                                  color: Colors.white70),
-                              onPressed: contactPhone.isEmpty
-                                  ? null
-                                  : () => _launchUri(
-                                      Uri(scheme: 'tel', path: contactPhone)),
-                              tooltip: 'Teléfono',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.facebook_outlined,
-                                  color: Colors.white70),
-                              onPressed: facebookUrl == null
-                                  ? null
-                                  : () => _launchUri(Uri.parse(facebookUrl)),
-                              tooltip: 'Facebook',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.camera_alt_outlined,
-                                  color: Colors.white70),
-                              onPressed: instagramUrl == null
-                                  ? null
-                                  : () => _launchUri(Uri.parse(instagramUrl)),
-                              tooltip: 'Instagram',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.alternate_email,
-                                  color: Colors.white70),
-                              onPressed: twitterUrl == null
-                                  ? null
-                                  : () => _launchUri(Uri.parse(twitterUrl)),
-                              tooltip: 'Twitter',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.play_circle_outline,
-                                  color: Colors.white70),
-                              onPressed: youtubeUrl == null
-                                  ? null
-                                  : () => _launchUri(Uri.parse(youtubeUrl)),
-                              tooltip: 'YouTube',
-                            ),
-                          ],
-                        ),
-                      ],
+      final facebookUrl =
+          _buildSocialUrl(facebookHandle, 'https://facebook.com/');
+      final instagramUrl =
+          _buildSocialUrl(instagramHandle, 'https://instagram.com/');
+      final twitterUrl = _buildSocialUrl(twitterHandle, 'https://twitter.com/');
+      final youtubeUrl = _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
+
+      if (isMobile) {
+        return _buildMobileFooter(
+          context: context,
+          storeName: storeName,
+          storeDescription: storeDescription,
+          contactEmail: contactEmail,
+          contactPhone: contactPhone,
+          contactAddress: contactAddress,
+          facebookUrl: facebookUrl,
+          instagramUrl: instagramUrl,
+          twitterUrl: twitterUrl,
+          youtubeUrl: youtubeUrl,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          logoUrl: logoUrl,
+          isEditMode: isEditMode,
+          isPreviewMode:
+              isMobile, // Always true when this branch runs, so icons show
+        );
+      }
+
+      final footerContent = Container(
+        width: double.infinity,
+        color: PublicStoreTheme.textPrimary,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              children: [
+                Wrap(
+                  spacing: 32,
+                  runSpacing: 24,
+                  crossAxisAlignment: WrapCrossAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 250,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            storeName.isNotEmpty ? storeName : 'VINABIKE',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            storeDescription.isNotEmpty
+                                ? storeDescription
+                                : 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Colors.white70,
+                                ),
+                          ),
+                          const SizedBox(height: 24),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.mail_outline,
+                                    color: Colors.white70),
+                                onPressed: contactEmail.isEmpty
+                                    ? null
+                                    : () => _launchUri(Uri(
+                                        scheme: 'mailto', path: contactEmail)),
+                                tooltip: 'Email',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.phone_outlined,
+                                    color: Colors.white70),
+                                onPressed: contactPhone.isEmpty
+                                    ? null
+                                    : () => _launchUri(
+                                        Uri(scheme: 'tel', path: contactPhone)),
+                                tooltip: 'Teléfono',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.facebook_outlined,
+                                    color: Colors.white70),
+                                onPressed: facebookUrl == null
+                                    ? null
+                                    : () => _launchUri(Uri.parse(facebookUrl)),
+                                tooltip: 'Facebook',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.camera_alt_outlined,
+                                    color: Colors.white70),
+                                onPressed: instagramUrl == null
+                                    ? null
+                                    : () => _launchUri(Uri.parse(instagramUrl)),
+                                tooltip: 'Instagram',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.alternate_email,
+                                    color: Colors.white70),
+                                onPressed: twitterUrl == null
+                                    ? null
+                                    : () => _launchUri(Uri.parse(twitterUrl)),
+                                tooltip: 'Twitter',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.play_circle_outline,
+                                    color: Colors.white70),
+                                onPressed: youtubeUrl == null
+                                    ? null
+                                    : () => _launchUri(Uri.parse(youtubeUrl)),
+                                tooltip: 'YouTube',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Enlaces',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildFooterLink(
-                            context, 'Inicio', '/tienda', primaryColor),
-                        _buildFooterLink(context, 'Productos',
-                            '/tienda/productos', primaryColor),
-                        _buildFooterLink(context, 'Servicios',
-                            '/tienda/servicios', primaryColor),
-                        _buildFooterLink(context, 'Contacto',
-                            '/tienda/contacto', primaryColor),
-                      ],
+                    SizedBox(
+                      width: 180,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Enlaces',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFooterLink(
+                              context, 'Inicio', '/tienda', primaryColor),
+                          _buildFooterLink(context, 'Productos',
+                              '/tienda/productos', primaryColor),
+                          _buildFooterLink(context, 'Servicios',
+                              '/tienda/servicios', primaryColor),
+                          _buildFooterLink(context, 'Contacto',
+                              '/tienda/contacto', primaryColor),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Información',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildFooterLink(context, 'Sobre Nosotros', '/nosotros',
-                            primaryColor),
-                        _buildFooterLink(context, 'Términos y Condiciones',
-                            '/terminos', primaryColor),
-                        _buildFooterLink(context, 'Política de Privacidad',
-                            '/privacidad', primaryColor),
-                        _buildFooterLink(context, 'Política de Devoluciones',
-                            '/devoluciones', primaryColor),
-                        _buildFooterLink(
-                            context, 'Envíos', '/envios', primaryColor),
-                      ],
+                    SizedBox(
+                      width: 200,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Información',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFooterLink(context, 'Sobre Nosotros',
+                              '/nosotros', primaryColor),
+                          _buildFooterLink(context, 'Términos y Condiciones',
+                              '/terminos', primaryColor),
+                          _buildFooterLink(context, 'Política de Privacidad',
+                              '/privacidad', primaryColor),
+                          _buildFooterLink(context, 'Política de Devoluciones',
+                              '/devoluciones', primaryColor),
+                          _buildFooterLink(
+                              context, 'Envíos', '/envios', primaryColor),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Contacto',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.location_on_outlined,
-                                color: Colors.white70, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                contactAddress.isNotEmpty
-                                    ? contactAddress
-                                    : 'Álvarez 32, Local 17\nViña del Mar, Chile',
+                    SizedBox(
+                      width: 200,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Contacto',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.location_on_outlined,
+                                  color: Colors.white70, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  contactAddress.isNotEmpty
+                                      ? contactAddress
+                                      : 'Álvarez 32, Local 17\nViña del Mar, Chile',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Icon(Icons.phone_outlined,
+                                  color: Colors.white70, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                contactPhone.isNotEmpty
+                                    ? contactPhone
+                                    : '+56 9 XXXX XXXX',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
@@ -2209,125 +2849,106 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                       color: Colors.white70,
                                     ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(Icons.phone_outlined,
-                                color: Colors.white70, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              contactPhone.isNotEmpty
-                                  ? contactPhone
-                                  : '+56 9 XXXX XXXX',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Colors.white70,
-                                  ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(Icons.email_outlined,
-                                color: Colors.white70, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              contactEmail.isNotEmpty
-                                  ? contactEmail
-                                  : 'contacto@vinabike.cl',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Colors.white70,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 48),
-              const Divider(color: Colors.white24),
-              const SizedBox(height: 24),
-              Text(
-                '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // Wrap with edit mode indicator if in edit mode
-    if (isEditMode) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          // Select footer for editing in the "Editar" tab
-          final editProvider = context.read<WebsiteEditModeProvider>();
-          editProvider.selectBlock('footer');
-        },
-        child: Stack(
-          children: [
-            footerContent,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.green.withOpacity(0.5),
-                      width: 2,
-                    ),
-                  ),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      margin: const EdgeInsets.all(4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.edit, color: Colors.white, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Footer',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Icon(Icons.email_outlined,
+                                  color: Colors.white70, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                contactEmail.isNotEmpty
+                                    ? contactEmail
+                                    : 'contacto@vinabike.cl',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Colors.white70,
+                                    ),
+                              ),
+                            ],
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 48),
+                const Divider(color: Colors.white24),
+                const SizedBox(height: 24),
+                Text(
+                  '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Wrap with edit mode indicator if in edit mode
+      if (isEditMode) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            // Select footer for editing in the "Editar" tab
+            final editProvider = context.read<WebsiteEditModeProvider>();
+            editProvider.selectBlock('footer');
+          },
+          child: Stack(
+            children: [
+              footerContent,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.green.withOpacity(0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        margin: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.edit, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Footer',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      );
-    }
+            ],
+          ),
+        );
+      }
 
-    return footerContent;
+      return footerContent;
+    });
   }
 
   Widget _buildTextLogo(
@@ -2447,119 +3068,246 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  PopupMenuItem<String> _buildDropdownItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return PopupMenuItem<String>(
-      value: value,
-      height: 44,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.grey.shade700),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade800,
-              fontWeight: FontWeight.w400,
+  void _showMobileMenu(
+      BuildContext context, List<Map<String, String>> navLinks) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1a1a1a),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Navigation items
+                if (navLinks.isEmpty) ...[
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.home_rounded,
+                    label: 'Inicio',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/tienda');
+                    },
+                  ),
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.shopping_bag_rounded,
+                    label: 'Productos',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/tienda/productos');
+                    },
+                  ),
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.mail_rounded,
+                    label: 'Contacto',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/contacto');
+                    },
+                  ),
+                ] else ...[
+                  ...navLinks.map((link) => _buildMobileMenuItem(
+                        context,
+                        icon: Icons.arrow_forward_ios_rounded,
+                        label: link['label'] ?? '',
+                        onTap: () {
+                          Navigator.pop(context);
+                          context.go(link['url'] ?? '/');
+                        },
+                      )),
+                ],
+                // Divider
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Divider(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                // Account
+                _buildMobileMenuItem(
+                  context,
+                  icon: Icons.person_rounded,
+                  label: 'Mi Cuenta',
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.go('/tienda/cuenta');
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildFooterLink(
-    BuildContext context,
-    String label,
-    String path,
-    Color primaryColor,
-  ) {
-    final isActive = GoRouterState.of(context).matchedLocation == path;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+  Widget _buildMobileMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.go(path),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        onTap: onTap,
+        splashColor: Colors.white12,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white70, size: 22),
+              const SizedBox(width: 16),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white38, size: 20),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Future<void> _launchUri(Uri uri) async {
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
-    }
+PopupMenuItem<String> _buildDropdownItem({
+  required IconData icon,
+  required String label,
+  required String value,
+}) {
+  return PopupMenuItem<String>(
+    value: value,
+    height: 44,
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey.shade700),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade800,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildFooterLink(
+  BuildContext context,
+  String label,
+  String path,
+  Color primaryColor,
+) {
+  final isActive = GoRouterState.of(context).matchedLocation == path;
+
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: InkWell(
+      onTap: () => context.go(path),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            ),
+      ),
+    ),
+  );
+}
+
+Future<void> _launchUri(Uri uri) async {
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.platformDefault);
   }
+}
 
-  String? _buildSocialUrl(String handle, String baseUrl) {
-    final trimmed = handle.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    if (trimmed.startsWith('http')) {
-      return trimmed;
-    }
-    return '$baseUrl${trimmed.replaceAll('@', '')}';
+String? _buildSocialUrl(String handle, String baseUrl) {
+  final trimmed = handle.trim();
+  if (trimmed.isEmpty) {
+    return null;
   }
+  if (trimmed.startsWith('http')) {
+    return trimmed;
+  }
+  return '$baseUrl${trimmed.replaceAll('@', '')}';
+}
 
-  String _sanitizePhone(String input) {
-    final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return '';
-    }
-    if (digits.startsWith('56')) {
-      return digits;
-    }
-    if (digits.length == 9 && digits.startsWith('9')) {
-      return '56$digits';
-    }
-    if (digits.length == 8) {
-      return '56$digits';
-    }
+String _sanitizePhone(String input) {
+  final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) {
+    return '';
+  }
+  if (digits.startsWith('56')) {
     return digits;
   }
-
-  Color _resolveColor(String raw, Color fallback) {
-    final value = raw.trim();
-    if (value.isEmpty) return fallback;
-
-    Color? parsed;
-    int? intValue;
-
-    String cleaned = value.toLowerCase();
-    if (cleaned.startsWith('color(')) {
-      final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-      intValue = int.tryParse(inside);
-    }
-
-    intValue ??= int.tryParse(cleaned);
-    if (intValue == null && cleaned.startsWith('0x')) {
-      intValue = int.tryParse(cleaned);
-    }
-    if (intValue == null) {
-      cleaned = cleaned.replaceAll('#', '');
-      intValue = int.tryParse(cleaned, radix: 16);
-      if (intValue != null && cleaned.length <= 6) {
-        intValue = 0xFF000000 | intValue;
-      }
-    }
-
-    if (intValue != null) {
-      parsed = Color(intValue);
-    }
-
-    return parsed ?? fallback;
+  if (digits.length == 9 && digits.startsWith('9')) {
+    return '56$digits';
   }
+  if (digits.length == 8) {
+    return '56$digits';
+  }
+  return digits;
+}
+
+Color _resolveColor(String raw, Color fallback) {
+  final value = raw.trim();
+  if (value.isEmpty) return fallback;
+
+  Color? parsed;
+  int? intValue;
+
+  String cleaned = value.toLowerCase();
+  if (cleaned.startsWith('color(')) {
+    final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
+    intValue = int.tryParse(inside);
+  }
+
+  intValue ??= int.tryParse(cleaned);
+  if (intValue == null && cleaned.startsWith('0x')) {
+    intValue = int.tryParse(cleaned);
+  }
+  if (intValue == null) {
+    cleaned = cleaned.replaceAll('#', '');
+    intValue = int.tryParse(cleaned, radix: 16);
+    if (intValue != null && cleaned.length <= 6) {
+      intValue = 0xFF000000 | intValue;
+    }
+  }
+
+  if (intValue != null) {
+    parsed = Color(intValue);
+  }
+
+  return parsed ?? fallback;
 }
 
 class _PreviewNavAction {
@@ -2580,8 +3328,6 @@ class _PreviewNavAction {
         icon = null,
         isDivider = true;
 }
-
-enum _DevicePreviewMode { desktop, tablet, mobile }
 
 /// A stateful widget that manages the sticky header that stays fixed at top while scrolling
 class _StickyHeaderScaffold extends StatefulWidget {

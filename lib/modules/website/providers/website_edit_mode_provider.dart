@@ -3,15 +3,25 @@ import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
+/// Device preview modes for the website editor
+enum DevicePreviewMode {
+  desktop,
+  tablet,
+  mobile,
+}
+
 /// Provider for website inline edit mode state.
 /// Tracks edit mode, selected block, and pending changes.
 ///
 /// Two modes:
-/// - Preview mode: Shows the site with a top "Editar" bar (isPreviewMode = true, isEditMode = false)
-/// - Edit mode: Shows the site with the side panel editor (isEditMode = true)
+/// - Preview mode: Shows the top bar (isPreviewMode = true)
+/// - Edit mode: Shows the side panel (isEditMode = true)
 class WebsiteEditModeProvider extends ChangeNotifier {
   bool _isPreviewMode = false; // Preview with top bar
   bool _isEditMode = false; // Full edit with side panel
+  DevicePreviewMode _devicePreviewMode =
+      DevicePreviewMode.desktop; // Persist preview options
+
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
   bool _hasUnsavedChanges = false;
@@ -22,6 +32,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Multi-page editing support (Dec 2025)
   String? _currentPageId; // The page ID being edited (null = home page)
   String? _currentPageSlug; // The page slug for navigation
+
+  // Screenshot capability
+  final GlobalKey _screenshotKey = GlobalKey();
+  GlobalKey get screenshotKey => _screenshotKey;
 
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
@@ -36,6 +50,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool get isEditMode => _isEditMode;
   bool get isInEditorContext =>
       _isPreviewMode || _isEditMode; // Either preview or edit
+  DevicePreviewMode get devicePreviewMode => _devicePreviewMode;
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
   bool get hasUnsavedChanges => _hasUnsavedChanges || _hasHeaderChanges;
@@ -137,6 +152,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _isEditMode = false;
     _isPreviewMode = true;
     _selectedBlockId = null;
+    notifyListeners();
+  }
+
+  /// Set device preview mode (desktop, tablet, mobile)
+  void setDevicePreviewMode(DevicePreviewMode mode) {
+    _devicePreviewMode = mode;
     notifyListeners();
   }
 

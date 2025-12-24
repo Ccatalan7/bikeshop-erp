@@ -293,10 +293,10 @@ class WebsiteBlockRenderer {
     switch (preset) {
       case 'heading':
         base = Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontFamily: headingFont,
-              fontSize: headingSize,
-            ) ??
+                  fontWeight: FontWeight.w700,
+                  fontFamily: headingFont,
+                  fontSize: headingSize,
+                ) ??
             TextStyle(
               fontSize: headingSize ?? 36,
               fontWeight: FontWeight.w700,
@@ -305,9 +305,9 @@ class WebsiteBlockRenderer {
         break;
       case 'subheading':
         base = Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontFamily: headingFont,
-            ) ??
+                  fontWeight: FontWeight.w600,
+                  fontFamily: headingFont,
+                ) ??
             TextStyle(
               fontSize: (bodySize ?? 16) * 1.25,
               fontWeight: FontWeight.w600,
@@ -316,9 +316,9 @@ class WebsiteBlockRenderer {
         break;
       case 'caption':
         base = Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontFamily: bodyFont,
-              fontSize: (bodySize ?? 16) * 0.9,
-            ) ??
+                  fontFamily: bodyFont,
+                  fontSize: (bodySize ?? 16) * 0.9,
+                ) ??
             TextStyle(
               fontSize: (bodySize ?? 16) * 0.9,
               fontFamily: bodyFont,
@@ -326,9 +326,9 @@ class WebsiteBlockRenderer {
         break;
       default:
         base = Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontFamily: bodyFont,
-              fontSize: bodySize,
-            ) ??
+                  fontFamily: bodyFont,
+                  fontSize: bodySize,
+                ) ??
             TextStyle(
               fontSize: bodySize ?? 16,
               fontFamily: bodyFont,
@@ -545,8 +545,13 @@ class WebsiteBlockRenderer {
         geometryAlign = Alignment.center;
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Container(
-      height: isFullScreen ? MediaQuery.of(context).size.height : 520,
+      height: isFullScreen
+          ? MediaQuery.of(context).size.height
+          : (isMobile ? 420 : 520),
       width: double.infinity,
       decoration: BoxDecoration(
         color: bgColor,
@@ -593,12 +598,18 @@ class WebsiteBlockRenderer {
                   style: resolvedHeading.copyWith(
                     letterSpacing: 3,
                     fontWeight: FontWeight.w900,
+                    fontSize:
+                        isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
                   ),
                   textAlign: textAlign,
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  Text(subtitle, style: resolvedSubtitle, textAlign: textAlign),
+                  Text(subtitle,
+                      style: resolvedSubtitle.copyWith(
+                        fontSize: isMobile ? (bodySize ?? 16) : bodySize,
+                      ),
+                      textAlign: textAlign),
                 ],
                 const SizedBox(height: 40),
                 OutlinedButton(
@@ -743,6 +754,8 @@ class WebsiteBlockRenderer {
             ? const EdgeInsets.symmetric(horizontal: 24)
             : _parsePadding(data, defaultVertical: 56);
 
+        final isMobile = constraints.maxWidth < 700;
+
         return Container(
           color: bgColor,
           width: double.infinity,
@@ -765,21 +778,23 @@ class WebsiteBlockRenderer {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
-                  Row(
-                    children: services.take(3).map((service) {
-                      final iconName = service['icon']?.toString();
-                      final serviceTitle =
-                          (service['title'] ?? 'Servicio').toString();
-                      final description =
-                          (service['description'] ?? '').toString().trim();
+                  if (isMobile)
+                    Column(
+                      children: services.take(3).map((service) {
+                        final index = services.indexOf(service);
+                        final iconName = service['icon']?.toString();
+                        final serviceTitle =
+                            (service['title'] ?? 'Servicio').toString();
+                        final description =
+                            (service['description'] ?? '').toString().trim();
 
-                      return Expanded(
-                        child: Container(
+                        return Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 24),
                           decoration: BoxDecoration(
                             border: Border(
-                              left: services.indexOf(service) > 0
+                              bottom: index < services.take(3).length - 1
                                   ? BorderSide(
                                       color: Colors.grey.shade300, width: 1)
                                   : BorderSide.none,
@@ -817,10 +832,66 @@ class WebsiteBlockRenderer {
                               ],
                             ],
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                        );
+                      }).toList(),
+                    )
+                  else
+                    Row(
+                      children: services.take(3).map((service) {
+                        final iconName = service['icon']?.toString();
+                        final serviceTitle =
+                            (service['title'] ?? 'Servicio').toString();
+                        final description =
+                            (service['description'] ?? '').toString().trim();
+
+                        return Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 24),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: services.indexOf(service) > 0
+                                    ? BorderSide(
+                                        color: Colors.grey.shade300, width: 1)
+                                    : BorderSide.none,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getIconFromString(iconName),
+                                  size: 32,
+                                  color: primaryColor,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  serviceTitle,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (description.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    description,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600,
+                                      height: 1.4,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                 ],
               ),
             ),
@@ -1140,6 +1211,9 @@ class WebsiteBlockRenderer {
       return const SizedBox.shrink();
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 380;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
       color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
@@ -1164,7 +1238,7 @@ class WebsiteBlockRenderer {
                 children: testimonials
                     .map(
                       (item) => SizedBox(
-                        width: 320,
+                        width: isCompact ? double.infinity : 320,
                         child: _buildTestimonialCard(
                           context: context,
                           testimonial: item,
@@ -1249,6 +1323,9 @@ class WebsiteBlockRenderer {
       return const SizedBox.shrink();
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 380;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
       color: theme.colorScheme.surfaceVariant.withOpacity(0.15),
@@ -1284,7 +1361,7 @@ class WebsiteBlockRenderer {
                 children: plans
                     .map(
                       (plan) => SizedBox(
-                        width: 320,
+                        width: isCompact ? double.infinity : 320,
                         child: _buildPricingPlanCard(
                           context: context,
                           plan: plan,
@@ -1951,6 +2028,9 @@ class WebsiteBlockRenderer {
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 400;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
       child: Center(
@@ -1984,7 +2064,7 @@ class WebsiteBlockRenderer {
                 alignment: WrapAlignment.center,
                 children: [
                   SizedBox(
-                    width: 320,
+                    width: isCompact ? double.infinity : 320,
                     child: Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(
@@ -2019,7 +2099,7 @@ class WebsiteBlockRenderer {
                   ),
                   if (showForm)
                     SizedBox(
-                      width: 360,
+                      width: isCompact ? double.infinity : 360,
                       child: Card(
                         elevation: 2,
                         shape: RoundedRectangleBorder(
@@ -2061,7 +2141,7 @@ class WebsiteBlockRenderer {
                     ),
                   if (showMap)
                     SizedBox(
-                      width: 360,
+                      width: isCompact ? double.infinity : 360,
                       child: Card(
                         elevation: 2,
                         shape: RoundedRectangleBorder(
@@ -2215,6 +2295,9 @@ class WebsiteBlockRenderer {
       ];
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 350;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
       child: Center(
@@ -2257,7 +2340,7 @@ class WebsiteBlockRenderer {
                   final linkedin = (member['linkedin'] ?? '').toString().trim();
 
                   return SizedBox(
-                    width: 300,
+                    width: isCompact ? double.infinity : 300,
                     child: Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(
@@ -3069,12 +3152,83 @@ class _CategoryGridLayout extends StatelessWidget {
 
     // Gap between cards (Commencal uses ~4px gaps)
     const double cardGap = 4.0;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
+    if (isMobile) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Large cards: Stacked vertically
+          for (final card in largeCards) ...[
+            _CategoryCard(
+              data: card,
+              height: 300, // Slightly shorter than desktop large
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              bodyFont: bodyFont,
+              previewMode: previewMode,
+              onNavigate: onNavigate,
+            ),
+            const SizedBox(height: cardGap),
+          ],
+
+          if (largeCards.isNotEmpty && otherCards.isNotEmpty)
+            const SizedBox(height: cardGap),
+
+          // Other cards: 2 columns using Row for every pair
+          if (otherCards.isNotEmpty)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < otherCards.length; i += 2) ...[
+                  if (i > 0) const SizedBox(height: cardGap),
+                  SizedBox(
+                    height: 220,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: _CategoryCard(
+                            data: otherCards[i],
+                            height: 220,
+                            primaryColor: primaryColor,
+                            accentColor: accentColor,
+                            bodyFont: bodyFont,
+                            previewMode: previewMode,
+                            onNavigate: onNavigate,
+                          ),
+                        ),
+                        const SizedBox(width: cardGap),
+                        Expanded(
+                          child: i + 1 < otherCards.length
+                              ? _CategoryCard(
+                                  data: otherCards[i + 1],
+                                  height: 220,
+                                  primaryColor: primaryColor,
+                                  accentColor: accentColor,
+                                  bodyFont: bodyFont,
+                                  previewMode: previewMode,
+                                  onNavigate: onNavigate,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]
+              ],
+            )
+        ],
+      );
+    }
 
     return Column(
       children: [
         // Large cards row (2 per row, taller) - edge to edge
         if (largeCards.isNotEmpty)
-          IntrinsicHeight(
+          SizedBox(
+            height: 380,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -3098,7 +3252,8 @@ class _CategoryGridLayout extends StatelessWidget {
         // Smaller cards row (4 per row, shorter) - edge to edge
         if (otherCards.isNotEmpty) ...[
           const SizedBox(height: cardGap),
-          IntrinsicHeight(
+          SizedBox(
+            height: 220,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -3129,7 +3284,7 @@ class _CategoryGridLayout extends StatelessWidget {
 // CATEGORY CARD WIDGET
 // Individual category card with image, title, and CTA button
 // ============================================================================
-class _CategoryCard extends StatefulWidget {
+class _CategoryCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final double height;
   final Color primaryColor;
@@ -3149,134 +3304,117 @@ class _CategoryCard extends StatefulWidget {
   });
 
   @override
-  State<_CategoryCard> createState() => _CategoryCardState();
-}
-
-class _CategoryCardState extends State<_CategoryCard> {
-  bool _isHovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final title = (widget.data['title'] ?? 'Categoría').toString();
-    final subtitle = (widget.data['subtitle'] ?? '').toString();
-    final ctaText = (widget.data['ctaText'] ?? 'Ver colección').toString();
-    final ctaLink = (widget.data['ctaLink'] ?? '/tienda/productos').toString();
-    final imageUrl = widget.data['imageUrl']?.toString();
+    final title = (data['title'] ?? 'Categoría').toString();
+    final subtitle = (data['subtitle'] ?? '').toString();
+    final ctaText = (data['ctaText'] ?? 'Ver colección').toString();
+    final ctaLink = (data['ctaLink'] ?? '/tienda/productos').toString();
+    final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap:
-            widget.previewMode ? null : () => widget.onNavigate?.call(ctaLink),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2a2a2a),
-            // No border radius - squared like Commencal
-            image: hasImage
-                ? DecorationImage(
-                    image: NetworkImage(imageUrl),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(_isHovered ? 0.2 : 0.35),
-                      BlendMode.darken,
-                    ),
-                  )
-                : null,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Placeholder gradient for cards without images
-              if (!hasImage)
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF3a3a3a),
-                        const Color(0xFF1a1a1a),
-                      ],
-                    ),
+    return RepaintBoundary(
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2a2a2a),
+          image: hasImage
+              ? DecorationImage(
+                  image: NetworkImage(imageUrl),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0.35),
+                    BlendMode.darken,
+                  ),
+                )
+              : null,
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Placeholder gradient for cards without images
+            if (!hasImage)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF3a3a3a),
+                      const Color(0xFF1a1a1a),
+                    ],
                   ),
                 ),
-              // Hover overlay
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: _isHovered ? 1.0 : 0.0,
-                child: Container(
-                  color: Colors.black.withOpacity(0.1),
-                ),
               ),
-              // Content overlay
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: 24,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: TextStyle(
-                        fontFamily: widget.bodyFont,
-                        color: Colors.white,
-                        fontSize: widget.height > 300 ? 28 : 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontFamily: widget.bodyFont,
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    // Commencal-style black button with white text
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        ctaText.toUpperCase(),
-                        style: const TextStyle(
+            // Material + InkWell for interaction and hover effect
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: previewMode ? null : () => onNavigate?.call(ctaLink),
+                hoverColor: Colors.black.withOpacity(0.2),
+                splashColor: Colors.white.withOpacity(0.1),
+                highlightColor: Colors.white.withOpacity(0.05),
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        title.toUpperCase(),
+                        style: TextStyle(
+                          fontFamily: bodyFont,
                           color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5,
+                          fontSize: height > 300 ? 28 : 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      if (subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontFamily: bodyFont,
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      // Commencal-style black button with white text
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          border:
+                              Border.all(color: Colors.white.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          ctaText.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -4010,7 +4148,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         itemsPerRow = parsed;
       }
     }
-    itemsPerRow = itemsPerRow.clamp(2, 4);
+
+    // Responsive override
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth < 450) {
+      itemsPerRow = 1;
+    } else if (screenWidth < 900) {
+      itemsPerRow = 2;
+    } else {
+      itemsPerRow = itemsPerRow.clamp(2, 4);
+    }
 
     // Show placeholders only during loading
     // Show empty message if no products after loading
@@ -4101,28 +4248,62 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 ],
               ),
               const SizedBox(height: 32),
-              layout == 'carousel'
-                  ? SizedBox(
-                      height: 480,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.only(bottom: 20),
-                        itemCount: displayProducts.length,
-                        itemBuilder: (context, index) {
-                          final product = displayProducts[index];
-                          double cardWidth;
-                          if (itemsPerRow <= 2) {
-                            cardWidth = 350;
-                          } else if (itemsPerRow == 3) {
-                            cardWidth = 300;
-                          } else {
-                            cardWidth = 260;
-                          }
+              // Responsive override for mobile
+              screenWidth < 700
+                  ? _MobileProductAutoCarousel(
+                      products: displayProducts,
+                      bodyFont: widget.bodyFont,
+                      previewMode: widget.previewMode,
+                      onNavigate: widget.onNavigate,
+                    )
+                  : layout == 'carousel'
+                      ? SizedBox(
+                          height: 480,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.only(bottom: 20),
+                            itemCount: displayProducts.length,
+                            itemBuilder: (context, index) {
+                              final product = displayProducts[index];
+                              double cardWidth;
+                              if (itemsPerRow <= 2) {
+                                cardWidth = 350;
+                              } else if (itemsPerRow == 3) {
+                                cardWidth = 300;
+                              } else {
+                                cardWidth = 260;
+                              }
 
-                          return Container(
-                            width: cardWidth,
-                            margin: const EdgeInsets.only(right: 20),
-                            child: PremiumProductCard(
+                              return Container(
+                                width: cardWidth,
+                                margin: const EdgeInsets.only(right: 20),
+                                child: PremiumProductCard(
+                                  productId: product.id,
+                                  name: product.name,
+                                  price: product.price,
+                                  imageUrl: product.imageUrl,
+                                  bodyFont: widget.bodyFont,
+                                  previewMode: widget.previewMode,
+                                  onNavigate: widget.onNavigate,
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      : GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: itemsPerRow,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 20,
+                          ),
+                          itemCount: displayProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = displayProducts[index];
+                            return PremiumProductCard(
                               productId: product.id,
                               name: product.name,
                               price: product.price,
@@ -4130,34 +4311,9 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                               bodyFont: widget.bodyFont,
                               previewMode: widget.previewMode,
                               onNavigate: widget.onNavigate,
-                            ),
-                          );
-                        },
-                      ),
-                    )
-                  : GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: itemsPerRow,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 20,
-                      ),
-                      itemCount: displayProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = displayProducts[index];
-                        return PremiumProductCard(
-                          productId: product.id,
-                          name: product.name,
-                          price: product.price,
-                          imageUrl: product.imageUrl,
-                          bodyFont: widget.bodyFont,
-                          previewMode: widget.previewMode,
-                          onNavigate: widget.onNavigate,
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
               if (showViewAll) ...[
                 const SizedBox(height: 40),
                 Center(
@@ -4416,6 +4572,127 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
           ),
         );
       },
+    );
+  }
+}
+
+class _MobileProductAutoCarousel extends StatefulWidget {
+  final List<Product> products;
+  final String? bodyFont;
+  final bool previewMode;
+  final Function(String)? onNavigate;
+
+  const _MobileProductAutoCarousel({
+    Key? key,
+    required this.products,
+    this.bodyFont,
+    this.previewMode = false,
+    this.onNavigate,
+  }) : super(key: key);
+
+  @override
+  State<_MobileProductAutoCarousel> createState() =>
+      _MobileProductAutoCarouselState();
+}
+
+class _MobileProductAutoCarouselState
+    extends State<_MobileProductAutoCarousel> {
+  late final PageController _pageController;
+  Timer? _timer;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.85);
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.products.length <= 1) return;
+
+    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      int next = _currentPage + 1;
+      if (next >= widget.products.length) {
+        next = 0;
+        _pageController.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.fastOutSlowIn,
+        );
+        _currentPage = 0;
+      } else {
+        _pageController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.fastOutSlowIn,
+        );
+        _currentPage = next;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 520,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.products.length,
+            onPageChanged: (index) {
+              setState(() => _currentPage = index);
+            },
+            itemBuilder: (context, index) {
+              final product = widget.products[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: PremiumProductCard(
+                  productId: product.id,
+                  name: product.name,
+                  price: product.price,
+                  imageUrl: product.imageUrl,
+                  bodyFont: widget.bodyFont,
+                  previewMode: widget.previewMode,
+                  onNavigate: widget.onNavigate,
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (widget.products.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.products.length, (index) {
+              final isActive = index == _currentPage;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                height: 8,
+                width: isActive ? 24 : 8,
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.black : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }),
+          ),
+      ],
     );
   }
 }

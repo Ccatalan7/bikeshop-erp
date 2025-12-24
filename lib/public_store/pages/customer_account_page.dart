@@ -176,57 +176,67 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
               ),
               const SizedBox(height: 24),
 
-              // Quick Actions
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.5,
-                children: [
-                  _QuickActionCard(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'Mis Pedidos',
-                    subtitle: '${accountService.orders.length} pedidos',
-                    onTap: () => context.go('/cuenta/pedidos'),
-                  ),
-                  _QuickActionCard(
-                    icon: Icons.pedal_bike_outlined,
-                    title: 'Mis Bicicletas',
-                    subtitle: '${accountService.bikes.length} registradas',
-                    onTap: () => context.go('/cuenta/bicicletas'),
-                  ),
-                  _QuickActionCard(
-                    icon: Icons.build_outlined,
-                    title: 'Servicios',
-                    subtitle: accountService.activeServicesCount > 0
-                        ? '${accountService.activeServicesCount} activo${accountService.activeServicesCount > 1 ? 's' : ''}'
-                        : 'Historial',
-                    badge: accountService.servicesAwaitingApproval.isNotEmpty
-                        ? accountService.servicesAwaitingApproval.length
-                        : null,
-                    onTap: () => context.go('/cuenta/servicios'),
-                  ),
-                  _QuickActionCard(
-                    icon: Icons.location_on_outlined,
-                    title: 'Direcciones',
-                    subtitle: '${accountService.addresses.length} guardadas',
-                    onTap: () => context.go('/cuenta/direcciones'),
-                  ),
-                  _QuickActionCard(
-                    icon: Icons.person_outline,
-                    title: 'Perfil',
-                    subtitle: 'Datos personales',
-                    onTap: () => context.go('/cuenta/perfil'),
-                  ),
-                  _QuickActionCard(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'Ayuda',
-                    subtitle: 'Mensajes y Soporte',
-                    onTap: () => context.go('/cuenta/mensajes'),
-                  ),
-                ],
+              // Quick Actions - Responsive Grid
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  // 3 columns on desktop, 2 on mobile
+                  final crossAxisCount = constraints.maxWidth > 600 ? 3 : 2;
+                  final spacing = constraints.maxWidth > 600 ? 16.0 : 12.0;
+
+                  return GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    childAspectRatio: 1.4, // Slightly wider than tall
+                    children: [
+                      _QuickActionCard(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'Mis Pedidos',
+                        subtitle: '${accountService.orders.length} pedidos',
+                        onTap: () => context.go('/cuenta/pedidos'),
+                      ),
+                      _QuickActionCard(
+                        icon: Icons.pedal_bike_outlined,
+                        title: 'Mis Bicicletas',
+                        subtitle: '${accountService.bikes.length} registradas',
+                        onTap: () => context.go('/cuenta/bicicletas'),
+                      ),
+                      _QuickActionCard(
+                        icon: Icons.build_outlined,
+                        title: 'Servicios',
+                        subtitle: accountService.activeServicesCount > 0
+                            ? '${accountService.activeServicesCount} activo${accountService.activeServicesCount > 1 ? 's' : ''}'
+                            : 'Historial',
+                        badge:
+                            accountService.servicesAwaitingApproval.isNotEmpty
+                                ? accountService.servicesAwaitingApproval.length
+                                : null,
+                        onTap: () => context.go('/cuenta/servicios'),
+                      ),
+                      _QuickActionCard(
+                        icon: Icons.location_on_outlined,
+                        title: 'Direcciones',
+                        subtitle:
+                            '${accountService.addresses.length} guardadas',
+                        onTap: () => context.go('/cuenta/direcciones'),
+                      ),
+                      _QuickActionCard(
+                        icon: Icons.person_outline,
+                        title: 'Perfil',
+                        subtitle: 'Datos personales',
+                        onTap: () => context.go('/cuenta/perfil'),
+                      ),
+                      _QuickActionCard(
+                        icon: Icons.chat_bubble_outline,
+                        title: 'Ayuda',
+                        subtitle: 'Mensajes y Soporte',
+                        onTap: () => context.go('/cuenta/mensajes'),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 24),
 
@@ -498,35 +508,61 @@ class _QuickActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              child: Row(
                 children: [
-                  Icon(icon, size: 40, color: PublicStoreTheme.primaryBlue),
-                  const SizedBox(height: 12),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color:
+                          PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    textAlign: TextAlign.center,
+                    child: Icon(icon,
+                        size: 24, color: PublicStoreTheme.primaryBlue),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: PublicStoreTheme.textSecondary,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: PublicStoreTheme.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
+                  Icon(Icons.chevron_right,
+                      size: 20, color: Colors.grey.shade400),
                 ],
               ),
             ),
@@ -536,16 +572,16 @@ class _QuickActionCard extends StatelessWidget {
                 right: 8,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.red,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     badge.toString(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
