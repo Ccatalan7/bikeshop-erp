@@ -16,22 +16,56 @@ class MessagingService {
     final userId = currentUserId;
     if (userId == null) return [];
 
-    // First get conversations
-    dynamic query = _client.from('conversations').select('''
-      *,
-      conversation_participants!inner(user_id)
-    ''');
+    List<dynamic> data = [];
 
-    // Filter by type if provided
-    if (type != null) {
-      query = query.eq('type', type);
+    if (type == 'support') {
+      // For support chats: show ALL support conversations (shared inbox)
+      final response = await _client
+          .from('conversations')
+          .select(
+              '*, conversation_participants(user_id), conversation_contexts(*)')
+          .eq('type', 'support')
+          .order('last_message_at', ascending: false);
+      data = response as List<dynamic>;
+      debugPrint('📬 Support chats loaded: ${data.length}');
+    } else if (type == 'internal') {
+      // For internal chats: only show ones where user is a participant
+      final response = await _client
+          .from('conversations')
+          .select(
+              '*, conversation_participants!inner(user_id), conversation_contexts(*)')
+          .eq('type', 'internal')
+          .order('last_message_at', ascending: false);
+      data = response as List<dynamic>;
+      debugPrint('💬 Internal chats loaded: ${data.length}');
+    } else {
+      // No filter: get both internal (participated) and support (all)
+      final internalResponse = await _client
+          .from('conversations')
+          .select(
+              '*, conversation_participants!inner(user_id), conversation_contexts(*)')
+          .eq('type', 'internal')
+          .order('last_message_at', ascending: false);
+
+      final supportResponse = await _client
+          .from('conversations')
+          .select(
+              '*, conversation_participants(user_id), conversation_contexts(*)')
+          .eq('type', 'support')
+          .order('last_message_at', ascending: false);
+
+      debugPrint('💬 Internal chats: ${(internalResponse as List).length}');
+      debugPrint('📬 Support chats: ${(supportResponse as List).length}');
+
+      data = [...(internalResponse as List), ...(supportResponse as List)];
+      // Sort by last_message_at
+      data.sort((a, b) {
+        final aTime = a['last_message_at'] ?? a['updated_at'];
+        final bTime = b['last_message_at'] ?? b['updated_at'];
+        return bTime.compareTo(aTime);
+      });
+      debugPrint('📊 Total conversations: ${data.length}');
     }
-
-    // Order by latest message
-    query = query.order('last_message_at', ascending: false);
-
-    final response = await query;
-    final List<dynamic> data = response as List<dynamic>;
 
     // Fetch unread counts for current user
     final unreadResponse = await _client
@@ -44,9 +78,40 @@ class MessagingService {
       unreadMap[row['conversation_id']] = row['unread_count'] ?? 0;
     }
 
+    // Collect all created_by IDs to fetch customer names in batch
+    final Set<String> creatorIds = {};
+    for (var json in data) {
+      final createdBy = json['created_by'];
+      if (createdBy != null && json['type'] == 'support') {
+        creatorIds.add(createdBy);
+      }
+    }
+
+    // Fetch customer names for creators
+    Map<String, String> customerNames = {};
+    if (creatorIds.isNotEmpty) {
+      try {
+        final customersResponse = await _client
+            .from('customers')
+            .select('auth_user_id, name')
+            .inFilter('auth_user_id', creatorIds.toList());
+        for (var c in customersResponse) {
+          if (c['auth_user_id'] != null && c['name'] != null) {
+            customerNames[c['auth_user_id']] = c['name'];
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching customer names: $e');
+      }
+    }
+
     return data.map((json) {
-      // Inject unread count into json before parsing
+      // Inject unread count and creator name into json before parsing
       json['unread_count'] = unreadMap[json['id']] ?? 0;
+      final createdBy = json['created_by'];
+      if (createdBy != null && customerNames.containsKey(createdBy)) {
+        json['creator_name'] = customerNames[createdBy];
+      }
       return Conversation.fromJson(json);
     }).toList();
   }
@@ -241,6 +306,92 @@ class MessagingService {
     return conversationId;
   }
 
+  // ===========================================================================
+  // GROUP & OUTBOUND CHAT METHODS
+  // ===========================================================================
+
+  /// Create a new internal group chat
+  Future<String> createGroupChat({
+    required List<String> participantIds,
+    required String title,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    // Create conversation
+    final conversation = await _client
+        .from('conversations')
+        .insert({
+          'type': 'internal',
+          'title': title,
+          'last_message_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
+
+    final conversationId = conversation['id'] as String;
+
+    // Add participants (Creator + others)
+    final participants = [
+      {'conversation_id': conversationId, 'user_id': userId, 'role': 'admin'},
+      ...participantIds.map((pid) =>
+          {'conversation_id': conversationId, 'user_id': pid, 'role': 'member'})
+    ];
+
+    await _client.from('conversation_participants').insert(participants);
+
+    return conversationId;
+  }
+
+  /// Create a new support chat initiated by Employee (Outbound)
+  Future<String> createOutboundSupportChat(
+    String customerUserId, {
+    String? contextType,
+    String? contextId,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    // Create conversation
+    final conversation = await _client
+        .from('conversations')
+        .insert({
+          'type': 'support',
+          'status': 'active', // Active immediately as staff initiated it
+          'created_by': userId,
+          'accepted_by': userId, // Auto-accepted
+          'accepted_at': DateTime.now().toIso8601String(),
+          'last_message_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
+
+    final conversationId = conversation['id'] as String;
+
+    // Add participants: Employee and Customer
+    await _client.from('conversation_participants').insert([
+      {'conversation_id': conversationId, 'user_id': userId, 'role': 'admin'},
+      {
+        'conversation_id': conversationId,
+        'user_id': customerUserId,
+        'role': 'member'
+      }
+    ]);
+
+    // Add context if provided
+    if (contextType != null && contextId != null) {
+      await _client.from('conversation_contexts').insert({
+        'conversation_id': conversationId,
+        'context_type': contextType,
+        'context_id': contextId,
+        'is_primary': true,
+        'added_by': userId,
+      });
+    }
+
+    return conversationId;
+  }
+
   /// Delete a conversation and all its messages
   /// Uses RPC function for proper permission handling
   Future<void> deleteConversation(String conversationId) async {
@@ -258,5 +409,234 @@ class MessagingService {
       debugPrint('❌ Error deleting conversation: $e');
       rethrow;
     }
+  }
+
+  /// Update the context linking of a conversation
+  /// Allows linking an existing chat to a Job, Invoice, etc.
+  Future<void> updateConversationContext({
+    required String conversationId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    debugPrint(
+        '🔗 Linking conversation $conversationId to $contextType/$contextId');
+
+    try {
+      await _client.from('conversations').update({
+        'context_type': contextType,
+        'context_id': contextId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', conversationId);
+
+      debugPrint('✅ Conversation context updated successfully');
+    } catch (e) {
+      debugPrint('❌ Error updating conversation context: $e');
+      rethrow;
+    }
+  }
+
+  // ===========================================================================
+  // CUSTOMER CHAT METHODS
+  // ===========================================================================
+
+  /// Create a chat request from customer portal
+  /// The first message is the request itself - simple, frictionless
+  Future<String> createChatRequest({
+    required String initialMessage,
+    String? contextType,
+    String? contextId,
+    required String tenantId,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    // 1. Create conversation with 'pending' status
+    final conversation = await _client
+        .from('conversations')
+        .insert({
+          'type': 'support',
+          'status': 'pending',
+          'context_type': contextType,
+          'context_id': contextId,
+          'tenant_id': tenantId,
+          'created_by': userId, // Explicitly set for RLS
+          'last_message_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
+
+    final conversationId = conversation['id'] as String;
+
+    // 2. Add customer as participant
+    await _client.from('conversation_participants').insert({
+      'conversation_id': conversationId,
+      'user_id': userId,
+      'role': 'admin', // Customer is admin of their own request
+      'tenant_id': tenantId,
+    });
+
+    // 3. Add context if provided
+    if (contextType != null && contextId != null) {
+      await _client.from('conversation_contexts').insert({
+        'conversation_id': conversationId,
+        'context_type': contextType,
+        'context_id': contextId,
+        'is_primary': true,
+        'added_by': userId,
+        'tenant_id': tenantId,
+      });
+    }
+
+    // 4. Send the initial message
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': userId,
+      'content': initialMessage,
+      'type': 'text',
+      'tenant_id': tenantId,
+    });
+
+    debugPrint('✅ Created chat request: $conversationId');
+    return conversationId;
+  }
+
+  /// Get conversations for a customer (supports filtering by status)
+  Future<List<Map<String, dynamic>>> getCustomerConversations({
+    String? status,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+
+    // Build query dynamically
+    dynamic query = _client.from('conversations').select('''
+      *,
+      conversation_participants!inner(user_id, role),
+      messages(id, content, sender_id, created_at, type)
+    ''').eq('type', 'support');
+
+    if (status != null) {
+      query = query.eq('status', status);
+    }
+
+    final response = await query.order('last_message_at', ascending: false);
+    final List<dynamic> data = response as List<dynamic>;
+
+    // Filter to only include convos where current user is participant
+    return data
+        .where((conv) {
+          final participants = conv['conversation_participants'] as List?;
+          return participants?.any((p) => p['user_id'] == userId) ?? false;
+        })
+        .map((conv) => Map<String, dynamic>.from(conv))
+        .toList();
+  }
+
+  /// Accept a chat request (for employees)
+  Future<void> acceptChatRequest(String conversationId) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    await _client.from('conversations').update({
+      'status': 'active',
+      'accepted_by': userId,
+      'accepted_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', conversationId);
+
+    // Add employee as participant if not already
+    try {
+      await _client.from('conversation_participants').upsert({
+        'conversation_id': conversationId,
+        'user_id': userId,
+        'role': 'member',
+      }, onConflict: 'conversation_id,user_id');
+    } catch (e) {
+      debugPrint('Participant already exists or error: $e');
+    }
+
+    debugPrint('✅ Accepted chat request: $conversationId');
+  }
+
+  /// Reject a chat request (for employees)
+  Future<void> rejectChatRequest(String conversationId, String reason) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    await _client.from('conversations').update({
+      'status': 'rejected',
+      'reject_reason': reason,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', conversationId);
+
+    debugPrint('❌ Rejected chat request: $conversationId');
+  }
+
+  /// Resolve a chat (mark as completed)
+  Future<void> resolveChat(String conversationId) async {
+    await _client.from('conversations').update({
+      'status': 'resolved',
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', conversationId);
+
+    debugPrint('✅ Resolved chat: $conversationId');
+  }
+
+  /// Get pending chat requests (for employee inbox)
+  Future<List<Map<String, dynamic>>> getPendingChatRequests() async {
+    final response = await _client
+        .from('conversations')
+        .select('''
+      *,
+      conversation_participants(user_id, role),
+      messages(id, content, sender_id, created_at, type),
+      conversation_contexts(context_type, context_id, is_primary)
+    ''')
+        .eq('type', 'support')
+        .eq('status', 'pending')
+        .order('created_at', ascending: true);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Get sender info for a user ID (employee or customer)
+  /// Get sender info for a user ID (employee or customer)
+  Future<Map<String, dynamic>?> getSenderInfo(String senderId) async {
+    try {
+      // Use secure RPC to fetch public info without hitting table RLS
+      final result = await _client.rpc('get_public_user_info', params: {
+        'p_user_id': senderId,
+      }).maybeSingle();
+
+      if (result != null) {
+        return Map<String, dynamic>.from(result);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ Error fetching sender info: $e');
+      return null;
+    }
+  }
+
+  /// Get all support conversations grouped by status (for ERP inbox)
+  Future<Map<String, List<Map<String, dynamic>>>> getSupportInbox() async {
+    final response = await _client.from('conversations').select('''
+      *,
+      conversation_participants(user_id, role),
+      messages(id, content, sender_id, created_at, type),
+      conversation_contexts(context_type, context_id, is_primary)
+    ''').eq('type', 'support').order('last_message_at', ascending: false);
+
+    final conversations = List<Map<String, dynamic>>.from(response);
+
+    // Group by status
+    return {
+      'pending': conversations.where((c) => c['status'] == 'pending').toList(),
+      'active': conversations.where((c) => c['status'] == 'active').toList(),
+      'resolved':
+          conversations.where((c) => c['status'] == 'resolved').toList(),
+    };
   }
 }

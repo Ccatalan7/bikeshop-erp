@@ -19430,3 +19430,520 @@ end $$;
 
 
 
+--------------------------------------------------------------------------------
+-- MESSAGING SYSTEM
+--------------------------------------------------------------------------------
+-- Unified messaging for internal ERP chats and customer support
+-- Supports: Employee-to-employee chats, customer support tickets
+-- RLS: Employees see internal + support, Customers see only their own support
+--------------------------------------------------------------------------------
+
+-- Conversations table
+create table if not exists conversations (
+  id uuid default gen_random_uuid() primary key,
+  tenant_id uuid references public.tenants(id) default user_tenant_id(),
+  type text not null check (type in ('internal', 'support')),
+  title text, -- Optional title for group chats or ticket subjects
+  context_type text, -- 'job', 'invoice', etc.
+  context_id uuid, -- ID of the related entity
+  status text default 'active' check (status in ('pending', 'active', 'resolved', 'rejected')),
+  created_by uuid references auth.users(id) default auth.uid(),
+  accepted_by uuid references auth.users(id),
+  accepted_at timestamptz,
+  reject_reason text,
+  last_message_at timestamptz default now(),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Add columns if they don't exist (for existing tables)
+alter table conversations add column if not exists status text default 'active';
+alter table conversations add column if not exists created_by uuid references auth.users(id) default auth.uid();
+alter table conversations add column if not exists accepted_by uuid references auth.users(id);
+alter table conversations add column if not exists accepted_at timestamptz;
+alter table conversations add column if not exists reject_reason text;
+
+-- Conversation participants table
+create table if not exists conversation_participants (
+  conversation_id uuid references public.conversations(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  tenant_id uuid references public.tenants(id) default user_tenant_id(),
+  role text default 'member' check (role in ('admin', 'member')),
+  last_read_at timestamptz default now(),
+  created_at timestamptz default now(),
+  primary key (conversation_id, user_id)
+);
+
+-- Messages table
+create table if not exists messages (
+  id uuid default gen_random_uuid() primary key,
+  conversation_id uuid references public.conversations(id) on delete cascade,
+  sender_id uuid references auth.users(id) on delete set null,
+  tenant_id uuid references public.tenants(id) default user_tenant_id(),
+  content text,
+  type text default 'text' check (type in ('text', 'image', 'file', 'system', 'action_request')),
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+-- Conversation contexts table (multi-context support)
+create table if not exists conversation_contexts (
+  id uuid default gen_random_uuid() primary key,
+  conversation_id uuid references public.conversations(id) on delete cascade,
+  context_type text not null check (context_type in ('job', 'invoice', 'bike', 'product', 'order', 'customer')),
+  context_id uuid not null,
+  is_primary boolean default false,
+  added_by uuid references auth.users(id),
+  added_at timestamptz default now(),
+  tenant_id uuid references public.tenants(id) default user_tenant_id(),
+  unique(conversation_id, context_type, context_id)
+);
+
+-- Indexes for performance
+create index if not exists idx_conversations_tenant on public.conversations(tenant_id);
+create index if not exists idx_conversations_status on public.conversations(status);
+create index if not exists idx_conversations_type_status on public.conversations(type, status);
+create index if not exists idx_participants_user on public.conversation_participants(user_id);
+create index if not exists idx_messages_conversation on public.messages(conversation_id);
+create index if not exists idx_messages_created_at on public.messages(created_at);
+create index if not exists idx_conv_contexts_lookup on public.conversation_contexts(context_type, context_id);
+create index if not exists idx_conv_contexts_conversation on public.conversation_contexts(conversation_id);
+
+-- Helper function to check if user is a conversation participant
+create or replace function is_conversation_participant(conv_id uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.conversation_participants
+    where conversation_id = conv_id and user_id = auth.uid()
+  );
+end;
+$$ language plpgsql stable security definer;
+
+-- Update last_message_at trigger
+create or replace function update_conversation_timestamp()
+returns trigger as $$
+begin
+  update public.conversations
+  set last_message_at = new.created_at,
+      updated_at = new.created_at
+  where id = new.conversation_id;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_update_conversation_timestamp on messages;
+create trigger trg_update_conversation_timestamp
+after insert on public.messages
+for each row execute function update_conversation_timestamp();
+
+-- Enable RLS
+alter table public.conversations enable row level security;
+alter table public.conversation_participants enable row level security;
+alter table public.messages enable row level security;
+alter table public.conversation_contexts enable row level security;
+
+-- Drop existing policies to recreate them (NON-RECURSIVE VERSIONS)
+drop policy if exists "Users can view conversations they participate in" on public.conversations;
+drop policy if exists "Users can create conversations" on public.conversations;
+drop policy if exists "Users can update their conversations" on public.conversations;
+drop policy if exists "Users can view participants of their conversations" on public.conversation_participants;
+drop policy if exists "Users can join conversations" on public.conversation_participants;
+drop policy if exists "Users can add themselves as participants" on public.conversation_participants;
+drop policy if exists "Users can view messages in their conversations" on public.messages;
+drop policy if exists "Users can insert messages in their conversations" on public.messages;
+drop policy if exists "Users can send messages" on public.messages;
+drop policy if exists "Users can view contexts of their conversations" on public.conversation_contexts;
+drop policy if exists "Participants can add contexts" on public.conversation_contexts;
+
+-- ============================================================================
+-- NON-RECURSIVE RLS POLICIES (Fixed Dec 24, 2024)
+-- These policies use direct subqueries instead of is_conversation_participant()
+-- to avoid infinite recursion when conversation_participants policy triggers itself
+-- ============================================================================
+
+-- CONVERSATIONS POLICIES
+-- INSERT: Any authenticated user can create support conversations
+create policy "Users can create conversations"
+  on public.conversations for insert
+  to authenticated
+  with check (TRUE);  -- Simple: any authenticated user can create
+
+-- SELECT: Creator, participants, or employees for support
+create policy "Users can view conversations they participate in"
+  on public.conversations for select
+  to authenticated
+  using (
+    created_by = auth.uid()
+    OR id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+    OR (type = 'support' AND EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid()))
+  );
+
+-- UPDATE: Creator, participants, or employees
+create policy "Users can update their conversations"
+  on public.conversations for update
+  to authenticated
+  using (
+    created_by = auth.uid()
+    OR id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+-- PARTICIPANTS POLICIES (CRITICAL: must not reference itself!)
+-- SELECT: Your own participations, conversations you created, or employees see all
+create policy "Users can view participants of their conversations"
+  on public.conversation_participants for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    OR conversation_id IN (SELECT id FROM public.conversations WHERE created_by = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+-- INSERT: Can add yourself, or employees can add anyone
+create policy "Users can add themselves as participants"
+  on public.conversation_participants for insert
+  to authenticated
+  with check (
+    user_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+-- MESSAGES POLICIES
+-- SELECT: Conversations you created, participate in, or employees for support
+create policy "Users can view messages in their conversations"
+  on public.messages for select
+  to authenticated
+  using (
+    conversation_id IN (SELECT id FROM public.conversations WHERE created_by = auth.uid())
+    OR conversation_id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+-- INSERT: Must be sender and (creator, participant, or employee)
+create policy "Users can send messages"
+  on public.messages for insert
+  to authenticated
+  with check (
+    sender_id = auth.uid()
+    AND (
+      conversation_id IN (SELECT id FROM public.conversations WHERE created_by = auth.uid())
+      OR conversation_id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+      OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+    )
+  );
+
+-- CONVERSATION CONTEXTS POLICIES
+create policy "Users can view contexts of their conversations"
+  on public.conversation_contexts for select
+  to authenticated
+  using (
+    conversation_id IN (SELECT id FROM public.conversations WHERE created_by = auth.uid())
+    OR conversation_id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+create policy "Participants can add contexts"
+  on public.conversation_contexts for insert
+  to authenticated
+  with check (
+    conversation_id IN (SELECT id FROM public.conversations WHERE created_by = auth.uid())
+    OR conversation_id IN (SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+  );
+
+-- Grant permissions
+grant select, insert, update on public.conversations to authenticated;
+grant select, insert, update on public.conversation_participants to authenticated;
+grant select, insert on public.messages to authenticated;
+grant select, insert on public.conversation_contexts to authenticated;
+
+-- Delete conversation RPC
+-- Updated 2025-12-24: Fix permissions for support chats
+CREATE OR REPLACE FUNCTION delete_conversation(p_conversation_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id UUID := auth.uid();
+    v_is_participant BOOLEAN;
+    v_is_employee BOOLEAN;
+    v_user_role TEXT;
+    v_chat_type TEXT;
+BEGIN
+    -- Get conversation details
+    SELECT type INTO v_chat_type 
+    FROM conversations 
+    WHERE id = p_conversation_id;
+    
+    IF v_chat_type IS NULL THEN
+        RETURN; -- Conversation does not exist
+    END IF;
+
+    -- Check if user is a participant using a more direct query
+    IF EXISTS (
+        SELECT 1 FROM conversation_participants
+        WHERE conversation_id = p_conversation_id
+        AND user_id = v_user_id
+    ) THEN
+        v_is_participant := true;
+    ELSE
+        v_is_participant := false;
+    END IF;
+
+    -- Check if user is an employee
+    IF EXISTS (SELECT 1 FROM employees WHERE user_id = v_user_id) THEN
+        v_is_employee := true;
+    ELSE
+        v_is_employee := false;
+    END IF;
+    
+    -- AUTH LOGIC:
+    -- 1. Participant can delete (Standard)
+    -- 2. Employee can delete 'support' chats (Shared Inbox)
+    
+    END IF;
+
+    -- Get user role
+    SELECT role INTO v_user_role FROM user_profiles WHERE user_id = v_user_id;
+    
+    -- AUTH LOGIC:
+    -- 1. Participant can delete (Standard)
+    -- 2. Employee can delete 'support' chats (Shared Inbox)
+    -- 3. Admins/Managers can delete any chat
+    
+    IF v_is_participant 
+       OR (v_is_employee AND v_chat_type = 'support')
+       OR (v_user_role IN ('admin', 'manager', 'owner')) THEN
+        -- Allowed
+        NULL;
+    ELSE
+        RAISE EXCEPTION 'User is not authorized to delete this conversation (Code: P0001)';
+    END IF;
+    
+    -- DELETE OPERATIONS
+    
+    -- 1. Messages (Foreign Key)
+    DELETE FROM messages WHERE conversation_id = p_conversation_id;
+    
+    -- 2. Participants
+    DELETE FROM conversation_participants WHERE conversation_id = p_conversation_id;
+    
+    -- 3. Conversation
+    DELETE FROM conversations WHERE id = p_conversation_id;
+    
+END;
+$$;
+
+-- RPC to allow customers (or employees) to confirm an invoice
+CREATE OR REPLACE FUNCTION public.confirm_invoice_approval(p_invoice_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_customer_id uuid;
+BEGIN
+  -- Get invoice customer
+  SELECT customer_id INTO v_customer_id
+  FROM public.sales_invoices
+  WHERE id = p_invoice_id;
+
+  -- Check permissions (must be the customer or an admin/employee)
+  -- Employees are checked via user_profiles usually, but here we focus on Customer approval
+  IF v_customer_id != auth.uid() THEN
+     -- Check if employee
+     IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid()) THEN
+        RAISE EXCEPTION 'Not authorized to approve this invoice';
+     END IF;
+  END IF;
+
+  -- Update status
+  UPDATE public.sales_invoices
+  SET status = 'confirmed'
+  WHERE id = p_invoice_id;
+END;
+$$;
+-- Enable RLS on sales_invoices if not already enabled (it should be)
+ALTER TABLE public.sales_invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sales_invoice_items ENABLE ROW LEVEL SECURITY;
+
+-- 1. Sales Invoices: Customers can view their own invoices
+CREATE POLICY "Customers can view their own invoices"
+ON public.sales_invoices
+FOR SELECT
+TO authenticated
+USING (
+  customer_id = auth.uid()
+);
+
+-- 2. Sales Invoices: Employees can view all (assuming user_profiles check)
+CREATE POLICY "Employees can view all invoices"
+ON public.sales_invoices
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+);
+
+-- 3. Sales Invoice Items: Customers can view items of their invoices
+CREATE POLICY "Customers can view their own invoice items"
+ON public.sales_invoice_items
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.sales_invoices i
+    WHERE i.id = sales_invoice_items.invoice_id
+    AND i.customer_id = auth.uid()
+  )
+);
+
+-- 4. Sales Invoice Items: Employees can view all items
+CREATE POLICY "Employees can view all invoice items"
+ON public.sales_invoice_items
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+);
+-- Secure RPC to handle action request responses (bypassing RLS for specific updates)
+create or replace function public.respond_to_action_request(
+  p_message_id uuid,
+  p_action_type text,
+  p_status text,
+  p_metadata_updates jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+security definer -- Runs with elevated privileges
+as $$
+declare
+  v_message_exists boolean;
+  v_current_metadata jsonb;
+  v_new_metadata jsonb;
+begin
+  -- 1. Verify existence
+  select exists(select 1 from public.messages where id = p_message_id)
+  into v_message_exists;
+
+  if not v_message_exists then
+    raise exception 'StartChat: Message not found';
+  end if;
+
+  -- 2. Get current metadata
+  select metadata into v_current_metadata
+  from public.messages
+  where id = p_message_id;
+
+  -- 3. Merge updates
+  -- We update status, responded_at, and any other fields provided
+  v_new_metadata := v_current_metadata || 
+                    jsonb_build_object(
+                      'status', p_status,
+                      'responded_at', now()
+                    ) || p_metadata_updates;
+
+  -- 4. Update the message
+  update public.messages
+  set metadata = v_new_metadata
+  where id = p_message_id;
+
+end;
+$$;
+-- RPC to get basic public user info (name, avatar, role) for chat participants
+-- This bypasses strict RLS on user_profiles for the purpose of chat display
+create or replace function public.get_public_user_info(p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer -- Runs with elevated privileges
+as $$
+declare
+  v_result jsonb;
+begin
+  -- 1. Try to find in user_profiles (employees)
+  select jsonb_build_object(
+    'id', user_id,
+    'name', coalesce(name, 'Soporte'),
+    'avatar_url', image_url,
+    'role', 'employee'
+  )
+  into v_result
+  from public.user_profiles
+  where user_id = p_user_id;
+
+  if v_result is not null then
+    return v_result;
+  end if;
+
+  -- 2. If not found, try customers (for completeness, though usually customers query employees)
+  select jsonb_build_object(
+    'id', auth_user_id,
+    'name', coalesce(name, 'Cliente'),
+    'avatar_url', image_url,
+    'role', 'customer'
+  )
+  into v_result
+  from public.customers
+  where auth_user_id = p_user_id;
+
+  return v_result;
+end;
+$$;
+-- RPC to get basic public user info (name, avatar, role) for chat participants
+-- This bypasses strict RLS and table structure differences
+create or replace function public.get_public_user_info(p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer -- Runs with elevated privileges
+as $$
+declare
+  v_result jsonb;
+begin
+  -- 1. Try to find in employees table (via user_id)
+  -- Note: user_profiles does not have name column, employees does
+  select jsonb_build_object(
+    'id', user_id,
+    'name', coalesce(first_name || ' ' || last_name, 'Soporte'),
+    'avatar_url', photo_url,
+    'role', 'employee'
+  )
+  into v_result
+  from public.employees
+  where user_id = p_user_id
+  limit 1;
+
+  if v_result is not null then
+    return v_result;
+  end if;
+
+  -- 2. If not found, try customers (for completeness)
+  select jsonb_build_object(
+    'id', auth_user_id,
+    'name', coalesce(name, 'Cliente'),
+    'avatar_url', image_url,
+    'role', 'customer'
+  )
+  into v_result
+  from public.customers
+  where auth_user_id = p_user_id
+  limit 1;
+
+  -- 3. Fallback: try auth.users metadata if absolutely necessary (optional)
+  if v_result is null then
+     select jsonb_build_object(
+      'id', id,
+      'name', coalesce(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', email),
+      'avatar_url', raw_user_meta_data->>'avatar_url',
+      'role', 'unknown'
+    )
+    into v_result
+    from auth.users
+    where id = p_user_id;
+  end if;
+
+  return v_result;
+end;
+$$;

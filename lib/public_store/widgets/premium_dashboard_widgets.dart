@@ -238,7 +238,7 @@ class GarageGrid extends StatelessWidget {
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
               TextButton.icon(
-                onPressed: () => context.go('/cuenta/bicicletas'),
+                onPressed: () => context.go('/tienda/cuenta/bicicletas'),
                 icon: const Text('Ver Todo', style: TextStyle(fontSize: 12)),
                 label: const Icon(Icons.chevron_right, size: 14),
                 style: TextButton.styleFrom(
@@ -264,7 +264,7 @@ class GarageGrid extends StatelessWidget {
                             TextStyle(color: Colors.grey[500], fontSize: 13)),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => context.go('/cuenta/bicicletas'),
+                      onPressed: () => context.go('/tienda/cuenta/bicicletas'),
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Agregar Bicicleta',
                           style: TextStyle(fontSize: 12)),
@@ -277,16 +277,22 @@ class GarageGrid extends StatelessWidget {
               ),
             )
           else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.0),
-              itemCount: bikes.take(2).length,
-              itemBuilder: (context, index) => _buildBikeCard(bikes[index]),
+            // Use horizontal scroll for bikes instead of grid for consistent size
+            SizedBox(
+              height: 180, // Fixed reasonable height
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: bikes.take(4).length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final bike = bikes[index];
+                  if (bike is! Map<String, dynamic>) return const SizedBox();
+                  return SizedBox(
+                    width: 160, // Fixed card width
+                    child: _buildBikeCard(bike),
+                  );
+                },
+              ),
             ),
         ],
       ),
@@ -413,22 +419,21 @@ class _RecentActivityState extends State<RecentActivity> {
                       color: Colors.black87,
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(6)),
-                child: Row(
-                  children: [
-                    Text('Reciente',
-                        style:
-                            TextStyle(color: Colors.grey[600], fontSize: 11)),
-                    const SizedBox(width: 2),
-                    Icon(Icons.keyboard_arrow_down,
-                        color: Colors.grey[600], size: 14),
-                  ],
+              TextButton(
+                onPressed: () {
+                  if (_selectedTab == 0) {
+                    context.go('/tienda/cuenta/pedidos');
+                  } else {
+                    context.go('/tienda/cuenta/servicios');
+                  }
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+                child: Text('Ver Todo',
+                    style: TextStyle(color: Colors.blue[600], fontSize: 13)),
               ),
             ],
           ),
@@ -475,11 +480,14 @@ class _RecentActivityState extends State<RecentActivity> {
     return Column(
         children: widget.orders
             .take(3)
-            .map((order) => _buildActivityItem(
-                icon: Icons.receipt_long,
-                title: 'Pedido #${order['order_number'] ?? 'N/A'}',
-                subtitle: 'A las ${_formatTime(order['created_at'])}'))
-            .toList());
+            .where((order) => order is Map<String, dynamic>)
+            .map((order) {
+      final orderMap = order as Map<String, dynamic>;
+      return _buildActivityItem(
+          icon: Icons.receipt_long,
+          title: 'Pedido #${orderMap['order_number'] ?? 'N/A'}',
+          subtitle: 'A las ${_formatTime(orderMap['created_at'])}');
+    }).toList());
   }
 
   Widget _buildServicesList() {
@@ -488,12 +496,15 @@ class _RecentActivityState extends State<RecentActivity> {
     return Column(
         children: widget.services
             .take(3)
-            .map((service) => _buildActivityItem(
-                icon: Icons.build_circle_outlined,
-                title:
-                    '${service['bike_brand'] ?? ''} ${service['bike_model'] ?? ''} Mantención',
-                subtitle: 'A las ${_formatTime(service['created_at'])}'))
-            .toList());
+            .where((service) => service is Map<String, dynamic>)
+            .map((service) {
+      final serviceMap = service as Map<String, dynamic>;
+      return _buildActivityItem(
+          icon: Icons.build_circle_outlined,
+          title:
+              '${serviceMap['bike_brand'] ?? ''} ${serviceMap['bike_model'] ?? ''} Mantención',
+          subtitle: 'A las ${_formatTime(serviceMap['created_at'])}');
+    }).toList());
   }
 
   Widget _buildEmptyList(String message) => Padding(
@@ -545,5 +556,158 @@ class _RecentActivityState extends State<RecentActivity> {
     } catch (e) {
       return 'N/A';
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 4. QUICK REORDER WIDGET
+// -----------------------------------------------------------------------------
+class QuickReorderWidget extends StatelessWidget {
+  const QuickReorderWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Reordenar Rápido',
+                style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
+            TextButton(
+              onPressed: () => context.go('/tienda/productos'),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero, minimumSize: Size.zero),
+              child: Text('Ver todo',
+                  style: TextStyle(color: Colors.blue[600], fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildReorderItem(name: 'Lubricante Cadena', price: '\$18.000'),
+        const SizedBox(height: 12),
+        _buildReorderItem(name: 'Cámaras (Pack)', price: '\$12.500'),
+      ],
+    );
+  }
+
+  Widget _buildReorderItem({required String name, required String price}) {
+    return Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12)),
+          child: Icon(Icons.shopping_bag_outlined,
+              color: Colors.grey[500], size: 24),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name,
+                  style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+              const SizedBox(height: 2),
+              Text(price,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+            ],
+          ),
+        ),
+        Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+      ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 5. RECOMMENDATIONS WIDGET
+// -----------------------------------------------------------------------------
+class RecommendationsWidget extends StatelessWidget {
+  const RecommendationsWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Recomendado para Ti',
+            style: TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 16)),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 90,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _buildProductThumbnail('Lubricante', isNew: false),
+              _buildProductThumbnail('Cámaras', isNew: true),
+              _buildProductThumbnail('Pastillas', isNew: true),
+              _buildProductThumbnail('Sellante', isNew: false),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProductThumbnail(String name, {bool isNew = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Column(
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.shopping_bag_outlined,
+                    color: Colors.grey[400], size: 24),
+              ),
+              if (isNew)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(4)),
+                    child: const Text('NEW',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 56,
+            child: Text(name,
+                style: TextStyle(color: Colors.grey[600], fontSize: 10),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
   }
 }

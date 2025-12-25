@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import '../../modules/messaging/providers/chat_provider.dart';
-import '../../modules/messaging/models/message.dart';
-import '../theme/public_store_theme.dart';
+import '../../modules/messaging/services/messaging_service.dart';
+import '../widgets/customer_portal_layout.dart';
+import '../widgets/customer_inbox_list.dart';
+import '../widgets/customer_chat_view.dart';
+import '../widgets/customer_chat_context_panel.dart';
 
 class CustomerChatDetailPage extends StatefulWidget {
   final String conversationId;
@@ -19,190 +19,190 @@ class CustomerChatDetailPage extends StatefulWidget {
 }
 
 class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
-  final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final MessagingService _messagingService = MessagingService();
+  Map<String, dynamic>? _conversation;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().setActiveConversation(widget.conversationId);
-    });
+    _loadConversationDetails();
   }
 
   @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  void didUpdateWidget(CustomerChatDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversationId != widget.conversationId) {
+      _loadConversationDetails();
+    }
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isNotEmpty) {
-      context.read<ChatProvider>().sendMessage(text);
-      _messageController.clear();
-      // Scroll to bottom after small delay
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+  Future<void> _loadConversationDetails() async {
+    setState(() => _isLoading = true);
+    try {
+      final conversations = await _messagingService.getCustomerConversations();
+      final conv = conversations.firstWhere(
+        (c) => c['id'] == widget.conversationId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (mounted) {
+        setState(() {
+          _conversation = conv.isNotEmpty ? conv : null;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatProvider = context.watch<ChatProvider>();
-    final messages = chatProvider.activeMessages;
-    final isLoading = chatProvider.isLoading;
+    // Determine context for side panel
+    final contextType = _conversation?['context_type'];
+    final contextId = _conversation?['context_id'];
+    final hasContext = contextType != null && contextId != null;
 
-    return Column(
+    final title = _getTitle(contextType);
+
+    return CustomerPortalLayout(
+      title: title,
+      showBackButton: true,
+      overrideLayout: true,
+      backPath: '/tienda/cuenta/chats',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth > 900;
+
+          if (isDesktop) {
+            return _buildDesktopLayout(hasContext, contextType, contextId);
+          } else {
+            return _buildMobileLayout(
+                context, hasContext, contextType, contextId);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(
+      bool hasContext, String? contextType, String? contextId) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header
+        // Inbox Pane (Left)
         Container(
-          color: Theme.of(context).primaryColor,
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top,
-            left: 8,
-            right: 8,
-            bottom: 12,
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go('/cuenta/mensajes'),
-              ),
-              const Expanded(
-                child: Text(
-                  'Chat de Soporte',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(width: 48), // Balance for back button
-            ],
-          ),
-        ),
-
-        // Messages Area
-        Expanded(
-          child: isLoading && messages.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    return _buildMessageBubble(context, msg);
-                  },
-                ),
-        ),
-
-        // Input Area
-        Container(
-          padding: const EdgeInsets.all(16),
+          width: 300,
           decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: Colors.grey.shade200)),
             color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: const Text('Conversaciones',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: CustomerInboxList(
+                  activeConversationId: widget.conversationId,
+                  onConversationSelected: (id) =>
+                      context.go('/tienda/cuenta/chats/$id'),
+                ),
               ),
             ],
           ),
-          child: SafeArea(
-            top: false,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Escribe un mensaje...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                    ),
-                    textCapitalization: TextCapitalization.sentences,
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FloatingActionButton(
-                  onPressed: _sendMessage,
-                  mini: true,
-                  elevation: 0,
-                  backgroundColor: PublicStoreTheme.primaryBlue,
-                  child: const Icon(Icons.send, color: Colors.white, size: 20),
-                ),
-              ],
+        ),
+
+        // Chat Pane (Center)
+        Expanded(
+          flex: 2,
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : CustomerChatView(conversationId: widget.conversationId),
+        ),
+
+        // Context Pane (Right)
+        if (hasContext)
+          SizedBox(
+            width: 350,
+            child: CustomerChatContextPanel(
+              contextType: contextType!,
+              contextId: contextId!,
             ),
           ),
-        ),
       ],
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, Message msg) {
-    final isMe = msg.isMe;
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isMe ? PublicStoreTheme.primaryBlue : Colors.grey[200],
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
+  Widget _buildMobileLayout(BuildContext context, bool hasContext,
+      String? contextType, String? contextId) {
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : CustomerChatView(
+            conversationId: widget.conversationId,
+            onInfoPressed: hasContext
+                ? () =>
+                    _showContextBottomSheet(context, contextType!, contextId!)
+                : null,
+          );
+  }
+
+  void _showContextBottomSheet(
+      BuildContext context, String contextType, String contextId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              msg.content,
-              style: TextStyle(
-                color: isMe ? Colors.white : Colors.black87,
-                fontSize: 15,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('HH:mm').format(msg.createdAt),
-              style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.black54,
-                fontSize: 10,
+              Expanded(
+                child: CustomerChatContextPanel(
+                  contextType: contextType,
+                  contextId: contextId,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _getTitle(String? contextType) {
+    switch (contextType) {
+      case 'job':
+        return 'Servicio Técnico';
+      case 'order':
+        return 'Pedido';
+      case 'bike':
+        return 'Mi Bicicleta';
+      case 'invoice':
+        return 'Factura';
+      default:
+        return 'Chat de Soporte';
+    }
   }
 }

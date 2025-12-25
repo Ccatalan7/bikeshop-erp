@@ -25,6 +25,7 @@ import '../services/bikeshop_service.dart';
 import '../services/smart_task_service.dart';
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
+import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'bike_form_dialog.dart';
 
 // ============================================================
@@ -358,8 +359,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.approvedByCustomer = jobBike.approvedByCustomer;
 
           // Load items for this specific bike
-          final bikeItems =
-              allItems.where((item) => item.jobBikeId == jobBike.id).toList();
+          // Logic updated to handle legacy items (null jobBikeId):
+          // If this is the first bike in the list, we also include orphan items
+          final isFirstTab = loadedBikeTabs.isEmpty; // It's about to be added
+
+          final bikeItems = allItems.where((item) {
+            final matchesId = item.jobBikeId == jobBike.id;
+            final isLegacyOrphan = item.jobBikeId == null && isFirstTab;
+            return matchesId || isLegacyOrphan;
+          }).toList();
+
           for (final item in bikeItems) {
             final product = await getProductForItem(item);
             tab.partItems.add(_JobPartItem(
@@ -762,40 +771,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
-  void _showAddItemPicker() {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: const Text('Agregar repuesto o parte'),
-              subtitle:
-                  const Text('Busca en catálogo o ingresa uno personalizado'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _focusPartAutocomplete();
-              },
-            ),
-            const Divider(height: 0),
-            ListTile(
-              leading: const Icon(Icons.build_outlined),
-              title: const Text('Agregar servicio / mano de obra'),
-              subtitle: const Text('Registrar trabajos o paquetes de servicio'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                Future.microtask(_addServiceItem);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _focusPartAutocomplete() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1052,7 +1027,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             quantity: quantity,
             unitPrice: unitPrice,
             totalPrice: quantity * unitPrice,
-            itemType: 'product',
+            itemType: item.isCatalogProduct ? 'product' : 'adhoc',
           );
           final created = await bikeshopService.createJobItem(jobItem);
 
@@ -1641,7 +1616,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final isWide = constraints.maxWidth > 1180;
 
         if (isWide) {
-          // Two-column layout for wide screens
+          // Two-column layout for wide screens (+ chat sidebar for existing jobs)
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1703,6 +1678,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     ),
                   ),
                 ),
+                // CHAT SIDEBAR - Only for existing jobs
+                if (widget.jobId != null) ...[
+                  const SizedBox(width: 8),
+                  EntityChatSidebar(
+                    entityType: 'job',
+                    entityId: widget.jobId!,
+                    entityTitle:
+                        'Trabajo #${_existingJob?.jobNumber ?? widget.jobId!.substring(0, 6)}',
+                  ),
+                ],
               ],
             ),
           );
@@ -2496,46 +2481,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-
-        if (isMobile) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Mobile Header
-              Text(
-                'Repuestos y Partes',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              // Mobile List
-              if (_currentPartItems.isNotEmpty)
-                ..._currentPartItems.asMap().entries.map((entry) =>
-                    _buildMobilePartRow(
-                        theme, entry.key + 1, entry.value, entry.key)),
-
-              const SizedBox(height: 8),
-
-              // Add Item Button (Mobile-styled)
-              Container(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed:
-                      _showAddItemPicker, // Use the bottom sheet picker on mobile
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar Repuesto o Parte'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
-                    alignment: Alignment.centerLeft,
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-
+        // Always use table layout with scroll
         const minTableWidth = 800.0;
         final tableWidth = constraints.maxWidth > minTableWidth
             ? constraints.maxWidth
@@ -2777,432 +2723,44 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
-  /// Builds a mobile-friendly card for a part item
-  Widget _buildMobilePartRow(
-      ThemeData theme, int index, _JobPartItem item, int itemIndex) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            // Top row: Name and Delete button
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: SmartProductField(
-                    key: ValueKey('smart_product_mobile_${item.id}'),
-                    initialData: item.product != null || item.name.isNotEmpty
-                        ? ProductFieldData(
-                            product: item.product,
-                            productName: item.displayName.isNotEmpty
-                                ? item.displayName
-                                : null,
-                            productSku: item.sku,
-                            isCatalogProduct: item.isCatalogProduct,
-                            description: item.notes,
-                          )
-                        : null,
-                    enabled: true,
-                    showCost: false,
-                    allowCustomItems: true,
-                    onProductChanged: (selection) {
-                      final partItems = _currentPartItems;
-                      if (selection == null) {
-                        setState(() {
-                          partItems[itemIndex] = item.copyWith(
-                            clearProduct: true,
-                            name: '',
-                            isCatalogProduct: false,
-                            quantity: 1,
-                            unitPrice: 0,
-                            notes: null,
-                          );
-                        });
-                      } else if (selection.price == 0 &&
-                          selection.description != null) {
-                        item.notes = selection.description;
-                      } else {
-                        setState(() {
-                          partItems[itemIndex] = item.copyWith(
-                            product: selection.product,
-                            name: selection.productName ?? '',
-                            isCatalogProduct: selection.isCatalogProduct,
-                            unitPrice:
-                                selection.product?.price ?? item.unitPrice,
-                            notes: selection.description,
-                          );
-                        });
-                      }
-                    },
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () =>
-                      setState(() => _currentPartItems.removeAt(itemIndex)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Second row: Qty, Price, Total
-            Row(
-              children: [
-                // Quantity
-                Expanded(
-                  flex: 2,
-                  child: TextFormField(
-                    initialValue: item.quantity.toString(),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Cant.',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (value) {
-                      final newQty = int.tryParse(value) ?? 1;
-                      item.quantity = newQty;
-                      setState(() {});
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Price
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    initialValue: item.unitPrice.toStringAsFixed(0),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Precio',
-                      prefixText: '\$ ',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
-                    ],
-                    onChanged: (value) {
-                      final newPrice = double.tryParse(value) ?? 0;
-                      item.unitPrice = newPrice;
-                      setState(() {});
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Total
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                          .format(item.quantity * item.unitPrice),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Builds a mobile-friendly card for a service item
-  Widget _buildMobileServiceRow(
-      ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.work_outline, color: Colors.blue),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.displayName,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      if (item.hasCustomDescription)
-                        Text(
-                          item.description,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(fontStyle: FontStyle.italic),
-                        ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () =>
-                      setState(() => _serviceItems.removeAt(itemIndex)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                // Quantity (Hours)
-                Expanded(
-                  flex: 2,
-                  child: TextFormField(
-                    initialValue:
-                        item.hours.toString(), // Simplified for mobile
-                    readOnly:
-                        true, // Simplified: services usually added via dialog
-                    decoration: const InputDecoration(
-                      labelText: 'Horas',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Price
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    initialValue: item.hourlyRate.toStringAsFixed(0),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Tarifa',
-                      prefixText: '\$ ',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
-                    ],
-                    onChanged: (value) {
-                      final newPrice = double.tryParse(value) ?? 0;
-                      setState(() {
-                        _serviceItems[itemIndex] = _JobServiceItem(
-                          serviceProduct: item.serviceProduct,
-                          description: item.description,
-                          hours: item.hours,
-                          hourlyRate: newPrice,
-                          date: item.date,
-                        );
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Total
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                          .format(item.total),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildPartRow(
       ThemeData theme, int index, _JobPartItem item, int itemIndex) {
-    final partItems = _currentPartItems; // Get current bike's items
-
-    return LineRowWrapper(
+    return _PartItemRow(
       key: ValueKey('part_${item.id}'),
+      item: item,
       index: index,
-      canMoveUp: itemIndex > 0,
-      canMoveDown: itemIndex < partItems.length - 1,
+      itemIndex: itemIndex,
+      isFirst: itemIndex == 0,
+      isLast: itemIndex == _currentPartItems.length - 1,
+      indexWidth: _colIndexWidth,
+      quantityWidth: _colQuantityWidth,
+      priceWidth: _colPriceWidth,
+      totalWidth: _colTotalWidth,
+      actionsWidth: _colActionsWidth,
+      onChanged: (newItem) {
+        setState(() {
+          _currentPartItems[itemIndex] = newItem;
+        });
+      },
+      onRemove: () => setState(() => _currentPartItems.removeAt(itemIndex)),
       onMoveUp: () {
         if (itemIndex > 0) {
           setState(() {
-            final temp = partItems[itemIndex];
-            partItems[itemIndex] = partItems[itemIndex - 1];
-            partItems[itemIndex - 1] = temp;
+            final temp = _currentPartItems[itemIndex];
+            _currentPartItems[itemIndex] = _currentPartItems[itemIndex - 1];
+            _currentPartItems[itemIndex - 1] = temp;
           });
         }
       },
       onMoveDown: () {
-        if (itemIndex < partItems.length - 1) {
+        if (itemIndex < _currentPartItems.length - 1) {
           setState(() {
-            final temp = partItems[itemIndex];
-            partItems[itemIndex] = partItems[itemIndex + 1];
-            partItems[itemIndex + 1] = temp;
+            final temp = _currentPartItems[itemIndex];
+            _currentPartItems[itemIndex] = _currentPartItems[itemIndex + 1];
+            _currentPartItems[itemIndex + 1] = temp;
           });
         }
       },
-      onRemove: () => setState(() => partItems.removeAt(itemIndex)),
-      canEdit: true,
-      indexColumnWidth: _colIndexWidth,
-      actionsColumnWidth: _colActionsWidth,
-      showDeleteButton: true,
-      columns: [
-        // Product details column - uses SmartProductField for consistent behavior
-        LineColumn(
-          expanded: true,
-          minWidth: 250,
-          padding: const EdgeInsets.all(12),
-          child: SmartProductField(
-            key: ValueKey('smart_product_${item.id}'),
-            initialData: item.product != null || item.name.isNotEmpty
-                ? ProductFieldData(
-                    product: item.product,
-                    productName:
-                        item.displayName.isNotEmpty ? item.displayName : null,
-                    productSku: item.sku,
-                    isCatalogProduct: item.isCatalogProduct,
-                    description: item.notes,
-                  )
-                : null,
-            enabled: true,
-            showCost: false, // Pegas bill customers at SALE price, not cost
-            allowCustomItems: true,
-            autoFocus: item.product == null &&
-                item.name.isEmpty, // Auto-focus empty rows
-            onAutoAddLine: () {
-              // Auto-add new line when product is selected
-              _addEmptyPartLine();
-            },
-            onProductChanged: (selection) {
-              if (selection == null) {
-                // Product cleared - reset the item but keep same ID
-                setState(() {
-                  partItems[itemIndex] = item.copyWith(
-                    clearProduct: true,
-                    name: '',
-                    isCatalogProduct: false,
-                    quantity: 1,
-                    unitPrice: 0,
-                    notes: null,
-                  );
-                });
-              } else if (selection.price == 0 &&
-                  selection.description != null) {
-                // Description-only update - DON'T reset price, just update notes
-                // Update in-place without full setState to avoid focus loss
-                item.notes = selection.description;
-                // No setState needed - description field handles its own state
-              } else {
-                // Product selected - update with sale price (not cost)
-                setState(() {
-                  partItems[itemIndex] = item.copyWith(
-                    product: selection.product,
-                    name: selection.productName ?? '',
-                    isCatalogProduct: selection.isCatalogProduct,
-                    unitPrice: selection.product?.price ?? item.unitPrice,
-                    notes: selection.description,
-                  );
-                });
-              }
-            },
-          ),
-        ),
-
-        // Cantidad column
-        LineColumn(
-          width: _colQuantityWidth,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Center(
-            child: TextFormField(
-              key: ValueKey('qty_${item.id}'),
-              initialValue: item.quantity.toString(),
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              onChanged: (value) {
-                final newQty = int.tryParse(value) ?? 1;
-                // Update in-place to avoid focus loss
-                item.quantity = newQty;
-                // Only setState to update total display
-                setState(() {});
-              },
-            ),
-          ),
-        ),
-
-        // Precio column - EDITABLE
-        LineColumn(
-          width: _colPriceWidth,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: TextFormField(
-            key: ValueKey('price_${item.id}'),
-            initialValue: item.unitPrice.toStringAsFixed(0),
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              border: OutlineInputBorder(),
-              prefixText: '\$ ',
-            ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-            ],
-            onChanged: (value) {
-              final newPrice = double.tryParse(value) ?? 0;
-              // Update in-place to avoid focus loss
-              item.unitPrice = newPrice;
-              // Only setState to update total display
-              setState(() {});
-            },
-          ),
-        ),
-
-        // Total column (no right border - last content column)
-        LineColumn(
-          width: _colTotalWidth,
-          showRightBorder: false,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Text(
-            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                .format(item.quantity * item.unitPrice),
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
     );
   }
 
@@ -3491,6 +3049,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   /// Builds a service/labor row using the universal LineRowWrapper.
   /// Provides hover-based reorder arrows and consistent styling.
+  Widget _buildMobileServiceRow(
+      ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
+    return const SizedBox.shrink();
+  }
+
   Widget _buildServiceRow(
       ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
     return LineRowWrapper(
@@ -3799,7 +3362,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ElevatedButton.icon(
             onPressed: () {
               if (_existingJob?.invoiceId != null) {
-                context.push('/sales/invoices/${_existingJob!.invoiceId}/edit');
+                // Pass extra param to indicate we came from a job, so back button works nicely
+                context.push(
+                    '/sales/invoices/${_existingJob!.invoiceId}/edit?referrer=job&jobId=${_existingJob!.id}');
               }
             },
             icon: const Icon(Icons.open_in_new),
@@ -3815,6 +3380,211 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 }
 
 // Helper classes for form items
+
+class _PartItemRow extends StatefulWidget {
+  final _JobPartItem item;
+  final int index;
+  final int itemIndex;
+  final bool isFirst;
+  final bool isLast;
+  final ValueChanged<_JobPartItem> onChanged;
+  final VoidCallback onRemove;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
+  final double indexWidth;
+  final double quantityWidth;
+  final double priceWidth;
+  final double totalWidth;
+  final double actionsWidth;
+
+  const _PartItemRow({
+    Key? key,
+    required this.item,
+    required this.index,
+    required this.itemIndex,
+    required this.isFirst,
+    required this.isLast,
+    required this.onChanged,
+    required this.onRemove,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.indexWidth,
+    required this.quantityWidth,
+    required this.priceWidth,
+    required this.totalWidth,
+    required this.actionsWidth,
+  }) : super(key: key);
+
+  @override
+  State<_PartItemRow> createState() => _PartItemRowState();
+}
+
+class _PartItemRowState extends State<_PartItemRow> {
+  late TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.item.displayName);
+  }
+
+  @override
+  void didUpdateWidget(_PartItemRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.product != oldWidget.item.product ||
+        (widget.item.product == null &&
+            widget.item.name != oldWidget.item.name &&
+            widget.item.name != _nameController.text)) {
+      _nameController.text = widget.item.displayName;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final item = widget.item;
+
+    return LineRowWrapper(
+      index: widget.index,
+      canMoveUp: !widget.isFirst,
+      canMoveDown: !widget.isLast,
+      onMoveUp: widget.onMoveUp,
+      onMoveDown: widget.onMoveDown,
+      onRemove: widget.onRemove,
+      canEdit: true,
+      indexColumnWidth: widget.indexWidth,
+      actionsColumnWidth: widget.actionsWidth,
+      showDeleteButton: true,
+      columns: [
+        // Product Autocomplete Column
+        // Product Autocomplete Column
+        LineColumn(
+          expanded: true,
+          minWidth: 250,
+          padding: const EdgeInsets.all(12),
+          child: SmartProductField(
+            initialData: ProductFieldData(
+              product: item.product,
+              productName: item.displayName,
+              productSku: item.product?.sku,
+              isCatalogProduct: item.isCatalogProduct,
+              description: item.notes,
+            ),
+            hintText: 'Buscar por nombre...',
+            allowCustomItems: true,
+            showCost:
+                false, // Job form usually shows price to customer, not cost
+            onProductChanged: (selection) {
+              if (selection == null) {
+                // Clear product
+                widget.onChanged(item.copyWith(
+                  clearProduct: true,
+                  name: '',
+                  isCatalogProduct: true,
+                  notes: '',
+                ));
+              } else if (selection.isCatalogProduct &&
+                  selection.product != null) {
+                // Catalog product
+                widget.onChanged(item.copyWith(
+                  product: selection.product,
+                  name: selection.productName ?? '',
+                  isCatalogProduct: true,
+                  // Only update price if it's a new selection, not a desc update
+                  unitPrice:
+                      selection.price > 0 ? selection.price : item.unitPrice,
+                  notes: selection.description,
+                ));
+              } else {
+                // Ad-hoc item
+                widget.onChanged(item.copyWith(
+                  clearProduct: true,
+                  name: selection.productName ?? '',
+                  isCatalogProduct: false,
+                  // Keep existing price for ad-hoc unless explicitly changed (not supported by field directly)
+                  // SmartProductField sends 0 for price on description-only updates
+                  unitPrice: item.unitPrice,
+                  notes: selection.description,
+                ));
+              }
+            },
+          ),
+        ),
+
+        // Quantity Column
+        LineColumn(
+          width: widget.quantityWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Center(
+            child: TextFormField(
+              initialValue: item.quantity.toString(),
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: OutlineInputBorder(),
+              ),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (value) {
+                final newQty = int.tryParse(value) ?? 1;
+                widget.onChanged(item.copyWith(quantity: newQty));
+              },
+            ),
+          ),
+        ),
+
+        // Price Column
+        LineColumn(
+          width: widget.priceWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: TextFormField(
+            initialValue: item.unitPrice.toStringAsFixed(0),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(),
+              prefixText: '\$ ',
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+            ],
+            onChanged: (value) {
+              final newPrice = double.tryParse(value) ?? 0;
+              widget.onChanged(item.copyWith(unitPrice: newPrice));
+            },
+          ),
+        ),
+
+        // Total Column
+        LineColumn(
+          width: widget.totalWidth,
+          showRightBorder: false,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(
+            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                .format(item.quantity * item.unitPrice),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _JobPartItem {
   final String id; // Unique stable ID for widget keys
   Product? product; // Nullable for ad-hoc items

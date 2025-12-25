@@ -61,6 +61,8 @@ class CustomerAccountMenu extends StatelessWidget {
               'Mis direcciones', '/tienda/cuenta/direcciones'),
           _buildMobileMenuItem(context, Icons.person_outline, 'Mi perfil',
               '/tienda/cuenta/perfil'),
+          _buildMobileMenuItem(context, Icons.chat_bubble_outline,
+              'Ayuda y Soporte', '/tienda/cuenta/chats'),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('Cerrar sesión',
@@ -159,6 +161,16 @@ class CustomerAccountMenu extends StatelessWidget {
             ],
           ),
         ),
+        PopupMenuItem(
+          value: 'chat',
+          child: Row(
+            children: const [
+              Icon(Icons.chat_bubble_outline, size: 18),
+              SizedBox(width: 12),
+              Text('Ayuda y Soporte'),
+            ],
+          ),
+        ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: 'logout',
@@ -184,6 +196,9 @@ class CustomerAccountMenu extends StatelessWidget {
             break;
           case 'profile':
             context.go('/tienda/cuenta/perfil');
+            break;
+          case 'chat':
+            context.go('/tienda/cuenta/chats');
             break;
           case 'logout':
             await accountService.signOut();

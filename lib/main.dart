@@ -50,6 +50,7 @@ import 'shared/services/job_role_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'modules/messaging/providers/chat_provider.dart';
+import 'modules/messaging/services/messaging_service.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -227,6 +228,9 @@ class VinabikeApp extends StatelessWidget {
           return navigationService;
         }),
         ChangeNotifierProvider(create: (_) => WorkspaceManager()),
+
+        // Messaging service (global for chat sidebar in all modules)
+        Provider(create: (_) => MessagingService()),
 
         // Business services
         // Shared inventory service (used by POS)

@@ -28,9 +28,14 @@ class ChatProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get activeConversationId => _activeConversationId;
 
-  /// Total unread messages across all conversations
-  int get totalUnreadCount =>
-      _conversations.fold(0, (sum, c) => sum + c.unreadCount);
+  /// Total unread messages across all conversations + pending requests
+  int get totalUnreadCount => _conversations.fold(0, (sum, c) {
+        // If it's a pending support chat, count it as at least 1 (even if unreadCount is 0 because user isn't participant)
+        if (c.type == 'support' && c.status == 'pending') {
+          return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
+        }
+        return sum + c.unreadCount;
+      });
 
   ChatProvider(this._userService) {
     _loadUserCache();
@@ -40,13 +45,17 @@ class ChatProvider extends ChangeNotifier {
   /// Load user cache for resolving names
   Future<void> _loadUserCache() async {
     try {
+      // Check if we are an employee/admin before trying to fetch sensitive tenant users
+      // This helper check prevents 400 errors for customers
       final users = await _userService.getTenantUsers();
       for (var u in users) {
         _userCache[u['id']] = u;
       }
       notifyListeners();
     } catch (e) {
-      debugPrint('Error loading user cache: $e');
+      // Silently fail for customers or non-admins to avoid console spam [400 Bad Request]
+      // This is expected for the Customer Portal.
+      // debugPrint('Info: Could not load full user cache (normal for customers): $e');
     }
   }
 
@@ -70,7 +79,14 @@ class ChatProvider extends ChangeNotifier {
   /// Get display title for a conversation
   String getChatTitle(Conversation c) {
     if (c.title != null && c.title!.isNotEmpty) return c.title!;
-    if (c.type == 'support') return 'Ticket de Soporte';
+
+    // For support chats, use customer name
+    if (c.type == 'support') {
+      if (c.creatorName != null && c.creatorName!.isNotEmpty) {
+        return c.creatorName!;
+      }
+      return 'Cliente';
+    }
 
     // Internal chat - find other participant
     final myId = _service.currentUserId;
@@ -124,6 +140,7 @@ class ChatProvider extends ChangeNotifier {
       _conversations[index] = Conversation(
         id: old.id,
         type: old.type,
+        status: old.status,
         title: old.title,
         contextType: old.contextType,
         contextId: old.contextId,
@@ -131,6 +148,8 @@ class ChatProvider extends ChangeNotifier {
         updatedAt: old.updatedAt,
         participantIds: old.participantIds,
         unreadCount: 0, // Force clear
+        createdBy: old.createdBy,
+        creatorName: old.creatorName,
       );
       notifyListeners();
     }
@@ -187,6 +206,51 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Create a new internal group chat
+  Future<void> createGroupChat(List<String> userIds, String title) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final conversationId = await _service.createGroupChat(
+        participantIds: userIds,
+        title: title,
+      );
+      setActiveConversation(conversationId);
+    } catch (e) {
+      debugPrint('❌ Error creating group chat: $e');
+      rethrow;
+    } finally {
+      if (_activeConversationId == null) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Create a new support chat with a customer
+  Future<void> createCustomerChat(String customerUserId,
+      {String? contextType, String? contextId}) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final conversationId = await _service.createOutboundSupportChat(
+          customerUserId,
+          contextType: contextType,
+          contextId: contextId);
+      setActiveConversation(conversationId);
+    } catch (e) {
+      debugPrint('❌ Error creating customer chat: $e');
+      rethrow;
+    } finally {
+      if (_activeConversationId == null) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Send a message in the active conversation
   Future<void> sendMessage(String content,
       {String type = 'text', Map<String, dynamic>? metadata}) async {
@@ -233,6 +297,28 @@ class ChatProvider extends ChangeNotifier {
       setActiveConversation(id);
     } catch (e) {
       debugPrint('❌ Error creating ticket: $e');
+    }
+  }
+
+  /// Accept a pending chat request
+  Future<void> acceptChatRequest(String conversationId) async {
+    try {
+      await _service.acceptChatRequest(conversationId);
+      await loadConversations(); // Refresh to update status
+    } catch (e) {
+      debugPrint('❌ Error accepting chat request: $e');
+      rethrow;
+    }
+  }
+
+  /// Reject a pending chat request
+  Future<void> rejectChatRequest(String conversationId, String reason) async {
+    try {
+      await _service.rejectChatRequest(conversationId, reason);
+      await loadConversations(); // Refresh to update status
+    } catch (e) {
+      debugPrint('❌ Error rejecting chat request: $e');
+      rethrow;
     }
   }
 

@@ -232,7 +232,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                         icon: Icons.chat_bubble_outline,
                         title: 'Ayuda',
                         subtitle: 'Mensajes y Soporte',
-                        onTap: () => context.go('/cuenta/mensajes'),
+                        onTap: () => context.go('/tienda/cuenta/chats'),
                       ),
                     ],
                   );

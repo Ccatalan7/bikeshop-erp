@@ -775,6 +775,58 @@ alter view stock_movements_view set (security_invoker = on);
 
 ---
 
+---
+
+# 🔐 AUTHENTICATION, ROLES & PERMISSIONS
+
+**Traceability and granular access control are core to this ERP.**
+
+## 1. Role System (`user_profiles`)
+Users are assigned roles in the `user_profiles` table. Logic must respect these hierarchies:
+- **`owner`**: Full access to everything in tenant. Can manage subscription.
+- **`admin`**: Full access to tenant operations.
+- **`manager`**: Can override limits, approve voids, view sensitive financial reports.
+- **`employee`**: Standard operational access (POS, Workshops, CRM).
+- **`mechanic`**: specialized access for Work Orders and Maintenance.
+
+**Checking Roles:**
+- In SQL: `EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid() AND role IN ('admin', 'manager'))`
+- In Flutter: `context.read<AuthProvider>().role`
+
+## 2. Traceability Requirements (Audit Trail)
+Every action must be traceable to a specific user. Anonymous operations are forbidden for business data.
+
+### Database Columns
+**ALL** transactional and business logic tables (invoices, payments, work_orders, stock_movements, chats) MUST have:
+- `created_by uuid references auth.users(id) default auth.uid()`
+- `updated_by uuid references auth.users(id)` (if mutable)
+
+### Performance & Metrics
+We key analytics off these columns. When building features:
+- **Sales by User**: Aggregated from `sales_invoices.created_by`.
+- **Productivity**: Tasks/Work Orders completed by user.
+- **Commissions**: Calculated based on `created_by` or dedicated `sales_rep_id` column.
+
+## 3. Permission Implementation Layers
+1. **RLS (Row Level Security)**:
+   - **MANDATORY** for Tenant Isolation (`tenant_id`).
+   - Used for basic "Employee vs Customer" data visibility.
+2. **RPC / Database Functions** (`SECURITY DEFINER`):
+   - **CRITICAL**: Checks roles explicitly inside the function.
+   - Example: `delete_conversation` allows Participants OR Admins.
+   - *Never rely on RLS alone for destructive RPCs.*
+3. **UI State (Flutter)**:
+   - Hide/Disable buttons based on role.
+   - Use `PermissionGate` widgets where available.
+
+## 4. Best Practices for New Features
+1. **Never trust the client**: Verify permissions in the backend (RLS or Function).
+2. **Auto-fill User**: Use `default auth.uid()` for `created_by` in new tables.
+3. **Log Destructive Actions**: Deleting invoices, voiding payments, or changing critical configs must be logged to `activity_logs`.
+4. **Explicit Overrides**: If a regular user needs to perform a Manager action, implement an "Admin Override" flow (ask for admin PIN/Credentials).
+
+---
+
 # 🧱 Modular Architecture
 
 Each module is independent but shares a unified data layer. Modules include:

@@ -23,16 +23,19 @@ import '../../modules/website/models/website_page_models.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
+import '../services/customer_account_service.dart';
 import 'customer_chat_widget.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
   final bool showEditorButton;
+  final bool enablePageViewScrolling;
 
   const PublicStoreLayout({
     super.key,
     required this.child,
     this.showEditorButton = true,
+    this.enablePageViewScrolling = true,
   });
 
   @override
@@ -321,7 +324,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         currentRoute == '/' ||
         currentRoute == '/tienda/';
 
-    if (headerStyle == 'transparent' && isHomePage) {
+    if (headerStyle == 'transparent' &&
+        isHomePage &&
+        widget.enablePageViewScrolling) {
       // TRANSPARENT: Header floats over hero ONLY ON HOMEPAGE
       pageContent = ScrollConfiguration(
         behavior: isEditMode
@@ -361,7 +366,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
         ),
       );
-    } else if (headerStyle == 'transparent' && !isHomePage) {
+    } else if (headerStyle == 'transparent' &&
+        !isHomePage &&
+        widget.enablePageViewScrolling) {
       // TRANSPARENT style but NOT homepage: Use solid header instead
       pageContent = Column(
         children: [
@@ -390,7 +397,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
         ],
       );
-    } else if (headerStyle == 'sticky') {
+    } else if (headerStyle == 'sticky' && widget.enablePageViewScrolling) {
       // STICKY: Header stays fixed at top while scrolling
       pageContent = _buildStickyHeaderLayout(
         context: context,
@@ -416,21 +423,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         children: [
           // Header - static at top
           buildHeaderWidget(),
-          // Main content area - scrollable
+          // Main content area - scrollable or fixed
           Expanded(
-            child: ScrollConfiguration(
-              behavior: isEditMode
-                  ? const _NoDragScrollBehavior()
-                  : const MaterialScrollBehavior(),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    widget.child,
-                    footerWidget,
-                  ],
-                ),
-              ),
-            ),
+            child: widget.enablePageViewScrolling
+                ? ScrollConfiguration(
+                    behavior: isEditMode
+                        ? const _NoDragScrollBehavior()
+                        : const MaterialScrollBehavior(),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          widget.child,
+                          footerWidget,
+                        ],
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      Expanded(child: widget.child),
+                      // In fixed mode, footer is appended at bottom if needed, or omitted.
+                      // Usually for fixed apps, footer is not shown or is part of child.
+                      // Let's hide footer for fixed layout to gain max space.
+                    ],
+                  ),
           ),
         ],
       );
@@ -1461,8 +1477,89 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Desktop mode is the default "no constraint" viewport.
     if (mode == DevicePreviewMode.desktop) return child;
 
+    // Checks if we are in an "App Mode" page (like Chat) that handles its own scrolling.
+    if (!widget.enablePageViewScrolling) {
+      final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
+      return LayoutBuilder(builder: (context, constraints) {
+        // Provide a STRICT height constraint equal to the available space (or a fixed device height).
+        // Using available space (constraints.maxHeight) prevents overflow/unbounded errors.
+        return Center(
+          child: Container(
+            width: targetWidth,
+            height: constraints.maxHeight,
+            decoration: BoxDecoration(
+              color: Colors.white, // Standard frame background
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                size: Size(targetWidth, constraints.maxHeight),
+              ),
+              child: child,
+            ),
+          ),
+        );
+      });
+    }
+
+    // If we are in an app-like page that handles its own scrolling (like Chat),
+    // and we are simply resizing the viewport for mobile preview, we should
+    // ensure we don't apply restrictive height constraints if possible,
+    // OR we rely on the fact that the inner content is now unbounded.
+    // However, the real issue is likely the Clip.antiAlias and fixed height container.
+
+    // If this is an app page (non-scrollable), we should probably return it as-is
+    // but just constrained by width if we want to simulate mobile.
+    // BUT the user asked to NOT break edit mode.
+    // So we must ensure the container provides a valid height constraint (not infinite, but not zero).
+    // The current implementation uses targetHeight = screenSize.height which IS definite.
+    // The issue might be MediaQuery data overlap.
+
+    // Let's ensure the MediaQuery doesn't mess up the constraints for the inner Expanded.
+    // Actually, getting "RenderBox not laid out" usually means an Expanded is inside a parent with unbounded height (Scrollable)
+    // OR an Expanded is inside a parent with 0 height.
+
+    // If widget.enablePageViewScrolling is false, the passed 'child' (pageContent)
+    // is a Column with Expanded(child: widget.child).
+    // The _buildEditorViewport wraps this in a Container(height: screenSize.height).
+    // This *should* work (Fixed Height > Column > Expanded).
+
+    // Wait, let's look at the 'child' being passed.
+    // pageContent is created in line 438: Column([Expanded(child: widget.child)]).
+    // If that is put inside _buildEditorViewport -> Container(height: screenHeight), it should be fine.
+
+    // Re-reading the error: "RenderBox was not laid out".
+    // This often happens if the Column is inside a SingleChildScrollView.
+    // But we fixed that logic in lines 423-445.
+
+    // Is it possible 'pageContent' is NOT what we think it is?
+    // In build(), 'pageContent' varies by 'headerStyle'.
+    // If headerStyle is transparent... which it might be on some pages?
+    // Chat page probably uses 'solid' (default).
+
+    // Let's modify this method to pass the 'enablePageViewScrolling' check effectively.
+    // If the user wants to "put the edit mode back", we just need to ensure it renders.
+    // The safest fix for the "App Mode" inside Editor is to allow it to fill the container.
+
+    // Actually, looking at the previous file content, I don't see 'enablePageViewScrolling' being checked here.
+    // I will add a check: if (!widget.enablePageViewScrolling) return child; ?
+    // No, user said "don't force it". They want edit mode.
+
+    // If the error persists in edit mode, it might be the MediaQuery.size override?
+    // Let's try to pass the constraints properly.
+
     final screenSize = MediaQuery.sizeOf(context);
     final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
+
+    // If we are simulating mobile on desktop, we want to constrain width but keep height full?
+    // Or fixed height?
     final targetHeight = screenSize.height;
 
     return Container(
@@ -3075,6 +3172,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
+        // Access provider here inside the builder to ensure we have context
+        final accountService = context.watch<CustomerAccountService>();
+        final isAuthenticated = accountService.isAuthenticated;
+
         return Container(
           decoration: const BoxDecoration(
             color: Color(0xFF1a1a1a),
@@ -3095,6 +3196,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                // Account Section (Top)
+                if (isAuthenticated) ...[
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.person_rounded,
+                    label: 'Mi Cuenta',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/tienda/cuenta');
+                    },
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Divider(color: Colors.white.withValues(alpha: 0.2)),
+                  ),
+                ] else ...[
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.login_rounded,
+                    label: 'Iniciar Sesión',
+                    color: PublicStoreTheme.primaryBlue,
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/tienda/cuenta/login');
+                    },
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Divider(color: Colors.white.withValues(alpha: 0.2)),
+                  ),
+                ],
+
                 // Navigation items
                 if (navLinks.isEmpty) ...[
                   _buildMobileMenuItem(
@@ -3135,22 +3270,34 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         },
                       )),
                 ],
-                // Divider
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                  child: Divider(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                // Account
-                _buildMobileMenuItem(
-                  context,
-                  icon: Icons.person_rounded,
-                  label: 'Mi Cuenta',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.go('/tienda/cuenta');
-                  },
-                ),
+
+                // Logout at bottom (only if authenticated)
+                if (isAuthenticated) ...[
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Divider(color: Colors.white.withValues(alpha: 0.2)),
+                  ),
+                  _buildMobileMenuItem(
+                    context,
+                    icon: Icons.logout_rounded,
+                    label: 'Cerrar Sesión',
+                    color: Colors.redAccent,
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await accountService.signOut();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sesión cerrada correctamente'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        context.go('/');
+                      }
+                    },
+                  ),
+                ],
                 const SizedBox(height: 24),
               ],
             ),
@@ -3165,6 +3312,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color? color,
   }) {
     return Material(
       color: Colors.transparent,
@@ -3175,12 +3323,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white70, size: 22),
+              Icon(icon, color: color ?? Colors.white70, size: 22),
               const SizedBox(width: 16),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: color ?? Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
-import '../theme/public_store_theme.dart';
 import '../../shared/models/customer_address.dart';
+import '../widgets/customer_portal_layout.dart';
 
 class CustomerAddressesPage extends StatelessWidget {
   const CustomerAddressesPage({super.key});
@@ -12,67 +11,62 @@ class CustomerAddressesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final accountService = context.watch<CustomerAccountService>();
 
-    // No Scaffold - wrapped by PublicStoreLayout
+    return CustomerPortalLayout(
+      title: 'Mis Direcciones',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (accountService.addresses.isEmpty)
+            _buildEmptyState(context)
+          else
+            _buildAddressesList(context, accountService),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressesList(
+      BuildContext context, CustomerAccountService accountService) {
+    // Sort: Default first
+    final addresses = List<CustomerAddress>.from(accountService.addresses);
+    addresses.sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header bar
-        Container(
-          color: Theme.of(context).primaryColor,
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top,
-            left: 4,
-            right: 8,
-            bottom: 8,
-          ),
+        // Add Button Row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go('/cuenta'),
-              ),
-              const Expanded(
-                child: Text(
-                  'Mis Direcciones',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add, color: Colors.white),
+              FilledButton.icon(
                 onPressed: () => _showAddressDialog(context, null),
-                tooltip: 'Agregar dirección',
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nueva Dirección'),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             ],
           ),
         ),
-        // Content
-        if (accountService.addresses.isEmpty)
-          _buildEmptyState(context)
-        else
-          _buildAddressesList(context, accountService),
-      ],
-    );
-  }
-
-  Widget _buildAddressesList(BuildContext context, CustomerAccountService accountService) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: accountService.addresses.map((address) {
-          return _AddressCard(
-            address: address,
-            onEdit: () => _showAddressDialog(context, address),
-            onDelete: () => _confirmDelete(context, address),
-            onSetDefault: () async {
-              await accountService.setDefaultAddress(address.id);
-            },
+        // List
+        ...addresses.map((address) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _AddressCard(
+              address: address,
+              onEdit: () => _showAddressDialog(context, address),
+              onDelete: () => _confirmDelete(context, address),
+              onSetDefault: () async {
+                await accountService.setDefaultAddress(address.id);
+              },
+            ),
           );
-        }).toList(),
-      ),
+        }),
+      ],
     );
   }
 
@@ -81,17 +75,29 @@ class CustomerAddressesPage extends StatelessWidget {
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          const SizedBox(height: 48),
-          const Icon(Icons.location_off_outlined, size: 64),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.location_off_outlined,
+                size: 48, color: Colors.grey[400]),
+          ),
           const SizedBox(height: 16),
-          const Text('No tienes direcciones guardadas'),
+          Text(
+            'No tienes direcciones guardadas',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800]),
+          ),
           const SizedBox(height: 24),
-          FilledButton.icon(
+          OutlinedButton.icon(
             onPressed: () => _showAddressDialog(context, null),
             icon: const Icon(Icons.add),
-            label: const Text('AGREGAR DIRECCIÓN'),
+            label: const Text('Agregar la primera dirección'),
           ),
-          const SizedBox(height: 48),
         ],
       ),
     );
@@ -109,7 +115,7 @@ class CustomerAddressesPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Dirección'),
-        content: Text('¿Eliminar "${address.label}"?'),
+        content: Text('¿Estás seguro de eliminar "${address.label}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -117,7 +123,9 @@ class CustomerAddressesPage extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () async {
-              await context.read<CustomerAccountService>().deleteAddress(address.id);
+              await context
+                  .read<CustomerAccountService>()
+                  .deleteAddress(address.id);
               if (context.mounted) Navigator.pop(context);
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -144,71 +152,149 @@ class _AddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    address.label,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.location_on_outlined,
+                          color: Colors.blue, size: 20),
                     ),
-                  ),
-                ),
-                if (address.isDefault)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: PublicStoreTheme.success,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'PRINCIPAL',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                address.label,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (address.isDefault) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'PRINCIPAL',
+                                    style: TextStyle(
+                                      color: Colors.green.shade800,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text(
+                            address.recipientName,
+                            style: TextStyle(
+                                color: Colors.grey[600], fontSize: 13),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: onEdit,
+                    PopupMenuButton(
+                      icon: const Icon(Icons.more_vert, color: Colors.grey),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, size: 18),
+                              SizedBox(width: 8),
+                              Text('Editar'),
+                            ],
+                          ),
+                        ),
+                        if (!address.isDefault)
+                          const PopupMenuItem(
+                            value: 'default',
+                            child: Row(
+                              children: [
+                                Icon(Icons.star, size: 18),
+                                SizedBox(width: 8),
+                                Text('Hacer principal'),
+                              ],
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Eliminar',
+                                  style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'edit') onEdit();
+                        if (value == 'delete') onDelete();
+                        if (value == 'default') onSetDefault();
+                      },
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: onDelete,
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1),
+                ),
+                Text(
+                  address.fullAddress,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.phone, size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(address.phone,
+                        style:
+                            TextStyle(color: Colors.grey[600], fontSize: 13)),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              address.recipientName,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 4),
-            Text(address.fullAddress),
-            Text(address.phone),
-            if (!address.isDefault) ...[
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: onSetDefault,
-                icon: const Icon(Icons.star_outline, size: 16),
-                label: const Text('Establecer como principal'),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -273,7 +359,8 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.address == null ? 'Nueva Dirección' : 'Editar Dirección'),
+      title:
+          Text(widget.address == null ? 'Nueva Dirección' : 'Editar Dirección'),
       content: SingleChildScrollView(
         child: SizedBox(
           width: 500,
@@ -284,13 +371,15 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
               children: [
                 TextFormField(
                   controller: _labelController,
-                  decoration: const InputDecoration(labelText: 'Etiqueta (ej: Casa, Trabajo)'),
+                  decoration: const InputDecoration(
+                      labelText: 'Etiqueta (ej: Casa, Trabajo)'),
                   validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Nombre del destinatario'),
+                  decoration: const InputDecoration(
+                      labelText: 'Nombre del destinatario'),
                   validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
                 ),
                 const SizedBox(height: 12),
@@ -307,7 +396,8 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                       child: TextFormField(
                         controller: _streetController,
                         decoration: const InputDecoration(labelText: 'Calle'),
-                        validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requerido' : null,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -322,7 +412,8 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _apartmentController,
-                  decoration: const InputDecoration(labelText: 'Depto/Oficina (opcional)'),
+                  decoration: const InputDecoration(
+                      labelText: 'Depto/Oficina (opcional)'),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -345,7 +436,8 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _infoController,
-                  decoration: const InputDecoration(labelText: 'Referencias (opcional)'),
+                  decoration: const InputDecoration(
+                      labelText: 'Referencias (opcional)'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),

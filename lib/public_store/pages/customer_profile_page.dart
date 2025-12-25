@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
+import '../widgets/customer_portal_layout.dart';
 
 class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
@@ -19,6 +19,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
   late final TextEditingController _rutController;
 
   bool _isEditing = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -45,141 +46,85 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
     final profile = accountService.customerProfile;
 
     if (profile == null) {
-      // Loading state - no Scaffold (wrapped by layout)
-      return Column(
-        children: [
-          _buildHeader(context),
-          const Padding(
-            padding: EdgeInsets.all(48),
-            child: Center(child: Text('Cargando...')),
-          ),
-        ],
+      return const CustomerPortalLayout(
+        title: 'Mi Perfil',
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // No Scaffold - wrapped by PublicStoreLayout
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Header bar
-        Container(
-          color: Theme.of(context).primaryColor,
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top,
-            left: 4,
-            right: 8,
-            bottom: 8,
-          ),
-          child: Row(
+    return CustomerPortalLayout(
+      title: 'Mi Perfil',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go('/cuenta'),
-              ),
-              const Expanded(
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
                 child: Text(
-                  'Mi Perfil',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
+                  (profile['name'] as String?)?.isNotEmpty == true
+                      ? profile['name'][0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
+                    color: PublicStoreTheme.primaryBlue,
                   ),
                 ),
               ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile['name'] ?? 'Sin nombre',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      profile['email'] ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               if (_isEditing)
-                TextButton.icon(
-                  onPressed: _saveProfile,
-                  icon: const Icon(Icons.save, color: Colors.white),
-                  label: const Text('GUARDAR', style: TextStyle(color: Colors.white)),
+                FilledButton.icon(
+                  onPressed: _isLoading ? null : _saveProfile,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check, size: 18),
+                  label: const Text('Guardar'),
                 )
               else
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.white),
+                OutlinedButton.icon(
                   onPressed: () => setState(() => _isEditing = true),
-                  tooltip: 'Editar perfil',
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Editar'),
                 ),
             ],
           ),
-        ),
-        // Content
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _buildProfileHeader(profile),
-              const SizedBox(height: 32),
-              _buildProfileForm(),
-              const SizedBox(height: 32),
-              _buildSecuritySection(context),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      color: Theme.of(context).primaryColor,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-        left: 4,
-        right: 16,
-        bottom: 8,
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/cuenta'),
-          ),
-          const Text(
-            'Mi Perfil',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 24),
+          _buildProfileForm(),
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 24),
+          _buildSecuritySection(context),
         ],
       ),
-    );
-  }
-
-  Widget _buildProfileHeader(Map<String, dynamic> profile) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
-          child: Text(
-            (profile['name'] as String?)?.isNotEmpty == true
-                ? profile['name'][0].toUpperCase()
-                : '?',
-            style: const TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-              color: PublicStoreTheme.primaryBlue,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          profile['name'] ?? 'Sin nombre',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          profile['email'] ?? '',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
     );
   }
 
@@ -192,47 +137,73 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
           const Text(
             'Información Personal',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Nombre Completo',
-              prefixIcon: Icon(Icons.person_outline),
-            ),
-            enabled: _isEditing,
-            validator: (v) => v == null || v.isEmpty ? 'Nombre requerido' : null,
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre Completo',
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                  enabled: _isEditing,
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'Nombre requerido' : null,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _rutController,
+                  decoration: const InputDecoration(
+                    labelText: 'RUT',
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                  enabled: _isEditing,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _emailController,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.email_outlined),
-            ),
-            enabled: false,
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _phoneController,
-            decoration: const InputDecoration(
-              labelText: 'Teléfono',
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
-            enabled: _isEditing,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _rutController,
-            decoration: const InputDecoration(
-              labelText: 'RUT',
-              prefixIcon: Icon(Icons.badge_outlined),
-            ),
-            enabled: _isEditing,
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    filled: true,
+                  ),
+                  enabled: false,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Teléfono',
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                  enabled: _isEditing,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -246,26 +217,24 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
         const Text(
           'Seguridad',
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 16),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.lock_outline),
-            title: const Text('Cambiar Contraseña'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showPasswordChangeDialog(context),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.lock_outline, color: Colors.black54),
           ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
-            onTap: () => _confirmSignOut(context),
-          ),
+          title: const Text('Contraseña'),
+          subtitle: const Text('Cambiar tu contraseña de acceso'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showPasswordChangeDialog(context),
         ),
       ],
     );
@@ -273,6 +242,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
 
     final accountService = context.read<CustomerAccountService>();
 
@@ -287,22 +257,26 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
             : null,
       );
 
-      setState(() => _isEditing = false);
+      setState(() {
+        _isEditing = false;
+        _isLoading = false;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Perfil actualizado correctamente'),
-            backgroundColor: PublicStoreTheme.success,
+            backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al actualizar perfil: $e'),
-            backgroundColor: PublicStoreTheme.error,
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -310,6 +284,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
   }
 
   void _showPasswordChangeDialog(BuildContext context) {
+    // ... existing implementation remains mostly same, just styled ...
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
@@ -326,14 +301,16 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
             children: [
               TextFormField(
                 controller: currentPasswordController,
-                decoration: const InputDecoration(labelText: 'Contraseña Actual'),
+                decoration:
+                    const InputDecoration(labelText: 'Contraseña Actual'),
                 obscureText: true,
                 validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: newPasswordController,
-                decoration: const InputDecoration(labelText: 'Nueva Contraseña'),
+                decoration:
+                    const InputDecoration(labelText: 'Nueva Contraseña'),
                 obscureText: true,
                 validator: (v) =>
                     v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
@@ -341,7 +318,8 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: confirmPasswordController,
-                decoration: const InputDecoration(labelText: 'Confirmar Contraseña'),
+                decoration:
+                    const InputDecoration(labelText: 'Confirmar Contraseña'),
                 obscureText: true,
                 validator: (v) => v != newPasswordController.text
                     ? 'Las contraseñas no coinciden'
@@ -356,50 +334,17 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              // TODO: Implement password change with Supabase Auth
-              // await context.read<CustomerAccountService>().updatePassword(...)
-
-              Navigator.pop(context);
-              if (context.mounted) {
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Contraseña actualizada'),
-                    backgroundColor: PublicStoreTheme.success,
-                  ),
+                      content:
+                          Text('Función de cambio de contraseña simulada')),
                 );
               }
             },
             child: const Text('Cambiar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmSignOut(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cerrar Sesión'),
-        content: const Text('¿Estás seguro que deseas cerrar sesión?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await context.read<CustomerAccountService>().signOut();
-              if (context.mounted) {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Go back to store
-              }
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Cerrar Sesión'),
           ),
         ],
       ),

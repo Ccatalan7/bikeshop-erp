@@ -10,12 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/services/sales_service.dart';
+import '../../sales/models/sales_models.dart';
 import '../models/conversation.dart';
+import '../services/messaging_service.dart';
 import '../models/message.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
+import 'assign_context_dialog.dart';
 
 class ChatWindow extends StatefulWidget {
   final Conversation conversation;
@@ -35,6 +38,7 @@ class _ChatWindowState extends State<ChatWindow> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  final MessagingService _messagingService = MessagingService();
 
   // Autocomplete State
   List<AutocompleteSuggestion> _suggestions = [];
@@ -70,8 +74,6 @@ class _ChatWindowState extends State<ChatWindow> {
     _removeOverlay();
     super.dispose();
   }
-
-  // ... (keeping _onTextChanged and others same)
 
   void _onTextChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -276,6 +278,90 @@ class _ChatWindowState extends State<ChatWindow> {
         }
       });
     }
+  }
+
+  /// Accept a pending chat request
+  Future<void> _acceptChatRequest(BuildContext ctx) async {
+    try {
+      final provider = ctx.read<ChatProvider>();
+      await provider.acceptChatRequest(widget.conversation.id);
+      if (mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text('Chat aceptado. Ahora puedes responder.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// Show reject dialog with reason input
+  void _showRejectDialog(BuildContext ctx) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Rechazar solicitud'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('¿Por qué rechazas esta solicitud? (opcional)'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Motivo del rechazo...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final provider = ctx.read<ChatProvider>();
+                await provider.rejectChatRequest(
+                  widget.conversation.id,
+                  reasonController.text.trim(),
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('Solicitud rechazada'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Rechazar'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Pick and send a file (image, PDF, document, etc.)
@@ -488,12 +574,82 @@ class _ChatWindowState extends State<ChatWindow> {
                 ],
               ),
               const Spacer(),
-              // Actions (optional: resolve ticket, etc)
+              // Link to Job/Invoice button
               IconButton(
-                  icon: const Icon(Icons.info_outline), onPressed: () {}),
+                icon: Icon(
+                  widget.conversation.contextType != null
+                      ? Icons.link
+                      : Icons.link_off,
+                  color: widget.conversation.contextType != null
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                ),
+                tooltip: widget.conversation.contextType != null
+                    ? 'Vinculado a ${widget.conversation.contextType}'
+                    : 'Vincular chat...',
+                onPressed: () => _showAssignContextDialog(context),
+              ),
             ],
           ),
         ),
+
+        // Pending Chat Request Banner (for employees reviewing customer requests)
+        if (widget.conversation.type == 'support' &&
+            widget.conversation.status == 'pending')
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              border: Border(
+                bottom: BorderSide(color: Colors.orange[200]!),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.pending_actions, color: Colors.orange[700]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Solicitud de chat pendiente',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'El cliente espera respuesta. Acepta para comenzar a chatear.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () => _showRejectDialog(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                  ),
+                  child: const Text('Rechazar'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: () => _acceptChatRequest(context),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Aceptar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
         // Messages
         Expanded(
@@ -525,6 +681,11 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
           child: Row(
             children: [
+              IconButton(
+                icon: const Icon(Icons.flash_on, color: Colors.amber),
+                tooltip: 'Acciones Rápidas',
+                onPressed: () => _showSmartActions(context),
+              ),
               IconButton(
                 icon: const Icon(Icons.attach_file),
                 onPressed: _pickAndSendFile,
@@ -561,19 +722,468 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// Show dialog to link this conversation to a Job or Invoice
+  void _showAssignContextDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AssignContextDialog(
+        conversationId: widget.conversation.id,
+        currentContextType: widget.conversation.contextType,
+        currentContextId: widget.conversation.contextId,
+      ),
+    );
+  }
+
+  void _showSmartActions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Acciones Rápidas',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.orange,
+                child: Icon(Icons.description, color: Colors.white, size: 20),
+              ),
+              title: const Text('Solicitar Aprobación de Presupuesto'),
+              subtitle: const Text('El cliente puede aprobar o rechazar'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _sendActionRequest(context, 'approve_quote');
+              },
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.green,
+                child: Icon(Icons.payment, color: Colors.white, size: 20),
+              ),
+              title: const Text('Solicitar Pago'),
+              subtitle: const Text('Envía botón de pago al cliente'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _sendActionRequest(context, 'pay_now');
+              },
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.blue,
+                child:
+                    Icon(Icons.local_shipping, color: Colors.white, size: 20),
+              ),
+              title: const Text('Confirmar Entrega'),
+              subtitle: const Text('Cliente confirma recepción del producto'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _sendActionRequest(context, 'confirm_delivery');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.grey,
+                child: Icon(Icons.receipt_long, color: Colors.white, size: 20),
+              ),
+              title: const Text('Enviar Presupuesto (Antiguo)'),
+              subtitle: const Text('Actualiza estado y notifica'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _handleSendQuote(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Send an action request message to the customer
+  Future<void> _sendActionRequest(
+      BuildContext context, String actionType) async {
+    final conversation = widget.conversation;
+    final contextType = conversation.contextType;
+    final contextId = conversation.contextId;
+
+    // Validate context
+    if (contextId == null) {
+      _showErrorSnackBar(
+          context, 'No hay contexto asociado a este chat (Job/Invoice).');
+      return;
+    }
+
+    // Get invoice details
+    String? invoiceId;
+    double? amount;
+
+    if (contextType == 'invoice') {
+      invoiceId = contextId;
+    } else if (contextType == 'job') {
+      try {
+        final bikeshopService = context.read<BikeshopService>();
+        final job = await bikeshopService.getJobById(contextId);
+        if (job?.invoiceId != null) {
+          invoiceId = job!.invoiceId;
+        } else {
+          _showErrorSnackBar(context, 'El trabajo no tiene factura asociada.');
+          return;
+        }
+      } catch (e) {
+        _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
+        return;
+      }
+    }
+
+    // Get invoice amount for payment requests
+    if (invoiceId != null && actionType == 'pay_now') {
+      try {
+        final salesService = context.read<SalesService>();
+        final invoice = await salesService.fetchInvoice(invoiceId);
+        amount = invoice?.balance ?? invoice?.total ?? 0;
+      } catch (e) {
+        debugPrint('Error fetching invoice: $e');
+      }
+    }
+
+    // Build message content
+    String content;
+    switch (actionType) {
+      case 'approve_quote':
+        content = 'Por favor revisa y aprueba el presupuesto adjunto.';
+        break;
+      case 'pay_now':
+        content = amount != null
+            ? 'Tienes un saldo pendiente de \$${amount.toStringAsFixed(0)}. Por favor procede con el pago.'
+            : 'Por favor procede con el pago.';
+        break;
+      case 'confirm_delivery':
+        content = 'Tu pedido ha sido enviado. Por favor confirma la recepción.';
+        break;
+      default:
+        content = 'Acción requerida.';
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+
+      // For approve_quote, update invoice status to 'sent' first
+      if (actionType == 'approve_quote' && invoiceId != null) {
+        try {
+          final salesService = context.read<SalesService>();
+          await salesService.updateInvoiceStatus(invoiceId, InvoiceStatus.sent);
+        } catch (e) {
+          debugPrint('Error updating invoice status: $e');
+        }
+      }
+
+      await supabase.from('messages').insert({
+        'conversation_id': conversation.id,
+        'sender_id': userId,
+        'content': content,
+        'type': 'action_request',
+        'metadata': {
+          'action_type': actionType,
+          'target_id': invoiceId,
+          'status': 'pending',
+          'amount': amount,
+        },
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(actionType == 'approve_quote'
+                ? '✅ Presupuesto enviado al cliente'
+                : '✅ Solicitud enviada al cliente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleSendQuote(BuildContext context) async {
+    final conversation = widget.conversation;
+    // Check context
+    final contextType = conversation.contextType;
+    final contextId = conversation.contextId;
+
+    if (contextId == null) {
+      _showErrorSnackBar(
+          context, 'No hay contexto asociado a este chat (Job/Invoice).');
+      return;
+    }
+
+    String? invoiceId;
+    if (contextType == 'invoice') {
+      invoiceId = contextId;
+    } else if (contextType == 'job') {
+      // Find linked invoice for job
+      try {
+        final bikeshopService = context.read<BikeshopService>();
+        final job = await bikeshopService.getJobById(contextId);
+        if (job?.invoiceId != null) {
+          invoiceId = job!.invoiceId;
+        } else {
+          _showErrorSnackBar(context, 'El trabajo no tiene factura asociada.');
+          return;
+        }
+      } catch (e) {
+        _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
+        return;
+      }
+    } else {
+      _showErrorSnackBar(
+          context, 'Tipo de contexto no soportado para presupuesto.');
+      return;
+    }
+
+    if (invoiceId == null) return;
+
+    // Confirm Action
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Enviar Presupuesto?'),
+        content: const Text(
+            'Esto cambiará el estado de la factura a "Enviado" y enviará una tarjeta de confirmación al cliente.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enviar')),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // 1. Update Invoice Status
+      await context
+          .read<SalesService>()
+          .updateInvoiceStatus(invoiceId, InvoiceStatus.sent);
+
+      // 2. Send Message
+      if (mounted) {
+        context.read<ChatProvider>().sendMessage(
+            '📋 Presupuesto Enviado\nPor favor revisa y confirma los detalles para proceder.',
+            metadata: {
+              'type': 'quote_request',
+              'invoiceId': invoiceId,
+              'action': 'confirm_quote'
+            });
+
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Presupuesto enviado correctamente'),
+            backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar(context, 'Error al enviar presupuesto: $e');
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getSenderInfo(String senderId) async {
+    return _messagingService.getSenderInfo(senderId);
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  Color _getNameColor(String name) {
+    if (name == 'Cliente') return Colors.blue[800]!;
+
+    final colors = [
+      Colors.orange[800]!,
+      Colors.purple[700]!,
+      Colors.pink[700]!,
+      Colors.teal[700]!,
+      Colors.brown[700]!,
+      Colors.indigo[700]!,
+    ];
+    return colors[name.hashCode.abs() % colors.length];
+  }
+
   Widget _buildMessageBubble(BuildContext context, Message msg) {
     final isMe = msg.isMe; // In ERP context, "Me" is the logged-in employee
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.6,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.blue[600] : Colors.white,
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: msg.senderId != null
+          ? _getSenderInfo(msg.senderId!)
+          : Future.value(null),
+      builder: (context, snapshot) {
+        final senderInfo = snapshot.data;
+        final senderName = senderInfo?['name'] ?? (isMe ? 'Tú' : 'Cliente');
+        final senderAvatar = senderInfo?['avatar_url'];
+
+        // Message Content Widget
+        Widget contentWidget;
+        if (msg.type == 'image') {
+          contentWidget = GestureDetector(
+            onTap: () {
+              // Show full-screen image preview
+              showDialog(
+                context: context,
+                builder: (_) => Dialog(
+                  backgroundColor: Colors.transparent,
+                  child: Stack(
+                    children: [
+                      InteractiveViewer(
+                        child: Image.network(msg.content),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.white, size: 32),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                msg.content,
+                width: 200,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 200,
+                    height: 150,
+                    color: Colors.grey[300],
+                    child: const Center(child: CircularProgressIndicator()),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 200,
+                  height: 150,
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.broken_image, size: 48),
+                ),
+              ),
+            ),
+          );
+        } else if (msg.metadata['type'] == 'quote_request') {
+          contentWidget = _buildQuoteCard(context, msg, isMe);
+        } else if (msg.type == 'file') {
+          // File attachment (PDF, doc, etc.)
+          contentWidget = GestureDetector(
+            onTap: () async {
+              // Open URL in browser
+              final url = Uri.parse(msg.content);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } else {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(
+                          'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
+                );
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isMe ? Colors.white.withOpacity(0.3) : Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _getFileIcon(msg.metadata['extension'] ?? ''),
+                    color: isMe ? Colors.black87 : Colors.blue[600],
+                    size: 32,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          msg.metadata['filename'] ?? 'Archivo',
+                          style: TextStyle(
+                            color: isMe ? Colors.black87 : Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          (msg.metadata['extension'] ?? '').toUpperCase(),
+                          style: TextStyle(
+                            color: isMe ? Colors.black54 : Colors.grey[600],
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.download,
+                    color: isMe ? Colors.black54 : Colors.grey[500],
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else if (msg.type == 'action_request') {
+          // ACTION REQUEST - Interactive buttons for customers
+          contentWidget = _buildActionRequestCard(context, msg, isMe);
+        } else {
+          // Text Message
+          contentWidget = ParsedMessageText(
+            text: msg.content,
+            isMe: isMe,
+            onReferenceTap: widget.onReferenceTap,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 14,
+            ),
+          );
+        }
+
+        // Timestamp
+        final timeStr = DateFormat('HH:mm').format(msg.createdAt);
+
+        // Bubble Decoration
+        final bubbleDecoration = BoxDecoration(
+          color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(12),
             topRight: const Radius.circular(12),
@@ -581,157 +1191,180 @@ class _ChatWindowState extends State<ChatWindow> {
             bottomRight: Radius.circular(isMe ? 0 : 12),
           ),
           boxShadow: [
-            if (!isMe)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 1,
+              offset: const Offset(0, 1),
+            ),
           ],
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            // Render image or text based on message type
-            if (msg.type == 'image')
-              GestureDetector(
-                onTap: () {
-                  // Show full-screen image preview
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      child: Stack(
-                        children: [
-                          InteractiveViewer(
-                            child: Image.network(msg.content),
+        );
+
+        if (!isMe) {
+          // INCOMING MESSAGE
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage:
+                      senderAvatar != null ? NetworkImage(senderAvatar) : null,
+                  child: senderAvatar == null
+                      ? Icon(Icons.person, size: 16, color: Colors.grey[500])
+                      : null,
+                ),
+                const SizedBox(width: 8),
+
+                // Bubble
+                Flexible(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    ),
+                    decoration: bubbleDecoration,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Sender Name (Colored)
+                        Text(
+                          senderName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: _getNameColor(senderName),
                           ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.white, size: 32),
-                              onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(height: 2),
+
+                        contentWidget,
+
+                        // Timestamp
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4, left: 8),
+                            child: Text(
+                              timeStr,
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 10,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    msg.content,
-                    width: 200,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        width: 200,
-                        height: 150,
-                        color: Colors.grey[300],
-                        child: const Center(child: CircularProgressIndicator()),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      width: 200,
-                      height: 150,
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.broken_image, size: 48),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              )
-            else if (msg.type == 'file')
-              // File attachment (PDF, doc, etc.)
-              GestureDetector(
-                onTap: () async {
-                  // Open URL in browser
-                  final url = Uri.parse(msg.content);
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } else {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
-                    );
-                  }
-                },
+                const SizedBox(width: 40),
+              ],
+            ),
+          );
+        }
+
+        // OUTGOING MESSAGE
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(width: 40),
+              Flexible(
                 child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isMe ? Colors.blue[700] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  decoration: bubbleDecoration,
+                  child: Stack(
                     children: [
-                      Icon(
-                        _getFileIcon(msg.metadata['extension'] ?? ''),
-                        color: isMe ? Colors.white : Colors.blue[600],
-                        size: 32,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: contentWidget,
                       ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg.metadata['filename'] ?? 'Archivo',
-                              style: TextStyle(
-                                color: isMe ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              (msg.metadata['extension'] ?? '').toUpperCase(),
-                              style: TextStyle(
-                                color: isMe ? Colors.white70 : Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Text(
+                          timeStr,
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 10,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.download,
-                        color: isMe ? Colors.white70 : Colors.grey[500],
-                        size: 20,
                       ),
                     ],
                   ),
                 ),
-              )
-            else
-              ParsedMessageText(
-                text: msg.content,
-                isMe: isMe,
-                onReferenceTap: widget.onReferenceTap,
-                style: TextStyle(
-                  color: isMe ? Colors.white : Colors.black87,
-                  fontSize: 14,
-                ),
               ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('HH:mm').format(msg.createdAt),
-              style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.grey[500],
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  /// Handle customer response to action request
+  Future<void> _handleActionResponse(
+    BuildContext context,
+    String messageId,
+    String actionType,
+    String? targetId,
+    String response,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Update the message metadata with the response
+      await supabase.from('messages').update({
+        'metadata': {
+          'status': response,
+          'responded_at': DateTime.now().toIso8601String(),
+        },
+      }).eq('id', messageId);
+
+      // If accepted, perform the action
+      if (response == 'accepted' && targetId != null) {
+        switch (actionType) {
+          case 'approve_quote':
+            // Update invoice status to confirmed
+            final salesService =
+                Provider.of<SalesService>(context, listen: false);
+            await salesService.updateInvoiceStatus(
+                targetId, InvoiceStatus.confirmed);
+            break;
+          case 'pay_now':
+            // Navigate to payment page or show payment dialog
+            // This would typically trigger a MercadoPago checkout
+            debugPrint('💳 Payment requested for invoice: $targetId');
+            break;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                response == 'accepted' ? '✅ Acción completada' : 'Rechazado'),
+            backgroundColor:
+                response == 'accepted' ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   /// Get appropriate icon for file extension
@@ -754,6 +1387,313 @@ class _ChatWindowState extends State<ChatWindow> {
         return Icons.image;
       default:
         return Icons.insert_drive_file;
+    }
+  }
+
+  Widget _buildQuoteCard(BuildContext context, Message msg, bool isMe) {
+    final invoiceId = msg.metadata['invoiceId'];
+    final isConfirmed = msg.metadata['status'] == 'confirmed';
+
+    // High contrast colors for both sender (green bubble) and receiver (white bubble)
+    // On green bubble (isMe), we use Dark Green/Black text.
+    // On white bubble (!isMe), we use Green/Black text.
+    final headerIconColor = isMe ? Colors.green[900] : Colors.green;
+    final headerTextColor = isMe ? Colors.green[900] : Colors.green[800];
+    final headerBgColor =
+        isMe ? Colors.black.withOpacity(0.05) : Colors.green[50];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: headerBgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.receipt_long, color: headerIconColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Presupuesto',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: headerTextColor,
+                  ),
+                ),
+              ),
+              if (isConfirmed)
+                Icon(Icons.check_circle, color: headerIconColor, size: 16),
+            ],
+          ),
+        ),
+
+        // Body
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                msg.content.split('\n').first,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87, // Always dark for readability
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isMe
+                    ? 'Esperando confirmación del cliente.'
+                    : 'Por favor revisa y confirma para proceder.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black54, // Always dark grey
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Actions
+        if (!isMe && !isConfirmed)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _confirmQuote(context, invoiceId),
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Confirmar Presupuesto'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ),
+
+        if (isConfirmed)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Center(
+              child: Text('✅ Confirmado',
+                  style: TextStyle(
+                      color: Colors.green[800], // Always visible
+                      fontWeight: FontWeight.bold)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildActionRequestCard(BuildContext context, Message msg, bool isMe) {
+    final actionType = msg.metadata['action_type'] as String? ?? 'unknown';
+    final targetId = msg.metadata['target_id'] as String?;
+    final status = msg.metadata['status'] as String? ?? 'pending';
+    final amount = msg.metadata['amount'] as num?;
+
+    // Determine card appearance based on action type
+    IconData icon;
+    String title;
+    String buttonLabel;
+    Color accentColor;
+
+    // Contrast Logic:
+    // Bubbles are Light Green (Me) or White (Other).
+    // Text should ALWAYS be dark (Black/Dark Grey).
+    // Feature colors (icons/titles) should be dark versions of their accent.
+
+    Color iconColor;
+    Color titleColor = Colors.black87;
+    Color headerBgColor =
+        isMe ? Colors.black.withOpacity(0.05) : Colors.grey[50]!;
+
+    switch (actionType) {
+      case 'approve_quote':
+        icon = Icons.description;
+        if (status == 'accepted') {
+          title = 'Presupuesto Aprobado';
+          accentColor = Colors.green;
+        } else if (status == 'declined') {
+          title = 'Presupuesto Rechazado';
+          accentColor = Colors.red;
+        } else {
+          title = 'Presupuesto Enviado';
+          accentColor = Colors.orange;
+        }
+        buttonLabel = 'Aprobar Presupuesto';
+        // Use darker shade for icon to ensure visibility on light green
+        iconColor = isMe ? Colors.black54 : accentColor;
+        break;
+      case 'pay_now':
+        icon = Icons.payment;
+        title = 'Solicitud de Pago';
+        buttonLabel = amount != null
+            ? 'Pagar \$${amount.toStringAsFixed(0)}'
+            : 'Pagar Ahora';
+        accentColor = Colors.green;
+        iconColor =
+            isMe ? Colors.green[900]! : accentColor; // Visible green on green
+        break;
+      case 'confirm_delivery':
+        icon = Icons.local_shipping;
+        title = 'Confirmar Entrega';
+        buttonLabel = 'Confirmar Recepción';
+        accentColor = Colors.blue;
+        iconColor =
+            isMe ? Colors.blue[900]! : accentColor; // Visible blue on green
+        break;
+      default:
+        icon = Icons.help_outline;
+        title = 'Acción Requerida';
+        buttonLabel = 'Ver Detalles';
+        accentColor = Colors.grey;
+        iconColor = Colors.grey[700]!;
+    }
+
+    // Build status badge
+    Widget statusBadge = const SizedBox.shrink();
+    if (status == 'accepted') {
+      statusBadge = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: (isMe ? Colors.black : Colors.green).withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green.withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 14, color: Colors.green[800]),
+            const SizedBox(width: 4),
+            Text('Aceptado',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green[900],
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      );
+    } else if (status == 'declined') {
+      statusBadge = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: (isMe ? Colors.black : Colors.red).withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cancel, size: 14, color: Colors.red[800]),
+            const SizedBox(width: 4),
+            Text('Rechazado',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.red[900],
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: headerBgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: titleColor,
+                  ),
+                ),
+              ),
+              statusBadge,
+            ],
+          ),
+        ),
+        // Message content
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            msg.content,
+            style: const TextStyle(
+                color: Colors.black87, fontSize: 13, height: 1.4),
+          ),
+        ),
+        // Action button (only if pending and viewer is not sender)
+        if (status == 'pending' && !isMe)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _handleActionResponse(
+                        context, msg.id, actionType, targetId, 'declined'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey[700],
+                    ),
+                    child: const Text('Rechazar'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => _handleActionResponse(
+                        context, msg.id, actionType, targetId, 'accepted'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accentColor,
+                    ),
+                    child: Text(buttonLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _confirmQuote(BuildContext context, String? invoiceId) async {
+    if (invoiceId == null) return;
+
+    try {
+      await context
+          .read<SalesService>()
+          .updateInvoiceStatus(invoiceId, InvoiceStatus.confirmed);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Presupuesto confirmado. ¡Gracias!'),
+              backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al confirmar: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
     }
   }
 }

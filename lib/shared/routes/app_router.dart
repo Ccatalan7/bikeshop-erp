@@ -108,6 +108,7 @@ import '../../public_store/pages/customer_service_history_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/pages/static_policy_page.dart';
 import '../../public_store/pages/customer_chat_list_page.dart';
+import '../../public_store/pages/customer_chat_hub_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../modules/messaging/pages/employee_chat_page.dart';
@@ -116,12 +117,20 @@ import '../../public_store/widgets/public_store_layout.dart';
 // Helper wrapper for public store pages
 class PublicStoreWrapper extends StatelessWidget {
   final Widget child;
+  final bool enablePageViewScrolling;
 
-  const PublicStoreWrapper({super.key, required this.child});
+  const PublicStoreWrapper({
+    super.key,
+    required this.child,
+    this.enablePageViewScrolling = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return PublicStoreLayout(child: child);
+    return PublicStoreLayout(
+      enablePageViewScrolling: enablePageViewScrolling,
+      child: child,
+    );
   }
 }
 
@@ -834,8 +843,34 @@ class AppRouter {
               context,
               state,
               PublicStoreWrapper(
+                  enablePageViewScrolling: false,
                   child:
                       CustomerChatDetailPage(conversationId: conversationId)),
+            );
+          },
+        ),
+
+        // Chat / Support (New) - Unified Hub with Animation
+        GoRoute(
+          path: '/tienda/cuenta/chats',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: CustomerChatHubPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/tienda/cuenta/chats/:id',
+          pageBuilder: (context, state) {
+            final conversationId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                enablePageViewScrolling: false, // Important for chat input
+                child:
+                    CustomerChatHubPage(initialConversationId: conversationId),
+              ),
             );
           },
         ),
@@ -1370,10 +1405,16 @@ class AppRouter {
           path: '/sales/invoices/:id',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
+            final referrer = state.uri.queryParameters['referrer'];
+            final jobId = state.uri.queryParameters['jobId'];
             return _buildPageWithNoTransition(
               context,
               state,
-              InvoiceFormPage(invoiceId: id),
+              InvoiceFormPage(
+                invoiceId: id,
+                referrer: referrer,
+                referrerJobId: jobId,
+              ),
             );
           },
         ),
@@ -1392,10 +1433,16 @@ class AppRouter {
           path: '/sales/invoices/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
+            final referrer = state.uri.queryParameters['referrer'];
+            final jobId = state.uri.queryParameters['jobId'];
             return _buildPageWithNoTransition(
               context,
               state,
-              InvoiceFormPage(invoiceId: id),
+              InvoiceFormPage(
+                invoiceId: id,
+                referrer: referrer,
+                referrerJobId: jobId,
+              ),
             );
           },
         ),

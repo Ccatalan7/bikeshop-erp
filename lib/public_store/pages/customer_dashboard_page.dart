@@ -101,21 +101,23 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
                   ),
                 ),
 
-                // BODY CONTENT (White Background)
-                Container(
-                  color: Colors.white,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(8), // ALL 8px
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Dashboard Widgets
-                        LiveJobTracker(activeService: activeService),
-                        const SizedBox(height: 8), // ALL 8px
-                        GarageGrid(bikes: bikes),
-                        const SizedBox(height: 8), // ALL 8px
-                        RecentActivity(orders: orders, services: services),
-                      ],
+                // BODY CONTENT (White Background) - Wrap in Expanded for scrolling
+                Expanded(
+                  child: Container(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(8), // ALL 8px
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Dashboard Widgets
+                          LiveJobTracker(activeService: activeService),
+                          const SizedBox(height: 8), // ALL 8px
+                          GarageGrid(bikes: bikes),
+                          const SizedBox(height: 8), // ALL 8px
+                          RecentActivity(orders: orders, services: services),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -139,37 +141,124 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
                   8, 0, 8, 8), // No top padding for header alignment
               child: Column(
                 children: [
-                  // PROFILE HEADER AREA (Full 80px to match left header)
+                  // PROFILE CARD (User information + Dropdown)
                   Container(
                     height: 80,
-                    alignment: Alignment.center, // Vertically center
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.only(right: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.grey.shade300)),
-                          child: InkWell(
-                            onTap: () => context.go('/cuenta/perfil'),
-                            child: CircleAvatar(
-                              radius: 20,
-                              backgroundColor: Colors.black,
-                              child: Text(name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
+                        PopupMenuButton<String>(
+                          tooltip: 'Opciones de Cuenta',
+                          offset: const Offset(0, 50),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(30),
+                                border:
+                                    Border.all(color: Colors.grey.shade300)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.black,
+                                  child: Text(name[0].toUpperCase(),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Mi Cuenta',
+                                    style: TextStyle(
+                                        color: Colors.black87,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.keyboard_arrow_down,
+                                    size: 18, color: Colors.grey[600]),
+                              ],
                             ),
                           ),
+                          onSelected: (value) async {
+                            switch (value) {
+                              case 'profile':
+                                context.go('/tienda/cuenta/perfil');
+                                break;
+                              case 'orders':
+                                context.go('/tienda/cuenta/pedidos');
+                                break;
+                              case 'addresses':
+                                context.go('/tienda/cuenta/direcciones');
+                                break;
+                              case 'chat':
+                                context.go('/tienda/cuenta/chats');
+                                break;
+                              case 'logout':
+                                final accountService =
+                                    context.read<CustomerAccountService>();
+                                await accountService.signOut();
+                                if (context.mounted) context.go('/');
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'profile',
+                              child: Row(children: [
+                                Icon(Icons.person_outline),
+                                SizedBox(width: 12),
+                                Text('Mi Perfil')
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'orders',
+                              child: Row(children: [
+                                Icon(Icons.shopping_bag_outlined),
+                                SizedBox(width: 12),
+                                Text('Mis Pedidos')
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'addresses',
+                              child: Row(children: [
+                                Icon(Icons.location_on_outlined),
+                                SizedBox(width: 12),
+                                Text('Mis Direcciones')
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'chat',
+                              child: Row(children: [
+                                Icon(Icons.chat_bubble_outline),
+                                SizedBox(width: 12),
+                                Text('Ayuda y Soporte')
+                              ]),
+                            ),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(
+                              value: 'logout',
+                              child: Row(children: [
+                                Icon(Icons.logout, color: Colors.red),
+                                SizedBox(width: 12),
+                                Text('Cerrar Sesión',
+                                    style: TextStyle(color: Colors.red))
+                              ]),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.keyboard_arrow_down,
-                            color: Colors.grey[600]),
                       ],
                     ),
                   ),
+
+                  const SizedBox(height: 0),
+
+                  // Chat Card
 
                   // NO GAP HERE - Chat starts at Y=80 (aligned with header bottom)
 
@@ -262,12 +351,83 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87)),
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.black,
-                  child: Text(name[0].toUpperCase(),
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 14)),
+                PopupMenuButton<String>(
+                  offset: const Offset(0, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.black,
+                    child: Text(name[0].toUpperCase(),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 14)),
+                  ),
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'profile':
+                        context.go('/tienda/cuenta/perfil');
+                        break;
+                      case 'orders':
+                        context.go('/tienda/cuenta/pedidos');
+                        break;
+                      case 'addresses':
+                        context.go('/tienda/cuenta/direcciones');
+                        break;
+                      case 'chat':
+                        context.go('/tienda/cuenta/chats');
+                        break;
+                      case 'logout':
+                        final accountService =
+                            context.read<CustomerAccountService>();
+                        await accountService.signOut();
+                        if (context.mounted) context.go('/');
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'profile',
+                      child: Row(children: [
+                        Icon(Icons.person_outline),
+                        SizedBox(width: 12),
+                        Text('Mi Perfil')
+                      ]),
+                    ),
+                    const PopupMenuItem(
+                      value: 'orders',
+                      child: Row(children: [
+                        Icon(Icons.shopping_bag_outlined),
+                        SizedBox(width: 12),
+                        Text('Mis Pedidos')
+                      ]),
+                    ),
+                    const PopupMenuItem(
+                      value: 'addresses',
+                      child: Row(children: [
+                        Icon(Icons.location_on_outlined),
+                        SizedBox(width: 12),
+                        Text('Mis Direcciones')
+                      ]),
+                    ),
+                    const PopupMenuItem(
+                      value: 'chat',
+                      child: Row(children: [
+                        Icon(Icons.chat_bubble_outline),
+                        SizedBox(width: 12),
+                        Text('Ayuda y Soporte')
+                      ]),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Row(children: [
+                        Icon(Icons.logout, color: Colors.red),
+                        SizedBox(width: 12),
+                        Text('Cerrar Sesión',
+                            style: TextStyle(color: Colors.red))
+                      ]),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -304,6 +464,8 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
                     border: Border.all(color: Colors.grey.shade200)),
                 padding: const EdgeInsets.all(16),
                 child: _buildRecommendations()),
+
+            const SizedBox(height: 32),
           ],
         ),
       ),

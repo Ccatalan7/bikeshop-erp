@@ -42,7 +42,12 @@ class InvoiceFormPage extends StatefulWidget {
     this.invoiceId,
     this.preselectedJobId,
     this.preselectedCustomerId,
+    this.referrer,
+    this.referrerJobId,
   });
+
+  final String? referrer;
+  final String? referrerJobId;
 
   @override
   State<InvoiceFormPage> createState() => _InvoiceFormPageState();
@@ -117,6 +122,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint(
+        '🔍 InvoiceFormPage initState - referrer: ${widget.referrer}, jobId: ${widget.referrerJobId}');
     _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
@@ -1329,12 +1336,21 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 children: [
                   IconButton(
                     onPressed: () {
+                      debugPrint(
+                          '🔙 Back button pressed - referrer: ${widget.referrer}, jobId: ${widget.referrerJobId}');
                       final returnTo = GoRouterState.of(context)
                           .uri
                           .queryParameters['returnTo'];
-                      if (returnTo != null && returnTo.isNotEmpty) {
+                      if (widget.referrer == 'job' &&
+                          widget.referrerJobId != null) {
+                        debugPrint(
+                            '🔙 Navigating back to job: ${widget.referrerJobId}');
+                        context.go('/taller/pegas/${widget.referrerJobId}');
+                      } else if (returnTo != null && returnTo.isNotEmpty) {
+                        debugPrint('🔙 Navigating to returnTo: $returnTo');
                         context.go(returnTo);
                       } else {
+                        debugPrint('🔙 Navigating to default: /sales/invoices');
                         context.go('/sales/invoices');
                       }
                     },

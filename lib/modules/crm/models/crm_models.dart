@@ -15,6 +15,7 @@ DateTime _parseDate(dynamic value) {
 class Customer {
   final String? id;
   final String tenantId;
+  final String? authUserId; // Links to auth.users for messaging/portal
   final String name;
   final String rut;
   final String? email;
@@ -29,6 +30,7 @@ class Customer {
   Customer({
     this.id,
     required this.tenantId,
+    this.authUserId,
     required this.name,
     required this.rut,
     this.email,
@@ -46,6 +48,7 @@ class Customer {
     return Customer(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
+      authUserId: json['auth_user_id']?.toString(),
       name: json['name'] ?? '',
       rut: json['rut'] ?? '',
       email: json['email'] as String?,
@@ -62,6 +65,7 @@ class Customer {
   Map<String, dynamic> toJson() {
     final json = {
       'tenant_id': tenantId,
+      'auth_user_id': authUserId,
       'name': name,
       'rut': rut,
       'email': email,
@@ -85,6 +89,7 @@ class Customer {
   Customer copyWith({
     String? id,
     String? tenantId,
+    String? authUserId,
     String? name,
     String? rut,
     String? email,
@@ -99,6 +104,7 @@ class Customer {
     return Customer(
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
+      authUserId: authUserId ?? this.authUserId,
       name: name ?? this.name,
       rut: rut ?? this.rut,
       email: email ?? this.email,
@@ -114,7 +120,7 @@ class Customer {
 
   String get initials {
     if (name.trim().isEmpty) return '?';
-    
+
     final words = name.trim().split(' ').where((w) => w.isNotEmpty).toList();
     if (words.length >= 2) {
       return '${words[0][0]}${words[1][0]}'.toUpperCase();
