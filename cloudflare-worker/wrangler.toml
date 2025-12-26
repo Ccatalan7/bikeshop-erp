@@ -1,0 +1,16 @@
+name = "vinabike-edge-cache"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Routes - bind to your domain
+# Uncomment and update when you have a custom domain configured
+# routes = [
+#   { pattern = "api.vinabike.cl/*", zone_name = "vinabike.cl" }
+# ]
+
+# Or use a workers.dev subdomain (free)
+# Your worker will be available at: vinabike-edge-cache.YOUR_SUBDOMAIN.workers.dev
+
+[vars]
+# These can be overridden with secrets
+# SUPABASE_URL = "https://your-project.supabase.co"

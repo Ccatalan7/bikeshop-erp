@@ -13,26 +13,36 @@ class TenantDetectionService {
   static const List<String> mainDomains = [
     // Production domain (add your domain here)
     'bikeshop-erp.app',
-    
+
     // Vercel preview/production domains
     'bikeshop-erp.vercel.app',
-    
+
     // Firebase Hosting domains
     'project-vinabike.web.app',
     'project-vinabike.firebaseapp.com',
     'vinabike-store.web.app',
     'vinabike-store.firebaseapp.com',
-    
+
     // Netlify domains (if using Netlify)
     'bikeshop-erp.netlify.app',
-    
+
     // Development
     'localhost',
     '127.0.0.1',
   ];
 
+  /// PERFORMANCE OPTIMIZATION: Hardcoded tenant IDs for known production domains
+  /// This skips the DB query entirely for domains we control, saving ~674ms
+  /// Add your production domains here when deploying to new tenants
+  static const Map<String, String> _knownDomainTenants = {
+    'vinabike.cl': '5443b130-cc28-45af-a420-cd500b288890',
+    'www.vinabike.cl': '5443b130-cc28-45af-a420-cd500b288890',
+    'vinabike-store.web.app': '5443b130-cc28-45af-a420-cd500b288890',
+    'vinabike-store.firebaseapp.com': '5443b130-cc28-45af-a420-cd500b288890',
+  };
+
   /// Extract subdomain from current URL
-  /// 
+  ///
   /// Examples:
   ///   vinabike.bikeshop-erp.app → "vinabike"
   ///   joesbikes.bikeshop-erp.app → "joesbikes"
@@ -40,32 +50,32 @@ class TenantDetectionService {
   ///   localhost:8080 → null (development, no subdomain)
   String? extractSubdomain(String host) {
     if (!kIsWeb) return null;
-    
+
     // Remove port if present
     final cleanHost = host.split(':').first.toLowerCase();
-    
+
     // Check each main domain pattern
     for (final mainDomain in mainDomains) {
       // Exact match = no subdomain
       if (cleanHost == mainDomain) {
         return null;
       }
-      
+
       // Check if this is a subdomain of the main domain
       if (cleanHost.endsWith('.$mainDomain')) {
         // Extract subdomain part
         final subdomain = cleanHost.substring(
-          0, 
+          0,
           cleanHost.length - mainDomain.length - 1,
         );
-        
+
         // Validate subdomain format
         if (_isValidSubdomain(subdomain)) {
           return subdomain;
         }
       }
     }
-    
+
     // Not a recognized subdomain pattern
     return null;
   }
@@ -77,15 +87,13 @@ class TenantDetectionService {
   }
 
   /// OPTIMIZED: Get tenant by subdomain OR custom domain in a single query
-  Future<Tenant?> _getTenantBySubdomainOrDomain(String? subdomain, String domain) async {
+  Future<Tenant?> _getTenantBySubdomainOrDomain(
+      String? subdomain, String domain) async {
     final sw = Stopwatch()..start();
     try {
       // Use OR filter to check both in one query
-      var query = _supabase
-          .from('tenants')
-          .select()
-          .eq('is_active', true);
-          
+      var query = _supabase.from('tenants').select().eq('is_active', true);
+
       if (subdomain != null && subdomain.isNotEmpty) {
         query = query.or('subdomain.eq.$subdomain,custom_domain.eq.$domain');
       } else {
@@ -94,7 +102,8 @@ class TenantDetectionService {
       }
 
       final response = await query.maybeSingle();
-      debugPrint('⏱️ [TenantDetection] DB query took: ${sw.elapsedMilliseconds}ms');
+      debugPrint(
+          '⏱️ [TenantDetection] DB query took: ${sw.elapsedMilliseconds}ms');
 
       if (response == null) {
         return null;
@@ -164,8 +173,8 @@ class TenantDetectionService {
     final host = Uri.base.host;
     final normalizedHost = host.toLowerCase();
     final hostWithoutWww = normalizedHost.startsWith('www.')
-      ? normalizedHost.substring(4)
-      : normalizedHost;
+        ? normalizedHost.substring(4)
+        : normalizedHost;
 
     // Development: Check for FORCE_SUBDOMAIN environment variable
     const forceSubdomain = String.fromEnvironment('FORCE_SUBDOMAIN');
@@ -176,32 +185,52 @@ class TenantDetectionService {
       }
     }
 
+    // PERFORMANCE OPTIMIZATION: Check hardcoded known domains FIRST
+    // This skips the DB query entirely for production domains, saving ~674ms
+    final knownTenantId = _knownDomainTenants[normalizedHost];
+    if (knownTenantId != null) {
+      debugPrint(
+          '⚡ [TenantDetection] Using hardcoded tenant for $normalizedHost');
+      // Return a minimal Tenant object with just the ID - that's all we need
+      return Tenant(
+        id: knownTenantId,
+        shopName: 'Vinabike', // Default, actual name loaded from settings
+        subdomain: 'vinabike',
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
+
     // OPTIMIZED: Single query that checks BOTH subdomain AND custom_domain
     // This reduces 2 DB calls to 1 for most cases
     String? subdomain;
-    
+
     // Special handling for Firebase Hosting site-specific domains
-    if (host == 'vinabike-store.web.app' || host == 'vinabike-store.firebaseapp.com') {
+    if (host == 'vinabike-store.web.app' ||
+        host == 'vinabike-store.firebaseapp.com') {
       subdomain = 'vinabike';
     } else {
       subdomain = extractSubdomain(hostWithoutWww);
     }
-    
+
     // Single optimized query: check subdomain OR custom_domain in one call
-    final tenant = await _getTenantBySubdomainOrDomain(subdomain, hostWithoutWww);
+    final tenant =
+        await _getTenantBySubdomainOrDomain(subdomain, hostWithoutWww);
     if (tenant != null) {
       if (!kReleaseMode) {
-        debugPrint('🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
+        debugPrint(
+            '🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
       }
       return tenant;
     }
 
     // FALLBACK: On localhost/ERP domain, use authenticated user's tenant
-    final isLocalOrErpDomain = hostWithoutWww.contains('localhost') || 
-      hostWithoutWww.contains('127.0.0.1') ||
-      hostWithoutWww == 'project-vinabike.web.app' ||
-      hostWithoutWww == 'project-vinabike.firebaseapp.com';
-    
+    final isLocalOrErpDomain = hostWithoutWww.contains('localhost') ||
+        hostWithoutWww.contains('127.0.0.1') ||
+        hostWithoutWww == 'project-vinabike.web.app' ||
+        hostWithoutWww == 'project-vinabike.firebaseapp.com';
+
     if (isLocalOrErpDomain) {
       final user = _supabase.auth.currentUser;
       if (user != null) {
@@ -224,13 +253,13 @@ class TenantDetectionService {
           .select('tenant_id')
           .eq('user_id', userId)
           .maybeSingle();
-      
+
       if (profileResponse == null || profileResponse['tenant_id'] == null) {
         return null;
       }
-      
+
       final tenantId = profileResponse['tenant_id'] as String;
-      
+
       // Now fetch the full tenant record
       final tenantResponse = await _supabase
           .from('tenants')
@@ -238,11 +267,11 @@ class TenantDetectionService {
           .eq('id', tenantId)
           .eq('is_active', true)
           .maybeSingle();
-      
+
       if (tenantResponse == null) {
         return null;
       }
-      
+
       return Tenant.fromJson(tenantResponse);
     } catch (e) {
       return null;
@@ -287,15 +316,16 @@ class TenantDetectionService {
     return shopName
         .toLowerCase()
         .trim()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-') // Replace non-alphanumeric with dash
-        .replaceAll(RegExp(r'^-+|-+$'), '')     // Remove leading/trailing dashes
-        .replaceAll(RegExp(r'-+'), '-');        // Replace multiple dashes with single
+        .replaceAll(
+            RegExp(r'[^a-z0-9]+'), '-') // Replace non-alphanumeric with dash
+        .replaceAll(RegExp(r'^-+|-+$'), '') // Remove leading/trailing dashes
+        .replaceAll(RegExp(r'-+'), '-'); // Replace multiple dashes with single
   }
 
   /// Generate unique subdomain with fallback numbers
   Future<String?> generateUniqueSubdomain(String shopName) async {
     String baseSubdomain = generateSubdomain(shopName);
-    
+
     // Try base subdomain first
     if (await isSubdomainAvailable(baseSubdomain)) {
       return baseSubdomain;
@@ -310,7 +340,8 @@ class TenantDetectionService {
     }
 
     // Failed to find unique subdomain
-    debugPrint('[TenantDetection] Failed to generate unique subdomain for: $shopName');
+    debugPrint(
+        '[TenantDetection] Failed to generate unique subdomain for: $shopName');
     return null;
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -26,6 +27,7 @@ class WebsiteService extends ChangeNotifier {
   bool _disposed = false; // Track disposal state
   bool _hasLoadedForTenant =
       false; // Track if loadBlocksForTenant completed (even with no blocks)
+  bool _isLoadingForTenant = false; // Prevent concurrent loads
 
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
@@ -57,6 +59,128 @@ class WebsiteService extends ChangeNotifier {
   void _safeNotifyListeners() {
     if (!_disposed) {
       notifyListeners();
+    }
+  }
+
+  // ============================================================================
+  // UNIFIED PUBLIC STORE DATA LOADER (PERFORMANCE OPTIMIZED)
+  // ============================================================================
+
+  // Cloudflare edge cache URL - caches Supabase responses at edge nodes
+  static const String _edgeCacheUrl =
+      'https://vinabike-edge-cache.vinabike.workers.dev';
+
+  /// Load ALL public store data - tries edge cache first, falls back to Supabase
+  /// Edge cache: ~50ms (cache hit) vs Supabase direct: ~700ms
+  Future<void> loadPublicStoreDataUnified(String tenantId) async {
+    final sw = Stopwatch()..start();
+
+    // Prevent duplicate loads
+    if (_hasLoadedForTenant) {
+      debugPrint('[WebsiteService] Already loaded unified data for tenant');
+      return;
+    }
+
+    if (_isLoadingForTenant) {
+      debugPrint('[WebsiteService] Already loading unified data, waiting...');
+      while (_isLoadingForTenant && !_hasLoadedForTenant) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      return;
+    }
+
+    _isLoadingForTenant = true;
+
+    try {
+      debugPrint('[WebsiteService] Loading data for tenant: $tenantId');
+
+      // Try edge cache first (Cloudflare Worker - 5 min TTL)
+      // Cache HIT: ~100ms, Cache MISS: ~1000ms
+      Map<String, dynamic>? response;
+      String source = 'unknown';
+
+      try {
+        final cacheResponse = await _tryEdgeCache(tenantId);
+        if (cacheResponse != null) {
+          response = cacheResponse;
+          source = cacheResponse['_cache'] == 'HIT'
+              ? 'EDGE_CACHE_HIT'
+              : 'EDGE_CACHE_MISS';
+          debugPrint(
+              '⚡ [WebsiteService] Edge cache $source: ${sw.elapsedMilliseconds}ms '
+              '(edge: ${cacheResponse['_edge']})');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [WebsiteService] Edge cache failed: $e');
+      }
+
+      // Fallback to direct Supabase RPC if edge cache fails
+      if (response == null) {
+        debugPrint('[WebsiteService] Falling back to direct Supabase RPC');
+        response = await _supabase
+            .rpc('get_public_store_data', params: {'p_tenant_id': tenantId});
+        source = 'SUPABASE_DIRECT';
+      }
+
+      debugPrint(
+          '⏱️ [WebsiteService] Data loaded ($source): ${sw.elapsedMilliseconds}ms');
+
+      if (response != null) {
+        // Parse settings
+        final settingsData =
+            response['settings'] as Map<String, dynamic>? ?? {};
+        _settings =
+            settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+        _themePresets = _parseThemePresets(_settings['theme_presets']);
+
+        // Parse blocks
+        final blocksData = response['blocks'] as List? ?? [];
+        _blocks = List<Map<String, dynamic>>.from(blocksData);
+
+        debugPrint(
+            '⏱️ [WebsiteService] Unified load complete: ${sw.elapsedMilliseconds}ms '
+            '(${_settings.length} settings, ${_blocks.length} blocks)');
+      }
+
+      _hasLoadedForTenant = true;
+      _isLoadingForTenant = false;
+      _safeNotifyListeners();
+    } catch (e) {
+      debugPrint(
+          '⚠️ [WebsiteService] All methods failed, falling back to separate queries: $e');
+      _isLoadingForTenant = false;
+
+      // Fallback to separate queries if RPC doesn't exist yet
+      await Future.wait([
+        loadSettingsForTenant(tenantId),
+        loadBlocksForTenant(tenantId),
+      ]);
+    }
+  }
+
+  /// Try to fetch data from Cloudflare edge cache
+  /// Returns null if cache is unavailable, otherwise returns the cached data
+  Future<Map<String, dynamic>?> _tryEdgeCache(String tenantId) async {
+    try {
+      final uri = Uri.parse('$_edgeCacheUrl/cache/public-store-data');
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'p_tenant_id': tenantId}),
+          )
+          .timeout(const Duration(seconds: 5)); // Don't wait too long
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      debugPrint(
+          '⚠️ [WebsiteService] Edge cache returned status: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Edge cache request failed: $e');
+      return null;
     }
   }
 
@@ -215,16 +339,29 @@ class WebsiteService extends ChangeNotifier {
   /// from subdomain detection (PublicStoreTenantProvider)
   ///
   /// OPTIMIZED: Uses a single query with JOIN to get home page + blocks together
+
   Future<List<Map<String, dynamic>>> loadBlocksForTenant(
       String tenantId) async {
     final sw = Stopwatch()..start();
 
-    // Prevent duplicate loads
+    // Prevent duplicate loads - check BOTH flags
     if (_hasLoadedForTenant) {
       debugPrint(
           '[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
       return _blocks;
     }
+
+    // Prevent concurrent loads
+    if (_isLoadingForTenant) {
+      debugPrint('[WebsiteService] Already loading, waiting...');
+      // Wait for the other load to complete
+      while (_isLoadingForTenant && !_hasLoadedForTenant) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      return _blocks;
+    }
+
+    _isLoadingForTenant = true;
 
     try {
       debugPrint('[WebsiteService] Loading blocks for tenant: $tenantId');

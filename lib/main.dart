@@ -85,6 +85,7 @@ String? _initialBrowserUrl;
 // Performance timing for initialization
 final _initTimings = <String, int>{};
 late final Stopwatch _globalStopwatch;
+bool _tenantDetectionStarted = false; // Prevent duplicate triggers
 
 void _logTiming(String phase, [String? detail]) {
   final elapsed = _globalStopwatch.elapsedMilliseconds;
@@ -407,10 +408,12 @@ class VinabikeApp extends StatelessWidget {
           if (isPublicStoreHost) {
             final tenantProvider = context.watch<PublicStoreTenantProvider>();
 
-            // Start tenant detection + data loading
+            // Start tenant detection + data loading (ONLY ONCE)
             if (!tenantProvider.hasTenant &&
                 !tenantProvider.isLoading &&
-                !tenantProvider.hasError) {
+                !tenantProvider.hasError &&
+                !_tenantDetectionStarted) {
+              _tenantDetectionStarted = true; // Prevent duplicate triggers
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 if (!context.mounted) return;
                 _logTiming('TENANT_DETECT_START');
@@ -418,20 +421,14 @@ class VinabikeApp extends StatelessWidget {
                 if (!context.mounted) return;
                 _logTiming('TENANT_DETECTED', tenantProvider.tenantId);
 
-                // Load data in background
+                // Load data in background - UNIFIED single query
                 if (tenantProvider.tenantId != null) {
                   final tid = tenantProvider.tenantId!;
                   final ws = context.read<WebsiteService>();
 
                   _logTiming('DATA_LOAD_START');
-                  Future.wait([
-                    ws
-                        .loadSettingsForTenant(tid)
-                        .then((_) => _logTiming('SETTINGS_LOADED')),
-                    ws
-                        .loadBlocksForTenant(tid)
-                        .then((_) => _logTiming('BLOCKS_LOADED')),
-                  ]).then((_) => _logTiming('ALL_DATA_LOADED'));
+                  await ws.loadPublicStoreDataUnified(tid);
+                  _logTiming('ALL_DATA_LOADED');
                 }
               });
             }

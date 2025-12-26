@@ -499,11 +499,22 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     // Show loading skeleton if data is still loading (and we don't have blocks yet)
     if (isDataLoading && blocksToRender.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(48),
-          child: CircularProgressIndicator(),
-        ),
+      // Use LayoutBuilder to fill the full available height
+      // This prevents the footer from appearing in the middle of the screen
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          // Calculate minimum height to fill viewport (minus header/footer space)
+          final viewportHeight = MediaQuery.of(context).size.height;
+          final minHeight =
+              viewportHeight - 200; // Approximate header + footer height
+
+          return SizedBox(
+            height: minHeight > 400 ? minHeight : 400,
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
       );
     }
 
@@ -513,22 +524,28 @@ class _PublicHomePageState extends State<PublicHomePage> {
     if (tenantProvider.tenantId == null &&
         blocksToRender.isEmpty &&
         !websiteService.hasLoadedForTenant) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Tienda no encontrada',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Verifica la URL e intenta nuevamente',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            ),
-          ],
+      final viewportHeight = MediaQuery.of(context).size.height;
+      final minHeight = viewportHeight - 200;
+
+      return SizedBox(
+        height: minHeight > 400 ? minHeight : 400,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'Tienda no encontrada',
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Verifica la URL e intenta nuevamente',
+                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              ),
+            ],
+          ),
         ),
       );
     }

@@ -1,0 +1,14 @@
+{
+    "name": "vinabike-edge-cache",
+    "version": "1.0.0",
+    "description": "Cloudflare Worker for caching Supabase public store data at edge",
+    "main": "src/index.js",
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "tail": "wrangler tail"
+    },
+    "devDependencies": {
+        "wrangler": "^3.0.0"
+    }
+}
