@@ -25,10 +25,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overscroll-behavior-x: none; }
-    body { touch-action: pan-y pinch-zoom; }
+    body { touch-action: pan-y pinch-zoom; background: #1a1a2e; }
+    
+    /* Loading screen - shows while Flutter JS downloads */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease-out;
+    }
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading-logo {
+      width: 120px;
+      height: auto;
+      margin-bottom: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    #loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #4a90d9;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    #loading-text {
+      color: rgba(255,255,255,0.7);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
   </style>
 </head>
 <body>
+  <!-- Loading screen shown while Flutter downloads -->
+  <div id="loading-screen">
+    <img id="loading-logo" src="https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/company_logos/1763412155458_Logo-vinabike_ai_to_png.png" alt="Vinabike">
+    <div id="loading-spinner"></div>
+    <div id="loading-text">Cargando...</div>
+  </div>
   <script>
     // Debug: Log URL info BEFORE Flutter loads
     console.log('📍 [index.html] window.location.href =', window.location.href);

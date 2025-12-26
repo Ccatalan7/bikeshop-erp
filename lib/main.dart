@@ -94,6 +94,21 @@ void _logTiming(String phase, [String? detail]) {
       '⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
 }
 
+/// Hide the HTML loading screen after Flutter has loaded
+void _hideLoadingScreen() {
+  if (!kIsWeb) return;
+
+  // Use web platform URL strategy to call JavaScript
+  try {
+    // This works by leveraging the url_strategy package's web implementation
+    // which already has access to the DOM
+    hideHtmlLoadingScreen();
+    debugPrint('✨ [Main] Loading screen hidden');
+  } catch (e) {
+    debugPrint('⚠️ [Main] Could not hide loading screen: $e');
+  }
+}
+
 Future<void> main() async {
   _globalStopwatch = Stopwatch()..start();
 
@@ -180,6 +195,11 @@ Future<void> main() async {
 
     runApp(const VinabikeApp());
     _logTiming('RUN_APP');
+
+    // Hide the HTML loading screen after Flutter starts
+    if (kIsWeb) {
+      _hideLoadingScreen();
+    }
   }, (error, stack) {
     // Suppress Flutter Web-specific errors in zone guard as well
     final errorString = error.toString();

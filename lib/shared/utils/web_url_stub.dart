@@ -5,3 +5,8 @@ String? getInitialBrowserUrl() {
   // On non-web platforms, we don't have a browser URL
   return null;
 }
+
+/// Stub - no loading screen on non-web platforms
+void hideHtmlLoadingScreen() {
+  // No-op on non-web platforms
+}
