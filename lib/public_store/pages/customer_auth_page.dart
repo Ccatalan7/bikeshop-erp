@@ -12,7 +12,8 @@ class CustomerAuthPage extends StatefulWidget {
   State<CustomerAuthPage> createState() => _CustomerAuthPageState();
 }
 
-class _CustomerAuthPageState extends State<CustomerAuthPage> {
+class _CustomerAuthPageState extends State<CustomerAuthPage>
+    with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -24,6 +25,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage> {
   bool _obscurePassword = true;
   bool _showVerificationNotice = false;
   String? _verificationEmail;
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void dispose() {
@@ -129,6 +134,8 @@ class _CustomerAuthPageState extends State<CustomerAuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     // No Scaffold - wrapped by PublicStoreLayout
     return Column(
       children: [

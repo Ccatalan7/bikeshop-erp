@@ -13,6 +13,10 @@ class CustomerPortalLayout extends StatelessWidget {
   final bool overrideLayout;
   final Widget? rightSidebarContent;
 
+  /// When false, the body content area will NOT be wrapped in a scroll view,
+  /// allowing the child to manage its own scrolling (e.g., chat with message list).
+  final bool enableContentScrolling;
+
   final String? backPath;
 
   const CustomerPortalLayout({
@@ -24,6 +28,7 @@ class CustomerPortalLayout extends StatelessWidget {
     this.overrideLayout = false,
     this.backPath,
     this.rightSidebarContent,
+    this.enableContentScrolling = true,
   });
 
   @override
@@ -37,7 +42,7 @@ class CustomerPortalLayout extends StatelessWidget {
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 900;
         if (isDesktop) {
-          return _buildDesktopLayout(context, name, initial);
+          return _buildDesktopLayout(context, constraints, name, initial);
         } else {
           return _buildMobileLayout(context);
         }
@@ -45,19 +50,28 @@ class CustomerPortalLayout extends StatelessWidget {
     );
   }
 
-  Widget _buildDesktopLayout(
-      BuildContext context, String name, String initial) {
+  Widget _buildDesktopLayout(BuildContext context, BoxConstraints constraints,
+      String name, String initial) {
     if (overrideLayout) {
+      // Use provided constraints if available to ensure we fit exactly in the parent
+      // (e.g. Scaffod body) without overflowing.
+      final height = constraints.hasBoundedHeight
+          ? constraints.maxHeight
+          : MediaQuery.of(context).size.height - 80;
+
       return SizedBox(
-        height: MediaQuery.of(context).size.height -
-            80, // Approximate header height adjustment
+        height: height,
         child: child,
       );
     }
 
+    // Default usage also benefits from constraints if available
+    final height = constraints.hasBoundedHeight
+        ? constraints.maxHeight
+        : MediaQuery.of(context).size.height - 80;
+
     return SizedBox(
-      height:
-          MediaQuery.of(context).size.height - 80, // Account for store header
+      height: height,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -102,10 +116,17 @@ class CustomerPortalLayout extends StatelessWidget {
                 Expanded(
                   child: Container(
                     color: Colors.white,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(8),
-                      child: child,
-                    ),
+                    // Only use ScrollView if content scrolling is enabled
+                    // Chat pages manage their own internal scrolling
+                    child: enableContentScrolling
+                        ? SingleChildScrollView(
+                            padding: const EdgeInsets.all(8),
+                            child: child,
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: child,
+                          ),
                   ),
                 ),
               ],
@@ -237,98 +258,108 @@ class CustomerPortalLayout extends StatelessWidget {
                   const SizedBox(height: 0),
 
                   // ANIMATED SIDEBAR CONTENT SWITCHER
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    reverseDuration: const Duration(milliseconds: 400),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder: (child, animation) {
-                      // Full slide from right + fade for dramatic effect
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(1.0, 0), // Full slide from right
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        )),
-                        child: FadeTransition(
-                          opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: const Interval(0.0, 0.7),
+                  // Wrap in Expanded to constrain height and prevent overflow
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 600),
+                      reverseDuration: const Duration(milliseconds: 400),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) {
+                        // Full slide from right + fade for dramatic effect
+                        return SlideTransition(
+                          position: Tween<Offset>(
+                            begin:
+                                const Offset(1.0, 0), // Full slide from right
+                            end: Offset.zero,
+                          ).animate(CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          )),
+                          child: FadeTransition(
+                            opacity:
+                                Tween<double>(begin: 0.0, end: 1.0).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: const Interval(0.0, 0.7),
+                              ),
                             ),
+                            child: child,
                           ),
-                          child: child,
-                        ),
-                      );
-                    },
-                    layoutBuilder: (currentChild, previousChildren) {
-                      return Stack(
-                        alignment: Alignment.topCenter,
-                        children: [
-                          ...previousChildren,
-                          if (currentChild != null) currentChild,
-                        ],
-                      );
-                    },
-                    child: rightSidebarContent != null
-                        ? Container(
-                            key: const ValueKey('custom-sidebar'),
-                            child: rightSidebarContent,
-                          )
-                        : Column(
-                            key: const ValueKey('default-sidebar'),
-                            children: [
-                              // Default Sidebar Cards
-                              Container(
-                                height: 400,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4))
-                                  ],
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child:
-                                    const CustomerChatPanel(compactMode: true),
+                        );
+                      },
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          alignment: Alignment.topCenter,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
+                      child: rightSidebarContent != null
+                          ? SingleChildScrollView(
+                              key: const ValueKey('custom-sidebar'),
+                              child: rightSidebarContent,
+                            )
+                          : SingleChildScrollView(
+                              key: const ValueKey('default-sidebar'),
+                              child: Column(
+                                children: [
+                                  // Default Sidebar Cards
+                                  Container(
+                                    height: 400,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.05),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4))
+                                      ],
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: const CustomerChatPanel(
+                                        compactMode: true),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.05),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4))
+                                      ],
+                                    ),
+                                    padding: const EdgeInsets.all(20),
+                                    child: const QuickReorderWidget(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.05),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4))
+                                      ],
+                                    ),
+                                    padding: const EdgeInsets.all(20),
+                                    child: const RecommendationsWidget(),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4))
-                                  ],
-                                ),
-                                padding: const EdgeInsets.all(20),
-                                child: const QuickReorderWidget(),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4))
-                                  ],
-                                ),
-                                padding: const EdgeInsets.all(20),
-                                child: const RecommendationsWidget(),
-                              ),
-                            ],
-                          ),
+                            ),
+                    ),
                   ),
 
                   const SizedBox(height: 16),
@@ -377,51 +408,80 @@ class CustomerPortalLayout extends StatelessWidget {
       );
     }
 
+    // Build the header widget
+    final mobileHeader = Container(
+      color: Colors.grey.shade50,
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 8,
+        left: 16,
+        right: 16,
+        bottom: 16,
+      ),
+      child: Row(
+        children: [
+          if (showBackButton)
+            InkWell(
+              onTap: () => context.go(backPath ?? '/tienda/cuenta'),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade300),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.arrow_back,
+                    size: 20, color: Colors.black87),
+              ),
+            ),
+          if (showBackButton) const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          if (headerAction != null) headerAction!,
+        ],
+      ),
+    );
+
+    // When content scrolling is disabled (e.g., for chat),
+    // use Column with Expanded so child receives bounded height
+    if (!enableContentScrolling) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          mobileHeader,
+          // Content fills the rest without ScrollView
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: child,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Default: Scrollable layout for normal pages
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Mobile Header
-          Container(
-            color: Colors.grey.shade50,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 8,
-              left: 16,
-              right: 16,
-              bottom: 16,
-            ),
-            child: Row(
-              children: [
-                if (showBackButton)
-                  InkWell(
-                    onTap: () => context.go(backPath ?? '/tienda/cuenta'),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.arrow_back,
-                          size: 20, color: Colors.black87),
-                    ),
-                  ),
-                if (showBackButton) const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-                if (headerAction != null) headerAction!,
-              ],
-            ),
-          ),
+          mobileHeader,
 
           // Content Container
           Padding(

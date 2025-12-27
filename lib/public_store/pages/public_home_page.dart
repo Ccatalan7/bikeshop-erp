@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
-import '../../modules/website/widgets/editable_block_renderer.dart';
+import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/inline_edit_toolbar.dart'
     show AddBlockDialog;
 import '../../modules/website/widgets/block_spacer_handle.dart';
@@ -25,7 +25,8 @@ class PublicHomePage extends StatefulWidget {
   State<PublicHomePage> createState() => _PublicHomePageState();
 }
 
-class _PublicHomePageState extends State<PublicHomePage> {
+class _PublicHomePageState extends State<PublicHomePage>
+    with AutomaticKeepAliveClientMixin {
   List<Product> _featuredProducts = [];
   bool _editModeChecked =
       false; // Track if we've checked edit mode for this navigation
@@ -39,11 +40,17 @@ class _PublicHomePageState extends State<PublicHomePage> {
     'mobile'
   ];
 
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
+    debugPrint('🏠 [PublicHomePage] initState() called');
     // Load featured products once
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('🏠 [PublicHomePage] postFrameCallback - loading data');
       _ensureTenantId();
       _loadFeaturedProductsOnce();
     });
@@ -440,8 +447,23 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   @override
+  void dispose() {
+    debugPrint('🏠 [PublicHomePage] dispose() called');
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    debugPrint(
+        '🏠 [PublicHomePage] build() called - wantKeepAlive: $wantKeepAlive');
+
     // Check for edit/preview mode from URL query parameters (using GoRouter)
+    // We check this here to prevent a 1-frame flash where hidden blocks are filtered out
+    // before the edit provider fully initializes.
+    final qp = GoRouterState.of(context).uri.queryParameters;
+    final forceEditMode = qp['edit'] == 'true';
+
     _checkEditModeFromRouter(context);
 
     // Read data from providers - WATCH WebsiteService to rebuild when blocks load
@@ -552,57 +574,88 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     final currentBreakpoint = _currentBreakpoint(context);
 
-    // Check if we're in editor context (preview or edit mode)
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
-    final isInEditorContext = editProvider.isInEditorContext;
-
-    // Use edit provider blocks if in editor context, otherwise use the blocks we have
-    final finalBlocks =
-        isInEditorContext ? editProvider.blocks : blocksToRender;
-
-    // In editor context, show all blocks (even hidden ones, with opacity)
-    // In normal mode, filter by visibility
-    final visibleBlocks = List<Map<String, dynamic>>.from(
-      finalBlocks.where((block) {
-        if (isInEditorContext) return true; // Show all blocks in editor context
-
-        final isGloballyVisible = block['is_visible'] ?? true;
-        if (!isGloballyVisible) {
-          return false;
+    // Use Selector to only rebuild when edit mode state or block IDs change
+    // This prevents full page rebuilds when only block DATA changes (which is handled by each block)
+    return Selector<WebsiteEditModeProvider,
+        ({bool isEditMode, bool isInEditorContext, List<String> blockIds})>(
+      selector: (_, provider) {
+        final blocks =
+            provider.isInEditorContext ? provider.blocks : blocksToRender;
+        final ids = blocks.map((b) => b['id']?.toString() ?? '').toList();
+        return (
+          isEditMode: provider.isEditMode,
+          isInEditorContext: provider.isInEditorContext,
+          blockIds: ids,
+        );
+      },
+      // Custom shouldRebuild to compare block IDs by content, not reference
+      shouldRebuild: (prev, next) {
+        if (prev.isEditMode != next.isEditMode) return true;
+        if (prev.isInEditorContext != next.isInEditorContext) return true;
+        if (prev.blockIds.length != next.blockIds.length) return true;
+        for (int i = 0; i < prev.blockIds.length; i++) {
+          if (prev.blockIds[i] != next.blockIds[i]) return true;
         }
+        return false;
+      },
+      builder: (context, state, _) {
+        final editProvider = context.read<WebsiteEditModeProvider>();
 
-        final data = Map<String, dynamic>.from(block['block_data'] ?? {});
-        final visibility = _normalizeBlockVisibility(data['visibility']);
-        return visibility[currentBreakpoint] ?? true;
-      }),
-    )..sort(
-        (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0)
-            .compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
-      );
+        // If URL forces edit mode, we treat it as edit mode even if provider isn't ready
+        final isEditMode = state.isEditMode || forceEditMode;
+        final isInEditorContext = state.isInEditorContext || forceEditMode;
 
-    // Build the page content (blocks)
-    final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
-    Widget pageContent = _buildPageContent(
-      context: context,
-      visibleBlocks: visibleBlocks,
-      isEditMode: isEditMode,
-      editProvider: editProvider,
-      primaryColor: primaryColor,
-      accentColor: accentColor,
-      headingFont: headingFont,
-      bodyFont: bodyFont,
-      headingSize: headingSize,
-      bodySize: bodySize,
-      textColor: textColor,
-      sectionSpacing: sectionSpacing,
-      containerPadding: containerPadding,
-      tenantId: effectiveTenantId,
-      isInitialLoading: false, // Loading handled by main.dart
+        // Use edit provider blocks if in editor context, otherwise use the blocks we have
+        // Note: If forceEditMode is true but provider IS NOT ready (state.isInEditorContext is false),
+        // we use blocksToRender (from service) but display them with edit-mode visibility rules.
+        final finalBlocks =
+            state.isInEditorContext ? editProvider.blocks : blocksToRender;
+
+        // In editor context, show all blocks (even hidden ones, with opacity)
+        // In normal mode, filter by visibility
+        final visibleBlocks = List<Map<String, dynamic>>.from(
+          finalBlocks.where((block) {
+            if (isInEditorContext)
+              return true; // Show all blocks in editor context
+
+            final isGloballyVisible = block['is_visible'] ?? true;
+            if (!isGloballyVisible) {
+              return false;
+            }
+
+            final data = Map<String, dynamic>.from(block['block_data'] ?? {});
+            final visibility = _normalizeBlockVisibility(data['visibility']);
+            return visibility[currentBreakpoint] ?? true;
+          }),
+        )..sort(
+            (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0)
+                .compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
+          );
+
+        // Build the page content (blocks)
+        final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
+        Widget pageContent = _buildPageContent(
+          context: context,
+          visibleBlocks: visibleBlocks,
+          isEditMode: isEditMode,
+          editProvider: editProvider,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+          headingSize: headingSize,
+          bodySize: bodySize,
+          textColor: textColor,
+          sectionSpacing: sectionSpacing,
+          containerPadding: containerPadding,
+          tenantId: effectiveTenantId,
+          isInitialLoading: false, // Loading handled by main.dart
+        );
+
+        // Just return the page content - toolbar and side panel are handled by PublicStoreLayout
+        return pageContent;
+      },
     );
-
-    // Just return the page content - toolbar and side panel are handled by PublicStoreLayout
-    return pageContent;
   }
 
   /// Build the main page content (blocks list)
@@ -634,12 +687,15 @@ class _PublicHomePageState extends State<PublicHomePage> {
         child: Column(
           children: [
             for (int i = 0; i < visibleBlocks.length; i++) ...[
-              KeyedSubtree(
-                // Use hash of block_data + tenantId to force rebuild when content or tenant changes
-                key: ValueKey(
-                    '${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
-                child: _buildBlockFromData(
-                  visibleBlocks[i],
+              // Use _BlockDataSelector to read block data from provider
+              // This ensures each block only rebuilds when ITS data changes
+              _BlockDataSelector(
+                key: ValueKey('${visibleBlocks[i]['id']}_$tenantId'),
+                blockId: visibleBlocks[i]['id']?.toString() ?? '',
+                fallbackBlockData: visibleBlocks[i],
+                isInEditorContext: isEditMode,
+                builder: (context, blockData) => _buildBlockFromData(
+                  blockData,
                   primaryColor,
                   accentColor,
                   headingFont: headingFont,
@@ -836,7 +892,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final blockHeight = (data['blockHeight'] as num?)?.toDouble();
 
     Widget content = isEditMode
-        ? EditableBlockRenderer.build(
+        ? DeferredEditableBlockRenderer.build(
             context: context,
             blockId: blockId,
             blockType: blockType,
@@ -1042,6 +1098,70 @@ class _AddBlockButtonLarge extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A widget that selects block data from the provider and only rebuilds when THAT block's data changes.
+/// This prevents all blocks from rebuilding when any block is edited.
+class _BlockDataSelector extends StatelessWidget {
+  final String blockId;
+  final Map<String, dynamic> fallbackBlockData;
+  final bool isInEditorContext;
+  final Widget Function(BuildContext, Map<String, dynamic>) builder;
+
+  const _BlockDataSelector({
+    super.key,
+    required this.blockId,
+    required this.fallbackBlockData,
+    required this.isInEditorContext,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // If not in editor context, use fallback data (from WebsiteService)
+    if (!isInEditorContext) {
+      return builder(context, fallbackBlockData);
+    }
+
+    // In editor context, select only THIS block's data from the provider
+    return Selector<WebsiteEditModeProvider, Map<String, dynamic>?>(
+      selector: (_, provider) {
+        // Find this block in the provider's blocks list
+        for (final block in provider.blocks) {
+          if (block['id']?.toString() == blockId) {
+            return block;
+          }
+        }
+        return null;
+      },
+      // Compare block data by content, not reference
+      // For canvas blocks, ignore activeElementId since it's managed internally
+      shouldRebuild: (prev, next) {
+        if (prev == null && next == null) return false;
+        if (prev == null || next == null) return true;
+
+        final prevData = Map<String, dynamic>.from(prev['block_data'] ?? {});
+        final nextData = Map<String, dynamic>.from(next['block_data'] ?? {});
+
+        // For canvas blocks, don't rebuild for activeElementId changes
+        // The canvas widget manages this internally
+        final blockType = (prev['block_type'] ?? '').toString().toLowerCase();
+        if (blockType == 'canvas') {
+          // Remove transient properties before comparing
+          prevData.remove('activeElementId');
+          nextData.remove('activeElementId');
+        }
+
+        // Compare remaining data
+        // Use string representation for deep comparison
+        return prevData.toString() != nextData.toString();
+      },
+      builder: (context, blockData, _) {
+        // Use the selected block data, or fallback if not found
+        return builder(context, blockData ?? fallbackBlockData);
+      },
     );
   }
 }

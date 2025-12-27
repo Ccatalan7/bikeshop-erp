@@ -13,7 +13,12 @@ class CustomerAccountPage extends StatefulWidget {
   State<CustomerAccountPage> createState() => _CustomerAccountPageState();
 }
 
-class _CustomerAccountPageState extends State<CustomerAccountPage> {
+class _CustomerAccountPageState extends State<CustomerAccountPage>
+    with AutomaticKeepAliveClientMixin {
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +38,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
 
     if (!accountService.isAuthenticated) {

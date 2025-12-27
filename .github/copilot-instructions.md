@@ -38,6 +38,18 @@ postgresql://postgres:[PASSWORD]@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgr
 |--------|------|-------------|
 | **Viñabike (Production)** | `5443b130-cc28-45af-a420-cd500b288890` | Primary business account, used for testing and production |
 
+## Viñabike Business Info (for SEO/index.html)
+
+| Field | Value |
+|-------|-------|
+| **Business Name** | Vinabike |
+| **Address** | Álvarez 32, Local 17, Viña del Mar, Chile |
+| **Phone** | +56998357797 |
+| **Email** | vinabikechile@gmail.com |
+| **Website** | https://vinabike.cl |
+
+**⚠️ NEVER use placeholder data (like "contacto", "XXXX", "test") in index.html SEO content!**
+
 ## Storage Buckets
 
 - `products` - Product images
@@ -774,6 +786,251 @@ alter view stock_movements_view set (security_invoker = on);
 - Easy to review before deploying
 
 ---
+
+# 🌐 WEB DEPLOYMENT: SPLIT BUILD (CRITICAL)
+
+**⚠️ THE PUBLIC STORE AND ERP USE DIFFERENT ENTRY POINTS!**
+
+## Entry Points
+
+| Target | Entry Point | Bundle Size | Description |
+|--------|-------------|-------------|-------------|
+| **Public Store** | `lib/main_store.dart` | ~4.1 MB | Minimal: public store only, no ERP modules |
+| **ERP** | `lib/main.dart` | ~9.2 MB | Full: all modules (inventory, accounting, etc.) |
+
+## Build Commands
+
+**✅ CORRECT: Build store with optimized entry point**
+```bash
+flutter build web --release -t lib/main_store.dart -o build/web_store
+```
+
+**✅ CORRECT: Build ERP with full entry point**
+```bash
+flutter build web --release -o build/web_erp
+```
+
+**❌ WRONG: Using main.dart for store (9MB bundle!)**
+```bash
+flutter build web --release  # This uses main.dart = 9MB!!
+cp -R build/web/ build/web_store/  # DON'T DO THIS
+```
+
+## Firebase Hosting Targets
+
+- **`web_erp/`** → `project-vinabike.web.app` (ERP admin)
+- **`web_store/`** → `vinabike-store.web.app` (Public store)
+
+## Workflow Reference
+
+Full workflow is in `.agent/workflows/deploy_to_firebase.md`
+
+## Rules for Deployment
+
+1. ✅ **ALWAYS** build store with `-t lib/main_store.dart`
+2. ✅ **ALWAYS** use separate `-o` directories for each target
+3. ✅ **VERIFY** bundle size: store should be ~4MB, not 9MB
+4. ❌ **NEVER** copy `build/web/` to `build/web_store/` (wrong entry point)
+5. ❌ **NEVER** use default `flutter build web` for store deployment
+
+## Why This Matters
+
+- **~4MB** bundle = fast initial load for public store visitors
+- **~9MB** bundle = slow load, poor Google PageSpeed, Merchant Center issues
+- Public store visitors don't need ERP modules (accounting, HR, etc.)
+- `main_store.dart` excludes unnecessary imports = smaller bundle
+
+## Files Involved
+
+- `lib/main_store.dart` - Lightweight entry point for public store
+- `lib/main.dart` - Full entry point with all modules
+- `.agent/workflows/deploy_to_firebase.md` - Deployment workflow
+- `firebase.json` - Hosting target configuration
+
+---
+
+# 🔍 SEO & WEBSITE ARCHITECTURE (CRITICAL FOR GOOGLE MERCHANT CENTER)
+
+**⚠️ UNDERSTANDING THIS ARCHITECTURE IS CRITICAL FOR GOOGLE MERCHANT CENTER APPROVAL!**
+
+## Overview: 3 Data Layers
+
+The website has THREE layers of data that must stay in sync:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     1. STATIC INDEX.HTML                        │
+│  (What Google bot sees BEFORE Flutter loads - ~500ms window)   │
+├─────────────────────────────────────────────────────────────────┤
+│  Location: web/index.html                                       │
+│  Synced via: scripts/sync_seo_index.sh (runs before deploy)    │
+│  Contains: meta tags, JSON-LD schema, contact info, legal links│
+│  ⚠️ MUST match database values or Google rejects!              │
+└─────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ sync_seo_index.sh
+                              │
+┌─────────────────────────────────────────────────────────────────┐
+│                 2. WEBSITE_SETTINGS TABLE (DB)                  │
+│         (Central source of truth for site-wide settings)       │
+├─────────────────────────────────────────────────────────────────┤
+│  Key Settings:                                                  │
+│  - contact_email, contact_phone, contact_address                │
+│  - store_name, store_description                                │
+│  - meta_title, meta_description, meta_keywords                  │
+│  - facebook, instagram, twitter, youtube, whatsapp              │
+│  - theme_*, header_*, logo_url                                  │
+│                                                                 │
+│  Accessed via: WebsiteService.getSetting('key', 'default')      │
+│  Saved via: WebsiteService.saveSettings({'key': 'value'})       │
+└─────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │
+┌─────────────────────────────────────────────────────────────────┐
+│                3. WEBSITE_PAGES TABLE (DB)                      │
+│             (Per-page SEO - each page has its own!)             │
+├─────────────────────────────────────────────────────────────────┤
+│  Per-Page Fields:                                               │
+│  - slug (URL path: 'productos', 'devoluciones', etc.)          │
+│  - title (browser tab title)                                    │
+│  - meta_title (SEO title - can differ from title)               │
+│  - meta_description (SEO description for this page)             │
+│  - meta_keywords (page-specific keywords)                       │
+│  - og_image_url (social sharing image for this page)           │
+│  - is_published (whether page is live)                          │
+│                                                                 │
+│  ⚠️ ALL 9 pages need SEO configured, not just home!            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Current Pages (Viñabike)
+
+| Page | Slug | SEO Status | Notes |
+|------|------|------------|-------|
+| Inicio | `inicio` | NEEDS CHECK | Home page, uses site-wide meta |
+| Productos | `productos` | NEEDS CHECK | Product catalog |
+| Contacto | `contacto` | NEEDS CHECK | Contact page |
+| Sobre Nosotros | `nosotros` | NEEDS CHECK | About page |
+| Términos y Condiciones | `terminos` | NEEDS META | Legal page |
+| Política de Privacidad | `privacidad` | NEEDS META | Legal page |
+| Política de Devoluciones | `devoluciones` | NEEDS META | Legal page (refund) |
+| Información de Envíos | `envios` | NEEDS META | Legal page (shipping) |
+
+## Where Data Flows
+
+### Website Footer/Header (LIVE)
+- **Source:** `website_settings` table
+- **Read by:** `public_store_layout.dart` lines 167-179
+- **Keys used:**
+  ```dart
+  contactEmail = websiteService.getSetting('contact_email', '');
+  contactPhone = websiteService.getSetting('contact_phone', '');
+  contactAddress = websiteService.getSetting('contact_address', '');
+  ```
+
+### Editor Footer Controls (ERP)
+- **Location:** `lib/modules/website/widgets/website_editor_panel.dart` (lines ~9198-9410)
+- **Source:** Same `website_settings` table
+- **Wiring:** `_FooterBlockControlsState._loadSettings()` reads, `_saveSettings()` writes
+- **Keys:** Same `contact_email`, `contact_phone`, `contact_address`
+- ✅ **NOT mock data** - Editor IS properly wired to database!
+
+### Static index.html (for Google Bot)
+- **Location:** `web/index.html`
+- **Synced by:** `scripts/sync_seo_index.sh`
+- **When synced:** Before every `flutter build web` (in deploy workflow)
+- **Contains:**
+  - Phone, email, address in hidden SEO div
+  - JSON-LD LocalBusiness schema
+  - Open Graph meta tags
+  - Legal page links (refund, terms, privacy, shipping)
+
+## The Sync Script
+
+**File:** `scripts/sync_seo_index.sh`
+
+**What it does:**
+1. Fetches settings from Supabase `website_settings` table
+2. Regenerates `web/index.html` with correct values
+3. Injects JSON-LD schema, Open Graph, Twitter Cards
+4. Adds legal page links
+
+**When it runs:**
+- Step 1 of `/deploy_to_firebase` workflow
+- Must run BEFORE `flutter build web`
+
+**API used:**
+```bash
+curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_settings?tenant_id=eq.${TENANT_ID}&select=key,value"
+```
+
+## SEO Settings Page
+
+**Location:** `lib/modules/website/pages/seo_settings_page.dart`
+
+**Route:** `/website/seo`
+
+**What it manages:**
+1. Business Info (name, phone, email, full address)
+2. Meta Tags (title, description, keywords)
+3. Legal Pages (URLs for refund, terms, shipping, privacy)
+4. Open Graph (social sharing)
+5. Twitter Cards
+6. Structured Data (JSON-LD toggles)
+7. Analytics (GA, FB Pixel, GTM IDs)
+
+**Key sync behavior:**
+- Writes to BOTH `seo_*` prefixed keys AND legacy keys
+- Example: Saves `seo_phone` AND `contact_phone` for backward compatibility
+
+## Critical Sync Rules
+
+### ✅ DO
+1. Always run sync script before deploy
+2. Check ALL pages have SEO configured (not just home)
+3. Use SEO Settings page (`/website/seo`) as primary editor
+4. Verify legal pages are published AND have meta descriptions
+
+### ❌ DON'T
+1. Edit `web/index.html` directly (will be overwritten by sync script)
+2. Assume changes are live without deploying
+3. Forget that legal pages ALSO need SEO (meta_title, meta_description)
+4. Use placeholder data ("+56 9 contacto", "test@test.com")
+
+## Debugging SEO Issues
+
+**If Google Merchant Center rejects:**
+1. Check `web/index.html` has correct phone/email (not placeholders)
+2. Check ALL 4 legal page links exist in index.html
+3. Check legal pages are published (`is_published: true`)
+4. Run sync script and redeploy
+5. Test with Google Rich Results Test
+
+**If footer shows wrong info:**
+1. Check `website_settings` table for `contact_email`, `contact_phone`
+2. Verify WebsiteService loaded settings correctly
+3. Check for cached data (hard refresh browser)
+
+**If editor changes don't reflect:**
+1. Editor DOES save to database (verified)
+2. Check save confirmation (green snackbar)
+3. Hard refresh the public store page
+4. Check browser console for errors
+
+## Per-Page SEO Checklist
+
+For EACH page in `website_pages`, verify:
+- [ ] `meta_title` is set (max 60 chars)
+- [ ] `meta_description` is set (max 160 chars)
+- [ ] `meta_keywords` has relevant terms
+- [ ] `og_image_url` has a social sharing image
+- [ ] `is_published` is `true`
+
+**Command to check per-page SEO:**
+```bash
+curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_pages?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=slug,meta_title,meta_description,is_published" \
+  -H "apikey: $(grep SUPABASE_ANON_KEY lib/shared/config/supabase_config.dart | cut -d\"'\" -f2)" | jq '.'
+```
 
 ---
 

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/providers/website_edit_mode_provider.dart';
-import '../../modules/website/widgets/editable_block_renderer.dart';
+import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDialog;
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
@@ -250,7 +250,7 @@ class WebsitePageContent extends StatelessWidget {
     final blockHeight = (data['blockHeight'] as num?)?.toDouble();
     
     Widget content = isEditMode
-        ? EditableBlockRenderer.build(
+        ? DeferredEditableBlockRenderer.build(
             context: context,
             blockId: blockId,
             blockType: blockType,

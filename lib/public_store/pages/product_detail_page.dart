@@ -3,12 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
-import '../../shared/services/inventory_service.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/public_inventory_service.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
-import '../../shared/widgets/branded_loading.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -19,13 +19,20 @@ class ProductDetailPage extends StatefulWidget {
   State<ProductDetailPage> createState() => _ProductDetailPageState();
 }
 
-class _ProductDetailPageState extends State<ProductDetailPage> {
+class _ProductDetailPageState extends State<ProductDetailPage>
+    with AutomaticKeepAliveClientMixin {
   static const _structuredDataScriptId = 'vinabike-product-structured-data';
   Product? _product;
   List<Product> _relatedProducts = [];
   bool _isLoading = true;
+  bool _isLoadingRelated = false;
   int _quantity = 1;
   int _selectedImageIndex = 0;
+  int _loadToken = 0;
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -53,47 +60,96 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _loadProduct() async {
-    setState(() => _isLoading = true);
+    final token = ++_loadToken;
+    setState(() {
+      _isLoading = true;
+      _isLoadingRelated = false;
+      _relatedProducts = [];
+    });
 
     try {
-      final inventoryService = context.read<InventoryService>();
+      final inventoryService = context.read<PublicInventoryService>();
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+
+      if (tenantId == null) {
+        debugPrint('❌ [ProductDetail] No tenant ID available');
+        return;
+      }
 
       // Load the product - support both UUID and SKU-based lookups
       // SKU format: "sku:S56467" (from legacy /shop/ URLs)
+      final Product? loadedProduct;
       if (widget.productId.startsWith('sku:')) {
         final sku = widget.productId.substring(4); // Remove "sku:" prefix
         debugPrint('🔍 [ProductDetail] Looking up product by SKU: $sku');
-        _product = await inventoryService.getProductBySku(sku);
+        loadedProduct = await inventoryService.getProductBySku(
+          sku: sku,
+          tenantId: tenantId,
+        );
       } else {
-        _product = await inventoryService.getProductById(widget.productId);
+        loadedProduct = await inventoryService.getProductById(
+          productId: widget.productId,
+          tenantId: tenantId,
+        );
       }
+
+      if (!mounted || token != _loadToken) return;
+
+      _product = loadedProduct;
 
       if (_product != null) {
         debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
-        // Load related products (same category)
-        final allProducts = await inventoryService.getProducts();
-        _relatedProducts = allProducts
-            .where((p) =>
-                p.id != _product!.id &&
-                p.categoryId == _product!.categoryId &&
-                p.stockQuantity > 0)
-            .take(4)
-            .toList();
-
-        if (mounted) {
-          _updateStructuredData();
-        }
+        // Render immediately, then load related products in background.
+        setState(() => _isLoading = false);
+        _updateStructuredData();
+        _loadRelatedProducts(
+          token: token,
+          inventoryService: inventoryService,
+          tenantId: tenantId,
+          product: _product!,
+        );
       } else {
         debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
         removeStructuredDataScript(_structuredDataScriptId);
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading product: $e');
       removeStructuredDataScript(_structuredDataScriptId);
-    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _loadRelatedProducts({
+    required int token,
+    required PublicInventoryService inventoryService,
+    required String tenantId,
+    required Product product,
+  }) async {
+    final categoryId = product.categoryId;
+    if (categoryId == null || categoryId.isEmpty) return;
+
+    setState(() => _isLoadingRelated = true);
+    try {
+      final allProducts = await inventoryService.getProductsForTenant(
+        tenantId: tenantId,
+        categoryId: categoryId,
+        onlyInStock: true,
+        limit: 12,
+      );
+
+      if (!mounted || token != _loadToken) return;
+      setState(() {
+        _relatedProducts =
+            allProducts.where((p) => p.id != product.id).take(4).toList();
+        _isLoadingRelated = false;
+      });
+    } catch (_) {
+      if (!mounted || token != _loadToken) return;
+      setState(() => _isLoadingRelated = false);
     }
   }
 
@@ -200,8 +256,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     if (_isLoading) {
-      return const Center(child: BrandedLoading());
+      return Container(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ),
+      );
     }
 
     if (_product == null) {
@@ -221,7 +290,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => context.go('/tienda/productos'),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/productos');
+                }
+              },
               child: const Text('Volver a productos'),
             ),
           ],
@@ -269,7 +344,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             const SizedBox(height: 64),
 
             // Related Products
-            if (_relatedProducts.isNotEmpty) _buildRelatedProducts(),
+            if (_isLoadingRelated)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_relatedProducts.isNotEmpty)
+              _buildRelatedProducts(),
           ],
         ),
       ),
@@ -484,9 +571,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: inStock
-                  ? Colors.green.shade50
-                  : Colors.red.shade50,
+              color: inStock ? Colors.green.shade50 : Colors.red.shade50,
               borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
@@ -503,7 +588,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: inStock ? Colors.green.shade700 : Colors.red.shade700,
+                    color:
+                        inStock ? Colors.green.shade700 : Colors.red.shade700,
                   ),
                 ),
               ],
@@ -542,7 +628,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           child: Icon(
                             Icons.remove,
                             size: 18,
-                            color: _quantity > 1 ? Colors.black87 : Colors.grey.shade400,
+                            color: _quantity > 1
+                                ? Colors.black87
+                                : Colors.grey.shade400,
                           ),
                         ),
                       ),
@@ -572,8 +660,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           child: Icon(
                             Icons.add,
                             size: 18,
-                            color: _quantity < _product!.stockQuantity 
-                                ? Colors.black87 
+                            color: _quantity < _product!.stockQuantity
+                                ? Colors.black87
                                 : Colors.grey.shade400,
                           ),
                         ),
@@ -592,7 +680,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               child: ElevatedButton(
                 onPressed: _addToCart,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: inCart ? Colors.green.shade600 : Colors.black,
+                  backgroundColor:
+                      inCart ? Colors.green.shade600 : Colors.black,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -659,7 +748,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.cancel_outlined, color: Colors.red.shade700, size: 18),
+                  Icon(Icons.cancel_outlined,
+                      color: Colors.red.shade700, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Agotado',
@@ -681,7 +771,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           // Quick Info - Clean icons
           _buildInfoRow(Icons.local_shipping_outlined, 'Envío a todo Chile'),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.storefront_outlined, 'Retiro en tienda disponible'),
+          _buildInfoRow(
+              Icons.storefront_outlined, 'Retiro en tienda disponible'),
           const SizedBox(height: 12),
           _buildInfoRow(Icons.verified_outlined, 'Garantía oficial'),
         ],
@@ -745,7 +836,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Description
-              if (_product!.description != null && _product!.description!.isNotEmpty) ...[
+              if (_product!.description != null &&
+                  _product!.description!.isNotEmpty) ...[
                 const Text(
                   'Descripción',
                   style: TextStyle(
@@ -814,7 +906,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ],
 
               // General Info
-              _buildDetailRow('Categoría', _product!.categoryName ?? 'Sin categoría'),
+              _buildDetailRow(
+                  'Categoría', _product!.categoryName ?? 'Sin categoría'),
               if (_product!.brand != null && _product!.brand!.isNotEmpty)
                 _buildDetailRow('Marca', _product!.brand!),
               if (_product!.model != null && _product!.model!.isNotEmpty)
@@ -902,7 +995,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Widget _buildRelatedProductCard(Product product) {
     final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(

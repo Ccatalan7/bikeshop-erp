@@ -28,6 +28,9 @@ class PublicInventoryService extends ChangeNotifier {
   final Map<String, List<Product>> _productsCache = {};
   final Map<String, List<Category>> _categoriesCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
+
+  // Prevent duplicate concurrent fetches per tenant
+  final Map<String, Future<List<Category>>> _categoriesInFlight = {};
   
   // Cache duration: 5 minutes
   static const _cacheDuration = Duration(minutes: 5);
@@ -145,7 +148,8 @@ class PublicInventoryService extends ChangeNotifier {
           onlyInStock && 
           minPrice == null && 
           maxPrice == null &&
-          offset == 0) {
+          offset == 0 &&
+          limit == null) {
         _productsCache[cacheKey] = products;
         _cacheTimestamps[cacheKey] = DateTime.now();
       }
@@ -167,37 +171,59 @@ class PublicInventoryService extends ChangeNotifier {
     required String tenantId,
   }) async {
     final sw = Stopwatch()..start();
+    final cacheKey = 'categories_$tenantId';
     try {
       // Check cache first
-      final cacheKey = 'categories_$tenantId';
       if (_isCacheValid(cacheKey)) {
         debugPrint('⏱️ [PublicInventory] Categories from cache: ${sw.elapsedMilliseconds}ms');
         return _categoriesCache[cacheKey] ?? [];
       }
 
-      final response = await _supabase
-          .from('categories')
-          .select()
-          .eq('tenant_id', tenantId)
-          .order('name', ascending: true);
-      
-      debugPrint('⏱️ [PublicInventory] Categories query: ${sw.elapsedMilliseconds}ms');
+      // Avoid duplicate requests if multiple widgets trigger it on startup
+      final inFlight = _categoriesInFlight[cacheKey];
+      if (inFlight != null) {
+        debugPrint('⏳ [PublicInventory] Categories already loading; awaiting in-flight request');
+        return await inFlight;
+      }
 
-      final categories = (response as List)
-          .map((json) => Category.fromJson(json))
-          .toList();
-
-      debugPrint('✅ PublicInventoryService: Found ${categories.length} categories (${sw.elapsedMilliseconds}ms)');
-
-      // Cache results
-      _categoriesCache[cacheKey] = categories;
-      _cacheTimestamps[cacheKey] = DateTime.now();
-
-      return categories;
+      final future = _fetchCategoriesForTenant(tenantId: tenantId, sw: sw);
+      _categoriesInFlight[cacheKey] = future;
+      return await future;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error fetching categories: $e (${sw.elapsedMilliseconds}ms)');
       return [];
+    } finally {
+      _categoriesInFlight.remove(cacheKey);
     }
+  }
+
+  Future<List<Category>> _fetchCategoriesForTenant({
+    required String tenantId,
+    required Stopwatch sw,
+  }) async {
+    final response = await _supabase
+        .from('product_categories')
+        // Only fetch what the public store needs (smaller payload = faster).
+        .select('id,tenant_id,name,full_path,parent_id,level,image_url,sort_order')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('sort_order', ascending: true)
+        .order('name', ascending: true);
+    
+    debugPrint('⏱️ [PublicInventory] Categories query: ${sw.elapsedMilliseconds}ms');
+
+    final categories = (response as List)
+        .map((json) => Category.fromJson(Map<String, dynamic>.from(json as Map)))
+        .toList();
+
+    debugPrint('✅ PublicInventoryService: Found ${categories.length} categories (${sw.elapsedMilliseconds}ms)');
+
+    // Cache results
+    final cacheKey = 'categories_$tenantId';
+    _categoriesCache[cacheKey] = categories;
+    _cacheTimestamps[cacheKey] = DateTime.now();
+
+    return categories;
   }
 
   /// Get single product by ID (public access)
@@ -231,6 +257,52 @@ class PublicInventoryService extends ChangeNotifier {
       return product;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error fetching product: $e');
+      return null;
+    }
+  }
+
+  /// Get single product by SKU (public access)
+  /// 
+  /// Parameters:
+  /// - [sku]: The product SKU (case-insensitive)
+  /// - [tenantId]: The tenant ID (for verification)
+  /// 
+  /// Returns product or null if not found/error
+  Future<Product?> getProductBySku({
+    required String sku,
+    required String tenantId,
+  }) async {
+    try {
+      debugPrint('🔍 PublicInventoryService: Fetching product by SKU $sku for tenant $tenantId');
+
+      // Try exact match first, then case-insensitive
+      var response = await _supabase
+          .from('products')
+          .select()
+          .eq('sku', sku)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+
+      // Try with uppercase if not found (common pattern: s56467 -> S56467)
+      if (response == null) {
+        response = await _supabase
+            .from('products')
+            .select()
+            .eq('sku', sku.toUpperCase())
+            .eq('tenant_id', tenantId)
+            .maybeSingle();
+      }
+
+      if (response == null) {
+        debugPrint('⚠️ PublicInventoryService: Product with SKU $sku not found');
+        return null;
+      }
+
+      final product = Product.fromJson(response);
+      debugPrint('✅ PublicInventoryService: Found product by SKU: ${product.name}');
+      return product;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching product by SKU: $e');
       return null;
     }
   }

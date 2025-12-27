@@ -43,7 +43,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   void _checkSelection(WebsiteEditModeProvider editProvider) {
@@ -104,7 +104,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     }
 
     return Container(
-      width: 320,
+      width: 380,
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         border: Border(
@@ -232,8 +232,9 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       ),
       child: Row(
         children: [
-          _buildTab('add', '+ Agregar', Icons.add_box_outlined),
+          _buildTab('add', 'Agregar', Icons.add_box_outlined),
           _buildTab('edit', 'Editar', Icons.edit_outlined),
+          _buildTab('page', 'Página', Icons.article_outlined),
           _buildTab('theme', 'Tema', Icons.palette_outlined),
         ],
       ),
@@ -290,6 +291,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
         );
       case 'edit':
         return _EditBlockTab(editProvider: editProvider);
+      case 'page':
+        return _PageSettingsTab(editProvider: editProvider);
       case 'theme':
         return _ThemeTab();
       default:
@@ -3848,7 +3851,9 @@ class _CanvasBlockControls extends StatelessWidget {
   }
 
   void _setActive(String? id) {
-    provider.updateBlockData(blockId, 'activeElementId', id);
+    // Don't save to history for transient activeElementId changes
+    provider.updateBlockData(blockId, 'activeElementId', id,
+        saveHistory: false);
   }
 
   void _setElements(List<Map<String, dynamic>> elements) {
@@ -5089,6 +5094,392 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
 
 // (removed) Canvas-specific picker dialog; Canvas reuses `_ProductPickerDialog` for consistency.
 
+/// Page settings tab for page-level SEO (meta title, description)
+/// Minimal, clean interface following existing patterns
+class _PageSettingsTab extends StatefulWidget {
+  final WebsiteEditModeProvider editProvider;
+
+  const _PageSettingsTab({required this.editProvider});
+
+  @override
+  State<_PageSettingsTab> createState() => _PageSettingsTabState();
+}
+
+class _PageSettingsTabState extends State<_PageSettingsTab> {
+  final _metaTitleController = TextEditingController();
+  final _metaDescriptionController = TextEditingController();
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _hasChanges = false;
+  WebsitePage? _currentPage;
+  String _currentRoute = '';
+  bool _isSpecialRoute = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use addPostFrameCallback to ensure context is available for router
+    WidgetsBinding.instance.addPostFrameCallback((_) => _detectCurrentPage());
+  }
+
+  @override
+  void dispose() {
+    _metaTitleController.dispose();
+    _metaDescriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _detectCurrentPage() async {
+    if (!mounted) return;
+
+    // Get current page info from the edit provider (works even outside router context)
+    final pageSlug = widget.editProvider.currentPageSlug;
+    var newRoute = pageSlug ?? 'inicio';
+    if (newRoute.isEmpty) newRoute = 'inicio';
+
+    debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
+
+    // Avoid reloading if route hasn't changed
+    if (newRoute == _currentRoute && !_isLoading) return;
+
+    setState(() {
+      _currentRoute = newRoute;
+      _isLoading = true;
+    });
+
+    // Check if this is a special route (not a CMS page)
+    final specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
+    _isSpecialRoute = specialRoutes.any((r) => _currentRoute.startsWith(r));
+
+    // For special routes, load SEO from website_settings
+    if (_isSpecialRoute) {
+      final service = context.read<WebsiteService>();
+      final routeKey = _currentRoute.split('/').first; // e.g., 'productos'
+      _metaTitleController.text =
+          service.getSetting('seo_${routeKey}_title', '');
+      _metaDescriptionController.text =
+          service.getSetting('seo_${routeKey}_description', '');
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    await _loadPageData();
+  }
+
+  Future<void> _loadPageData() async {
+    final pageId = widget.editProvider.currentPageId;
+    final pageSlug = widget.editProvider.currentPageSlug ?? _currentRoute;
+
+    // Home page
+    if ((pageId == null && pageSlug == 'inicio') || _currentRoute == 'inicio') {
+      final service = context.read<WebsiteService>();
+      _metaTitleController.text = service.getSetting('meta_title', '');
+      _metaDescriptionController.text =
+          service.getSetting('meta_description', '');
+      _currentRoute = 'inicio';
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final service = context.read<WebsiteService>();
+      WebsitePage? page;
+
+      if (pageId != null) {
+        page = await service.getPageById(pageId);
+      } else {
+        page = await service.getPageBySlug(pageSlug);
+      }
+
+      if (mounted && page != null) {
+        _currentPage = page;
+        _currentRoute = page.slug;
+        _metaTitleController.text = page.metaTitle ?? '';
+        _metaDescriptionController.text = page.metaDescription ?? '';
+        setState(() => _isLoading = false);
+      } else {
+        setState(() {
+          _isSpecialRoute = true;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading page for SEO: $e');
+      if (mounted) {
+        setState(() {
+          _isSpecialRoute = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveSeoSettings() async {
+    if (!_hasChanges) return;
+    setState(() => _isSaving = true);
+
+    try {
+      final service = context.read<WebsiteService>();
+      final pageId = widget.editProvider.currentPageId;
+
+      if (_isSpecialRoute) {
+        // Special route - save to website_settings with route-prefixed keys
+        final routeKey = _currentRoute.split('/').first;
+        await service.saveSettings({
+          'seo_${routeKey}_title': _metaTitleController.text,
+          'seo_${routeKey}_description': _metaDescriptionController.text,
+        });
+      } else if (pageId == null && _currentRoute == 'inicio') {
+        // Home page - save to website_settings
+        await service.saveSettings({
+          'meta_title': _metaTitleController.text,
+          'meta_description': _metaDescriptionController.text,
+        });
+      } else if (_currentPage != null) {
+        // Regular page - update page record
+        final updated = _currentPage!.copyWith(
+          metaTitle: _metaTitleController.text,
+          metaDescription: _metaDescriptionController.text,
+        );
+        await service.updatePage(updated);
+        _currentPage = updated;
+      }
+
+      if (mounted) {
+        setState(() {
+          _hasChanges = false;
+          _isSaving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('SEO guardado'),
+            backgroundColor: Color(0xFF00A09D),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _markChanged() {
+    if (!_hasChanges) setState(() => _hasChanges = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(color: Color(0xFF00A09D)),
+        ),
+      );
+    }
+
+    final pageName = _currentPage?.slug ?? _currentRoute;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Page header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A09D).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.article_outlined,
+                    color: Color(0xFF00A09D), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SEO de página',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      '/$pageName',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (_hasChanges)
+                ElevatedButton(
+                  onPressed: _isSaving ? null : _saveSeoSettings,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A09D),
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: Size.zero,
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Guardar', style: TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 16),
+
+          // Meta Title
+          _buildField(
+            label: 'Meta título',
+            controller: _metaTitleController,
+            hint: 'Título para Google (máx. 60 car.)',
+            maxLength: 60,
+            helperText: 'Lo que aparece en las búsquedas de Google',
+          ),
+          const SizedBox(height: 16),
+
+          // Meta Description
+          _buildField(
+            label: 'Meta descripción',
+            controller: _metaDescriptionController,
+            hint: 'Descripción para Google (máx. 160 car.)',
+            maxLength: 160,
+            maxLines: 3,
+            helperText: 'Resumen que aparece bajo el título en Google',
+          ),
+          const SizedBox(height: 24),
+
+          // SEO preview
+          _buildSeoPreview(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    int? maxLength,
+    int maxLines = 1,
+    String? helperText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            if (helperText != null) ...[
+              const SizedBox(width: 4),
+              Tooltip(
+                message: helperText,
+                child: Icon(Icons.info_outline,
+                    size: 14, color: Colors.white.withValues(alpha: 0.4)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLength: maxLength,
+          maxLines: maxLines,
+          onChanged: (_) => _markChanged(),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+            filled: true,
+            fillColor: const Color(0xFF2D2D2D),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            counterStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSeoPreview() {
+    final title = _metaTitleController.text.isNotEmpty
+        ? _metaTitleController.text
+        : 'Título de la página';
+    final description = _metaDescriptionController.text.isNotEmpty
+        ? _metaDescriptionController.text
+        : 'Descripción de la página...';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Vista previa en Google',
+            style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 10,
+                fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF1A0DAB),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              decoration: TextDecoration.underline,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'vinabike.cl › ...',
+            style: TextStyle(color: Colors.green.shade700, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Theme tab for global site-wide settings (colors, typography, button styles)
 /// Header and Footer are edited via the "Editar" tab when selected
 class _ThemeTab extends StatefulWidget {
@@ -5394,6 +5785,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _primaryColorController.text = val);
+                  // Update provider for live preview
+                  context
+                      .read<WebsiteEditModeProvider>()
+                      .updateThemeSetting('theme_primary_color', val);
                 }
               },
             ),
@@ -5413,6 +5808,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _accentColorController.text = val);
+                  // Update provider for live preview
+                  context
+                      .read<WebsiteEditModeProvider>()
+                      .updateThemeSetting('theme_accent_color', val);
                 }
               },
             ),
@@ -9195,6 +9594,7 @@ class _FooterBlockControls extends StatefulWidget {
 }
 
 class _FooterBlockControlsState extends State<_FooterBlockControls> {
+  final _taglineController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _whatsappController = TextEditingController();
@@ -9203,6 +9603,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   final _instagramController = TextEditingController();
   final _twitterController = TextEditingController();
   final _youtubeController = TextEditingController();
+  final _tiktokController = TextEditingController();
+  // Legal page URLs
+  final _termsUrlController = TextEditingController();
+  final _privacyUrlController = TextEditingController();
+  final _returnsUrlController = TextEditingController();
+  final _aboutUrlController = TextEditingController();
+  final _shippingUrlController = TextEditingController();
   bool _loaded = false;
 
   @override
@@ -9216,6 +9623,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   void _loadSettings() {
     final service = context.read<WebsiteService>();
+    _taglineController.text = service.getSetting('store_tagline', '');
     _emailController.text = service.getSetting('contact_email', '');
     _phoneController.text = service.getSetting('contact_phone', '');
     _whatsappController.text = service.getSetting('whatsapp', '');
@@ -9224,11 +9632,19 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     _instagramController.text = service.getSetting('instagram_handle', '');
     _twitterController.text = service.getSetting('twitter_handle', '');
     _youtubeController.text = service.getSetting('youtube_handle', '');
+    _tiktokController.text = service.getSetting('tiktok_handle', '');
+    // Legal page URLs
+    _termsUrlController.text = service.getSetting('legal_terms_url', '');
+    _privacyUrlController.text = service.getSetting('legal_privacy_url', '');
+    _returnsUrlController.text = service.getSetting('legal_returns_url', '');
+    _aboutUrlController.text = service.getSetting('legal_about_url', '');
+    _shippingUrlController.text = service.getSetting('legal_shipping_url', '');
   }
 
   Future<void> _saveSettings() async {
     final service = context.read<WebsiteService>();
     await service.saveSettings({
+      'store_tagline': _taglineController.text,
       'contact_email': _emailController.text,
       'contact_phone': _phoneController.text,
       'whatsapp': _whatsappController.text,
@@ -9237,6 +9653,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       'instagram_handle': _instagramController.text,
       'twitter_handle': _twitterController.text,
       'youtube_handle': _youtubeController.text,
+      'tiktok_handle': _tiktokController.text,
+      // Legal page URLs
+      'legal_terms_url': _termsUrlController.text,
+      'legal_privacy_url': _privacyUrlController.text,
+      'legal_returns_url': _returnsUrlController.text,
+      'legal_about_url': _aboutUrlController.text,
+      'legal_shipping_url': _shippingUrlController.text,
     });
 
     if (mounted) {
@@ -9251,6 +9674,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   @override
   void dispose() {
+    _taglineController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _whatsappController.dispose();
@@ -9259,6 +9683,12 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     _instagramController.dispose();
     _twitterController.dispose();
     _youtubeController.dispose();
+    _tiktokController.dispose();
+    _termsUrlController.dispose();
+    _privacyUrlController.dispose();
+    _returnsUrlController.dispose();
+    _aboutUrlController.dispose();
+    _shippingUrlController.dispose();
     super.dispose();
   }
 
@@ -9305,6 +9735,20 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           ),
 
           const SizedBox(height: 24),
+
+          // Brand section
+          _SectionHeader('Marca'),
+          const SizedBox(height: 12),
+
+          _EditorTextField(
+            label: 'Eslogan / Tagline',
+            value: _taglineController.text,
+            controller: _taglineController,
+            onChanged: (_) {},
+            hint: 'Todo lo que necesitas para tu bicicleta',
+          ),
+
+          const SizedBox(height: 20),
 
           // Contact section
           _SectionHeader('Contacto'),
@@ -9384,6 +9828,104 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             controller: _youtubeController,
             onChanged: (_) {},
             hint: 'mitienda',
+          ),
+          const SizedBox(height: 12),
+
+          _EditorTextField(
+            label: 'TikTok',
+            value: _tiktokController.text,
+            controller: _tiktokController,
+            onChanged: (_) {},
+            hint: '@mitienda',
+          ),
+
+          const SizedBox(height: 20),
+
+          // Info about auto-generated sections
+          _SectionHeader('Columnas del footer'),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                    SizedBox(width: 8),
+                    Text('Enlaces',
+                        style: TextStyle(
+                            color: Colors.blue, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Se genera automáticamente desde el menú de navegación.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Legal pages section - editable inline
+          _SectionHeader('Páginas legales'),
+          const SizedBox(height: 8),
+          const Text(
+            'URLs de las páginas que aparecen en "Información"',
+            style: TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+
+          _EditorTextField(
+            label: 'Sobre Nosotros',
+            value: _aboutUrlController.text,
+            controller: _aboutUrlController,
+            onChanged: (_) {},
+            hint: '/nosotros',
+          ),
+          const SizedBox(height: 10),
+
+          _EditorTextField(
+            label: 'Términos y Condiciones',
+            value: _termsUrlController.text,
+            controller: _termsUrlController,
+            onChanged: (_) {},
+            hint: '/terminos',
+          ),
+          const SizedBox(height: 10),
+
+          _EditorTextField(
+            label: 'Política de Privacidad',
+            value: _privacyUrlController.text,
+            controller: _privacyUrlController,
+            onChanged: (_) {},
+            hint: '/privacidad',
+          ),
+          const SizedBox(height: 10),
+
+          _EditorTextField(
+            label: 'Política de Devoluciones',
+            value: _returnsUrlController.text,
+            controller: _returnsUrlController,
+            onChanged: (_) {},
+            hint: '/devoluciones',
+          ),
+          const SizedBox(height: 10),
+
+          _EditorTextField(
+            label: 'Información de Envíos',
+            value: _shippingUrlController.text,
+            controller: _shippingUrlController,
+            onChanged: (_) {},
+            hint: '/envios',
           ),
 
           const SizedBox(height: 24),

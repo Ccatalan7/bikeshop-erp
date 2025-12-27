@@ -98,6 +98,7 @@ class _CustomerChatWidgetState extends State<CustomerChatWidget> {
 
           // Toggle Button
           FloatingActionButton(
+            heroTag: 'customer_chat_fab',
             onPressed: () => setState(() => _isOpen = !_isOpen),
             backgroundColor: Colors.black, // Vinabike Black
             child: Icon(

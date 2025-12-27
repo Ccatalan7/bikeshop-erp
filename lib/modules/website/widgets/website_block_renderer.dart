@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
 import '../models/website_block_type.dart';
-import 'canvas_block.dart';
+import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
 import 'text_formatting_toolbar.dart';
 
@@ -264,9 +264,8 @@ class WebsiteBlockRenderer {
     String? tenantId,
     String? bodyFont,
   }) {
-    return CanvasBlock(
+    return DeferredCanvasBlock(
       data: data,
-      editable: false,
       accentColor: accentColor,
       onNavigate: onNavigate,
       tenantId: tenantId,
@@ -661,12 +660,12 @@ class WebsiteBlockRenderer {
     double? bodySize,
     void Function(String route)? onNavigate,
   }) {
-    // Generate a key based on slides data to force rebuild when slides change
-    final slides = data['slides'];
-    final slidesHash = slides != null ? slides.toString().hashCode : 0;
+    // Use block ID as stable key to prevent rebuilds on every page mount
+    // Falls back to a constant key if no ID is available
+    final blockId = data['id']?.toString() ?? 'carousel_default';
 
     return _CarouselBanner(
-      key: ValueKey('carousel_$slidesHash'),
+      key: ValueKey('carousel_$blockId'),
       data: data,
       primaryColor: primaryColor,
       accentColor: accentColor,
@@ -4357,7 +4356,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       final now = DateTime.now();
       return Product(
         id: 'preview-product-$index',
-        name: 'Cargando...',
+        name: '',
         sku: 'PREVIEW-${index + 1}',
         price: 0,
         cost: 0,

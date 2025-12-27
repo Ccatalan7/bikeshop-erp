@@ -19854,46 +19854,8 @@ begin
 end;
 $$;
 -- RPC to get basic public user info (name, avatar, role) for chat participants
--- This bypasses strict RLS on user_profiles for the purpose of chat display
-create or replace function public.get_public_user_info(p_user_id uuid)
-returns jsonb
-language plpgsql
-security definer -- Runs with elevated privileges
-as $$
-declare
-  v_result jsonb;
-begin
-  -- 1. Try to find in user_profiles (employees)
-  select jsonb_build_object(
-    'id', user_id,
-    'name', coalesce(name, 'Soporte'),
-    'avatar_url', image_url,
-    'role', 'employee'
-  )
-  into v_result
-  from public.user_profiles
-  where user_id = p_user_id;
-
-  if v_result is not null then
-    return v_result;
-  end if;
-
-  -- 2. If not found, try customers (for completeness, though usually customers query employees)
-  select jsonb_build_object(
-    'id', auth_user_id,
-    'name', coalesce(name, 'Cliente'),
-    'avatar_url', image_url,
-    'role', 'customer'
-  )
-  into v_result
-  from public.customers
-  where auth_user_id = p_user_id;
-
-  return v_result;
-end;
-$$;
--- RPC to get basic public user info (name, avatar, role) for chat participants
 -- This bypasses strict RLS and table structure differences
+-- IMPORTANT: Checks employees FIRST, then user_profiles+employees, then customers, then auth.users
 create or replace function public.get_public_user_info(p_user_id uuid)
 returns jsonb
 language plpgsql
@@ -19902,11 +19864,10 @@ as $$
 declare
   v_result jsonb;
 begin
-  -- 1. Try to find in employees table (via user_id)
-  -- Note: user_profiles does not have name column, employees does
+  -- 1. Try to find in employees table directly (via user_id)
   select jsonb_build_object(
     'id', user_id,
-    'name', coalesce(first_name || ' ' || last_name, 'Soporte'),
+    'name', coalesce(nullif(trim(first_name || ' ' || last_name), ''), 'Soporte'),
     'avatar_url', photo_url,
     'role', 'employee'
   )
@@ -19919,7 +19880,24 @@ begin
     return v_result;
   end if;
 
-  -- 2. If not found, try customers (for completeness)
+  -- 2. Try user_profiles joined with employees (for when employee_id is linked)
+  select jsonb_build_object(
+    'id', up.user_id,
+    'name', coalesce(nullif(trim(e.first_name || ' ' || e.last_name), ''), 'Soporte'),
+    'avatar_url', e.photo_url,
+    'role', 'employee'
+  )
+  into v_result
+  from public.user_profiles up
+  inner join public.employees e on e.id = up.employee_id
+  where up.user_id = p_user_id
+  limit 1;
+
+  if v_result is not null then
+    return v_result;
+  end if;
+
+  -- 3. If not an employee, try customers
   select jsonb_build_object(
     'id', auth_user_id,
     'name', coalesce(name, 'Cliente'),
@@ -19931,19 +19909,21 @@ begin
   where auth_user_id = p_user_id
   limit 1;
 
-  -- 3. Fallback: try auth.users metadata if absolutely necessary (optional)
-  if v_result is null then
-     select jsonb_build_object(
-      'id', id,
-      'name', coalesce(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', email),
-      'avatar_url', raw_user_meta_data->>'avatar_url',
-      'role', 'unknown'
-    )
-    into v_result
-    from auth.users
-    where id = p_user_id;
+  if v_result is not null then
+    return v_result;
   end if;
 
-  return v_result;
+  -- 4. Fallback: try auth.users metadata
+  select jsonb_build_object(
+    'id', id,
+    'name', coalesce(raw_user_meta_data->>'full_name', raw_user_meta_data->>'name', split_part(email, '@', 1)),
+    'avatar_url', raw_user_meta_data->>'avatar_url',
+    'role', 'unknown'
+  )
+  into v_result
+  from auth.users
+  where id = p_user_id;
+
+  return coalesce(v_result, jsonb_build_object('id', p_user_id, 'name', 'Soporte', 'avatar_url', null, 'role', 'employee'));
 end;
 $$;

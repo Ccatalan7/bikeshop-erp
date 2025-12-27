@@ -11,7 +11,8 @@ class CustomerProfilePage extends StatefulWidget {
   State<CustomerProfilePage> createState() => _CustomerProfilePageState();
 }
 
-class _CustomerProfilePageState extends State<CustomerProfilePage> {
+class _CustomerProfilePageState extends State<CustomerProfilePage>
+    with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -20,6 +21,10 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
 
   bool _isEditing = false;
   bool _isLoading = false;
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -42,6 +47,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
     final profile = accountService.customerProfile;
 

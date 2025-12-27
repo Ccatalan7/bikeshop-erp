@@ -18,7 +18,8 @@ class ProductCatalogPage extends StatefulWidget {
   State<ProductCatalogPage> createState() => _ProductCatalogPageState();
 }
 
-class _ProductCatalogPageState extends State<ProductCatalogPage> {
+class _ProductCatalogPageState extends State<ProductCatalogPage>
+    with AutomaticKeepAliveClientMixin {
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
@@ -35,9 +36,14 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
 
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
+    debugPrint('🔄 [ProductCatalogPage] initState() called - loading products');
     _loadProducts();
   }
 
@@ -277,7 +283,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
   }
 
   @override
+  void dispose() {
+    debugPrint('🔄 [ProductCatalogPage] dispose() called');
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    debugPrint(
+        '🔄 [ProductCatalogPage] build() called - isLoading: $_isLoading, wantKeepAlive: $wantKeepAlive');
     if (_isLoading) {
       return const Center(child: BrandedLoading());
     }
@@ -293,133 +308,136 @@ class _ProductCatalogPageState extends State<ProductCatalogPage> {
               final isMobile = constraints.maxWidth < 700;
 
               if (isMobile) {
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header section - clean white
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 24,
+                // IMPORTANT: Do not create a nested scroll view here.
+                // The public store layout already provides a single scroll
+                // controller (sticky header scaffold). Keeping one scroll
+                // controller allows restoring scroll position when navigating
+                // to product detail and back.
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header section - clean white
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 24,
+                                color: Colors.black,
+                                margin: const EdgeInsets.only(right: 12),
+                              ),
+                              const Text(
+                                'PRODUCTOS',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
                                   color: Colors.black,
-                                  margin: const EdgeInsets.only(right: 12),
                                 ),
-                                const Text(
-                                  'PRODUCTOS',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${_filteredProducts.length} productos',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Controls bar
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            bottom: BorderSide(color: Colors.grey.shade200),
+                            ],
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${_filteredProducts.length} productos',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Controls bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          bottom: BorderSide(color: Colors.grey.shade200),
                         ),
-                        child: Row(
-                          children: [
-                            // Filter button
-                            InkWell(
-                              onTap: () => _showFilterSheet(context),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.tune,
-                                      size: 20, color: Colors.grey.shade700),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Filtro',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 24),
-                            // Sort button
-                            InkWell(
-                              onTap: () => _showSortSheet(context),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'Ordenar por',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.keyboard_arrow_down,
-                                      size: 20, color: Colors.grey.shade700),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            // View toggles
-                            Row(
+                      ),
+                      child: Row(
+                        children: [
+                          // Filter button
+                          InkWell(
+                            onTap: () => _showFilterSheet(context),
+                            child: Row(
                               children: [
-                                IconButton(
-                                  icon: Icon(Icons.grid_view,
-                                      size: 20,
-                                      color: _isGridView
-                                          ? Colors.black
-                                          : Colors.grey.shade400),
-                                  onPressed: () =>
-                                      setState(() => _isGridView = true),
-                                  constraints: const BoxConstraints(),
-                                  padding: const EdgeInsets.all(8),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.view_list,
-                                      size: 20,
-                                      color: !_isGridView
-                                          ? Colors.black
-                                          : Colors.grey.shade400),
-                                  onPressed: () =>
-                                      setState(() => _isGridView = false),
-                                  constraints: const BoxConstraints(),
-                                  padding: const EdgeInsets.all(8),
+                                Icon(Icons.tune,
+                                    size: 20, color: Colors.grey.shade700),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Filtro',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 24),
+                          // Sort button
+                          InkWell(
+                            onTap: () => _showSortSheet(context),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Ordenar por',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.keyboard_arrow_down,
+                                    size: 20, color: Colors.grey.shade700),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          // View toggles
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.grid_view,
+                                    size: 20,
+                                    color: _isGridView
+                                        ? Colors.black
+                                        : Colors.grey.shade400),
+                                onPressed: () =>
+                                    setState(() => _isGridView = true),
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(8),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.view_list,
+                                    size: 20,
+                                    color: !_isGridView
+                                        ? Colors.black
+                                        : Colors.grey.shade400),
+                                onPressed: () =>
+                                    setState(() => _isGridView = false),
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(8),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      // Product grid
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: _buildProductGrid(),
-                      ),
-                    ],
-                  ),
+                    ),
+                    // Product grid
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildProductGrid(),
+                    ),
+                  ],
                 );
               }
 
@@ -956,7 +974,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => context.go('/tienda/producto/${product.id}'),
+        onTap: () => context.push('/producto/${product.id}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: const BoxDecoration(

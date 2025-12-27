@@ -23,7 +23,8 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
   @override
   void initState() {
     super.initState();
-    debugPrint('🏗️ [WebsiteManagementPage] initState called - initializing website service');
+    debugPrint(
+        '🏗️ [WebsiteManagementPage] initState called - initializing website service');
     _initialize();
   }
 
@@ -54,324 +55,340 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-              // Clean Professional Header
-              Row(
+            // Clean Professional Header
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gestión de Sitio Web',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Administra el contenido de tu tienda online',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Vista Previa Button - Navigate to /tienda with preview mode
+                FilledButton.icon(
+                  onPressed: () {
+                    debugPrint(
+                        '👁️ [WebsiteManagementPage] Vista Previa button clicked - navigating to /tienda?preview=true');
+                    context.go('/tienda?preview=true');
+                  },
+                  icon: const Icon(Icons.visibility),
+                  label: const Text('Vista Previa'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Open in New Tab - Only for web platform
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    debugPrint(
+                        '🌐 [WebsiteManagementPage] Nueva Pestaña button clicked - launching external URL');
+                    final uri = Uri.parse('${Uri.base.origin}/tienda');
+                    try {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                      debugPrint(
+                          '✅ [WebsiteManagementPage] External URL launched successfully');
+                    } catch (e) {
+                      debugPrint(
+                          '❌ [WebsiteManagementPage] Failed to launch external URL: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se pudo abrir en nueva pestaña. Usa Vista Previa.',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Nueva Pestaña'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 32),
+
+            // 🎨 VISUAL EDITOR CARD - Clean and Professional
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    theme.colorScheme.primaryContainer,
+                    theme.colorScheme.secondaryContainer,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.palette_outlined,
+                      size: 48,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Gestión de Sitio Web',
-                          style: theme.textTheme.headlineMedium?.copyWith(
+                          'Editor Visual de Sitio Web',
+                          style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onPrimaryContainer,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         Text(
-                          'Administra el contenido de tu tienda online',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          'Edita tu sitio web con vista previa en tiempo real. Cambia textos, colores, imágenes y ve los resultados al instante.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSecondaryContainer,
+                            height: 1.5,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  // Vista Previa Button - Navigate to /tienda with preview mode
+                  const SizedBox(width: 24),
                   FilledButton.icon(
                     onPressed: () {
-                      debugPrint('👁️ [WebsiteManagementPage] Vista Previa button clicked - navigating to /tienda?preview=true');
-                      context.go('/tienda?preview=true');
+                      // Navigate to /tienda and auto-enable edit mode
+                      // The inline editor is now integrated into the live preview
+                      context.go('/tienda?edit=true');
                     },
-                    icon: const Icon(Icons.visibility),
-                    label: const Text('Vista Previa'),
+                    icon: const Icon(Icons.edit_rounded),
+                    label: const Text('Abrir Editor'),
                     style: FilledButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
+                        horizontal: 32,
+                        vertical: 20,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Open in New Tab - Only for web platform
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      debugPrint('🌐 [WebsiteManagementPage] Nueva Pestaña button clicked - launching external URL');
-                      final uri = Uri.parse('${Uri.base.origin}/tienda');
-                      try {
-                        await launchUrl(
-                          uri,
-                          mode: LaunchMode.externalApplication,
-                        );
-                        debugPrint('✅ [WebsiteManagementPage] External URL launched successfully');
-                      } catch (e) {
-                        debugPrint('❌ [WebsiteManagementPage] Failed to launch external URL: $e');
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'No se pudo abrir en nueva pestaña. Usa Vista Previa.',
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Nueva Pestaña'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 32),
+            const SizedBox(height: 32),
 
-              // 🎨 VISUAL EDITOR CARD - Clean and Professional
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.colorScheme.primaryContainer,
-                      theme.colorScheme.secondaryContainer,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+            // Management Cards Grid
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: _getCrossAxisCount(context),
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.5,
+              children: [
+                // Pages - Main page management
+                _buildManagementCard(
+                  context: context,
+                  title: 'Páginas',
+                  subtitle: 'Crea y gestiona páginas del sitio',
+                  icon: Icons.web_stories,
+                  color: Colors.indigo,
+                  onTap: () => context.go('/website/pages'),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.palette_outlined,
-                        size: 48,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Editor Visual de Sitio Web',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onPrimaryContainer,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Edita tu sitio web con vista previa en tiempo real. Cambia textos, colores, imágenes y ve los resultados al instante.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSecondaryContainer,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    FilledButton.icon(
-                      onPressed: () {
-                        // Navigate to /tienda and auto-enable edit mode
-                        // The inline editor is now integrated into the live preview
-                        context.go('/tienda?edit=true');
-                      },
-                      icon: const Icon(Icons.edit_rounded),
-                      label: const Text('Abrir Editor'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 20,
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+                // Navigation - Menu management
+                _buildManagementCard(
+                  context: context,
+                  title: 'Navegación',
+                  subtitle: 'Configura menús y enlaces',
+                  icon: Icons.menu_book,
+                  color: Colors.teal,
+                  onTap: () => context.go('/website/navigation'),
                 ),
-              ),
+                // Featured Products
+                _buildManagementCard(
+                  context: context,
+                  title: 'Productos Destacados',
+                  subtitle: 'Selecciona productos para la home',
+                  icon: Icons.star,
+                  color: Colors.orange,
+                  onTap: () => context.go('/website/featured'),
+                ),
+                // Content Management
+                _buildManagementCard(
+                  context: context,
+                  title: 'Contenido',
+                  subtitle: 'Textos, páginas y descripciones',
+                  icon: Icons.article,
+                  color: Colors.blue,
+                  onTap: () => context.go('/website/content'),
+                ),
+                // Online Orders
+                _buildManagementCard(
+                  context: context,
+                  title: 'Pedidos Online',
+                  subtitle: 'Gestiona pedidos del sitio web',
+                  icon: Icons.shopping_bag,
+                  color: Colors.green,
+                  onTap: () => context.go('/website/orders'),
+                ),
+                // Website Settings
+                _buildManagementCard(
+                  context: context,
+                  title: 'Configuración',
+                  subtitle: 'Ajustes de la tienda online',
+                  icon: Icons.settings,
+                  color: Colors.grey,
+                  onTap: () => context.go('/website/settings'),
+                ),
+                // Integrations
+                _buildManagementCard(
+                  context: context,
+                  title: 'Integraciones',
+                  subtitle: 'Google Merchant, Analytics y más',
+                  icon: Icons.hub,
+                  color: Colors.red,
+                  onTap: () => context.go('/website/integrations'),
+                ),
+                // SEO Settings
+                _buildManagementCard(
+                  context: context,
+                  title: 'SEO',
+                  subtitle: 'Optimización para buscadores',
+                  icon: Icons.search,
+                  color: Colors.green,
+                  onTap: () => context.go('/website/seo'),
+                ),
+              ],
+            ),
 
-              const SizedBox(height: 32),
+            const SizedBox(height: 32),
 
-              // Management Cards Grid
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: _getCrossAxisCount(context),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.5,
-                children: [
-                  // Pages - Main page management
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Páginas',
-                    subtitle: 'Crea y gestiona páginas del sitio',
-                    icon: Icons.web_stories,
-                    color: Colors.indigo,
-                    onTap: () => context.go('/website/pages'),
-                  ),
-                  // Navigation - Menu management
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Navegación',
-                    subtitle: 'Configura menús y enlaces',
-                    icon: Icons.menu_book,
-                    color: Colors.teal,
-                    onTap: () => context.go('/website/navigation'),
-                  ),
-                  // Featured Products
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Productos Destacados',
-                    subtitle: 'Selecciona productos para la home',
-                    icon: Icons.star,
-                    color: Colors.orange,
-                    onTap: () => context.go('/website/featured'),
-                  ),
-                  // Content Management
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Contenido',
-                    subtitle: 'Textos, páginas y descripciones',
-                    icon: Icons.article,
-                    color: Colors.blue,
-                    onTap: () => context.go('/website/content'),
-                  ),
-                  // Online Orders
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Pedidos Online',
-                    subtitle: 'Gestiona pedidos del sitio web',
-                    icon: Icons.shopping_bag,
-                    color: Colors.green,
-                    onTap: () => context.go('/website/orders'),
-                  ),
-                  // Website Settings
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Configuración',
-                    subtitle: 'Ajustes de la tienda online',
-                    icon: Icons.settings,
-                    color: Colors.grey,
-                    onTap: () => context.go('/website/settings'),
-                  ),
-                  // Integrations
-                  _buildManagementCard(
-                    context: context,
-                    title: 'Integraciones',
-                    subtitle: 'Google Merchant, Analytics y más',
-                    icon: Icons.hub,
-                    color: Colors.red,
-                    onTap: () => context.go('/website/integrations'),
-                  ),
-                ],
-              ),
+            // Quick Stats
+            Consumer<WebsiteService>(
+              builder: (context, service, _) {
+                final activeBlocks =
+                    service.blocks.where((b) => b['is_visible'] == true).length;
+                final activeFeatured =
+                    service.featuredProducts.where((fp) => fp.active).length;
+                final pendingOrders =
+                    service.orders.where((o) => o.status == 'pending').length;
+                final totalOrders = service.orders.length;
 
-              const SizedBox(height: 32),
-
-              // Quick Stats
-              Consumer<WebsiteService>(
-                builder: (context, service, _) {
-                  final activeBlocks = service.blocks.where((b) => b['is_visible'] == true).length;
-                  final activeFeatured = service.featuredProducts.where((fp) => fp.active).length;
-                  final pendingOrders = service.orders.where((o) => o.status == 'pending').length;
-                  final totalOrders = service.orders.length;
-
-                  return Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: theme.colorScheme.outlineVariant,
-                        width: 1,
-                      ),
+                return Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: theme.colorScheme.outlineVariant,
+                      width: 1,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Estadísticas',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Estadísticas',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            _buildStatItem(
+                              context,
+                              'Bloques Activos',
+                              activeBlocks.toString(),
+                              Icons.view_module_outlined,
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              _buildStatItem(
-                                context,
-                                'Bloques Activos',
-                                activeBlocks.toString(),
-                                Icons.view_module_outlined,
-                              ),
-                              const SizedBox(width: 32),
-                              _buildStatItem(
-                                context,
-                                'Productos Destacados',
-                                activeFeatured.toString(),
-                                Icons.star_outline,
-                              ),
-                              const SizedBox(width: 32),
-                              _buildStatItem(
-                                context,
-                                'Pedidos Pendientes',
-                                pendingOrders.toString(),
-                                Icons.pending_actions_outlined,
-                              ),
-                              const SizedBox(width: 32),
-                              _buildStatItem(
-                                context,
-                                'Total Pedidos',
-                                totalOrders.toString(),
-                                Icons.receipt_long_outlined,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 32),
+                            _buildStatItem(
+                              context,
+                              'Productos Destacados',
+                              activeFeatured.toString(),
+                              Icons.star_outline,
+                            ),
+                            const SizedBox(width: 32),
+                            _buildStatItem(
+                              context,
+                              'Pedidos Pendientes',
+                              pendingOrders.toString(),
+                              Icons.pending_actions_outlined,
+                            ),
+                            const SizedBox(width: 32),
+                            _buildStatItem(
+                              context,
+                              'Total Pedidos',
+                              totalOrders.toString(),
+                              Icons.receipt_long_outlined,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildManagementCard({
@@ -490,11 +507,11 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
   /// Show Google Merchant Center feed URL dialog
   Future<void> _showGoogleMerchantDialog(BuildContext context) async {
     final theme = Theme.of(context);
-    
+
     // Get tenant subdomain
     String? subdomain;
     String? customDomain;
-    
+
     try {
       final tenantService = TenantService();
       final tenantData = await tenantService.getCurrentTenant();
@@ -509,7 +526,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     // Build the feed URL
     final supabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1';
     String feedUrl;
-    
+
     if (customDomain != null && customDomain.isNotEmpty) {
       feedUrl = '$supabaseUrl/google-merchant-feed?domain=$customDomain';
     } else if (subdomain != null && subdomain.isNotEmpty) {
@@ -614,7 +631,8 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    const Icon(Icons.info_outline,
+                        color: Colors.blue, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(

@@ -35,7 +35,7 @@ class NotificationService {
 
   final _supabase = Supabase.instance.client;
   final _localNotifications = FlutterLocalNotificationsPlugin();
-  final _audioPlayer = AudioPlayer();
+  AudioPlayer? _audioPlayer;
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
@@ -87,10 +87,16 @@ class NotificationService {
   Future<void> playNotificationSound() async {
     if (!_soundEnabled) return;
 
+    // Web: audio playback is often blocked by browser policy, and plugin
+    // initialization can throw MissingPluginException depending on build.
+    // Never let notification sounds crash app startup.
+    if (kIsWeb) return;
+
     try {
       // Use a simple system beep or bundled sound
       // For cross-platform, we use a URL approach or asset
-      await _audioPlayer.play(AssetSource('sounds/notification.mp3'),
+      _audioPlayer ??= AudioPlayer();
+      await _audioPlayer!.play(AssetSource('sounds/notification.mp3'),
           volume: 1.0);
     } catch (e) {
       // On Web, browsers block audio if not triggered by user interaction.
@@ -111,6 +117,14 @@ class NotificationService {
 
   Future<void> init() async {
     if (_isInitialized) return;
+
+    // Web: flutter_local_notifications has no stable web implementation.
+    // Skip to avoid MissingPluginException during app boot.
+    if (kIsWeb) {
+      await _loadSettings();
+      _isInitialized = true;
+      return;
+    }
 
     // 1. Initialize Local Notifications for ALL platforms
     const initializationSettingsAndroid =
@@ -214,6 +228,7 @@ class NotificationService {
     }
   }
 
+  // ignore: unused_element
   Future<void> _initDesktop() async {
     debugPrint('🖥️ Initializing Desktop Notifications...');
 
@@ -321,7 +336,7 @@ class NotificationService {
               if (employee != null) {
                 senderName =
                     '${employee['first_name']} ${employee['last_name']}'.trim();
-                _senderNames[senderId] = senderName!;
+                _senderNames[senderId] = senderName;
               }
             }
           } catch (e) {

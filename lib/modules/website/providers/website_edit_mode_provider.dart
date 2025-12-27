@@ -40,6 +40,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
 
+  // Pending theme settings for live preview
+  // These are applied immediately in the UI but only saved when user clicks "Guardar"
+  Map<String, String> _pendingThemeSettings = {};
+  bool _hasThemeChanges = false;
+
   // History for undo/redo
   final List<List<Map<String, dynamic>>> _history = [];
   int _historyIndex = -1;
@@ -53,11 +58,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   DevicePreviewMode get devicePreviewMode => _devicePreviewMode;
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
-  bool get hasUnsavedChanges => _hasUnsavedChanges || _hasHeaderChanges;
+  bool get hasUnsavedChanges =>
+      _hasUnsavedChanges || _hasHeaderChanges || _hasThemeChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
+  bool get hasThemeChanges => _hasThemeChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
+  Map<String, String> get pendingThemeSettings => _pendingThemeSettings;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
 
@@ -88,6 +96,42 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update a single theme setting for live preview
+  void updateThemeSetting(String key, String value) {
+    _pendingThemeSettings[key] = value;
+    _hasThemeChanges = true;
+    debugPrint('🎨 [EditProvider] Theme setting updated: $key = $value');
+    notifyListeners();
+  }
+
+  /// Update multiple theme settings at once
+  void updateThemeSettings(Map<String, String> settings) {
+    _pendingThemeSettings.addAll(settings);
+    _hasThemeChanges = true;
+    debugPrint(
+        '🎨 [EditProvider] Theme settings updated: ${settings.keys.join(', ')}');
+    notifyListeners();
+  }
+
+  /// Get effective theme setting (pending value if exists, otherwise from settings)
+  String getEffectiveThemeSetting(String key, String defaultValue) {
+    // First check pending theme settings (live preview)
+    if (_pendingThemeSettings.containsKey(key)) {
+      return _pendingThemeSettings[key]!;
+    }
+    // Fall back to saved settings
+    final saved = _settings[key];
+    if (saved != null) return saved.toString();
+    return defaultValue;
+  }
+
+  /// Clear theme changed flag (after save)
+  void clearThemeChanges() {
+    _hasThemeChanges = false;
+    _pendingThemeSettings = {};
+    notifyListeners();
+  }
+
   /// Enter preview mode (shows top bar with "Editar" button)
   /// [pageId] - Optional page ID for multi-page editing (null = home page)
   /// [pageSlug] - Optional page slug for navigation
@@ -106,8 +150,6 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
-    debugPrint(
-        '👁️ [EditProvider] Entered preview mode for page: ${pageSlug ?? "home"} (id: $pageId)');
     notifyListeners();
   }
 
@@ -209,7 +251,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   /// Update block data
-  void updateBlockData(String blockId, String key, dynamic value) {
+  /// [saveHistory] - Set to false for transient updates (like activeElementId changes) to avoid history pollution
+  void updateBlockData(String blockId, String key, dynamic value,
+      {bool saveHistory = true}) {
     final blockIndex = _blocks.indexWhere((b) => b['id'] == blockId);
     if (blockIndex == -1) {
       debugPrint('⚠️ [EditProvider] updateBlockData: block $blockId not found');
@@ -224,7 +268,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'block_data': blockData,
     };
     _hasUnsavedChanges = true;
-    _saveToHistory(); // Save to history after each change
+    if (saveHistory) {
+      _saveToHistory();
+    }
     debugPrint(
         '✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, hasUnsavedChanges=$_hasUnsavedChanges');
     notifyListeners();
@@ -327,7 +373,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     elements.add(next);
     updateBlockData(canvasBlockId, 'elements', elements);
-    updateBlockData(canvasBlockId, 'activeElementId', id);
+    // Don't save to history for activeElementId - it's transient
+    updateBlockData(canvasBlockId, 'activeElementId', id, saveHistory: false);
     return true;
   }
 

@@ -1802,12 +1802,37 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  /// Synchronously peek the in-memory cache for a page+blocks.
+  ///
+  /// Use this to render policy pages instantly without showing a 1-frame
+  /// loading spinner when the data is already cached.
+  CachedPageSnapshot? peekPageWithBlocks(
+    String slug, {
+    required String tenantId,
+  }) {
+    final cacheKey = '$tenantId:$slug';
+    final cached = _pageCache[cacheKey];
+    if (cached == null || cached.isExpired) return null;
+    return CachedPageSnapshot(page: cached.page, blocks: cached.blocks);
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _ordersChannel?.unsubscribe();
     super.dispose();
   }
+}
+
+/// Public snapshot of cached page data (safe to expose).
+class CachedPageSnapshot {
+  final WebsitePage page;
+  final List<Map<String, dynamic>> blocks;
+
+  CachedPageSnapshot({
+    required this.page,
+    required this.blocks,
+  });
 }
 
 /// Cached page data with TTL

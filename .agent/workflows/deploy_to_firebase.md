@@ -2,19 +2,35 @@
 description: Build and deploy the application to Firebase Hosting
 ---
 
-This workflow builds the Flutter web application and deploys it to Firebase Hosting.
+This workflow builds the Flutter web applications and deploys to Firebase Hosting.
 
-1.  **Build the Web Application**
+**IMPORTANT**: The public store uses `main_store.dart` (optimized, ~4.1MB bundle).
+The ERP uses `main.dart` (full app, ~9MB bundle).
+
+1.  **Sync SEO Settings to index.html**
     // turbo
-    Build the Flutter application for the web. This generates the static files in `build/web`.
+    Pulls SEO settings from Supabase and regenerates index.html with correct data.
     ```bash
-    flutter build web --release --wasm
+    ./scripts/sync_seo_index.sh
     ```
-    *Note: We use `--wasm` for better performance.*
 
-2.  **Deploy to Firebase**
+2.  **Build the Store (Optimized)**
     // turbo
-    Deploy the built files to Firebase Hosting using the Firebase CLI.
+    Build the public store with the lightweight entry point.
+    ```bash
+    flutter build web --release -t lib/main_store.dart -o build/web_store
+    ```
+
+3.  **Build the ERP (Full)**
+    // turbo
+    Build the ERP with the full entry point.
+    ```bash
+    flutter build web --release -o build/web_erp
+    ```
+
+4.  **Deploy to Firebase**
+    // turbo
+    Deploy both targets to Firebase Hosting.
     ```bash
     firebase deploy --only hosting
     ```

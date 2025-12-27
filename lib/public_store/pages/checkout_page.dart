@@ -22,7 +22,8 @@ class CheckoutPage extends StatefulWidget {
   State<CheckoutPage> createState() => _CheckoutPageState();
 }
 
-class _CheckoutPageState extends State<CheckoutPage> {
+class _CheckoutPageState extends State<CheckoutPage>
+    with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -41,6 +42,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _addressLabelController =
       TextEditingController(text: 'Dirección de entrega');
   bool _saveAddressToAccount = true;
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -263,7 +268,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _placeOrder() async {
     debugPrint('🔵 [Checkout] _placeOrder() CALLED!');
-    
+
     if (!_formKey.currentState!.validate()) {
       debugPrint('🔵 [Checkout] Form validation FAILED');
       return;
@@ -272,7 +277,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final cart = Provider.of<CartProvider>(context, listen: false);
     debugPrint('🔵 [Checkout] Cart items: ${cart.items.length}');
-    
+
     if (cart.items.isEmpty) {
       debugPrint('🔵 [Checkout] Cart is EMPTY, showing snackbar');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -289,40 +294,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final websiteService =
           Provider.of<WebsiteService>(context, listen: false);
       debugPrint('🔵 [Checkout] Got WebsiteService');
-      
+
       final mercadopagoService =
           Provider.of<MercadoPagoService>(context, listen: false);
       debugPrint('🔵 [Checkout] Got MercadoPagoService');
-      
+
       final accountService = _accountService ??
           Provider.of<CustomerAccountService>(context, listen: false);
       debugPrint('🔵 [Checkout] Got CustomerAccountService');
 
       final profile = accountService.customerProfile;
       final resolvedAddress = _resolvedAddress;
-      debugPrint('🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, resolvedAddress: ${resolvedAddress != null ? "exists" : "null"}');
+      debugPrint(
+          '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, resolvedAddress: ${resolvedAddress != null ? "exists" : "null"}');
 
       // ⚠️ CRITICAL: Get tenant_id from detected tenant (subdomain)
       debugPrint('🔵 [Checkout] Getting tenant provider...');
       final tenantProvider = context.read<PublicStoreTenantProvider>();
-      debugPrint('🔵 [Checkout] Got tenant provider, tenantId: ${tenantProvider.tenantId}');
+      debugPrint(
+          '🔵 [Checkout] Got tenant provider, tenantId: ${tenantProvider.tenantId}');
       final tenantId = tenantProvider.tenantId;
       debugPrint('🔵 [Checkout] tenantId assigned: $tenantId');
 
       if (tenantId == null) {
         debugPrint('🔵 [Checkout] ❌ tenantId is NULL! Throwing exception...');
-        throw Exception('No se pudo detectar la tienda. Por favor recarga la página.');
+        throw Exception(
+            'No se pudo detectar la tienda. Por favor recarga la página.');
       }
       debugPrint('🔵 [Checkout] ✅ tenantId is valid, continuing...');
 
       // ============================================================================
       // TAX HANDLING BASED ON PAYMENT METHOD
       // ============================================================================
-      debugPrint('🔵 [Checkout] Calculating tax... paymentMethod: $_paymentMethod');
+      debugPrint(
+          '🔵 [Checkout] Calculating tax... paymentMethod: $_paymentMethod');
       // MercadoPago/Card: IVA is charged (tax_included)
       // Wire Transfer/Cash: No IVA (no_tax) per Chilean informal sale rules
       // ============================================================================
-      final bool chargesIva = _paymentMethod == 'mercadopago' || _paymentMethod == 'card';
+      final bool chargesIva =
+          _paymentMethod == 'mercadopago' || _paymentMethod == 'card';
       debugPrint('🔵 [Checkout] chargesIva: $chargesIva');
       final double taxAmount = chargesIva ? cart.ivaAmount : 0.0;
       debugPrint('🔵 [Checkout] taxAmount: $taxAmount');
@@ -350,7 +360,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ? _notesController.text.trim()
             : null,
       };
-      debugPrint('🔵 [Checkout] orderData created: ${orderData.keys.join(', ')}');
+      debugPrint(
+          '🔵 [Checkout] orderData created: ${orderData.keys.join(', ')}');
 
       if (profile != null && profile['id'] != null) {
         orderData['customer_id'] = profile['id'];
@@ -369,7 +380,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'subtotal': item.product.price * item.quantity,
         };
       }).toList();
-      debugPrint('🔵 [Checkout] orderItems created: ${orderItems.length} items');
+      debugPrint(
+          '🔵 [Checkout] orderItems created: ${orderItems.length} items');
 
       debugPrint('🔵 [Checkout] Calling websiteService.createOrder()...');
       final orderId = await websiteService.createOrder(orderData, orderItems);
@@ -393,18 +405,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (_paymentMethod == 'mercadopago') {
         // Redirect to MercadoPago checkout
         try {
-          debugPrint('🔵 [Checkout] Starting MercadoPago flow for order: $orderId');
-          
+          debugPrint(
+              '🔵 [Checkout] Starting MercadoPago flow for order: $orderId');
+
           // Initialize MercadoPago with tenant context
-          debugPrint('🔵 [Checkout] Initializing MercadoPago with tenant: $tenantId');
+          debugPrint(
+              '🔵 [Checkout] Initializing MercadoPago with tenant: $tenantId');
           await mercadopagoService.initialize(tenantId: tenantId);
-          
+
           if (!mercadopagoService.isConfigured) {
             debugPrint('❌ [Checkout] MercadoPago not configured!');
-            throw Exception('MercadoPago no está configurado para esta tienda.');
+            throw Exception(
+                'MercadoPago no está configurado para esta tienda.');
           }
           debugPrint('✅ [Checkout] MercadoPago is configured');
-          
+
           final order = await websiteService.getOrderById(orderId);
           if (order == null) {
             debugPrint('❌ [Checkout] Order not found: $orderId');
@@ -499,15 +514,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final cart = context.watch<CartProvider>();
     context.watch<CustomerAccountService>();
     _accountService ??=
         Provider.of<CustomerAccountService>(context, listen: false);
 
-    debugPrint('🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
+    debugPrint(
+        '🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
 
     if (cart.isEmpty) {
-      debugPrint('🛒 [CheckoutPage.build] Cart is empty, showing empty cart view');
+      debugPrint(
+          '🛒 [CheckoutPage.build] Cart is empty, showing empty cart view');
       return _buildEmptyCart(context);
     }
 

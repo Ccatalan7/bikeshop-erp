@@ -32,6 +32,10 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
   }
 
   void _initialize() {
+    if (_isPublicStoreHost()) {
+      return;
+    }
+
     final barcodeService = context.read<BarcodeScannerService>();
     final remoteService = context.read<RemoteScannerService>();
 
@@ -48,6 +52,15 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
     });
   }
 
+  bool _isPublicStoreHost() {
+    if (!kIsWeb) return false;
+    final host = Uri.base.host.toLowerCase();
+    return host == 'vinabike-store.web.app' ||
+        host == 'vinabike-store.firebaseapp.com' ||
+        host == 'vinabike.cl' ||
+        host == 'www.vinabike.cl';
+  }
+
   @override
   void dispose() {
     _remoteSubscription?.cancel();
@@ -57,6 +70,10 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isPublicStoreHost()) {
+      return widget.child;
+    }
+
     return RawKeyboardListener(
       focusNode: _focusNode,
       onKey: (event) {

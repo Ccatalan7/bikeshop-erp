@@ -29,7 +29,6 @@ class _CustomerChatViewState extends State<CustomerChatView> {
   final MessagingService _messagingService = MessagingService();
 
   Map<String, dynamic>? _conversation;
-  Map<String, Map<String, dynamic>> _senderCache = {};
 
   @override
   void initState() {
@@ -46,6 +45,10 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     if (oldWidget.conversationId != widget.conversationId) {
       context.read<ChatProvider>().setActiveConversation(widget.conversationId);
       _loadConversationDetails();
+      // Reset scroll to bottom (0.0 because of reverse: true)
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0.0);
+      }
     }
   }
 
@@ -58,17 +61,6 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     if (mounted && conv.isNotEmpty) {
       setState(() => _conversation = conv);
     }
-  }
-
-  Future<Map<String, dynamic>?> _getSenderInfo(String senderId) async {
-    if (_senderCache.containsKey(senderId)) {
-      return _senderCache[senderId];
-    }
-    final info = await _messagingService.getSenderInfo(senderId);
-    if (info != null) {
-      _senderCache[senderId] = info;
-    }
-    return info;
   }
 
   @override
@@ -86,7 +78,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
+            0.0, // Scroll to bottom (start of list in reverse mode)
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -175,14 +167,27 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             color: Colors.grey[50],
             child: isLoading && messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = messages[index];
-                      return _buildMessageBubble(context, msg);
+                // Use NotificationListener to suppress OverscrollIndicatorNotification
+                // This prevents the scroll event from bubbling up to the parent ScrollView
+                // when the list reaches its bounds.
+                : NotificationListener<OverscrollIndicatorNotification>(
+                    onNotification: (notification) {
+                      notification.disallowIndicator();
+                      return true; // Stop propagation
                     },
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      reverse: true, // Anchor to bottom, scroll up for older
+                      padding: const EdgeInsets.all(16),
+                      itemCount: messages.length,
+                      // Allow physics again, but keep primary false
+                      primary: false,
+                      itemBuilder: (context, index) {
+                        // Reverse index since list is reversed
+                        final msg = messages[messages.length - 1 - index];
+                        return _buildMessageBubble(context, msg);
+                      },
+                    ),
                   ),
           ),
         ),
@@ -249,182 +254,66 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     );
   }
 
-  Color _getNameColor(String name) {
-    if (name == 'Soporte') return Colors.blue[800]!;
-
-    final colors = [
-      Colors.orange[800]!,
-      Colors.purple[700]!,
-      Colors.pink[700]!,
-      Colors.teal[700]!,
-      Colors.brown[700]!,
-      Colors.indigo[700]!,
-    ];
-    return colors[name.hashCode.abs() % colors.length];
-  }
-
   Widget _buildMessageBubble(BuildContext context, Message msg) {
     final isMe = msg.isMe;
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: msg.senderId != null
-          ? _getSenderInfo(msg.senderId!)
-          : Future.value(null),
-      builder: (context, snapshot) {
-        final senderInfo = snapshot.data;
-        final senderName = senderInfo?['name'] ?? (isMe ? 'Tú' : 'Soporte');
-        final senderAvatar = senderInfo?['avatar_url'];
-
-        // Content Widget
-        Widget content;
-        if (msg.type == 'action_request') {
-          content = _buildActionRequestCard(context, msg);
-        } else {
-          content = Text(
-            msg.content,
-            style: const TextStyle(
-              color: Colors.black87,
-              fontSize: 15,
-              height: 1.3,
+    // Handle action request cards specially
+    if (msg.type == 'action_request') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.85,
             ),
-          );
-        }
-
-        // Timestamp
-        final timeStr = DateFormat('HH:mm').format(msg.createdAt);
-
-        // Bubble Decoration
-        final bubbleDecoration = BoxDecoration(
-          color: isMe
-              ? const Color(0xFFD9FDD3)
-              : Colors.white, // WhatsApp Light Colors
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: Radius.circular(isMe ? 12 : 0),
-            bottomRight: Radius.circular(isMe ? 0 : 12),
+            child: _buildActionRequestCard(context, msg),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 1,
-              offset: const Offset(0, 1),
+        ),
+      );
+    }
+
+    // Simple, clean bubble styling (original design)
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.black : Colors.grey[200],
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 16),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              msg.content,
+              style: TextStyle(
+                color: isMe ? Colors.white : Colors.black87,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('HH:mm').format(msg.createdAt),
+              style: TextStyle(
+                color: isMe ? Colors.white70 : Colors.black54,
+                fontSize: 10,
+              ),
             ),
           ],
-        );
-
-        if (!isMe) {
-          // INCOMING MESSAGE (Support/Employee)
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage:
-                      senderAvatar != null ? NetworkImage(senderAvatar) : null,
-                  child: senderAvatar == null
-                      ? Icon(Icons.person, size: 16, color: Colors.grey[500])
-                      : null,
-                ),
-                const SizedBox(width: 8),
-
-                // Bubble
-                Flexible(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75,
-                    ),
-                    decoration: bubbleDecoration,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Name (Colored) inside bubble
-                        Text(
-                          senderName,
-                          style: TextStyle(
-                            color: _getNameColor(senderName),
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-
-                        // Content
-                        content,
-
-                        // Time (Bottom Right inside bubble)
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 4, left: 8),
-                            child: Text(
-                              timeStr,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 40),
-              ],
-            ),
-          );
-        }
-
-        // OUTGOING MESSAGE (Me)
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(width: 40),
-              Flexible(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  decoration: bubbleDecoration,
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: 16), // Space for time
-                        child: content,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Text(
-                          timeStr,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 

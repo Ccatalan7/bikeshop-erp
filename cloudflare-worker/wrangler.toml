@@ -14,3 +14,17 @@ compatibility_date = "2024-01-01"
 [vars]
 # These can be overridden with secrets
 # SUPABASE_URL = "https://your-project.supabase.co"
+
+# Cron trigger: Keep Supabase edge function warm
+# Runs every 4 minutes to prevent cold starts
+[triggers]
+crons = ["*/4 * * * *"]
+
+# Enable observability/logging
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true

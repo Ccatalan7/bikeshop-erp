@@ -14,7 +14,8 @@ class ContactPage extends StatefulWidget {
   State<ContactPage> createState() => _ContactPageState();
 }
 
-class _ContactPageState extends State<ContactPage> {
+class _ContactPageState extends State<ContactPage>
+    with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -22,14 +23,9 @@ class _ContactPageState extends State<ContactPage> {
   final _messageController = TextEditingController();
   bool _isSending = false;
 
+  // Keep this page alive in memory to prevent reloading on navigation
   @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _messageController.dispose();
-    super.dispose();
-  }
+  bool get wantKeepAlive => true;
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
@@ -55,9 +51,9 @@ class _ContactPageState extends State<ContactPage> {
         'Teléfono: ${_phoneController.text}\n\n'
         'Mensaje:\n${_messageController.text}',
       );
-      
+
       await _launchUrl('mailto:$email?subject=$subject&body=$body');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -77,28 +73,46 @@ class _ContactPageState extends State<ContactPage> {
   }
 
   @override
+  void dispose() {
+    debugPrint('📞 [ContactPage] dispose() called');
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    debugPrint(
+        '📞 [ContactPage] build() called - wantKeepAlive: $wantKeepAlive');
     final websiteService = context.watch<WebsiteService>();
-    
+
     // Get all contact info from website_settings (editable in admin)
     final storeName = websiteService.getSetting('store_name', 'Viñabike');
-    final contactEmail = websiteService.getSetting('contact_email', 'vinabikechile@gmail.com');
-    final contactPhone = websiteService.getSetting('contact_phone', '+56 9 9835 7797');
-    final contactAddress = websiteService.getSetting('contact_address', 'Álvarez 32, Local 17\nViña del Mar, Chile');
+    final contactEmail =
+        websiteService.getSetting('contact_email', 'vinabikechile@gmail.com');
+    final contactPhone =
+        websiteService.getSetting('contact_phone', '+56 9 9835 7797');
+    final contactAddress = websiteService.getSetting(
+        'contact_address', 'Álvarez 32, Local 17\nViña del Mar, Chile');
     final whatsappRaw = websiteService.getSetting('whatsapp', '+56998357797');
     final whatsappNumber = _sanitizePhone(whatsappRaw);
     final instagramHandle = websiteService.getSetting('instagram', '');
     final facebookHandle = websiteService.getSetting('facebook', '');
-    
+
     // Theme colors
-    final primaryColorStr = websiteService.getSetting('theme_primary_color', '');
-    final primaryColor = _parseColor(primaryColorStr) ?? PublicStoreTheme.primaryBlue;
-    
+    final primaryColorStr =
+        websiteService.getSetting('theme_primary_color', '');
+    final primaryColor =
+        _parseColor(primaryColorStr) ?? PublicStoreTheme.primaryBlue;
+
     return Column(
       children: [
         // Hero Section - Clean and minimal
         _buildHeroSection(primaryColor),
-        
+
         // Main Content
         Container(
           width: double.infinity,
@@ -116,14 +130,14 @@ class _ContactPageState extends State<ContactPage> {
                     contactEmail: contactEmail,
                     primaryColor: primaryColor,
                   ),
-                  
+
                   const SizedBox(height: 80),
-                  
+
                   // Two column layout: Form + Info
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final isWide = constraints.maxWidth > 900;
-                      
+
                       if (isWide) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +145,8 @@ class _ContactPageState extends State<ContactPage> {
                             // Contact Form
                             Expanded(
                               flex: 3,
-                              child: _buildContactForm(contactEmail, primaryColor),
+                              child:
+                                  _buildContactForm(contactEmail, primaryColor),
                             ),
                             const SizedBox(width: 48),
                             // Info Panel
@@ -151,7 +166,7 @@ class _ContactPageState extends State<ContactPage> {
                           ],
                         );
                       }
-                      
+
                       return Column(
                         children: [
                           _buildContactForm(contactEmail, primaryColor),
@@ -246,9 +261,8 @@ class _ContactPageState extends State<ContactPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 800;
-        final cardWidth = isWide 
-            ? (constraints.maxWidth - 48) / 3 
-            : constraints.maxWidth;
+        final cardWidth =
+            isWide ? (constraints.maxWidth - 48) / 3 : constraints.maxWidth;
 
         return Wrap(
           spacing: 24,
@@ -399,7 +413,7 @@ class _ContactPageState extends State<ContactPage> {
               ),
             ),
             const SizedBox(height: 32),
-            
+
             // Name Field
             _buildTextField(
               controller: _nameController,
@@ -414,7 +428,7 @@ class _ContactPageState extends State<ContactPage> {
               },
             ),
             const SizedBox(height: 20),
-            
+
             // Email & Phone Row
             LayoutBuilder(
               builder: (context, constraints) {
@@ -483,7 +497,7 @@ class _ContactPageState extends State<ContactPage> {
               },
             ),
             const SizedBox(height: 20),
-            
+
             // Message Field
             _buildTextField(
               controller: _messageController,
@@ -502,7 +516,7 @@ class _ContactPageState extends State<ContactPage> {
               },
             ),
             const SizedBox(height: 32),
-            
+
             // Submit Button
             SizedBox(
               width: double.infinity,
@@ -625,7 +639,8 @@ class _ContactPageState extends State<ContactPage> {
                       color: primaryColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.access_time, color: primaryColor, size: 24),
+                    child:
+                        Icon(Icons.access_time, color: primaryColor, size: 24),
                   ),
                   const SizedBox(width: 12),
                   const Text(
@@ -645,9 +660,9 @@ class _ContactPageState extends State<ContactPage> {
             ],
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // WhatsApp Quick Contact
         if (whatsappNumber.isNotEmpty)
           Container(
@@ -711,9 +726,9 @@ class _ContactPageState extends State<ContactPage> {
               ],
             ),
           ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Social Media
         if (instagramHandle.isNotEmpty || facebookHandle.isNotEmpty)
           Container(
@@ -749,7 +764,8 @@ class _ContactPageState extends State<ContactPage> {
                         icon: Icons.camera_alt_outlined,
                         label: 'Instagram',
                         color: const Color(0xFFE4405F),
-                        onTap: () => _launchUrl('https://instagram.com/$instagramHandle'),
+                        onTap: () => _launchUrl(
+                            'https://instagram.com/$instagramHandle'),
                       ),
                     if (instagramHandle.isNotEmpty && facebookHandle.isNotEmpty)
                       const SizedBox(width: 12),
@@ -758,7 +774,8 @@ class _ContactPageState extends State<ContactPage> {
                         icon: Icons.facebook,
                         label: 'Facebook',
                         color: const Color(0xFF1877F2),
-                        onTap: () => _launchUrl('https://facebook.com/$facebookHandle'),
+                        onTap: () =>
+                            _launchUrl('https://facebook.com/$facebookHandle'),
                       ),
                   ],
                 ),
@@ -833,22 +850,22 @@ class _ContactPageState extends State<ContactPage> {
 
   Color? _parseColor(String value) {
     if (value.isEmpty) return null;
-    
+
     var cleaned = value.trim().toLowerCase();
-    
+
     // Handle "color(0xFFXXXXXX)" format
     if (cleaned.startsWith('color(')) {
       final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
       final intValue = int.tryParse(inside);
       if (intValue != null) return Color(intValue);
     }
-    
+
     // Handle "0xFFXXXXXX" format
     if (cleaned.startsWith('0x')) {
       final intValue = int.tryParse(cleaned);
       if (intValue != null) return Color(intValue);
     }
-    
+
     // Handle "#XXXXXX" format
     cleaned = cleaned.replaceAll('#', '');
     final intValue = int.tryParse(cleaned, radix: 16);
@@ -858,7 +875,7 @@ class _ContactPageState extends State<ContactPage> {
       }
       return Color(intValue);
     }
-    
+
     return null;
   }
 }

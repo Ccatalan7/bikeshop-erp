@@ -45,6 +45,10 @@ class VideoBannerPlatform {
             ..style.pointerEvents = 'none' // Allow scroll events to pass through
             ..allow = 'autoplay; encrypted-media'
             ..allowFullscreen = true;
+
+          // Hint to browsers that support it.
+          // (For above-the-fold videos this may not delay, but it avoids eager load in some cases.)
+          iframe.setAttribute('loading', 'lazy');
           
           // Wrap in a container div to handle sizing
           final container = html.DivElement()

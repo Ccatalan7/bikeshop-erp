@@ -32,46 +32,55 @@ class EditableBlockRenderer {
     bool isVisible = true,
     String? tenantId,
   }) {
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
-    final isSelected = editProvider.selectedBlockId == blockId;
+    // Use Selector to only rebuild when edit mode or selection changes for THIS block
+    return Selector<WebsiteEditModeProvider,
+        ({bool isEditMode, bool isSelected})>(
+      selector: (_, provider) => (
+        isEditMode: provider.isEditMode,
+        isSelected: provider.selectedBlockId == blockId,
+      ),
+      builder: (context, state, child) {
+        final isEditMode = state.isEditMode;
+        final isSelected = state.isSelected;
 
-    // If not in edit mode, render normally
-    if (!isEditMode) {
-      if (!isVisible) return const SizedBox.shrink();
+        // If not in edit mode, render normally
+        if (!isEditMode) {
+          if (!isVisible) return const SizedBox.shrink();
 
-      return WebsiteBlockRenderer.build(
-        context: context,
-        blockType: blockType,
-        data: data,
-        primaryColor: primaryColor,
-        accentColor: accentColor,
-        featuredProducts: featuredProducts,
-        headingFont: headingFont,
-        bodyFont: bodyFont,
-        headingSize: headingSize,
-        bodySize: bodySize,
-        onNavigate: onNavigate,
-        tenantId: tenantId,
-      );
-    }
+          return WebsiteBlockRenderer.build(
+            context: context,
+            blockType: blockType,
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            featuredProducts: featuredProducts,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            headingSize: headingSize,
+            bodySize: bodySize,
+            onNavigate: onNavigate,
+            tenantId: tenantId,
+          );
+        }
 
-    // Edit mode - render with editing capability
-    return _EditableBlockWrapper(
-      blockId: blockId,
-      blockType: blockType,
-      data: data,
-      primaryColor: primaryColor,
-      accentColor: accentColor,
-      featuredProducts: featuredProducts,
-      headingFont: headingFont,
-      bodyFont: bodyFont,
-      headingSize: headingSize,
-      bodySize: bodySize,
-      onNavigate: onNavigate,
-      isSelected: isSelected,
-      isVisible: isVisible,
-      tenantId: tenantId,
+        // Edit mode - render with editing capability
+        return _EditableBlockWrapper(
+          blockId: blockId,
+          blockType: blockType,
+          data: data,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          featuredProducts: featuredProducts,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+          headingSize: headingSize,
+          bodySize: bodySize,
+          onNavigate: onNavigate,
+          isSelected: isSelected,
+          isVisible: isVisible,
+          tenantId: tenantId,
+        );
+      },
     );
   }
 }
@@ -137,10 +146,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   }
 
   void _measureHeight() {
-    final renderBox =
-        _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox != null && mounted) {
-      final height = renderBox.size.height;
+    if (!mounted) return;
+    final context = _contentKey.currentContext;
+    if (context == null) return;
+
+    final renderObject = context.findRenderObject();
+    if (renderObject is RenderBox &&
+        renderObject.attached &&
+        renderObject.hasSize) {
+      final height = renderObject.size.height;
       if (height != _measuredHeight) {
         setState(() => _measuredHeight = height);
       }
@@ -716,7 +730,9 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         if (id != null) {
           editProvider.selectBlock(widget.blockId);
         }
-        editProvider.updateBlockData(widget.blockId, 'activeElementId', id);
+        // Don't save to history for transient activeElementId changes
+        editProvider.updateBlockData(widget.blockId, 'activeElementId', id,
+            saveHistory: false);
       },
       onElementsChanged: (elements) {
         // Avoid needless writes
@@ -3165,9 +3181,18 @@ class _EditableButtonState extends State<_EditableButton> {
 
   void _showEditorOverlay() {
     _removeOverlay();
+
+    // Safety check for render object
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      debugPrint('⚠️ [EditableBlock] RenderBox not ready for overlay');
+      return;
+    }
+
     final overlay = Overlay.of(context);
-    final renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
+    final size = renderObject.size;
 
     _overlayEntry = OverlayEntry(
       builder: (context) => Stack(

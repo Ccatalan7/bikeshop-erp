@@ -14,11 +14,17 @@ class CustomerOrdersPage extends StatefulWidget {
   State<CustomerOrdersPage> createState() => _CustomerOrdersPageState();
 }
 
-class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
+class _CustomerOrdersPageState extends State<CustomerOrdersPage>
+    with AutomaticKeepAliveClientMixin {
   String? _statusFilter;
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
 
     final filteredOrders = _statusFilter == null

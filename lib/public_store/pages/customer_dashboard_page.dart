@@ -13,7 +13,12 @@ class CustomerDashboardPage extends StatefulWidget {
   State<CustomerDashboardPage> createState() => _CustomerDashboardPageState();
 }
 
-class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
+class _CustomerDashboardPageState extends State<CustomerDashboardPage>
+    with AutomaticKeepAliveClientMixin {
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +37,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
     final profile = accountService.customerProfile;
     final name = profile?['name']?.split(' ')[0] ?? 'Usuario';

@@ -83,6 +83,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
   // Product data cache for product/gallery elements
   final Map<String, Map<String, dynamic>> _productCache = {};
+  // Cache for latest products queries to prevent FutureBuilder reset on rebuild
+  final Map<int, Future<List<Map<String, dynamic>>>> _latestProductsCache = {};
+
   bool _isLoadingProducts = false;
   String? _resolvedTenantId;
   bool _isResolvingTenantId = false;
@@ -155,6 +158,15 @@ class _CanvasBlockState extends State<CanvasBlock> {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _getCachedLatestProducts(int limit) {
+    if (_latestProductsCache.containsKey(limit)) {
+      return _latestProductsCache[limit]!;
+    }
+    final future = _loadLatestProducts(limit);
+    _latestProductsCache[limit] = future;
+    return future;
   }
 
   // Inline edit state (double click to edit)
@@ -243,16 +255,27 @@ class _CanvasBlockState extends State<CanvasBlock> {
   @override
   void didUpdateWidget(covariant CanvasBlock oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Clear caches if tenant changes
+    if (oldWidget.tenantId != widget.tenantId) {
+      _latestProductsCache.clear();
+      _productCache.clear();
+      _resolvedTenantId = null;
+    }
+
     // If we are not actively interacting, accept provider updates.
     final isBusy = _draggingElementId != null ||
         _resizingElementId != null ||
         _editingElementId != null;
     if (isBusy) return;
 
-    final nextElements = _elementsFromData();
-    final nextActive = _activeElementIdFromData();
-    _elements = nextElements;
-    _activeElementIdLocal = nextActive;
+    // Only update elements if the source list reference changed
+    // This avoids rebuilding the internal list when other props change (like activeElementId)
+    if (widget.data['elements'] != oldWidget.data['elements']) {
+      _elements = _elementsFromData();
+    }
+
+    _activeElementIdLocal = _activeElementIdFromData();
   }
 
   void _setActive(String? id) {
@@ -945,7 +968,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
                             final ctx = _canvasKey.currentContext;
                             final box = ctx?.findRenderObject() as RenderBox?;
-                            if (box == null) return;
+                            if (box == null || !box.attached || !box.hasSize)
+                              return;
                             final local = box.globalToLocal(details.offset);
                             _addElementAtCanvasOffset(
                                 type, local, Size(canvasW, canvasH));
@@ -1288,97 +1312,43 @@ class _CanvasBlockState extends State<CanvasBlock> {
         // Save dynamic height so Positioned uses it (even before data loads)
         overrideHeight = galleryH;
 
-        content = FutureBuilder<List<Map<String, dynamic>>>(
-          future: mode == 'latest'
-              ? _loadLatestProducts(maxProducts)
-              : Future.value(ids
-                  .map((id) => _productCache[id])
-                  .whereType<Map<String, dynamic>>()
-                  .toList()),
-          builder: (context, snap) {
-            final products = snap.data ?? const [];
-            if (products.isEmpty) {
-              return Container(
-                color: Colors.black.withValues(alpha: 0.03),
-                child: Center(
-                  child: Text(
-                    'Galería de productos',
-                    style: TextStyle(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      fontWeight: FontWeight.w600,
-                    ),
+        Widget buildGallery(List<Map<String, dynamic>> products) {
+          if (products.isEmpty) {
+            return Container(
+              color: Colors.black.withValues(alpha: 0.03),
+              child: Center(
+                child: Text(
+                  'Galería de productos',
+                  style: TextStyle(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              );
-            }
-            if (layout == 'carousel') {
-              final items = products.take(maxProducts).toList(growable: false);
-              return ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: widget.editable
-                    ? const NeverScrollableScrollPhysics()
-                    : const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                itemCount: items.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 20),
-                itemBuilder: (context, index) {
-                  final p = items[index];
-                  final id = p['id']?.toString() ?? '';
-                  final name = p['name']?.toString() ?? 'Producto';
-                  final priceRaw = p['price'];
-                  final price = priceRaw is num
-                      ? priceRaw.toDouble()
-                      : double.tryParse('$priceRaw') ?? 0.0;
-                  final imageUrl = p['image_url']?.toString();
-                  return SizedBox(
-                    width: cardWidth.clamp(220, 380),
-                    child: PremiumProductCard(
-                      productId: id,
-                      name: name,
-                      price: price,
-                      imageUrl: imageUrl,
-                      bodyFont: widget.bodyFont,
-                      previewMode: widget.editable,
-                      onNavigate: widget.onNavigate,
-                    ),
-                  );
-                },
-              );
-            }
-
-            final itemCount = products.take(maxProducts).length;
-            final rows = (itemCount / cols).ceil().clamp(1, 50);
-            // Reuse precomputed cardW/cardH but update height if fewer rows
-            final effectiveRows = rows;
-            final dynamicHeight =
-                effectiveRows * cardH + (effectiveRows - 1) * spacing;
-            // Keep the larger of planned vs actual to avoid jump when data loads
-            final renderHeight =
-                dynamicHeight > galleryH ? dynamicHeight : galleryH;
-            overrideHeight = renderHeight;
-
-            return SizedBox(
-              height: renderHeight,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  childAspectRatio: aspect,
-                  crossAxisSpacing: spacing,
-                  mainAxisSpacing: spacing,
-                ),
-                itemCount: itemCount,
-                itemBuilder: (context, index) {
-                  final p = products.take(maxProducts).elementAt(index);
-                  final id = p['id']?.toString() ?? '';
-                  final name = p['name']?.toString() ?? 'Producto';
-                  final priceRaw = p['price'];
-                  final price = priceRaw is num
-                      ? priceRaw.toDouble()
-                      : double.tryParse('$priceRaw') ?? 0.0;
-                  final imageUrl = p['image_url']?.toString();
-                  return PremiumProductCard(
+              ),
+            );
+          }
+          if (layout == 'carousel') {
+            final items = products.take(maxProducts).toList(growable: false);
+            return ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: widget.editable
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              itemCount: items.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 20),
+              itemBuilder: (context, index) {
+                final p = items[index];
+                final id = p['id']?.toString() ?? '';
+                final name = p['name']?.toString() ?? 'Producto';
+                final priceRaw = p['price'];
+                final price = priceRaw is num
+                    ? priceRaw.toDouble()
+                    : double.tryParse('$priceRaw') ?? 0.0;
+                final imageUrl = p['image_url']?.toString();
+                return SizedBox(
+                  width: cardWidth.clamp(220, 380),
+                  child: PremiumProductCard(
                     productId: id,
                     name: name,
                     price: price,
@@ -1386,12 +1356,61 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     bodyFont: widget.bodyFont,
                     previewMode: widget.editable,
                     onNavigate: widget.onNavigate,
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             );
-          },
-        );
+          }
+
+          final itemCount = products.take(maxProducts).length;
+
+          return SizedBox(
+            height: galleryH,
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                childAspectRatio: aspect,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+              ),
+              itemCount: itemCount,
+              itemBuilder: (context, index) {
+                final p = products.take(maxProducts).elementAt(index);
+                final id = p['id']?.toString() ?? '';
+                final name = p['name']?.toString() ?? 'Producto';
+                final priceRaw = p['price'];
+                final price = priceRaw is num
+                    ? priceRaw.toDouble()
+                    : double.tryParse('$priceRaw') ?? 0.0;
+                final imageUrl = p['image_url']?.toString();
+                return PremiumProductCard(
+                  productId: id,
+                  name: name,
+                  price: price,
+                  imageUrl: imageUrl,
+                  bodyFont: widget.bodyFont,
+                  previewMode: widget.editable,
+                  onNavigate: widget.onNavigate,
+                );
+              },
+            ),
+          );
+        }
+
+        if (mode == 'latest') {
+          content = FutureBuilder<List<Map<String, dynamic>>>(
+            future: _getCachedLatestProducts(maxProducts),
+            builder: (context, snap) => buildGallery(snap.data ?? []),
+          );
+        } else {
+          final manualProducts = ids
+              .map((id) => _productCache[id])
+              .whereType<Map<String, dynamic>>()
+              .toList();
+          content = buildGallery(manualProducts);
+        }
         break;
       case 'text':
       default:

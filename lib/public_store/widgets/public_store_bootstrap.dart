@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 import '../../modules/website/services/website_service.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -35,7 +36,6 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
   Future<bool> _initialize() async {
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final websiteService = context.read<WebsiteService>();
-    final inventoryService = context.read<PublicInventoryService>();
     
     // Step 1: Detect tenant
     if (!tenantProvider.hasTenant) {
@@ -47,13 +47,9 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
       return false; // No tenant found
     }
     
-    // Step 2: Load ALL data in parallel (ONE TIME)
-    await Future.wait([
-      websiteService.loadSettingsForTenant(tenantId),
-      websiteService.loadBlocksForTenant(tenantId),
-      inventoryService.getProductsForTenant(tenantId: tenantId),
-      inventoryService.getCategoriesForTenant(tenantId: tenantId),
-    ]);
+    // Step 2: Load ONLY what's required to render the homepage.
+    // IMPORTANT: Do NOT block first paint on loading the full product catalog.
+    await websiteService.loadPublicStoreDataUnified(tenantId);
     
     return true;
   }

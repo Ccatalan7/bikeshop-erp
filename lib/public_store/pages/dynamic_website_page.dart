@@ -7,24 +7,23 @@ import 'package:provider/provider.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
-import '../../modules/website/widgets/editable_block_renderer.dart';
+import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
-import '../../shared/widgets/branded_loading.dart';
 import '../../shared/services/tenant_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 
 /// Dynamic page that renders website_blocks for any page based on slug
-/// 
+///
 /// This widget:
 /// 1. Loads the page by slug from website_pages
 /// 2. Loads blocks associated with that page from website_blocks
 /// 3. Renders blocks using WebsiteBlockRenderer (or EditableBlockRenderer if in edit mode)
 /// 4. Applies theme settings (colors, fonts, spacing)
-/// 
+///
 /// Dec 2025 - Multi-page website support with inline editing
 class DynamicWebsitePage extends StatefulWidget {
   final String slug;
-  
+
   const DynamicWebsitePage({
     super.key,
     required this.slug,
@@ -34,15 +33,17 @@ class DynamicWebsitePage extends StatefulWidget {
   State<DynamicWebsitePage> createState() => _DynamicWebsitePageState();
 }
 
-class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
+class _DynamicWebsitePageState extends State<DynamicWebsitePage>
+    with AutomaticKeepAliveClientMixin {
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _blocks = [];
-  
+
   // Page info for editing
   String? _pageId;
-  bool _editModeChecked = false; // Track if we've checked edit mode for this navigation
-  
+  bool _editModeChecked =
+      false; // Track if we've checked edit mode for this navigation
+
   // Theme settings
   Color _primaryColor = const Color(0xFF2E7D32);
   Color _accentColor = const Color(0xFFFF6F00);
@@ -60,12 +61,16 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
     'mobile'
   ];
 
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
     _loadPageData();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -84,13 +89,13 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
       });
     }
   }
-  
+
   /// Update the edit provider with new page's blocks if we're in edit mode
   void _updateEditProviderIfNeeded() {
     if (!mounted) return;
-    
+
     final editProvider = context.read<WebsiteEditModeProvider>();
-    
+
     // If we're already in edit mode (or preview mode), update the blocks for the new page
     if (editProvider.isEditMode || editProvider.isPreviewMode) {
       // Check if we're on a different page than what the provider has
@@ -98,64 +103,68 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
         final websiteService = context.read<WebsiteService>();
         final blocks = List<Map<String, dynamic>>.from(_blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        
-        debugPrint('🔄 [DynamicPage] Page changed while in edit mode: ${editProvider.currentPageSlug} → ${widget.slug}');
-        debugPrint('📄 [DynamicPage] Updating provider with ${_blocks.length} blocks for: ${widget.slug}');
-        
+
+        debugPrint(
+            '🔄 [DynamicPage] Page changed while in edit mode: ${editProvider.currentPageSlug} → ${widget.slug}');
+        debugPrint(
+            '📄 [DynamicPage] Updating provider with ${_blocks.length} blocks for: ${widget.slug}');
+
         if (editProvider.isEditMode) {
           editProvider.enterEditMode(
-            blocks, 
+            blocks,
             settings,
             pageId: _pageId,
             pageSlug: widget.slug,
           );
         } else {
           editProvider.enterPreviewMode(
-            blocks, 
+            blocks,
             settings,
             pageId: _pageId,
             pageSlug: widget.slug,
           );
         }
-        
-        _editModeChecked = true; // Mark as checked so _checkEditModeFromRouter doesn't double-process
+
+        _editModeChecked =
+            true; // Mark as checked so _checkEditModeFromRouter doesn't double-process
       }
     }
   }
-  
+
   /// Check edit mode using GoRouter state (called from build method)
   void _checkEditModeFromRouter(BuildContext context) {
     // Don't check edit mode until blocks are loaded
     if (_isLoading || _pageId == null) return;
-    
+
     // Get query parameters from GoRouter
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
-    
+
     final shouldEdit = queryParams['edit'] == 'true';
     final shouldPreview = queryParams['preview'] == 'true';
-    
+
     // Only process once per navigation (avoid infinite rebuilds)
     if (_editModeChecked) return;
-    
+
     if (shouldEdit || shouldPreview) {
       _editModeChecked = true;
-      
+
       final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
-      
+
       // Schedule for next frame to avoid calling during build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        
+
         final blocks = List<Map<String, dynamic>>.from(_blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
-        
-        debugPrint('📄 [DynamicPage] Setting up edit mode for page: ${widget.slug} (${_blocks.length} blocks)');
-        
+
+        debugPrint(
+            '📄 [DynamicPage] Setting up edit mode for page: ${widget.slug} (${_blocks.length} blocks)');
+
         if (shouldEdit) {
           editProvider.enterEditMode(
-            blocks, 
+            blocks,
             settings,
             pageId: _pageId,
             pageSlug: widget.slug,
@@ -163,12 +172,13 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
           debugPrint('✏️ [DynamicPage] Entered EDIT mode for: ${widget.slug}');
         } else {
           editProvider.enterPreviewMode(
-            blocks, 
+            blocks,
             settings,
             pageId: _pageId,
             pageSlug: widget.slug,
           );
-          debugPrint('👁️ [DynamicPage] Entered PREVIEW mode for: ${widget.slug}');
+          debugPrint(
+              '👁️ [DynamicPage] Entered PREVIEW mode for: ${widget.slug}');
         }
       });
     }
@@ -186,7 +196,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
     if (value is num) return value != 0;
     if (value is String) {
       final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' || normalized == '1' || normalized == 'si' || normalized == 'sí') {
+      if (normalized == 'true' ||
+          normalized == '1' ||
+          normalized == 'si' ||
+          normalized == 'sí') {
         return true;
       }
       if (normalized == 'false' || normalized == '0' || normalized == 'no') {
@@ -257,8 +270,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
   }
 
   Future<void> _loadPageData() async {
-    debugPrint('🔄 [DynamicPage] _loadPageData() called for slug: "${widget.slug}"');
-    
+    debugPrint(
+        '🔄 [DynamicPage] _loadPageData() called for slug: "${widget.slug}"');
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -266,26 +280,28 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
 
     try {
       final websiteService = context.read<WebsiteService>();
-      
+
       // Try to get tenant ID from public store provider (anonymous visitors)
       // OR from TenantService (authenticated ERP users)
       String? tenantId;
-      
+
       try {
         final tenantProvider = context.read<PublicStoreTenantProvider>();
         tenantId = tenantProvider.tenantId;
-        debugPrint('🔄 [DynamicPage] Got tenantId from provider: $tenantId (isLoading: ${tenantProvider.isLoading})');
+        debugPrint(
+            '🔄 [DynamicPage] Got tenantId from provider: $tenantId (isLoading: ${tenantProvider.isLoading})');
       } catch (e) {
-        debugPrint('🔄 [DynamicPage] PublicStoreTenantProvider not available: $e');
+        debugPrint(
+            '🔄 [DynamicPage] PublicStoreTenantProvider not available: $e');
         // PublicStoreTenantProvider not available, try TenantService
       }
-      
+
       // If no public tenant, try authenticated tenant
       if (tenantId == null) {
         final tenantService = TenantService();
         tenantId = await tenantService.getTenantId();
       }
-      
+
       // Wait for tenant detection if still not ready
       if (tenantId == null) {
         debugPrint('⏳ [DynamicWebsitePage] Waiting for tenant detection...');
@@ -296,9 +312,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
         }
         return;
       }
-      
-      debugPrint('🏪 [DynamicWebsitePage] Loading page "${widget.slug}" for tenant: $tenantId');
-      
+
+      debugPrint(
+          '🏪 [DynamicWebsitePage] Loading page "${widget.slug}" for tenant: $tenantId');
+
       // Load settings first (for theme)
       if (websiteService.settings.isEmpty) {
         await websiteService.loadSettingsForTenant(tenantId);
@@ -308,9 +325,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
       // Load pages using public method (no auth required)
       await websiteService.loadPagesForTenant(tenantId);
       final pages = websiteService.pages;
-      
+
       debugPrint('📄 [DynamicWebsitePage] Found ${pages.length} pages total');
-      
+
       // Find the page by slug (or home page for empty slug)
       WebsitePage? page;
       if (widget.slug.isEmpty) {
@@ -329,29 +346,33 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
           orElse: () => throw Exception('Page not found: ${widget.slug}'),
         );
       }
-      
+
       // Store page ID for editing
       _pageId = page.id;
-      
-      debugPrint('📄 [DynamicWebsitePage] Found page: "${page.title}" (id: ${page.id}, slug: ${page.slug})');
+
+      debugPrint(
+          '📄 [DynamicWebsitePage] Found page: "${page.title}" (id: ${page.id}, slug: ${page.slug})');
 
       // Load blocks for this page (pass tenantId explicitly for public store)
       final blocks = await websiteService.loadBlocksForPage(
         page.id,
         tenantId: tenantId,
       );
-      
-      debugPrint('📦 [DynamicWebsitePage] Loaded ${blocks.length} raw blocks from database');
+
+      debugPrint(
+          '📦 [DynamicWebsitePage] Loaded ${blocks.length} raw blocks from database');
       for (final block in blocks) {
-        debugPrint('   - Block: ${block['block_type']} (id: ${block['id']}, page_id: ${block['page_id']})');
+        debugPrint(
+            '   - Block: ${block['block_type']} (id: ${block['id']}, page_id: ${block['page_id']})');
       }
-      
+
       // Filter visible blocks only (but keep all for editing)
       _blocks = blocks.where((block) {
         return block['is_visible'] == true;
       }).toList();
 
-      debugPrint('✅ [DynamicWebsitePage] Showing ${_blocks.length} visible blocks');
+      debugPrint(
+          '✅ [DynamicWebsitePage] Showing ${_blocks.length} visible blocks');
 
       if (mounted) {
         setState(() => _isLoading = false);
@@ -387,27 +408,32 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
     if (parsedText != null) _textColor = parsedText;
     if (headingFont.isNotEmpty) _headingFont = headingFont;
     if (bodyFont.isNotEmpty) _bodyFont = bodyFont;
-    
+
     final parsedHeadingSize = double.tryParse(headingSize);
     final parsedBodySize = double.tryParse(bodySize);
     final parsedSectionSpacing = double.tryParse(sectionSpacing);
     final parsedContainerPadding = double.tryParse(containerPadding);
-    
-    if (parsedHeadingSize != null) _headingSize = parsedHeadingSize.clamp(24.0, 72.0);
+
+    if (parsedHeadingSize != null)
+      _headingSize = parsedHeadingSize.clamp(24.0, 72.0);
     if (parsedBodySize != null) _bodySize = parsedBodySize.clamp(12.0, 24.0);
-    if (parsedSectionSpacing != null) _sectionSpacing = parsedSectionSpacing.clamp(32.0, 128.0);
-    if (parsedContainerPadding != null) _containerPadding = parsedContainerPadding.clamp(16.0, 64.0);
+    if (parsedSectionSpacing != null)
+      _sectionSpacing = parsedSectionSpacing.clamp(32.0, 128.0);
+    if (parsedContainerPadding != null)
+      _containerPadding = parsedContainerPadding.clamp(16.0, 64.0);
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     // Check edit mode from URL parameters (called every build, but only acts once per navigation)
     _checkEditModeFromRouter(context);
-    
+
     // Watch edit mode provider for changes
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
-    
+
     // Get tenant ID for product loading (try public store provider or use cached)
     String? tenantId;
     try {
@@ -417,13 +443,13 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
       // PublicStoreTenantProvider not available (ERP host)
       // tenantId will be fetched in _loadPageData
     }
-    
+
     // If in edit mode, use blocks from provider (which tracks changes)
     final blocksToRender = isEditMode ? editProvider.blocks : _blocks;
-    
+
     if (_isLoading) {
       return const Center(
-        child: BrandedLoading(message: 'Cargando...'),
+        child: CircularProgressIndicator(),
       );
     }
 
@@ -438,14 +464,15 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
   }
 
   /// Build block widgets (non-sliver version for Column layout)
-  List<Widget> _buildBlockWidgets(List<Map<String, dynamic>> blocks, bool isEditMode, String? tenantId) {
+  List<Widget> _buildBlockWidgets(
+      List<Map<String, dynamic>> blocks, bool isEditMode, String? tenantId) {
     final breakpoint = _currentBreakpoint(context);
     final visibleBlocks = <Map<String, dynamic>>[];
 
     for (final block in blocks) {
       final blockData = block['block_data'] as Map<String, dynamic>? ?? {};
       final visibility = _normalizeBlockVisibility(blockData['visibility']);
-      
+
       // In edit mode, show all blocks; in view mode, respect visibility settings
       if (isEditMode || visibility[breakpoint] == true) {
         visibleBlocks.add(block);
@@ -461,10 +488,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
       final blockType = block['block_type']?.toString() ?? 'hero';
       final blockData = block['block_data'] as Map<String, dynamic>? ?? {};
       final isVisible = block['is_visible'] == true;
-      
+
       // Use EditableBlockRenderer in edit mode, WebsiteBlockRenderer in view mode
       final blockWidget = isEditMode
-          ? EditableBlockRenderer.build(
+          ? DeferredEditableBlockRenderer.build(
               context: context,
               blockId: blockId,
               blockType: blockType,
@@ -492,7 +519,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
               onNavigate: (route) => context.go(route),
               tenantId: tenantId,
             );
-      
+
       return Padding(
         padding: EdgeInsets.only(bottom: _sectionSpacing),
         child: blockWidget,
@@ -514,7 +541,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              isEditMode ? 'Esta página no tiene bloques' : 'Esta página está en construcción',
+              isEditMode
+                  ? 'Esta página no tiene bloques'
+                  : 'Esta página está en construcción',
               style: TextStyle(
                 fontSize: _headingSize * 0.5,
                 fontFamily: _headingFont,
@@ -523,7 +552,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage> {
             ),
             const SizedBox(height: 8),
             Text(
-              isEditMode 
+              isEditMode
                   ? 'Usa el panel de la derecha para agregar bloques'
                   : 'Vuelve pronto para ver el contenido',
               style: TextStyle(

@@ -1,95 +1,155 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
+
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Vinabike - Todo para tu bicicleta">
   
+  <!-- Primary Meta Tags -->
+  <title>Vinabike - Tienda de Bicicletas</title>
+  <meta name="title" content="Vinabike - Tienda de Bicicletas">
+  <meta name="description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
+  
+  <!-- Canonical -->
+  <link rel="canonical" href="https://vinabike.cl">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vinabike.cl">
+  <meta property="og:title" content="Vinabike - Tienda de Bicicletas">
+  <meta property="og:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
+  <meta property="og:site_name" content="Vinabike">
+  
+  
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://vinabike.cl">
+  <meta name="twitter:title" content="Vinabike - Tienda de Bicicletas">
+  <meta name="twitter:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
+  
+
   <!-- Google Analytics GA4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-FR5Q37BW43"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
+    function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-FR5Q37BW43');
   </script>
-  
+
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Vinabike">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>Vinabike</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overscroll-behavior-x: none; }
-    body { touch-action: pan-y pinch-zoom; background: #1a1a2e; }
-    
-    /* Loading screen - shows while Flutter JS downloads */
-    #loading-screen {
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overscroll-behavior-x: none;
+      background: #ffffff;
+    }
+
+    body {
+      touch-action: pan-y pinch-zoom;
+    }
+
+    /* Minimal loading - just white page, Flutter takes over */
+    #app-shell {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      background: #ffffff;
       z-index: 9999;
-      transition: opacity 0.3s ease-out;
+      transition: opacity 0.2s ease-out;
     }
-    #loading-screen.hidden {
+
+    #app-shell.hidden {
       opacity: 0;
       pointer-events: none;
     }
-    #loading-logo {
-      width: 120px;
-      height: auto;
-      margin-bottom: 24px;
-      animation: pulse 2s ease-in-out infinite;
+
+    /* Visually hidden SEO content (for Merchant Center bots) */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+      white-space: nowrap;
     }
-    #loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,255,255,0.1);
-      border-top-color: #4a90d9;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    #loading-text {
-      color: rgba(255,255,255,0.7);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      margin-top: 16px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
   </style>
+  
+  <!-- JSON-LD Structured Data for LocalBusiness -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Vinabike",
+    "telephone": "+56998357797",
+    "email": "vinabikechile@gmail.com",
+    "url": "https://vinabike.cl",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Álvarez 32, Local 17, Viña del Mar, Chile",
+      "addressLocality": "Viña del Mar",
+      "addressCountry": "Chile"
+    }
+  }
+  </script>
 </head>
+
 <body>
-  <!-- Loading screen shown while Flutter downloads -->
-  <div id="loading-screen">
-    <img id="loading-logo" src="https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/company_logos/1763412155458_Logo-vinabike_ai_to_png.png" alt="Vinabike">
-    <div id="loading-spinner"></div>
-    <div id="loading-text">Cargando...</div>
+  <!-- Minimal shell - just white background, hidden SEO content for bots -->
+  <div id="app-shell">
+    <!-- SEO Content (Visually Hidden for Merchant Center bots) -->
+    <div class="sr-only">
+      <h1>Vinabike - Tienda de Bicicletas en Viña del Mar</h1>
+      <p>Tu tienda especializada en ciclismo, repuestos y servicio técnico.</p>
+      
+      <!-- Navigation -->
+      <nav>
+        <a href="/productos">Productos</a>
+        <a href="/servicios">Servicios</a>
+        <a href="/contacto">Contacto</a>
+      </nav>
+      
+      <!-- Business Contact Info -->
+      <address>
+        <p>Dirección: Álvarez 32, Local 17, Viña del Mar, Chile, Viña del Mar, Chile</p>
+        <p>Teléfono: +56998357797</p>
+        <p>Email: vinabikechile@gmail.com</p>
+      </address>
+      
+      <!-- Legal Links (Required by Google Merchant Center) -->
+      <footer>
+        <a href="/devoluciones">Política de Reembolso</a>
+        <a href="/terminos">Términos y Condiciones</a>
+        <a href="/envios">Política de Envíos</a>
+        <a href="/privacidad">Política de Privacidad</a>
+      </footer>
+    </div>
   </div>
+
   <script>
-    // Debug: Log URL info BEFORE Flutter loads
-    console.log('📍 [index.html] window.location.href =', window.location.href);
-    console.log('📍 [index.html] window.location.pathname =', window.location.pathname);
-    console.log('📍 [index.html] window.location.search =', window.location.search);
-    console.log('📍 [index.html] window.location.hash =', window.location.hash);
-    console.log('📍 [index.html] document.baseURI =', document.baseURI);
-    
-    window.addEventListener('wheel', function(e) {
+    window.addEventListener('wheel', function (e) {
       if (Math.abs(e.deltaX) > 0) {
         let el = e.target, canScroll = false;
         while (el && el !== document.documentElement) {
-          if (el.scrollWidth > el.clientWidth && ['auto','scroll'].includes(getComputedStyle(el).overflowX)) { canScroll = true; break; }
+          if (el.scrollWidth > el.clientWidth && ['auto', 'scroll'].includes(getComputedStyle(el).overflowX)) { canScroll = true; break; }
           el = el.parentElement;
         }
         if (!canScroll) e.preventDefault();
@@ -97,5 +157,20 @@
     }, { passive: false });
   </script>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Configure Flutter renderer: HTML for mobile (faster), CanvasKit for desktop (quality)
+    window.addEventListener('load', function() {
+      if (window._flutter && window._flutter.loader) {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                      || window.innerWidth < 768;
+        window._flutter.loader.load({
+          config: {
+            renderer: isMobile ? 'html' : 'canvaskit'
+          }
+        });
+      }
+    });
+  </script>
 </body>
+
 </html>

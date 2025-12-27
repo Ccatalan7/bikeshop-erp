@@ -9,6 +9,6 @@ String? getInitialBrowserUrl() {
 
 /// Hide the HTML loading screen after Flutter has loaded
 void hideHtmlLoadingScreen() {
-  final loadingScreen = html.document.getElementById('loading-screen');
+  final loadingScreen = html.document.getElementById('app-shell');
   loadingScreen?.classes.add('hidden');
 }

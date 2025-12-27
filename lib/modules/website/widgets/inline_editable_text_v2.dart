@@ -112,7 +112,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   void _calculateToolbarPosition() {
     final RenderBox? renderBox =
         _targetKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox != null) {
+    if (renderBox != null && renderBox.attached && renderBox.hasSize) {
       final position = renderBox.localToGlobal(Offset.zero);
       final size = renderBox.size;
       // Position toolbar centered above the text box
@@ -286,7 +286,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
             // Check if tap was on toolbar
             final toolbarBox =
                 _toolbarKey.currentContext?.findRenderObject() as RenderBox?;
-            if (toolbarBox != null) {
+            if (toolbarBox != null &&
+                toolbarBox.attached &&
+                toolbarBox.hasSize) {
               final local = toolbarBox.globalToLocal(event.position);
               if (toolbarBox.paintBounds.contains(local)) {
                 return; // Tap was on toolbar, ignore
@@ -312,7 +314,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
           // Check if tap was on toolbar
           final toolbarBox =
               _toolbarKey.currentContext?.findRenderObject() as RenderBox?;
-          if (toolbarBox != null) {
+          if (toolbarBox != null && toolbarBox.attached && toolbarBox.hasSize) {
             final local = toolbarBox.globalToLocal(event.position);
             if (toolbarBox.paintBounds.contains(local)) {
               return; // Tap was on toolbar, ignore

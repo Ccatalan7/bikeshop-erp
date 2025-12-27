@@ -54,6 +54,30 @@ export default {
         }
 
         return new Response('Not Found', { status: 404 });
+    },
+
+    // Cron trigger: Keep Supabase warm every 4 minutes
+    async scheduled(event, env, ctx) {
+        console.log('🔥 Warm-up cron triggered');
+
+        // Ping Supabase RPC for each allowed tenant to keep the function warm
+        for (const tenantId of ALLOWED_TENANTS) {
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_store_data`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    body: JSON.stringify({ p_tenant_id: tenantId })
+                });
+
+                console.log(`🔥 Warm-up for tenant ${tenantId}: ${response.status}`);
+            } catch (error) {
+                console.error(`❌ Warm-up failed for tenant ${tenantId}:`, error.message);
+            }
+        }
     }
 };
 
@@ -82,7 +106,8 @@ async function handlePublicStoreData(request, ctx) {
         if (response) {
             // Cache HIT - return cached response with indicator
             console.log(`Cache HIT for tenant ${tenantId}`);
-            const cachedData = await response.json();
+            // Clone before reading so we don't consume the cached body stream.
+            const cachedData = await response.clone().json();
             return new Response(JSON.stringify({
                 ...cachedData,
                 _cache: 'HIT',
@@ -129,7 +154,7 @@ async function handlePublicStoreData(request, ctx) {
             }
         });
 
-        // Store in cache (don't await - do in background)
+        // Store in cache (background - don't block response)
         ctx.waitUntil(cache.put(cacheKey, responseToCache.clone()));
 
         // Return response with cache miss indicator

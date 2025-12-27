@@ -159,6 +159,8 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       title: 'Mis Conversaciones',
       // Pass custom sidebar content - animation handled by layout
       rightSidebarContent: rightContent,
+      // Disable scroll wrapping so chat can manage its own height/scrolling
+      enableContentScrolling: false,
 
       // Main Center Content
       child: LayoutBuilder(
@@ -182,13 +184,13 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
               switchOutCurve: Curves.easeIn,
               child: _selectedConversationId == null
                   ? _buildConversationList()
-                  : _buildChatView(),
+                  : _buildChatView(constraints),
             );
           } else {
             // Mobile: Full screen switch
             return _selectedConversationId == null
                 ? _buildConversationList()
-                : _buildChatViewMobile();
+                : _buildChatViewMobile(constraints);
           }
         },
       ),
@@ -214,10 +216,17 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     );
   }
 
-  Widget _buildChatView() {
+  Widget _buildChatView(BoxConstraints constraints) {
+    // Explicitly constrain the height to the available space using SizedBox.
+    // This allows the Expanded widget inside to function correctly.
+    // If constraints are unbounded (e.g., inside ScrollView or editor viewport),
+    // fallback to a calculated height based on MediaQuery.
+    final height = constraints.hasBoundedHeight
+        ? constraints.maxHeight
+        : MediaQuery.of(context).size.height - 200; // Fallback for editor mode
+
     return SizedBox(
-      key: ValueKey('chat-${_selectedConversationId}'),
-      height: 600, // Fixed height for chat area in desktop
+      height: height,
       child: Column(
         children: [
           // Desktop back button to list
@@ -230,8 +239,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
               ),
             ],
           ),
-          SizedBox(
-            height: 550, // Fixed height for the chat view itself
+          Expanded(
             child: CustomerChatView(
               conversationId: _selectedConversationId!,
               onShowQuote: _handleShowQuoteReview,
@@ -242,9 +250,15 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     );
   }
 
-  Widget _buildChatViewMobile() {
+  Widget _buildChatViewMobile(BoxConstraints constraints) {
+    // Similarly for mobile, use the available constraints to ensure
+    // the chat view fills the screen properly.
+    final height = constraints.hasBoundedHeight
+        ? constraints.maxHeight
+        : MediaQuery.of(context).size.height - 200;
+
     return SizedBox(
-      height: MediaQuery.of(context).size.height - 150,
+      height: height,
       child: CustomerChatView(
         conversationId: _selectedConversationId!,
         onShowQuote: _handleShowQuoteReview,

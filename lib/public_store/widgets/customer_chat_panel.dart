@@ -364,14 +364,25 @@ class _CustomerChatPanelState extends State<CustomerChatPanel> {
   }
 
   Widget _buildMessagesList() {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(14),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final msg = _messages[index];
-        return _buildMessageBubble(msg);
+    // Use NotificationListener to suppress OverscrollIndicatorNotification
+    // This prevents the scroll event from bubbling up to the parent ScrollView
+    // when the list reaches its bounds.
+    return NotificationListener<OverscrollIndicatorNotification>(
+      onNotification: (notification) {
+        notification.disallowIndicator();
+        return true; // Stop propagation
       },
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(14),
+        itemCount: _messages.length,
+        primary:
+            false, // Ensure this list doesn't try to be the primary scroll view
+        itemBuilder: (context, index) {
+          final msg = _messages[index];
+          return _buildMessageBubble(msg);
+        },
+      ),
     );
   }
 

@@ -13,12 +13,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
-import '../../modules/website/widgets/website_editor_panel.dart';
+import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
@@ -31,11 +32,16 @@ class PublicStoreLayout extends StatefulWidget {
   final bool showEditorButton;
   final bool enablePageViewScrolling;
 
+  /// When true, the editor panel is rendered externally (by PersistentEditorShell)
+  /// so this layout should not render it.
+  final bool useExternalEditorPanel;
+
   const PublicStoreLayout({
     super.key,
     required this.child,
     this.showEditorButton = true,
     this.enablePageViewScrolling = true,
+    this.useExternalEditorPanel = true,
   });
 
   @override
@@ -43,6 +49,7 @@ class PublicStoreLayout extends StatefulWidget {
 }
 
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
+  static const double _externalEditorPanelWidth = 380;
   static const String _actionSitePages = 'site_pages';
   static const String _actionSiteNavigation = 'site_navigation';
   static const String _actionSiteContent = 'site_content';
@@ -151,6 +158,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Watch providers to rebuild when data changes
     context.watch<PublicStoreTenantProvider>();
     final websiteService = context.watch<WebsiteService>();
+    final editProvider = context.watch<WebsiteEditModeProvider>();
 
     // Don't block rendering - just use defaults until settings load
     // This makes the site feel faster
@@ -163,13 +171,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final logoUrl = websiteService.getSetting('logo_url', '');
     final topBannerText =
         websiteService.getSetting('top_banner_text', 'Envíos a todo Chile');
-    final contactEmail =
-        websiteService.getSetting('contact_email', 'contacto@vinabike.cl');
-    final contactPhone =
-        websiteService.getSetting('contact_phone', '+56 9 XXXX XXXX');
+    final contactEmail = websiteService.getSetting('contact_email', '');
+    final contactPhone = websiteService.getSetting('contact_phone', '');
     final contactAddress = websiteService.getSetting(
       'contact_address',
-      'Álvarez 32, Local 17\nViña del Mar, Chile',
+      '',
     );
     final facebookHandle = websiteService.getSetting('facebook', '');
     final instagramHandle = websiteService.getSetting('instagram', '');
@@ -184,12 +190,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final sitePublished =
         websiteService.getSetting('site_published', 'true') == 'true';
 
+    // Theme colors - use provider for live preview if in edit mode
     final primaryColor = _resolveColor(
-      websiteService.getSetting('theme_primary_color', ''),
+      editProvider.isEditMode
+          ? editProvider.getEffectiveThemeSetting('theme_primary_color',
+              websiteService.getSetting('theme_primary_color', ''))
+          : websiteService.getSetting('theme_primary_color', ''),
       PublicStoreTheme.primaryBlue,
     );
     final accentColor = _resolveColor(
-      websiteService.getSetting('theme_accent_color', ''),
+      editProvider.isEditMode
+          ? editProvider.getEffectiveThemeSetting('theme_accent_color',
+              websiteService.getSetting('theme_accent_color', ''))
+          : websiteService.getSetting('theme_accent_color', ''),
       PublicStoreTheme.accentGreen,
     );
     final backgroundColor = _resolveColor(
@@ -254,15 +267,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     // Check if in edit mode - use different layout structure
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
-    final isPreviewMode = editProvider.isPreviewMode;
-    final isInEditorContext = editProvider.isInEditorContext;
+    // Check URL query params to force edit/preview mode visually before provider updates
+    // This prevents the "Edit Site" FAB from flashing before the editor panel loads
+    final qp = GoRouterState.of(context).uri.queryParameters;
+    final forceEditMode = qp['edit'] == 'true';
+    final forcePreviewMode = qp['preview'] == 'true';
+
+    final isEditMode = editProvider.isEditMode || forceEditMode;
+    final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
+
     final devicePreviewMode = editProvider.devicePreviewMode;
+    final isInEditorContext =
+        editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
 
     // If the site is unpublished, show a holding page to visitors.
     // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
-    final qp = GoRouterState.of(context).uri.queryParameters;
     final bypassUnpublished =
         isInEditorContext || qp['preview'] == 'true' || qp['edit'] == 'true';
     if (!sitePublished && !bypassUnpublished) {
@@ -452,10 +471,50 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       );
     }
 
+    // When the editor panel is rendered externally (PersistentEditorShell),
+    // reserve horizontal space so the website (including header) is never
+    // hidden behind the panel. Keep the top command bar full-width.
+    if (isEditMode && widget.useExternalEditorPanel) {
+      pageContent = Padding(
+        padding: const EdgeInsets.only(right: _externalEditorPanelWidth),
+        child: pageContent,
+      );
+    }
+
     // In full edit mode, use Row layout with side panel
     if (isEditMode) {
       final editorViewport =
           _buildEditorViewport(context, pageContent, devicePreviewMode);
+
+      // Build the main content area
+      Widget mainBody;
+
+      if (widget.useExternalEditorPanel) {
+        // Editor panel is rendered externally by PersistentEditorShell
+        // Just show the top bar + content (no side panel)
+        mainBody = Expanded(child: editorViewport);
+      } else {
+        // Legacy: render editor panel inline
+        mainBody = Expanded(
+          child: Row(
+            children: [
+              Expanded(child: editorViewport),
+              DeferredWebsiteEditorPanel(
+                onSave: () async {
+                  await _saveChanges(context, editProvider, websiteService);
+                  if (context.mounted) {
+                    editProvider.switchToPreviewMode();
+                  }
+                },
+                onDiscard: () {
+                  editProvider.switchToPreviewMode();
+                },
+              ),
+            ],
+          ),
+        );
+      }
+
       return Scaffold(
         backgroundColor: backgroundColor,
         body: Column(
@@ -463,29 +522,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             // Keep the same "command center" top bar visible while editing.
             _buildPreviewTopBar(
                 context, editProvider, websiteService, storeName),
-            Expanded(
-              child: Row(
-                children: [
-                  // Main content area
-                  Expanded(child: editorViewport),
-                  // Side panel for editing
-                  WebsiteEditorPanel(
-                    onSave: () async {
-                      // Actually save the changes to the database
-                      await _saveChanges(context, editProvider, websiteService);
-                      // After save, go back to preview mode
-                      if (context.mounted) {
-                        editProvider.switchToPreviewMode();
-                      }
-                    },
-                    onDiscard: () {
-                      // After discard, go back to preview mode
-                      editProvider.switchToPreviewMode();
-                    },
-                  ),
-                ],
-              ),
-            ),
+            mainBody,
           ],
         ),
       );
@@ -546,6 +583,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   if (isInEditorContext) return const SizedBox.shrink();
 
                   return FloatingActionButton.extended(
+                    heroTag: 'edit_site_fab',
                     onPressed: () {
                       debugPrint(
                           '🎨 [Layout] Edit button pressed. Entering preview mode');
@@ -1458,7 +1496,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         Supabase.instance.client.auth.currentUser != null;
                     if (!isLoggedIn) return const SizedBox.shrink();
                     return FilledButton.icon(
-                      onPressed: () => context.go('/tienda?preview=true'),
+                      onPressed: () => context
+                          .go(_routeForPublicStore('/tienda?preview=true')),
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Entrar al editor'),
                     );
@@ -1740,6 +1779,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         host == 'www.vinabike.cl';
   }
 
+  /// Converts legacy in-app routes under `/tienda` to clean public-store routes.
+  ///
+  /// Example: `/tienda` -> `/`, `/tienda/productos` -> `/productos`.
+  /// Preserves query parameters (e.g. `/tienda?edit=true` -> `/?edit=true`).
+  String _routeForPublicStore(String legacyRoute) {
+    if (!_isPublicStoreDomain()) return legacyRoute;
+    final uri = Uri.tryParse(legacyRoute);
+    if (uri == null) return legacyRoute;
+
+    var path = uri.path;
+    if (path == '/tienda' || path == '/tienda/') {
+      path = '/';
+    } else if (path.startsWith('/tienda/')) {
+      path = path.substring('/tienda'.length);
+      if (path.isEmpty) path = '/';
+    }
+
+    return uri.replace(path: path).toString();
+  }
+
   /// Save changes to the database
   Future<void> _saveChanges(
     BuildContext context,
@@ -2015,131 +2074,151 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 ),
               ),
             // Main header with logo
-            Container(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                children: [
-                  // Logo - uses URL if set, otherwise falls back to asset, then text
-                  InkWell(
-                    onTap: () => context.go('/tienda'),
-                    child: SizedBox(
-                      height: 48,
-                      child: logoUrl.isNotEmpty
-                          ? Image.network(
-                              logoUrl,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                              color: isDarkMode ? Colors.white : null,
-                              colorBlendMode:
-                                  isDarkMode ? BlendMode.srcIn : null,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildTextLogo(context, storeName, textColor),
-                            )
-                          : Image.asset(
-                              'assets/images/vinabike_logo.png',
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                              color: isDarkMode ? Colors.white : null,
-                              colorBlendMode:
-                                  isDarkMode ? BlendMode.srcIn : null,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildTextLogo(context, storeName, textColor),
-                            ),
+            Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  children: [
+                    // Logo - uses URL if set, otherwise falls back to asset, then text
+                    InkWell(
+                      onTap: () {
+                        final path = _routeForPublicStore('/tienda');
+                        final isEditMode =
+                            context.read<WebsiteEditModeProvider>().isEditMode;
+                        final target = isEditMode ? '$path?edit=true' : path;
+                        context.go(target);
+                      },
+                      child: SizedBox(
+                        height: 48,
+                        child: logoUrl.isNotEmpty
+                            ? Image.network(
+                                logoUrl,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                                color: isDarkMode ? Colors.white : null,
+                                colorBlendMode:
+                                    isDarkMode ? BlendMode.srcIn : null,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _buildTextLogo(
+                                        context, storeName, textColor),
+                              )
+                            : Image.asset(
+                                'assets/images/vinabike_logo.png',
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                                color: isDarkMode ? Colors.white : null,
+                                colorBlendMode:
+                                    isDarkMode ? BlendMode.srcIn : null,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _buildTextLogo(
+                                        context, storeName, textColor),
+                              ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 24),
-                  // Only show nav links on desktop, use Spacer on mobile
-                  if (screenWidth >= 900)
-                    Expanded(
-                      child: Row(
-                        children: navLinks.isEmpty
-                            ? [
-                                _buildNavLink(
-                                    context, 'Inicio', '/tienda', textColor),
-                                const SizedBox(width: 24),
-                                _buildNavLink(context, 'Productos',
-                                    '/tienda/productos', textColor),
-                                const SizedBox(width: 24),
-                                _buildInfoDropdown(context, textColor),
-                              ]
-                            : [
-                                ...navLinks.map((link) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 24),
-                                    child: _buildNavLink(
-                                        context,
-                                        link['label'] ?? '',
-                                        link['url'] ?? '/',
-                                        textColor),
-                                  );
-                                }),
-                                _buildInfoDropdown(context, textColor),
-                              ],
-                      ),
-                    )
-                  else
-                    const Spacer(),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.search),
-                        color: iconColor,
-                        onPressed: () => context.go('/tienda/productos'),
-                        tooltip: 'Buscar',
-                      ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.shopping_cart_outlined),
-                            color: iconColor,
-                            onPressed: () => context.go('/tienda/carrito'),
-                            tooltip: 'Carrito',
-                          ),
-                          if (cart.itemCount > 0)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: IgnorePointer(
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: accentColor,
-                                    shape: BoxShape.circle,
+                    const SizedBox(width: 24),
+                    // Only show nav links on desktop, use Spacer on mobile
+                    if (screenWidth >= 900)
+                      Expanded(
+                        child: Row(
+                          children: navLinks.isEmpty
+                              ? [
+                                  _buildNavLink(
+                                    context,
+                                    'Inicio',
+                                    _routeForPublicStore('/tienda'),
+                                    textColor,
                                   ),
-                                  constraints: const BoxConstraints(
-                                      minWidth: 18, minHeight: 18),
-                                  child: Text(
-                                    '${cart.itemCount}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 24),
+                                  _buildNavLink(
+                                      context,
+                                      'Productos',
+                                      _routeForPublicStore('/tienda/productos'),
+                                      textColor),
+                                  const SizedBox(width: 24),
+                                  _buildInfoDropdown(context, textColor),
+                                ]
+                              : [
+                                  ...navLinks.map((link) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 24),
+                                      child: _buildNavLink(
+                                          context,
+                                          link['label'] ?? '',
+                                          link['url'] ?? '/',
+                                          textColor),
+                                    );
+                                  }),
+                                  _buildInfoDropdown(context, textColor),
+                                ],
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.search),
+                          color: iconColor,
+                          onPressed: () => context
+                              .go(_routeForPublicStore('/tienda/productos')),
+                          tooltip: 'Buscar',
+                        ),
+                        const SizedBox(width: 8),
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.shopping_cart_outlined),
+                              color: iconColor,
+                              onPressed: () => context
+                                  .go(_routeForPublicStore('/tienda/carrito')),
+                              tooltip: 'Carrito',
+                            ),
+                            if (cart.itemCount > 0)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: accentColor,
+                                      shape: BoxShape.circle,
                                     ),
-                                    textAlign: TextAlign.center,
+                                    constraints: const BoxConstraints(
+                                        minWidth: 18, minHeight: 18),
+                                    child: Text(
+                                      '${cart.itemCount}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      if (screenWidth >= 900) ...[
-                        const SizedBox(width: 16),
-                        CustomerAccountMenu(textColor: textColor),
-                      ] else ...[
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.menu),
-                          color: iconColor,
-                          onPressed: () => _showMobileMenu(context, navLinks),
-                          tooltip: 'Menú',
+                          ],
                         ),
-                      ]
-                    ],
-                  ),
-                ],
+                        if (screenWidth >= 900) ...[
+                          const SizedBox(width: 16),
+                          CustomerAccountMenu(textColor: textColor),
+                        ] else ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.menu),
+                            color: iconColor,
+                            onPressed: () => _showMobileMenu(context, navLinks),
+                            tooltip: 'Menú',
+                          ),
+                        ]
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2348,12 +2427,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               collapsedIconColor: Colors.white,
               childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
               children: [
-                _buildFooterLinkMobile(context, 'Inicio', '/tienda'),
                 _buildFooterLinkMobile(
-                    context, 'Productos', '/tienda/productos'),
-                _buildFooterLinkMobile(
-                    context, 'Servicios', '/tienda/servicios'),
-                _buildFooterLinkMobile(context, 'Contacto', '/tienda/contacto'),
+                    context, 'Inicio', _routeForPublicStore('/tienda')),
+                _buildFooterLinkMobile(context, 'Productos',
+                    _routeForPublicStore('/tienda/productos')),
+                _buildFooterLinkMobile(context, 'Servicios',
+                    _routeForPublicStore('/tienda/servicios')),
+                _buildFooterLinkMobile(context, 'Contacto',
+                    _routeForPublicStore('/tienda/contacto')),
               ],
             ),
           ),
@@ -2501,7 +2582,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: InkWell(
-          onTap: () => context.go(route),
+          onTap: () {
+            final isEditMode =
+                context.read<WebsiteEditModeProvider>().isEditMode;
+            final target = isEditMode ? '$route?edit=true' : route;
+            context.go(target);
+          },
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -2781,56 +2867,54 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           Wrap(
                             spacing: 8,
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.mail_outline,
-                                    color: Colors.white70),
-                                onPressed: contactEmail.isEmpty
-                                    ? null
-                                    : () => _launchUri(Uri(
-                                        scheme: 'mailto', path: contactEmail)),
-                                tooltip: 'Email',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.phone_outlined,
-                                    color: Colors.white70),
-                                onPressed: contactPhone.isEmpty
-                                    ? null
-                                    : () => _launchUri(
-                                        Uri(scheme: 'tel', path: contactPhone)),
-                                tooltip: 'Teléfono',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.facebook_outlined,
-                                    color: Colors.white70),
-                                onPressed: facebookUrl == null
-                                    ? null
-                                    : () => _launchUri(Uri.parse(facebookUrl)),
-                                tooltip: 'Facebook',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.camera_alt_outlined,
-                                    color: Colors.white70),
-                                onPressed: instagramUrl == null
-                                    ? null
-                                    : () => _launchUri(Uri.parse(instagramUrl)),
-                                tooltip: 'Instagram',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.alternate_email,
-                                    color: Colors.white70),
-                                onPressed: twitterUrl == null
-                                    ? null
-                                    : () => _launchUri(Uri.parse(twitterUrl)),
-                                tooltip: 'Twitter',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.play_circle_outline,
-                                    color: Colors.white70),
-                                onPressed: youtubeUrl == null
-                                    ? null
-                                    : () => _launchUri(Uri.parse(youtubeUrl)),
-                                tooltip: 'YouTube',
-                              ),
+                              if (contactEmail.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.mail_outline,
+                                      color: Colors.white70),
+                                  onPressed: () => _launchUri(Uri(
+                                      scheme: 'mailto', path: contactEmail)),
+                                  tooltip: 'Email',
+                                ),
+                              if (contactPhone.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.phone_outlined,
+                                      color: Colors.white70),
+                                  onPressed: () => _launchUri(
+                                      Uri(scheme: 'tel', path: contactPhone)),
+                                  tooltip: 'Teléfono',
+                                ),
+                              if (facebookUrl != null)
+                                IconButton(
+                                  icon: const Icon(Icons.facebook_outlined,
+                                      color: Colors.white70),
+                                  onPressed: () =>
+                                      _launchUri(Uri.parse(facebookUrl)),
+                                  tooltip: 'Facebook',
+                                ),
+                              if (instagramUrl != null)
+                                IconButton(
+                                  icon: const Icon(Icons.camera_alt_outlined,
+                                      color: Colors.white70),
+                                  onPressed: () =>
+                                      _launchUri(Uri.parse(instagramUrl)),
+                                  tooltip: 'Instagram',
+                                ),
+                              if (twitterUrl != null)
+                                IconButton(
+                                  icon: const Icon(Icons.alternate_email,
+                                      color: Colors.white70),
+                                  onPressed: () =>
+                                      _launchUri(Uri.parse(twitterUrl)),
+                                  tooltip: 'Twitter',
+                                ),
+                              if (youtubeUrl != null)
+                                IconButton(
+                                  icon: const Icon(Icons.play_circle_outline,
+                                      color: Colors.white70),
+                                  onPressed: () =>
+                                      _launchUri(Uri.parse(youtubeUrl)),
+                                  tooltip: 'YouTube',
+                                ),
                             ],
                           ),
                         ],
@@ -2908,17 +2992,36 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 ),
                           ),
                           const SizedBox(height: 16),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(Icons.location_on_outlined,
-                                  color: Colors.white70, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  contactAddress.isNotEmpty
-                                      ? contactAddress
-                                      : 'Álvarez 32, Local 17\nViña del Mar, Chile',
+                          if (contactAddress.isNotEmpty) ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.location_on_outlined,
+                                    color: Colors.white70, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    contactAddress,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.white70,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (contactPhone.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.phone_outlined,
+                                    color: Colors.white70, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  contactPhone,
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall
@@ -2926,47 +3029,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                         color: Colors.white70,
                                       ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Icon(Icons.phone_outlined,
-                                  color: Colors.white70, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                contactPhone.isNotEmpty
-                                    ? contactPhone
-                                    : '+56 9 XXXX XXXX',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Icon(Icons.email_outlined,
-                                  color: Colors.white70, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                contactEmail.isNotEmpty
-                                    ? contactEmail
-                                    : 'contacto@vinabike.cl',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (contactEmail.isNotEmpty)
+                            Row(
+                              children: [
+                                const Icon(Icons.email_outlined,
+                                    color: Colors.white70, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  contactEmail,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -3070,8 +3153,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     return InkWell(
       onTap: () {
-        debugPrint('🔗 [NavLink] Navigating to: $path');
-        context.go(path);
+        final isEditMode = context.read<WebsiteEditModeProvider>().isEditMode;
+        final target = isEditMode ? '$path?edit=true' : path;
+        debugPrint('🔗 [NavLink] Navigating to: $target');
+        context.go(target);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3122,7 +3207,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _buildDropdownItem(
             icon: Icons.contact_page_outlined,
             label: 'Contacto',
-            value: '/contacto',
+            value: _routeForPublicStore('/tienda/contacto'),
           ),
           const PopupMenuDivider(height: 1),
           _buildDropdownItem(
@@ -3204,7 +3289,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: 'Mi Cuenta',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/tienda/cuenta');
+                      context.go(_routeForPublicStore('/tienda/cuenta'));
                     },
                   ),
                   Padding(
@@ -3220,7 +3305,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     color: PublicStoreTheme.primaryBlue,
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/tienda/cuenta/login');
+                      context.go(_routeForPublicStore('/tienda/cuenta/login'));
                     },
                   ),
                   Padding(
@@ -3238,7 +3323,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: 'Inicio',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/tienda');
+                      context.go(_routeForPublicStore('/tienda'));
                     },
                   ),
                   _buildMobileMenuItem(
@@ -3247,7 +3332,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: 'Productos',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/tienda/productos');
+                      context.go(_routeForPublicStore('/tienda/productos'));
                     },
                   ),
                   _buildMobileMenuItem(
@@ -3256,7 +3341,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: 'Contacto',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/contacto');
+                      context.go(_routeForPublicStore('/tienda/contacto'));
                     },
                   ),
                 ] else ...[
@@ -3376,11 +3461,17 @@ Widget _buildFooterLink(
   Color primaryColor,
 ) {
   final isActive = GoRouterState.of(context).matchedLocation == path;
+  final editProvider = context.read<WebsiteEditModeProvider>();
+  final isEditMode = editProvider.isEditMode;
 
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: InkWell(
-      onTap: () => context.go(path),
+      onTap: () {
+        // Preserve edit mode query param when navigating
+        final targetPath = isEditMode ? '$path?edit=true' : path;
+        context.go(targetPath);
+      },
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -3542,11 +3633,32 @@ class _StickyHeaderScaffold extends StatefulWidget {
 class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   final ScrollController _scrollController = ScrollController();
   double _scrollOffset = 0;
+  String? _routeKey;
+  bool _restoredForRoute = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Key scroll offset by current route location so going "back" restores where
+    // the user was (most important for long lists like /productos).
+    final uri = GoRouterState.of(context).uri;
+    final nextKey = uri.toString();
+    if (_routeKey != nextKey) {
+      _routeKey = nextKey;
+      _restoredForRoute = false;
+    }
+
+    if (!_restoredForRoute) {
+      _restoredForRoute = true;
+      _restoreScrollForRoute();
+    }
   }
 
   @override
@@ -3559,6 +3671,30 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   void _onScroll() {
     setState(() {
       _scrollOffset = _scrollController.offset;
+    });
+
+    final key = _routeKey;
+    if (key == null) return;
+    context
+        .read<PublicStoreScrollState>()
+        .setOffset(key, _scrollController.offset);
+  }
+
+  void _restoreScrollForRoute() {
+    final key = _routeKey;
+    if (key == null) return;
+
+    final targetOffset = context.read<PublicStoreScrollState>().getOffset(key);
+    if (targetOffset <= 0) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_scrollController.hasClients) return;
+
+      final max = _scrollController.position.maxScrollExtent;
+      final clamped = targetOffset.clamp(0.0, max);
+      if ((_scrollController.offset - clamped).abs() < 1.0) return;
+      _scrollController.jumpTo(clamped);
     });
   }
 

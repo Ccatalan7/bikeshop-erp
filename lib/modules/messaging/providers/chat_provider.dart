@@ -9,7 +9,7 @@ import '../../../shared/services/notification_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
-  final UserManagementService _userService;
+  final UserManagementService? _userService;
 
   // State
   List<Conversation> _conversations = [];
@@ -37,17 +37,18 @@ class ChatProvider extends ChangeNotifier {
         return sum + c.unreadCount;
       });
 
-  ChatProvider(this._userService) {
+  ChatProvider([this._userService]) {
     _loadUserCache();
     _initConversationsListener();
   }
 
   /// Load user cache for resolving names
   Future<void> _loadUserCache() async {
+    if (_userService == null) return;
     try {
       // Check if we are an employee/admin before trying to fetch sensitive tenant users
       // This helper check prevents 400 errors for customers
-      final users = await _userService.getTenantUsers();
+      final users = await _userService!.getTenantUsers();
       for (var u in users) {
         _userCache[u['id']] = u;
       }

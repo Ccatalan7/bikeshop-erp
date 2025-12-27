@@ -12,12 +12,18 @@ class CustomerServiceHistoryPage extends StatefulWidget {
   const CustomerServiceHistoryPage({super.key, this.bikeId});
 
   @override
-  State<CustomerServiceHistoryPage> createState() => _CustomerServiceHistoryPageState();
+  State<CustomerServiceHistoryPage> createState() =>
+      _CustomerServiceHistoryPageState();
 }
 
-class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage> {
+class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
+    with AutomaticKeepAliveClientMixin {
   String? _selectedBikeId;
   String _selectedStatus = 'all';
+
+  // Keep this page alive in memory to prevent reloading on navigation
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -32,6 +38,7 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
 
     if (!accountService.isAuthenticated) {
@@ -41,18 +48,23 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
     // Filter services
     var services = accountService.serviceHistory;
     debugPrint('🔍 [ServiceHistoryPage] Total services: ${services.length}');
-    debugPrint('🔍 [ServiceHistoryPage] Selected bike: $_selectedBikeId, status: $_selectedStatus');
-    
+    debugPrint(
+        '🔍 [ServiceHistoryPage] Selected bike: $_selectedBikeId, status: $_selectedStatus');
+
     if (_selectedBikeId != null && _selectedBikeId!.isNotEmpty) {
-      services = services.where((s) => s['bike_id'] == _selectedBikeId).toList();
-      debugPrint('🔍 [ServiceHistoryPage] After bike filter: ${services.length}');
+      services =
+          services.where((s) => s['bike_id'] == _selectedBikeId).toList();
+      debugPrint(
+          '🔍 [ServiceHistoryPage] After bike filter: ${services.length}');
     }
     if (_selectedStatus != 'all') {
       services = services.where((s) => s['status'] == _selectedStatus).toList();
-      debugPrint('🔍 [ServiceHistoryPage] After status filter: ${services.length}');
+      debugPrint(
+          '🔍 [ServiceHistoryPage] After status filter: ${services.length}');
     }
 
-    debugPrint('🔍 [ServiceHistoryPage] Final services to display: ${services.length}');
+    debugPrint(
+        '🔍 [ServiceHistoryPage] Final services to display: ${services.length}');
 
     // Build content without Scaffold (PublicStoreLayout provides the chrome)
     return _buildPageContent(context, accountService, services);
@@ -80,7 +92,10 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
     );
   }
 
-  Widget _buildPageContent(BuildContext context, CustomerAccountService accountService, List<Map<String, dynamic>> services) {
+  Widget _buildPageContent(
+      BuildContext context,
+      CustomerAccountService accountService,
+      List<Map<String, dynamic>> services) {
     return Container(
       constraints: const BoxConstraints(minHeight: 500),
       child: Column(
@@ -89,10 +104,10 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
         children: [
           // Page header with back button
           _buildPageHeader(context),
-          
+
           // Filters
           _buildFilters(accountService),
-          
+
           // Content - no Expanded needed since we're in SingleChildScrollView
           if (accountService.isLoading)
             const Padding(
@@ -154,7 +169,8 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
               value: _selectedBikeId,
               decoration: const InputDecoration(
                 labelText: 'Bicicleta',
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -180,14 +196,15 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Status filter
           Expanded(
             child: DropdownButtonFormField<String>(
               value: _selectedStatus,
               decoration: const InputDecoration(
                 labelText: 'Estado',
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -195,8 +212,11 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
                 DropdownMenuItem(value: 'all', child: Text('Todos')),
                 DropdownMenuItem(value: 'PENDIENTE', child: Text('Pendiente')),
                 DropdownMenuItem(value: 'EN_CURSO', child: Text('En curso')),
-                DropdownMenuItem(value: 'ESPERANDO_REPUESTOS', child: Text('Esperando repuestos')),
-                DropdownMenuItem(value: 'FINALIZADO', child: Text('Finalizado')),
+                DropdownMenuItem(
+                    value: 'ESPERANDO_REPUESTOS',
+                    child: Text('Esperando repuestos')),
+                DropdownMenuItem(
+                    value: 'FINALIZADO', child: Text('Finalizado')),
                 DropdownMenuItem(value: 'ENTREGADO', child: Text('Entregado')),
               ],
               onChanged: (value) {
@@ -256,24 +276,30 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
   Widget _buildServicesList(List<Map<String, dynamic>> services) {
     // Debug: log all service statuses
     for (final s in services) {
-      debugPrint('🔍 [ServicesList] Service ${s['job_number']}: status="${s['status']}", status_id=${s['status_id']}');
+      debugPrint(
+          '🔍 [ServicesList] Service ${s['job_number']}: status="${s['status']}", status_id=${s['status_id']}');
     }
-    
-    // Group by status: active first, then completed
-    final activeServices = services.where((s) => 
-      !['ENTREGADO', 'CANCELADO'].contains(s['status'])).toList();
-    final completedServices = services.where((s) => 
-      ['ENTREGADO', 'CANCELADO'].contains(s['status'])).toList();
 
-    debugPrint('🔍 [ServicesList] activeServices: ${activeServices.length}, completedServices: ${completedServices.length}');
+    // Group by status: active first, then completed
+    final activeServices = services
+        .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .toList();
+    final completedServices = services
+        .where((s) => ['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .toList();
+
+    debugPrint(
+        '🔍 [ServicesList] activeServices: ${activeServices.length}, completedServices: ${completedServices.length}');
 
     // Build content directly (no ListView since we're in SingleChildScrollView)
     final children = <Widget>[];
     if (activeServices.isNotEmpty) {
       debugPrint('🔍 [ServicesList] Adding active services section');
-      children.add(_buildSectionHeader('Servicios Activos', Icons.pending_actions));
+      children
+          .add(_buildSectionHeader('Servicios Activos', Icons.pending_actions));
       for (final service in activeServices) {
-        debugPrint('🔍 [ServicesList] Adding card for: ${service['job_number']}');
+        debugPrint(
+            '🔍 [ServicesList] Adding card for: ${service['job_number']}');
         children.add(_ServiceCard(
           service: service,
           onTap: () => _showServiceDetails(service),
@@ -291,8 +317,9 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
         ));
       }
     }
-    
-    debugPrint('🔍 [ServicesList] Total children in ListView: ${children.length}');
+
+    debugPrint(
+        '🔍 [ServicesList] Total children in ListView: ${children.length}');
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -355,9 +382,10 @@ class _ServiceCard extends StatelessWidget {
     final partsCost = (service['parts_cost'] ?? 0).toDouble();
     final laborCost = (service['labor_cost'] ?? 0).toDouble();
     final totalCost = (service['total_cost'] ?? 0).toDouble();
-    
-    debugPrint('💰 [ServiceCard] ${service['job_number']}: tax_treatment=$taxTreatment, parts=$partsCost, labor=$laborCost, total=$totalCost');
-    
+
+    debugPrint(
+        '💰 [ServiceCard] ${service['job_number']}: tax_treatment=$taxTreatment, parts=$partsCost, labor=$laborCost, total=$totalCost');
+
     // If no_tax, show parts + labor (net amount)
     // Otherwise show total_cost (which may include tax)
     if (taxTreatment == 'no_tax') {
@@ -368,7 +396,8 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🎴 [ServiceCard] Building card for job: ${service['job_number']}');
+    debugPrint(
+        '🎴 [ServiceCard] Building card for job: ${service['job_number']}');
     final jobNumber = service['job_number'] ?? 'Sin número';
     final status = service['status'] ?? 'PENDIENTE';
     final bikeBrand = service['bike_brand'] ?? service['bikes']?['brand'] ?? '';
@@ -395,7 +424,8 @@ class _ServiceCard extends StatelessWidget {
                 children: [
                   // Job number
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(4),
@@ -457,7 +487,8 @@ class _ServiceCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.medical_information, size: 16, color: Colors.blue[700]),
+                      Icon(Icons.medical_information,
+                          size: 16, color: Colors.blue[700]),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -490,19 +521,21 @@ class _ServiceCard extends StatelessWidget {
                         if (arrivalDate != null)
                           _buildDateRow(
                             'Ingreso:',
-                            ChileanUtils.formatDate(DateTime.parse(arrivalDate)),
+                            ChileanUtils.formatDate(
+                                DateTime.parse(arrivalDate)),
                           ),
                         if (deadline != null)
                           _buildDateRow(
                             'Fecha límite:',
                             ChileanUtils.formatDate(DateTime.parse(deadline)),
-                            isOverdue: DateTime.parse(deadline).isBefore(DateTime.now()) &&
+                            isOverdue: DateTime.parse(deadline)
+                                    .isBefore(DateTime.now()) &&
                                 !['ENTREGADO', 'CANCELADO'].contains(status),
                           ),
                       ],
                     ),
                   ),
-                  
+
                   // Cost
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -510,15 +543,17 @@ class _ServiceCard extends StatelessWidget {
                       if (displayTotal > 0)
                         Text(
                           ChileanUtils.formatCurrency(displayTotal),
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: PublicStoreTheme.primaryBlue,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: PublicStoreTheme.primaryBlue,
+                                  ),
                         ),
                       if (isInvoiced)
                         Container(
                           margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.green[100],
                             borderRadius: BorderRadius.circular(4),
@@ -582,7 +617,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final config = _getStatusConfig(status);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -701,7 +736,7 @@ class _ServiceDetailSheet extends StatelessWidget {
     final partsCost = (service['parts_cost'] ?? 0).toDouble();
     final laborCost = (service['labor_cost'] ?? 0).toDouble();
     final totalCost = (service['total_cost'] ?? 0).toDouble();
-    
+
     if (taxTreatment == 'no_tax') {
       return partsCost + laborCost;
     }
@@ -758,7 +793,8 @@ class _ServiceDetailSheet extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: PublicStoreTheme.primaryBlue,
                       borderRadius: BorderRadius.circular(6),
@@ -792,9 +828,10 @@ class _ServiceDetailSheet extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           '$bikeBrand $bikeModel'.trim(),
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                       ],
                     ),
@@ -825,7 +862,8 @@ class _ServiceDetailSheet extends StatelessWidget {
                                     color: Colors.purple[900],
                                   ),
                                 ),
-                                if (warrantyNotes != null && warrantyNotes.isNotEmpty)
+                                if (warrantyNotes != null &&
+                                    warrantyNotes.isNotEmpty)
                                   Text(
                                     warrantyNotes,
                                     style: TextStyle(
@@ -910,7 +948,8 @@ class _ServiceDetailSheet extends StatelessWidget {
                           if (laborCost > 0)
                             _buildCostRow('Mano de obra', laborCost),
                           if (discountAmount > 0)
-                            _buildCostRow('Descuento', -discountAmount, isDiscount: true),
+                            _buildCostRow('Descuento', -discountAmount,
+                                isDiscount: true),
                           const Divider(height: 16),
                           _buildCostRow('Total', displayTotal, isTotal: true),
                         ],
@@ -923,7 +962,8 @@ class _ServiceDetailSheet extends StatelessWidget {
                   if (technicianName != null && technicianName.isNotEmpty) ...[
                     Row(
                       children: [
-                        Icon(Icons.engineering, size: 16, color: Colors.grey[600]),
+                        Icon(Icons.engineering,
+                            size: 16, color: Colors.grey[600]),
                         const SizedBox(width: 8),
                         Text(
                           'Técnico: $technicianName',
@@ -1107,7 +1147,8 @@ class _ServiceDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildCostRow(String label, double amount, {bool isDiscount = false, bool isTotal = false}) {
+  Widget _buildCostRow(String label, double amount,
+      {bool isDiscount = false, bool isTotal = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -1121,11 +1162,15 @@ class _ServiceDetailSheet extends StatelessWidget {
             ),
           ),
           Text(
-            isDiscount ? '-${ChileanUtils.formatCurrency(amount.abs())}' : ChileanUtils.formatCurrency(amount),
+            isDiscount
+                ? '-${ChileanUtils.formatCurrency(amount.abs())}'
+                : ChileanUtils.formatCurrency(amount),
             style: TextStyle(
               fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
               fontSize: isTotal ? 16 : 14,
-              color: isDiscount ? Colors.green : (isTotal ? PublicStoreTheme.primaryBlue : null),
+              color: isDiscount
+                  ? Colors.green
+                  : (isTotal ? PublicStoreTheme.primaryBlue : null),
             ),
           ),
         ],

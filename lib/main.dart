@@ -54,6 +54,7 @@ import 'modules/messaging/services/messaging_service.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
+import 'public_store/widgets/persistent_editor_shell.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/data_preload_service.dart';
 import 'shared/services/error_reporting_service.dart';
@@ -127,20 +128,26 @@ Future<void> main() async {
     usePathUrlStrategy();
     _logTiming('URL_STRATEGY');
 
+    final isPublicStoreHost = _detectPublicStoreHost();
+
     if (!SupabaseConfig.isConfigured && kDebugMode) {
       debugPrint(
           '[Supabase] WARNING: SupabaseConfig still has placeholder values. '
           'Update lib/shared/config/supabase_config.dart or provide dart-defines.');
     }
 
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      _logTiming('FIREBASE_INIT');
-    } catch (e) {
-      debugPrint('⚠️ Firebase Config missing for this platform: $e');
-      _logTiming('FIREBASE_INIT_SKIPPED');
+    if (!isPublicStoreHost) {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        _logTiming('FIREBASE_INIT');
+      } catch (e) {
+        debugPrint('⚠️ Firebase Config missing for this platform: $e');
+        _logTiming('FIREBASE_INIT_SKIPPED');
+      }
+    } else {
+      _logTiming('FIREBASE_INIT_SKIPPED', 'public_store_host');
     }
 
     await Supabase.initialize(
@@ -154,8 +161,13 @@ Future<void> main() async {
 
     // Handle deep links for OAuth callbacks on desktop and mobile
     // Initialize Notifications (FCM for Mobile/Web, Local for Desktop)
-    await NotificationService().init();
-    _logTiming('NOTIFICATIONS_INIT');
+    // Skip on public store: visitors don't need ERP notifications, and web plugins can crash startup.
+    if (!isPublicStoreHost) {
+      await NotificationService().init();
+      _logTiming('NOTIFICATIONS_INIT');
+    } else {
+      _logTiming('NOTIFICATIONS_INIT_SKIPPED', 'public_store_host');
+    }
 
     if (!kIsWeb) {
       final appLinks = AppLinks();
@@ -583,7 +595,10 @@ class VinabikeApp extends StatelessWidget {
               locale: const Locale('es', ''),
               builder: (context, child) => WindowZoomScope(
                 child: ScannerBridgeScope(
-                  child: child ?? const SizedBox.shrink(),
+                  // Wrap in PersistentEditorShell to keep editor panel stable
+                  child: PersistentEditorShell(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             );
@@ -729,7 +744,10 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.build(context);
 
     try {
-      return Router.withConfig(config: _router);
+      // Wrap with PersistentEditorShell to keep editor panel stable across navigations
+      return PersistentEditorShell(
+        child: Router.withConfig(config: _router),
+      );
     } catch (e) {
       debugPrint('🔴 [WorkspaceRouterView] Router build error: $e');
       return Material(

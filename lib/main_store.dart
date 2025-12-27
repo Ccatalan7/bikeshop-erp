@@ -1,0 +1,174 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'public_store/providers/cart_provider.dart';
+import 'public_store/providers/public_store_tenant_provider.dart';
+import 'public_store/routes/public_store_router.dart';
+import 'public_store/services/address_autocomplete_service.dart';
+import 'public_store/services/public_store_scroll_state.dart';
+import 'public_store/services/customer_account_service.dart';
+import 'public_store/services/public_inventory_service.dart';
+import 'public_store/theme/public_store_theme.dart';
+import 'public_store/widgets/public_store_bootstrap.dart';
+import 'shared/config/supabase_config.dart';
+import 'shared/services/error_reporting_service.dart';
+import 'shared/services/tenant_detection_service.dart';
+import 'shared/utils/web_url.dart';
+import 'modules/website/providers/website_edit_mode_provider.dart';
+import 'modules/website/services/mercadopago_service.dart';
+import 'modules/website/services/website_service.dart';
+import 'modules/messaging/providers/chat_provider.dart';
+
+// Custom scroll behavior to prevent browser navigation gestures on trackpad
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.trackpad,
+      };
+}
+
+String? _initialBrowserUrl;
+
+void _hideLoadingScreen() {
+  if (!kIsWeb) return;
+  try {
+    hideHtmlLoadingScreen();
+  } catch (_) {
+    // Ignore
+  }
+}
+
+Future<void> main() async {
+  if (kIsWeb) {
+    _initialBrowserUrl = getInitialBrowserUrl();
+    debugPrint('🚀 [StoreMain] Captured initial URL: $_initialBrowserUrl');
+  }
+
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // Clean URLs (no hash #) for web
+    usePathUrlStrategy();
+
+    if (!SupabaseConfig.isConfigured && kDebugMode) {
+      debugPrint(
+        '[Supabase] WARNING: SupabaseConfig still has placeholder values. '
+        'Update lib/shared/config/supabase_config.dart or provide dart-defines.',
+      );
+    }
+
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+      authOptions: const FlutterAuthClientOptions(
+        autoRefreshToken: true,
+      ),
+    );
+
+    FlutterError.onError = (FlutterErrorDetails details) {
+      // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
+      final errorString = details.exceptionAsString();
+      if (kIsWeb &&
+          errorString.contains('disposed') &&
+          errorString.contains('EngineFlutterView')) {
+        return;
+      }
+
+      ErrorReportingService.report(details.exception, details.stack);
+      FlutterError.dumpErrorToConsole(details);
+    };
+
+    runApp(const PublicStoreApp());
+
+    if (kIsWeb) {
+      _hideLoadingScreen();
+    }
+  }, (error, stack) {
+    final errorString = error.toString();
+    if (kIsWeb &&
+        errorString.contains('disposed') &&
+        errorString.contains('EngineFlutterView')) {
+      return;
+    }
+
+    ErrorReportingService.report(error, stack);
+    if (kDebugMode) {
+      debugPrint('❌ [StoreMain] Unhandled error: $error');
+      debugPrint('❌ [StoreMain] Stack: $stack');
+    }
+  });
+}
+
+class PublicStoreApp extends StatelessWidget {
+  const PublicStoreApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        Provider(create: (_) => TenantDetectionService()),
+        Provider(create: (_) => PublicStoreScrollState()),
+        ChangeNotifierProvider(
+          create: (context) => PublicStoreTenantProvider(
+            context.read<TenantDetectionService>(),
+          ),
+        ),
+        ChangeNotifierProvider(create: (_) => WebsiteService()),
+        ChangeNotifierProvider(create: (_) => WebsiteEditModeProvider()),
+        ChangeNotifierProvider(create: (_) => PublicInventoryService()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
+        ChangeNotifierProxyProvider<PublicStoreTenantProvider, MercadoPagoService>(
+          create: (_) => MercadoPagoService(),
+          update: (context, tenantProvider, service) {
+            service ??= MercadoPagoService();
+            final tenantId = tenantProvider.tenantId;
+            if (tenantId != null && tenantId.isNotEmpty) {
+              service.setTenantId(tenantId);
+            }
+            return service;
+          },
+        ),
+        ChangeNotifierProxyProvider<PublicStoreTenantProvider, CustomerAccountService>(
+          create: (_) => CustomerAccountService(),
+          update: (context, tenantProvider, service) {
+            service ??= CustomerAccountService();
+            service.setTenantId(tenantProvider.tenantId);
+            return service;
+          },
+        ),
+      ],
+      child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
+        title: 'Tienda',
+        theme: PublicStoreTheme.theme,
+        scrollBehavior: AppScrollBehavior(),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('es'),
+          Locale('en'),
+        ],
+        routerConfig: PublicStoreRouter.createRouter(),
+        builder: (context, child) {
+          // Single place to do tenant detection + initial data preload.
+          return PublicStoreBootstrap(child: child ?? const SizedBox.shrink());
+        },
+      ),
+    );
+  }
+}
