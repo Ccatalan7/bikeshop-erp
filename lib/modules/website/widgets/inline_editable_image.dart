@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../shared/services/image_service.dart';
-import '../../../shared/constants/storage_constants.dart';
 
 /// Inline editable image widget for Odoo-style editing.
 /// When edit mode is active, clicking on image shows upload options.
@@ -56,12 +55,10 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
       final bytes = await pickedFile.readAsBytes();
       final fileName = 'website_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
       
-      // Use static uploadBytes method with correct parameters
-      final url = await ImageService.uploadBytes(
+      // Upload with automatic optimization (resizes to max 1200px, compresses as JPEG)
+      final url = await ImageService.uploadWebsiteImageWithOptimization(
         bytes: bytes,
         fileName: fileName,
-        bucket: StorageConfig.defaultBucket,
-        folder: 'website/blocks',
       );
 
       if (url != null) {

@@ -43,7 +43,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void initState() {
     super.initState();
-    debugPrint('🔄 [ProductCatalogPage] initState() called - loading products');
+    // Debug: initState
     _loadProducts();
   }
 
@@ -284,15 +284,14 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   @override
   void dispose() {
-    debugPrint('🔄 [ProductCatalogPage] dispose() called');
+    // Debug: dispose
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    debugPrint(
-        '🔄 [ProductCatalogPage] build() called - isLoading: $_isLoading, wantKeepAlive: $wantKeepAlive');
+    // Debug: build
     if (_isLoading) {
       return const Center(child: BrandedLoading());
     }
@@ -966,7 +965,9 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
-    final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+    // Prefer optimized image for faster loading, fallback to original
+    final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
+    final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
     final inStock = product.stockQuantity > 0;
 
     return MouseRegion(
@@ -994,7 +995,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                       padding: const EdgeInsets.all(16),
                       child: hasImage
                           ? Image.network(
-                              product.imageUrl!,
+                              displayImageUrl,
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
                                 return Center(

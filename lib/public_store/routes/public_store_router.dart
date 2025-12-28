@@ -23,106 +23,34 @@ import '../pages/static_policy_page.dart';
 import '../widgets/public_store_layout.dart';
 
 // ============================================================================
-// SHELL NAVIGATOR - Keeps pages alive in IndexedStack
+// PAGE BUILDER HELPER
 // ============================================================================
 
-/// Navigator key for tracking shell state
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
-
-// Branch navigator keys - keep each branch navigator stable/alive.
-final GlobalKey<NavigatorState> _homeBranchNavigatorKey =
-  GlobalKey<NavigatorState>(debugLabel: 'publicStoreHomeBranch');
-final GlobalKey<NavigatorState> _productsBranchNavigatorKey =
-  GlobalKey<NavigatorState>(debugLabel: 'publicStoreProductsBranch');
-final GlobalKey<NavigatorState> _contactBranchNavigatorKey =
-  GlobalKey<NavigatorState>(debugLabel: 'publicStoreContactBranch');
-final GlobalKey<NavigatorState> _cartBranchNavigatorKey =
-  GlobalKey<NavigatorState>(debugLabel: 'publicStoreCartBranch');
-final GlobalKey<NavigatorState> _accountBranchNavigatorKey =
-  GlobalKey<NavigatorState>(debugLabel: 'publicStoreAccountBranch');
-
-/// Shell pages enum for IndexedStack navigation
-enum ShellPage { home, products, contact, cart, account }
-
-/// Custom shell that wraps pages in PublicStoreLayout and keeps them alive
-class _PublicStoreShell extends StatefulWidget {
-  final StatefulNavigationShell navigationShell;
-
-  const _PublicStoreShell({required this.navigationShell});
-
-  @override
-  State<_PublicStoreShell> createState() => _PublicStoreShellState();
-}
-
-class _PublicStoreShellState extends State<_PublicStoreShell> {
-  @override
-  Widget build(BuildContext context) {
-    debugPrint(
-        '🐚 [PublicStoreShell] build() - currentIndex: ${widget.navigationShell.currentIndex}');
-
-    return PublicStoreLayout(
-      enablePageViewScrolling: true,
-      useExternalEditorPanel: true,
-      // The shell's child contains the IndexedStack with all branch pages
-      child: widget.navigationShell,
-    );
-  }
-}
-
-// ============================================================================
-// HELPER WRAPPER - For non-shell pages that need the layout
-// ============================================================================
-
-/// Helper wrapper for public store pages that are NOT in the shell
-class PublicStoreWrapper extends StatelessWidget {
-  final Widget child;
-  final bool enablePageViewScrolling;
-  final bool useExternalEditorPanel;
-
-  const PublicStoreWrapper({
-    super.key,
-    required this.child,
-    this.enablePageViewScrolling = true,
-    this.useExternalEditorPanel = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PublicStoreLayout(
-      enablePageViewScrolling: enablePageViewScrolling,
-      useExternalEditorPanel: useExternalEditorPanel,
-      child: child,
-    );
-  }
-}
-
-// ============================================================================
-// PAGE BUILDER HELPERS
-// ============================================================================
-
-Page<dynamic> _buildPageWithNoTransition(
+Page<dynamic> _buildPage(
   BuildContext context,
   GoRouterState state,
   Widget child,
 ) {
   return NoTransitionPage<void>(
     key: state.pageKey,
-    child: child,
+    child: PublicStoreLayout(
+      enablePageViewScrolling: true,
+      child: child,
+    ),
   );
 }
 
-/// Shell pages must stay alive across navigation and query param changes
-/// (e.g. `?edit=true`, `?preview=true`).
-///
-/// Using `state.pageKey` for these pages causes go_router to dispose/recreate
-/// the page whenever the location changes (including query parameters).
-Page<dynamic> _buildShellPage(
-  String key,
+Page<dynamic> _buildPageNoScroll(
+  BuildContext context,
+  GoRouterState state,
   Widget child,
 ) {
   return NoTransitionPage<void>(
-    key: ValueKey<String>(key),
-    child: child,
+    key: state.pageKey,
+    child: PublicStoreLayout(
+      enablePageViewScrolling: false,
+      child: child,
+    ),
   );
 }
 
@@ -133,219 +61,135 @@ Page<dynamic> _buildShellPage(
 class PublicStoreRouter {
   static GoRouter createRouter() {
     return GoRouter(
-      navigatorKey: _rootNavigatorKey,
       debugLogDiagnostics: false,
       initialLocation: null,
       routes: [
         // ====================================================================
-        // CANONICALIZATION REDIRECTS
-        //
-        // IMPORTANT: We keep exactly ONE route per shell page inside the
-        // StatefulShellRoute branches.
-        //
-        // If we register both '/productos' and '/tienda/productos' as separate
-        // GoRoutes that build the same widget, go_router will generate different
-        // pageKeys per match and will dispose/recreate the page on navigation.
-        // These redirects ensure legacy '/tienda/*' URLs map to the canonical
-        // clean URLs, keeping shell pages alive in the IndexedStack.
+        // MAIN PAGES
         // ====================================================================
+
+        // Home
         GoRoute(
-          path: '/tienda',
-          redirect: (context, state) {
-            final uri = Uri(path: '/', queryParameters: state.uri.queryParameters);
-            return uri.toString();
-          },
+          path: '/',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const PublicHomePage(),
+          ),
         ),
+
+        // Products
         GoRoute(
-          path: '/tienda/productos',
-          redirect: (context, state) {
-            final uri = Uri(
-              path: '/productos',
-              queryParameters: state.uri.queryParameters,
-            );
-            return uri.toString();
-          },
+          path: '/productos',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ProductCatalogPage(),
+          ),
         ),
+
+        // Contact
         GoRoute(
-          path: '/tienda/contacto',
-          redirect: (context, state) {
-            final uri = Uri(
-              path: '/contacto',
-              queryParameters: state.uri.queryParameters,
-            );
-            return uri.toString();
-          },
+          path: '/contacto',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ContactPage(),
+          ),
         ),
+
+        // Cart
         GoRoute(
-          path: '/tienda/carrito',
-          redirect: (context, state) {
-            final uri = Uri(
-              path: '/carrito',
-              queryParameters: state.uri.queryParameters,
-            );
-            return uri.toString();
-          },
+          path: '/carrito',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const CartPage(),
+          ),
         ),
+
+        // Account Dashboard
         GoRoute(
-          path: '/tienda/cuenta',
-          redirect: (context, state) {
-            final uri = Uri(
-              path: '/cuenta',
-              queryParameters: state.uri.queryParameters,
-            );
-            return uri.toString();
-          },
+          path: '/cuenta',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const CustomerDashboardPage(),
+          ),
         ),
 
         // ====================================================================
-        // STATEFUL SHELL - Main pages kept alive in IndexedStack
+        // POLICY PAGES
         // ====================================================================
-        StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) {
-            return _PublicStoreShell(navigationShell: navigationShell);
-          },
-          branches: [
-            // Branch 0: HOME (/)
-            StatefulShellBranch(
-              navigatorKey: _homeBranchNavigatorKey,
-              routes: [
-                GoRoute(
-                  path: '/',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_home',
-                    const PublicHomePage(),
-                  ),
-                ),
-
-                // Policy/info pages kept within the shell so navigating to them
-                // doesn't dispose the IndexedStack pages.
-                GoRoute(
-                  path: '/nosotros',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_policy_nosotros',
-                    const StaticPolicyPage(
-                      slug: 'nosotros',
-                      fallbackTitle: 'Sobre Nosotros',
-                    ),
-                  ),
-                ),
-                GoRoute(
-                  path: '/terminos',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_policy_terminos',
-                    const StaticPolicyPage(
-                      slug: 'terminos',
-                      fallbackTitle: 'Términos y Condiciones',
-                    ),
-                  ),
-                ),
-                GoRoute(
-                  path: '/privacidad',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_policy_privacidad',
-                    const StaticPolicyPage(
-                      slug: 'privacidad',
-                      fallbackTitle: 'Política de Privacidad',
-                    ),
-                  ),
-                ),
-                GoRoute(
-                  path: '/devoluciones',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_policy_devoluciones',
-                    const StaticPolicyPage(
-                      slug: 'devoluciones',
-                      fallbackTitle: 'Política de Devoluciones',
-                    ),
-                  ),
-                ),
-                GoRoute(
-                  path: '/envios',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_policy_envios',
-                    const StaticPolicyPage(
-                      slug: 'envios',
-                      fallbackTitle: 'Información de Envíos',
-                    ),
-                  ),
-                ),
-              ],
+        GoRoute(
+          path: '/nosotros',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const StaticPolicyPage(
+              slug: 'nosotros',
+              fallbackTitle: 'Sobre Nosotros',
             ),
-
-            // Branch 1: PRODUCTS (/productos)
-            StatefulShellBranch(
-              navigatorKey: _productsBranchNavigatorKey,
-              routes: [
-                GoRoute(
-                  path: '/productos',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_products',
-                    const ProductCatalogPage(),
-                  ),
-                ),
-              ],
+          ),
+        ),
+        GoRoute(
+          path: '/terminos',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const StaticPolicyPage(
+              slug: 'terminos',
+              fallbackTitle: 'Términos y Condiciones',
             ),
-
-            // Branch 2: CONTACT (/contacto)
-            StatefulShellBranch(
-              navigatorKey: _contactBranchNavigatorKey,
-              routes: [
-                GoRoute(
-                  path: '/contacto',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_contact',
-                    const ContactPage(),
-                  ),
-                ),
-              ],
+          ),
+        ),
+        GoRoute(
+          path: '/privacidad',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const StaticPolicyPage(
+              slug: 'privacidad',
+              fallbackTitle: 'Política de Privacidad',
             ),
-
-            // Branch 3: CART (/carrito)
-            StatefulShellBranch(
-              navigatorKey: _cartBranchNavigatorKey,
-              routes: [
-                GoRoute(
-                  path: '/carrito',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_cart',
-                    const CartPage(),
-                  ),
-                ),
-              ],
+          ),
+        ),
+        GoRoute(
+          path: '/devoluciones',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const StaticPolicyPage(
+              slug: 'devoluciones',
+              fallbackTitle: 'Política de Devoluciones',
             ),
-
-            // Branch 4: ACCOUNT (/cuenta)
-            StatefulShellBranch(
-              navigatorKey: _accountBranchNavigatorKey,
-              routes: [
-                GoRoute(
-                  path: '/cuenta',
-                  pageBuilder: (context, state) => _buildShellPage(
-                    'public_store_shell_account',
-                    const CustomerDashboardPage(),
-                  ),
-                ),
-              ],
+          ),
+        ),
+        GoRoute(
+          path: '/envios',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const StaticPolicyPage(
+              slug: 'envios',
+              fallbackTitle: 'Información de Envíos',
             ),
-          ],
+          ),
         ),
 
         // ====================================================================
-        // DETAIL PAGES - Outside shell (push on top)
+        // DETAIL PAGES
         // ====================================================================
 
         // Product detail
         GoRoute(
           path: '/producto/:id',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final productId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildPage(
               context,
               state,
-              PublicStoreWrapper(
-                child: ProductDetailPage(productId: productId),
-              ),
+              ProductDetailPage(productId: productId),
             );
           },
         ),
@@ -353,93 +197,81 @@ class PublicStoreRouter {
         // Checkout
         GoRoute(
           path: '/checkout',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CheckoutPage()),
+            const CheckoutPage(),
           ),
         ),
 
         // Order confirmation
         GoRoute(
           path: '/pedido/:id',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final orderId = state.pathParameters['id']!;
             final status = state.uri.queryParameters['status'];
-            return _buildPageWithNoTransition(
+            return _buildPage(
               context,
               state,
-              PublicStoreWrapper(
-                child: OrderConfirmationPage(
-                  orderId: orderId,
-                  paymentStatus: status,
-                ),
+              OrderConfirmationPage(
+                orderId: orderId,
+                paymentStatus: status,
               ),
             );
           },
         ),
 
         // ====================================================================
-        // CUSTOMER ACCOUNT SUB-PAGES - Outside shell
+        // CUSTOMER ACCOUNT SUB-PAGES
         // ====================================================================
         GoRoute(
           path: '/cuenta/login',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerAuthPage()),
+            const CustomerAuthPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/perfil',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerProfilePage()),
+            const CustomerProfilePage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/direcciones',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerAddressesPage()),
+            const CustomerAddressesPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/pedidos',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerOrdersPage()),
+            const CustomerOrdersPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/bicicletas',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerBikesPage()),
+            const CustomerBikesPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/servicios',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final bikeId = state.uri.queryParameters['bike_id'];
-            return _buildPageWithNoTransition(
+            return _buildPage(
               context,
               state,
-              PublicStoreWrapper(
-                child: CustomerServiceHistoryPage(bikeId: bikeId),
-              ),
+              CustomerServiceHistoryPage(bikeId: bikeId),
             );
           },
         ),
@@ -447,50 +279,39 @@ class PublicStoreRouter {
         // Chat / Support
         GoRoute(
           path: '/cuenta/mensajes',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerChatListPage()),
+            const CustomerChatListPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/mensajes/:id',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final conversationId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildPageNoScroll(
               context,
               state,
-              PublicStoreWrapper(
-                enablePageViewScrolling: false,
-                child: CustomerChatDetailPage(conversationId: conversationId),
-              ),
+              CustomerChatDetailPage(conversationId: conversationId),
             );
           },
         ),
         GoRoute(
           path: '/cuenta/chats',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const PublicStoreWrapper(child: CustomerChatHubPage()),
+            const CustomerChatHubPage(),
           ),
         ),
         GoRoute(
           path: '/cuenta/chats/:id',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final conversationId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildPageNoScroll(
               context,
               state,
-              PublicStoreWrapper(
-                enablePageViewScrolling: false,
-                child:
-                    CustomerChatHubPage(initialConversationId: conversationId),
-              ),
+              CustomerChatHubPage(initialConversationId: conversationId),
             );
           },
         ),
@@ -500,13 +321,12 @@ class PublicStoreRouter {
         // ====================================================================
         GoRoute(
           path: '/pagina/:slug',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final slug = state.pathParameters['slug'] ?? 'home';
-            return _buildPageWithNoTransition(
+            return _buildPage(
               context,
               state,
-              PublicStoreWrapper(child: DynamicWebsitePage(slug: slug)),
+              DynamicWebsitePage(slug: slug),
             );
           },
         ),
@@ -514,7 +334,6 @@ class PublicStoreRouter {
         // Legacy Google Merchant URLs
         GoRoute(
           path: '/shop/:slug',
-          parentNavigatorKey: _rootNavigatorKey,
           pageBuilder: (context, state) {
             final slug = state.pathParameters['slug'] ?? '';
             String productId = slug;
@@ -523,24 +342,33 @@ class PublicStoreRouter {
               final sku = skuMatch.group(0)!.toUpperCase();
               productId = 'sku:$sku';
             }
-            return _buildPageWithNoTransition(
+            return _buildPage(
               context,
               state,
-              PublicStoreWrapper(
-                child: ProductDetailPage(productId: productId),
-              ),
+              ProductDetailPage(productId: productId),
             );
           },
         ),
 
         // ====================================================================
-        // LEGACY /tienda/* ROUTES (redirects for non-shell pages only)
-        // NOTE: shell page redirects are handled above.
+        // LEGACY /tienda/* REDIRECTS
         // ====================================================================
+        GoRoute(
+          path: '/tienda',
+          redirect: (context, state) => '/',
+        ),
+        GoRoute(
+          path: '/tienda/productos',
+          redirect: (context, state) => '/productos',
+        ),
         GoRoute(
           path: '/tienda/producto/:id',
           redirect: (context, state) =>
               '/producto/${state.pathParameters['id']}',
+        ),
+        GoRoute(
+          path: '/tienda/carrito',
+          redirect: (context, state) => '/carrito',
         ),
         GoRoute(
           path: '/tienda/checkout',
@@ -556,8 +384,16 @@ class PublicStoreRouter {
                 : '/pedido/$id';
           },
         ),
+        GoRoute(
+          path: '/tienda/contacto',
+          redirect: (context, state) => '/contacto',
+        ),
 
-        // Customer account legacy redirects (sub-pages only, /tienda/cuenta is in shell)
+        // Customer account legacy redirects
+        GoRoute(
+          path: '/tienda/cuenta',
+          redirect: (context, state) => '/cuenta',
+        ),
         GoRoute(
           path: '/tienda/cuenta/login',
           redirect: (context, state) => '/cuenta/login',
@@ -629,14 +465,8 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/tienda/pagina/:slug',
-          redirect: (context, state) {
-            final slug = state.pathParameters['slug'];
-            final uri = Uri(
-              path: '/pagina/$slug',
-              queryParameters: state.uri.queryParameters,
-            );
-            return uri.toString();
-          },
+          redirect: (context, state) =>
+              '/pagina/${state.pathParameters['slug']}',
         ),
       ],
     );

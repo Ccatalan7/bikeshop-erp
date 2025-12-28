@@ -45,6 +45,7 @@ import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
+import 'modules/website/services/google_business_service.dart';
 import 'modules/website/providers/website_edit_mode_provider.dart';
 import 'shared/services/job_role_service.dart';
 import 'public_store/providers/cart_provider.dart';
@@ -54,7 +55,6 @@ import 'modules/messaging/services/messaging_service.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
-import 'public_store/widgets/persistent_editor_shell.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/data_preload_service.dart';
 import 'shared/services/error_reporting_service.dart';
@@ -91,8 +91,8 @@ bool _tenantDetectionStarted = false; // Prevent duplicate triggers
 void _logTiming(String phase, [String? detail]) {
   final elapsed = _globalStopwatch.elapsedMilliseconds;
   _initTimings[phase] = elapsed;
-  debugPrint(
-      '⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
+  // Performance logging disabled for production
+  // debugPrint('⏱️ [PERF] $phase: ${elapsed}ms${detail != null ? ' ($detail)' : ''}');
 }
 
 /// Hide the HTML loading screen after Flutter has loaded
@@ -104,7 +104,7 @@ void _hideLoadingScreen() {
     // This works by leveraging the url_strategy package's web implementation
     // which already has access to the DOM
     hideHtmlLoadingScreen();
-    debugPrint('✨ [Main] Loading screen hidden');
+    // debugPrint('✨ [Main] Loading screen hidden');
   } catch (e) {
     debugPrint('⚠️ [Main] Could not hide loading screen: $e');
   }
@@ -116,7 +116,7 @@ Future<void> main() async {
   // Capture browser URL IMMEDIATELY, before anything else
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
-    debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
+    // debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
   }
   _logTiming('URL_CAPTURED');
 
@@ -210,7 +210,11 @@ Future<void> main() async {
 
     // Hide the HTML loading screen after Flutter starts
     if (kIsWeb) {
-      _hideLoadingScreen();
+      // Safety timeout: Ensure loading screen is hidden after 4 seconds max
+      // This acts as a fallback if the data loading completion trigger fails
+      Future.delayed(const Duration(seconds: 4), () {
+        _hideLoadingScreen();
+      });
     }
   }, (error, stack) {
     // Suppress Flutter Web-specific errors in zone guard as well
@@ -340,6 +344,7 @@ class VinabikeApp extends StatelessWidget {
                 )),
         ChangeNotifierProvider(create: (_) => WebsiteService()),
         ChangeNotifierProvider(create: (_) => WebsiteEditModeProvider()),
+        ChangeNotifierProvider(create: (_) => GoogleBusinessService()),
         // MercadoPago: Don't auto-initialize - checkout will init with proper tenant_id
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => BackupService()),
@@ -461,6 +466,8 @@ class VinabikeApp extends StatelessWidget {
                   _logTiming('DATA_LOAD_START');
                   await ws.loadPublicStoreDataUnified(tid);
                   _logTiming('ALL_DATA_LOADED');
+                  if (kIsWeb)
+                    _hideLoadingScreen(); // Hide splash screen when data is ready
                 }
               });
             }
@@ -479,6 +486,8 @@ class VinabikeApp extends StatelessWidget {
 
             // Tenant detection failed
             if (tenantProvider.hasError) {
+              if (kIsWeb)
+                _hideLoadingScreen(); // Fail safe: hide if error occurs
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(
@@ -540,7 +549,7 @@ class VinabikeApp extends StatelessWidget {
           // BUT skip for public store hosts - they don't need auth
           if (authService.isInitializing && !isPublicStoreHost) {
             return MaterialApp(
-              title: 'Viñabike ERP',
+              title: 'Vinabike',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: appearanceService.themeMode,
@@ -572,7 +581,7 @@ class VinabikeApp extends StatelessWidget {
             }();
 
             return MaterialApp.router(
-              title: 'Viñabike ERP',
+              title: 'Vinabike',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: appearanceService.themeMode,
@@ -595,10 +604,7 @@ class VinabikeApp extends StatelessWidget {
               locale: const Locale('es', ''),
               builder: (context, child) => WindowZoomScope(
                 child: ScannerBridgeScope(
-                  // Wrap in PersistentEditorShell to keep editor panel stable
-                  child: PersistentEditorShell(
-                    child: child ?? const SizedBox.shrink(),
-                  ),
+                  child: child ?? const SizedBox.shrink(),
                 ),
               ),
             );
@@ -608,7 +614,7 @@ class VinabikeApp extends StatelessWidget {
           debugPrint('✅ [Main] User is AUTHENTICATED - using WORKSPACE SYSTEM');
 
           return MaterialApp(
-            title: 'Viñabike ERP',
+            title: 'Vinabike',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: appearanceService.themeMode,
@@ -744,10 +750,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.build(context);
 
     try {
-      // Wrap with PersistentEditorShell to keep editor panel stable across navigations
-      return PersistentEditorShell(
-        child: Router.withConfig(config: _router),
-      );
+      return Router.withConfig(config: _router);
     } catch (e) {
       debugPrint('🔴 [WorkspaceRouterView] Router build error: $e');
       return Material(

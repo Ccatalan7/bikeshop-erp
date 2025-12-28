@@ -158,16 +158,30 @@ class TenantDetectionService {
   /// Detect tenant from current URL
   /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
-    // For non-web platforms (macOS, Windows, iOS, Android), use authenticated user's tenant
+    // For non-web platforms (macOS, Windows, iOS, Android)
     if (!kIsWeb) {
+      // First try authenticated user's tenant
       final user = _supabase.auth.currentUser;
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
+          debugPrint('📱 [TenantDetection] Using authenticated user tenant');
           return tenantFromAuth;
         }
       }
-      return null;
+      
+      // For public store mobile app, default to Viñabike tenant
+      // This allows the store to work without authentication
+      const defaultTenantId = '5443b130-cc28-45af-a420-cd500b288890'; // Viñabike
+      debugPrint('📱 [TenantDetection] Using default mobile tenant (Viñabike)');
+      return Tenant(
+        id: defaultTenantId,
+        shopName: 'Vinabike',
+        subdomain: 'vinabike',
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
     }
 
     final host = Uri.base.host;

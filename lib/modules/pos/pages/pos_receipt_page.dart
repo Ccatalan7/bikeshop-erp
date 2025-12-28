@@ -5,7 +5,9 @@ import '../models/pos_transaction.dart';
 import '../widgets/receipt_preview.dart';
 
 class POSReceiptPage extends StatefulWidget {
-  final POSTransaction transaction;
+  // Accept dynamic to allow deferred loading from router
+  // (deferred types cannot be used in cast expressions)
+  final dynamic transaction;
 
   const POSReceiptPage({
     super.key,

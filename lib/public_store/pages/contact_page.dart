@@ -85,8 +85,7 @@ class _ContactPageState extends State<ContactPage>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    debugPrint(
-        '📞 [ContactPage] build() called - wantKeepAlive: $wantKeepAlive');
+    // Debug: build
     final websiteService = context.watch<WebsiteService>();
 
     // Get all contact info from website_settings (editable in admin)

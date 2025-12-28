@@ -5,29 +5,29 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  
+
   <!-- Primary Meta Tags -->
   <title>Vinabike - Tienda de Bicicletas</title>
   <meta name="title" content="Vinabike - Tienda de Bicicletas">
   <meta name="description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
-  
+
   <!-- Canonical -->
   <link rel="canonical" href="https://vinabike.cl">
-  
+
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://vinabike.cl">
   <meta property="og:title" content="Vinabike - Tienda de Bicicletas">
   <meta property="og:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
   <meta property="og:site_name" content="Vinabike">
-  
-  
+
+
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://vinabike.cl">
   <meta name="twitter:title" content="Vinabike - Tienda de Bicicletas">
   <meta name="twitter:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
-  
+
 
   <!-- Google Analytics GA4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-FR5Q37BW43"></script>
@@ -46,7 +46,14 @@
   <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preload" href="flutter_bootstrap.js" as="script">
-  
+  <link rel="preload" href="main.dart.js" as="script">
+
+  <!-- Preconnect to reduce connection latency -->
+  <link rel="preconnect" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co">
+  <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
+  <link rel="dns-prefetch" href="https://vinabike-edge-cache.vinabike.workers.dev">
+
   <style>
     html,
     body {
@@ -92,7 +99,7 @@
       white-space: nowrap;
     }
   </style>
-  
+
   <!-- JSON-LD Structured Data for LocalBusiness -->
   <script type="application/ld+json">
   {
@@ -119,21 +126,21 @@
     <div class="sr-only">
       <h1>Vinabike - Tienda de Bicicletas en Viña del Mar</h1>
       <p>Tu tienda especializada en ciclismo, repuestos y servicio técnico.</p>
-      
+
       <!-- Navigation -->
       <nav>
         <a href="/productos">Productos</a>
         <a href="/servicios">Servicios</a>
         <a href="/contacto">Contacto</a>
       </nav>
-      
+
       <!-- Business Contact Info -->
       <address>
         <p>Dirección: Álvarez 32, Local 17, Viña del Mar, Chile, Viña del Mar, Chile</p>
         <p>Teléfono: +56998357797</p>
         <p>Email: vinabikechile@gmail.com</p>
       </address>
-      
+
       <!-- Legal Links (Required by Google Merchant Center) -->
       <footer>
         <a href="/devoluciones">Política de Reembolso</a>
@@ -156,21 +163,29 @@
       }
     }, { passive: false });
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+
+  <!-- Pre-fetch store data while Flutter loads (runs in parallel) -->
   <script>
-    // Configure Flutter renderer: HTML for mobile (faster), CanvasKit for desktop (quality)
-    window.addEventListener('load', function() {
-      if (window._flutter && window._flutter.loader) {
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-                      || window.innerWidth < 768;
-        window._flutter.loader.load({
-          config: {
-            renderer: isMobile ? 'html' : 'canvaskit'
-          }
-        });
-      }
-    });
+    (function () {
+      // Only run on public store domains
+      const host = window.location.hostname;
+      if (!host.includes('vinabike.cl') && !host.includes('vinabike-store.web.app')) return;
+
+      const TENANT_ID = '5443b130-cc28-45af-a420-cd500b288890';
+      const EDGE_CACHE_URL = 'https://vinabike-edge-cache.vinabike.workers.dev/cache/public-store-data';
+
+      // Create a promise that Dart can await (must be named exactly flutter_injected_preloaded_data)
+      window.flutter_injected_preloaded_data = fetch(EDGE_CACHE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_tenant_id: TENANT_ID })
+      })
+        .then(response => response.ok ? response.json() : null)
+        .catch(() => null);
+    })();
   </script>
+
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 
 </html>

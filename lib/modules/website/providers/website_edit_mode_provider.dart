@@ -205,6 +205,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Exit completely (back to normal visitor view)
   void exitEditMode() {
+    if (!_isPreviewMode && !_isEditMode) return;
+
     _isPreviewMode = false;
     _isEditMode = false;
     _selectedBlockId = null;

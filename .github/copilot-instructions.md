@@ -787,67 +787,86 @@ alter view stock_movements_view set (security_invoker = on);
 
 ---
 
-# 🌐 WEB DEPLOYMENT: SPLIT BUILD (CRITICAL)
+# 🚨🚨🚨 WEB DEPLOYMENT: SPLIT BUILD (CRITICAL - READ CAREFULLY!) 🚨🚨🚨
 
-**⚠️ THE PUBLIC STORE AND ERP USE DIFFERENT ENTRY POINTS!**
+**⚠️⚠️⚠️ THE PUBLIC STORE AND ERP USE DIFFERENT ENTRY POINTS! ⚠️⚠️⚠️**
 
-## Entry Points
+**IF YOU BUILD THE STORE WRONG, IT WILL BE 9MB INSTEAD OF 4MB = SLOW LOAD TIMES!**
 
-| Target | Entry Point | Bundle Size | Description |
-|--------|-------------|-------------|-------------|
-| **Public Store** | `lib/main_store.dart` | ~4.1 MB | Minimal: public store only, no ERP modules |
-| **ERP** | `lib/main.dart` | ~9.2 MB | Full: all modules (inventory, accounting, etc.) |
+## The Two Builds (MEMORIZE THIS!)
 
-## Build Commands
+| Target | Entry Point | Bundle Size | Firebase URL |
+|--------|-------------|-------------|--------------|
+| **PUBLIC STORE** | `lib/main_store.dart` | **~4.1 MB** ✅ | `vinabike-store.web.app` |
+| **ERP ADMIN** | `lib/main.dart` | ~9.2 MB | `project-vinabike.web.app` |
 
-**✅ CORRECT: Build store with optimized entry point**
+## ✅ CORRECT Build Commands
+
 ```bash
+# ⚠️ STORE: MUST use -t lib/main_store.dart!!!
 flutter build web --release -t lib/main_store.dart -o build/web_store
-```
 
-**✅ CORRECT: Build ERP with full entry point**
-```bash
+# ERP: Uses default main.dart
 flutter build web --release -o build/web_erp
 ```
 
-**❌ WRONG: Using main.dart for store (9MB bundle!)**
+## ❌ WRONG Build Commands (WILL BREAK THE STORE!)
+
 ```bash
-flutter build web --release  # This uses main.dart = 9MB!!
-cp -R build/web/ build/web_store/  # DON'T DO THIS
+# ❌ WRONG - This uses main.dart = 9MB bundle on store!
+flutter build web --release
+cp -R build/web/ build/web_store/
+
+# ❌ WRONG - Missing the entry point flag!
+flutter build web --release -o build/web_store
+
+# ❌ WRONG - --web-renderer flag doesn't exist anymore
+flutter build web --release --web-renderer html -t lib/main_store.dart
 ```
 
-## Firebase Hosting Targets
+## Verification (DO THIS EVERY TIME!)
 
-- **`web_erp/`** → `project-vinabike.web.app` (ERP admin)
-- **`web_store/`** → `vinabike-store.web.app` (Public store)
+After building the store, ALWAYS verify the bundle size:
+```bash
+ls -lh build/web_store/main.dart.js
+# ✅ CORRECT: ~4.1MB
+# ❌ WRONG:  ~9.2MB (you used wrong entry point!)
+```
 
-## Workflow Reference
+## Firebase Hosting Configuration
 
-Full workflow is in `.agent/workflows/deploy_to_firebase.md`
+Defined in `firebase.json`:
+- Target `store` → builds from `build/web_store/` → deploys to `vinabike-store.web.app`
+- Target `erp` → builds from `build/web_erp/` → deploys to `project-vinabike.web.app`
 
-## Rules for Deployment
+## Full Deployment Workflow
 
-1. ✅ **ALWAYS** build store with `-t lib/main_store.dart`
-2. ✅ **ALWAYS** use separate `-o` directories for each target
-3. ✅ **VERIFY** bundle size: store should be ~4MB, not 9MB
-4. ❌ **NEVER** copy `build/web/` to `build/web_store/` (wrong entry point)
-5. ❌ **NEVER** use default `flutter build web` for store deployment
+See `.agent/workflows/deploy_to_firebase.md` for the complete deployment steps including:
+1. SEO sync (`./scripts/sync_seo_index.sh`)
+2. Store build (with correct entry point)
+3. ERP build
+4. Firebase deploy
 
 ## Why This Matters
 
-- **~4MB** bundle = fast initial load for public store visitors
-- **~9MB** bundle = slow load, poor Google PageSpeed, Merchant Center issues
-- Public store visitors don't need ERP modules (accounting, HR, etc.)
-- `main_store.dart` excludes unnecessary imports = smaller bundle
+| Scenario | Bundle Size | Mobile Load (4G) | User Experience |
+|----------|-------------|------------------|-----------------|
+| ✅ Correct build (`main_store.dart`) | 4.1 MB | ~2-3 seconds | Fast, happy users |
+| ❌ Wrong build (`main.dart`) | 9.2 MB | ~6-8 seconds | Slow, frustrated users |
+
+**The wrong build includes ALL ERP modules (accounting, HR, inventory management, etc.) that public store visitors DON'T NEED!**
 
 ## Files Involved
 
-- `lib/main_store.dart` - Lightweight entry point for public store
-- `lib/main.dart` - Full entry point with all modules
+- `lib/main_store.dart` - Lightweight entry point (public store only)
+- `lib/main.dart` - Full entry point (all ERP modules)
+- `lib/public_store/routes/public_store_router.dart` - Store-specific routes
+- `lib/shared/routes/app_router.dart` - Full ERP routes
 - `.agent/workflows/deploy_to_firebase.md` - Deployment workflow
 - `firebase.json` - Hosting target configuration
 
 ---
+
 
 # 🔍 SEO & WEBSITE ARCHITECTURE (CRITICAL FOR GOOGLE MERCHANT CENTER)
 

@@ -47,10 +47,10 @@ class _PublicHomePageState extends State<PublicHomePage>
   @override
   void initState() {
     super.initState();
-    debugPrint('🏠 [PublicHomePage] initState() called');
+    // Debug: initState
     // Load featured products once
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      debugPrint('🏠 [PublicHomePage] postFrameCallback - loading data');
+      // Debug: postFrameCallback - loading data
       _ensureTenantId();
       _loadFeaturedProductsOnce();
     });
@@ -217,38 +217,7 @@ class _PublicHomePageState extends State<PublicHomePage>
     _editModeChecked = false;
   }
 
-  /// Update the edit provider with home page blocks if we're in edit mode
-  /// and coming from a different page
-  // ignore: unused_element
-  void _updateEditProviderIfNeeded() {
-    if (!mounted) return;
-
-    final editProvider = context.read<WebsiteEditModeProvider>();
-
-    // If we're already in edit mode (or preview mode), update the blocks for home page
-    if (editProvider.isEditMode || editProvider.isPreviewMode) {
-      // Check if we're coming from a different page (not home)
-      if (editProvider.currentPageSlug != null &&
-          editProvider.currentPageSlug!.isNotEmpty) {
-        final websiteService = context.read<WebsiteService>();
-        final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
-        final settings = Map<String, dynamic>.from(websiteService.settings);
-
-        debugPrint(
-            '🔄 [HomePage] Page changed while in edit mode: ${editProvider.currentPageSlug} → home');
-        debugPrint(
-            '📄 [HomePage] Updating provider with ${blocks.length} blocks for home page');
-
-        if (editProvider.isEditMode) {
-          editProvider.enterEditMode(blocks, settings);
-        } else {
-          editProvider.enterPreviewMode(blocks, settings);
-        }
-
-        _editModeChecked = true;
-      }
-    }
-  }
+  // Note: _updateEditProviderIfNeeded was removed - not needed with simple routing
 
   String _currentBreakpoint(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -399,6 +368,7 @@ class _PublicHomePageState extends State<PublicHomePage>
       minStockLevel: minStock,
       maxStockLevel: maxStock > 0 ? maxStock : 100,
       imageUrl: json['image_url'] as String?,
+      imageUrlOptimized: json['image_url_optimized'] as String?,
       imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? const [],
       description: json['description'] as String?,
       category: ProductCategory.values.firstWhere(
@@ -448,15 +418,14 @@ class _PublicHomePageState extends State<PublicHomePage>
 
   @override
   void dispose() {
-    debugPrint('🏠 [PublicHomePage] dispose() called');
+    // Debug: dispose
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    debugPrint(
-        '🏠 [PublicHomePage] build() called - wantKeepAlive: $wantKeepAlive');
+    // Debug: build called
 
     // Check for edit/preview mode from URL query parameters (using GoRouter)
     // We check this here to prevent a 1-frame flash where hidden blocks are filtered out
@@ -465,6 +434,7 @@ class _PublicHomePageState extends State<PublicHomePage>
     final forceEditMode = qp['edit'] == 'true';
 
     _checkEditModeFromRouter(context);
+    // Note: _updateEditProviderIfNeeded() removed - not needed with simple routing
 
     // Read data from providers - WATCH WebsiteService to rebuild when blocks load
     final tenantProvider = context.read<PublicStoreTenantProvider>();
@@ -576,14 +546,21 @@ class _PublicHomePageState extends State<PublicHomePage>
 
     // Use Selector to only rebuild when edit mode state or block IDs change
     // This prevents full page rebuilds when only block DATA changes (which is handled by each block)
-    return Selector<WebsiteEditModeProvider,
-        ({bool isEditMode, bool isInEditorContext, List<String> blockIds})>(
+    return Selector<
+        WebsiteEditModeProvider,
+        ({
+          bool isEditMode,
+          bool isPreviewMode,
+          bool isInEditorContext,
+          List<String> blockIds
+        })>(
       selector: (_, provider) {
         final blocks =
             provider.isInEditorContext ? provider.blocks : blocksToRender;
         final ids = blocks.map((b) => b['id']?.toString() ?? '').toList();
         return (
           isEditMode: provider.isEditMode,
+          isPreviewMode: provider.isPreviewMode,
           isInEditorContext: provider.isInEditorContext,
           blockIds: ids,
         );
@@ -591,6 +568,7 @@ class _PublicHomePageState extends State<PublicHomePage>
       // Custom shouldRebuild to compare block IDs by content, not reference
       shouldRebuild: (prev, next) {
         if (prev.isEditMode != next.isEditMode) return true;
+        if (prev.isPreviewMode != next.isPreviewMode) return true;
         if (prev.isInEditorContext != next.isInEditorContext) return true;
         if (prev.blockIds.length != next.blockIds.length) return true;
         for (int i = 0; i < prev.blockIds.length; i++) {
@@ -602,8 +580,12 @@ class _PublicHomePageState extends State<PublicHomePage>
         final editProvider = context.read<WebsiteEditModeProvider>();
 
         // If URL forces edit mode, we treat it as edit mode even if provider isn't ready
-        final isEditMode = state.isEditMode || forceEditMode;
-        final isInEditorContext = state.isInEditorContext || forceEditMode;
+        // BUT: if provider is explicitly in Preview Mode, respect that (don't force edit)
+        final isProviderInPreviewMode = editProvider.isPreviewMode;
+        final effectiveForceEdit = forceEditMode && !isProviderInPreviewMode;
+
+        final isEditMode = state.isEditMode || effectiveForceEdit;
+        final isInEditorContext = state.isInEditorContext || effectiveForceEdit;
 
         // Use edit provider blocks if in editor context, otherwise use the blocks we have
         // Note: If forceEditMode is true but provider IS NOT ready (state.isInEditorContext is false),
@@ -690,7 +672,8 @@ class _PublicHomePageState extends State<PublicHomePage>
               // Use _BlockDataSelector to read block data from provider
               // This ensures each block only rebuilds when ITS data changes
               _BlockDataSelector(
-                key: ValueKey('${visibleBlocks[i]['id']}_$tenantId'),
+                key: ValueKey(
+                    '${visibleBlocks[i]['id']}_${tenantId}_$isEditMode'),
                 blockId: visibleBlocks[i]['id']?.toString() ?? '',
                 fallbackBlockData: visibleBlocks[i],
                 isInEditorContext: isEditMode,
@@ -862,6 +845,17 @@ class _PublicHomePageState extends State<PublicHomePage>
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
+
+    // Debug: trace style data flow
+    if (blockType == 'hero') {
+      final style = data['style'];
+      debugPrint('🎨 [_buildBlockFromData] Hero isEditMode=$isEditMode');
+      debugPrint('🎨 [_buildBlockFromData] Hero data.style=$style');
+      if (style is Map) {
+        debugPrint(
+            '🎨 [_buildBlockFromData] backgroundType=${style['backgroundType']}, gradientColor1=${style['gradientColor1']}');
+      }
+    }
 
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;

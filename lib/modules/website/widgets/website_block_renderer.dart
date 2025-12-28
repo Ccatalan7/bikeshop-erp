@@ -3,7 +3,10 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/website_service.dart';
 
 // import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
@@ -11,6 +14,7 @@ import '../models/website_block_type.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
 import 'text_formatting_toolbar.dart';
+import 'google_reviews_carousel.dart';
 
 // Conditional import for web platform
 import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
@@ -253,6 +257,36 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
         );
+      case WebsiteBlockType.googleReviews:
+        // Inject synced reviews if block doesn't have custom ones
+        var effectiveData = data;
+        if ((data['reviews'] as List?)?.isEmpty ?? true) {
+          try {
+            // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
+            final service = Provider.of<WebsiteService>(context, listen: false);
+            final jsonStr = service.getSetting('google_reviews_data');
+            if (jsonStr.isNotEmpty) {
+              final list = jsonDecode(jsonStr) as List;
+              final reviews =
+                  list.map((e) => Map<String, dynamic>.from(e)).toList();
+
+              // Create new map to avoid mutating original
+              effectiveData = Map<String, dynamic>.from(data);
+              effectiveData['reviews'] = reviews;
+            }
+          } catch (e) {
+            debugPrint('Error injecting reviews: $e');
+          }
+        }
+
+        return GoogleReviewsCarousel(
+          data: effectiveData,
+          primaryColor: primaryColor,
+          accentColor: accentColor,
+          headingFont: headingFont,
+          bodyFont: bodyFont,
+          previewMode: previewMode,
+        );
     }
   }
 
@@ -459,6 +493,77 @@ class WebsiteBlockRenderer {
     }
   }
 
+  /// Parse rgba color string to Color
+  static Color? _parseRgbaColor(String? rgba) {
+    if (rgba == null || rgba.isEmpty) return null;
+    try {
+      // Handle hex colors
+      if (rgba.startsWith('#')) return _parseColor(rgba);
+
+      // Handle rgba(r,g,b,a) format
+      final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)')
+          .firstMatch(rgba);
+      if (match != null) {
+        final r = int.parse(match.group(1)!);
+        final g = int.parse(match.group(2)!);
+        final b = int.parse(match.group(3)!);
+        final a = match.group(4) != null ? double.parse(match.group(4)!) : 1.0;
+        return Color.fromRGBO(r, g, b, a);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get gradient start alignment from direction string
+  static Alignment _getGradientBegin(String direction) {
+    switch (direction) {
+      case 'to-top':
+        return Alignment.bottomCenter;
+      case 'to-top-right':
+        return Alignment.bottomLeft;
+      case 'to-right':
+        return Alignment.centerLeft;
+      case 'to-bottom-right':
+        return Alignment.topLeft;
+      case 'to-bottom':
+        return Alignment.topCenter;
+      case 'to-bottom-left':
+        return Alignment.topRight;
+      case 'to-left':
+        return Alignment.centerRight;
+      case 'to-top-left':
+        return Alignment.bottomRight;
+      default:
+        return Alignment.topCenter;
+    }
+  }
+
+  /// Get gradient end alignment from direction string
+  static Alignment _getGradientEnd(String direction) {
+    switch (direction) {
+      case 'to-top':
+        return Alignment.topCenter;
+      case 'to-top-right':
+        return Alignment.topRight;
+      case 'to-right':
+        return Alignment.centerRight;
+      case 'to-bottom-right':
+        return Alignment.bottomRight;
+      case 'to-bottom':
+        return Alignment.bottomCenter;
+      case 'to-bottom-left':
+        return Alignment.bottomLeft;
+      case 'to-left':
+        return Alignment.centerLeft;
+      case 'to-top-left':
+        return Alignment.topLeft;
+      default:
+        return Alignment.bottomCenter;
+    }
+  }
+
   static EdgeInsets _parsePadding(Map<String, dynamic> data,
       {double defaultVertical = 64}) {
     final style = data['style'] as Map<String, dynamic>?;
@@ -469,6 +574,138 @@ class WebsiteBlockRenderer {
     final bottom =
         (style['paddingBottom'] as num?)?.toDouble() ?? defaultVertical;
     return EdgeInsets.only(top: top, bottom: bottom, left: 24, right: 24);
+  }
+
+  static BoxDecoration _resolveBackgroundDecoration({
+    required Map<String, dynamic> data,
+    required Color defaultColor,
+    String? imageUrl,
+  }) {
+    final style = Map<String, dynamic>.from(data['style'] ?? {});
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final backgroundType = style['backgroundType']?.toString() ?? 'solid';
+
+    // Parse border
+    final hasBorder = (style['borderWidth'] as num?)?.toDouble() != null &&
+        (style['borderWidth'] as num).toDouble() > 0;
+    final borderWidth = (style['borderWidth'] as num?)?.toDouble() ?? 0.0;
+    final borderColor =
+        _parseColor(style['borderColor']?.toString()) ?? Colors.grey;
+    final borderStyle = style['borderStyle']?.toString() ?? 'solid';
+
+    // Parse shadow
+    final hasShadow = style['shadowEnabled'] == true;
+    final shadowOffsetX = (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0;
+    final shadowOffsetY = (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0;
+    final shadowBlur = (style['shadowBlur'] as num?)?.toDouble() ?? 12.0;
+    final shadowSpread = (style['shadowSpread'] as num?)?.toDouble() ?? 0.0;
+    final shadowColor =
+        _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
+
+    // Parse border radius (note: typically handled by ClipRRect parent, but we can set it here too)
+    final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
+
+    // Image background takes precedence for the image property,
+    // but we might still want a color/gradient behind it (visible while loading or if transparent)
+    DecorationImage? image;
+    if (hasImage) {
+      image = DecorationImage(
+        image: NetworkImage(imageUrl),
+        fit: BoxFit.cover,
+      );
+    }
+
+    // Default background color (legacy fallback)
+    final bgColor = _parseColor(style['backgroundColor']) ?? defaultColor;
+
+    // Construct Border
+    BoxBorder? border;
+    if (hasBorder) {
+      border = Border.all(
+        color: borderColor,
+        width: borderWidth,
+        style: borderStyle == 'dotted' || borderStyle == 'dashed'
+            ? BorderStyle
+                .none // Flutter Border doesn't support dotted easily without custom painter, fallback to solid or none?
+            // Actually BorderStyle.solid is likely what we want unless completely hidden
+            : BorderStyle.solid,
+      );
+    }
+
+    // Construct Shadow
+    List<BoxShadow>? boxShadow;
+    if (hasShadow) {
+      boxShadow = [
+        BoxShadow(
+          offset: Offset(shadowOffsetX, shadowOffsetY),
+          blurRadius: shadowBlur,
+          spreadRadius: shadowSpread,
+          color: shadowColor,
+        ),
+      ];
+    }
+
+    if (backgroundType == 'gradient') {
+      final gradientColor1 =
+          _parseColor(style['gradientColor1']?.toString()) ?? Colors.white;
+      final gradientColor2 = _parseColor(style['gradientColor2']?.toString()) ??
+          Colors.grey.shade100;
+      final gradientDirection =
+          style['gradientDirection']?.toString() ?? 'to-bottom';
+
+      return BoxDecoration(
+        color: bgColor, // Fallback color
+        image: image,
+        gradient: !hasImage
+            ? LinearGradient(
+                begin: _getGradientBegin(gradientDirection),
+                end: _getGradientEnd(gradientDirection),
+                colors: [gradientColor1, gradientColor2],
+              )
+            : null,
+        border: border,
+        borderRadius:
+            borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
+        boxShadow: boxShadow,
+      );
+    }
+
+    // Solid color (or default legacy gradient if no image and no specific style)
+    // If style is explicitly 'solid', we use bgColor.
+    // Legacy behavior: if no style defined, we created a subtle gradient.
+    // We preserve legacy behavior only if style is strictly empty or explicitly asks for it?
+    // For now, let's trust the style data.
+
+    // If hasImage is false, and no specific gradient is requested, legacy code did a subtle gradient.
+    // We can keep that as a fallback if style is missing.
+    final hasStyle = data['style'] != null;
+
+    if (!hasImage && !hasStyle) {
+      return BoxDecoration(
+        color: bgColor,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            bgColor,
+            Color.lerp(bgColor, Colors.black, 0.2)!,
+          ],
+        ),
+        border: border,
+        borderRadius:
+            borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
+        boxShadow: boxShadow,
+      );
+    }
+
+    return BoxDecoration(
+      color: bgColor,
+      image: image,
+      border: border,
+      borderRadius:
+          borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
+      boxShadow: boxShadow,
+    );
   }
 
   static Widget _buildHero({
@@ -497,11 +734,9 @@ class WebsiteBlockRenderer {
     final showOverlay = (data['showOverlay'] ?? true) == true;
     final overlayOpacity =
         ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
-    final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
 
     // Use style background if no image
-    final bgColor = _parseColor(data['style']?['backgroundColor']) ??
-        const Color(0xFF1a1a1a);
+    final defaultBgColor = const Color(0xFF1a1a1a);
 
     // New Props for Alignment and Full Screen
     final isFullScreen = data['isFullScreen'] == true;
@@ -547,30 +782,18 @@ class WebsiteBlockRenderer {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
+    final decoration = _resolveBackgroundDecoration(
+      data: data,
+      defaultColor: defaultBgColor,
+      imageUrl: imageUrl?.toString(),
+    );
+
     return Container(
       height: isFullScreen
           ? MediaQuery.of(context).size.height
           : (isMobile ? 420 : 520),
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: bgColor,
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl.toString()),
-                fit: BoxFit.cover,
-              )
-            : null,
-        gradient: !hasImage
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  bgColor,
-                  Color.lerp(bgColor, Colors.black, 0.2)!,
-                ],
-              )
-            : null,
-      ),
+      decoration: decoration,
       child: Container(
         decoration: showOverlay
             ? BoxDecoration(
@@ -3307,7 +3530,7 @@ class _CategoryCard extends StatelessWidget {
     final title = (data['title'] ?? 'Categoría').toString();
     final subtitle = (data['subtitle'] ?? '').toString();
     final ctaText = (data['ctaText'] ?? 'Ver colección').toString();
-    final ctaLink = (data['ctaLink'] ?? '/tienda/productos').toString();
+    final ctaLink = (data['ctaLink'] ?? '/productos').toString();
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
@@ -3590,7 +3813,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final title = (slide['title'] ?? 'Título').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
     final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
-    final ctaLink = (slide['ctaLink'] ?? '/tienda/productos').toString().trim();
+    final ctaLink = (slide['ctaLink'] ?? '/productos').toString().trim();
     final imageUrl = slide['imageUrl'];
     final videoUrl = slide['videoUrl']?.toString() ?? '';
     final videoFileUrl = slide['videoFileUrl']?.toString() ?? '';
@@ -3735,27 +3958,22 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     }
 
     // No video or web not supported - use image/gradient background
+    // Use the block's style data for gradients (fall back to slide's image if present)
+    final slideWithStyle = Map<String, dynamic>.from(slide);
+    // If the slide doesn't have its own style, use the block's style
+    if (slide['style'] == null && widget.data['style'] != null) {
+      slideWithStyle['style'] = widget.data['style'];
+    }
+
+    final decoration = WebsiteBlockRenderer._resolveBackgroundDecoration(
+      data: slideWithStyle,
+      defaultColor: const Color(0xFF1a1a1a),
+      imageUrl: hasImage ? imageUrl.toString() : null,
+    );
+
     return Container(
       key: ValueKey<int>(index),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a1a1a),
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl.toString()),
-                fit: BoxFit.cover,
-              )
-            : null,
-        gradient: !hasImage
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF1a1a1a),
-                  const Color(0xFF2a2a2a),
-                ],
-              )
-            : null,
-      ),
+      decoration: decoration,
       child: contentWidget,
     );
   }
@@ -4227,13 +4445,17 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                     color: Colors.black,
                     margin: const EdgeInsets.only(right: 12),
                   ),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                      color: Colors.black,
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                   if (_isLoading) ...[

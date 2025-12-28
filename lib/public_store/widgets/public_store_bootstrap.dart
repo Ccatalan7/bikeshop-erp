@@ -30,7 +30,8 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
   @override
   void initState() {
     super.initState();
-    _initFuture = _initialize();
+    // Defer initialization to avoid notifyListeners during build
+    _initFuture = Future.microtask(() => _initialize());
   }
   
   Future<bool> _initialize() async {

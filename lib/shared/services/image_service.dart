@@ -2,9 +2,11 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'error_reporting_service.dart';
+import '../constants/storage_constants.dart';
 
 // Conditional import: use web implementation on web, mobile on other platforms
 import 'image_service_mobile.dart'
@@ -87,6 +89,162 @@ class ImageService {
       return publicUrl;
     } catch (e, stackTrace) {
       ErrorReportingService.report('Image upload failed: $e', stackTrace);
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // IMAGE OPTIMIZATION - Auto-create WebP versions
+  // ============================================================
+  
+  /// Optimization settings
+  static const int _maxOptimizedWidth = 1200;
+  static const int _optimizedQuality = 80;
+
+  /// Upload product image with automatic optimization.
+  /// 
+  /// Returns both URLs: original (full quality) and optimized (compressed).
+  /// The optimized version is resized to max 1200px width and compressed to JPEG.
+  /// 
+  /// Usage:
+  /// ```dart
+  /// final result = await ImageService.uploadProductImageWithOptimization(
+  ///   bytes: imageBytes,
+  ///   fileName: 'product.jpg',
+  /// );
+  /// // result.originalUrl - Full quality image
+  /// // result.optimizedUrl - Compressed version for web
+  /// ```
+  static Future<({String originalUrl, String? optimizedUrl})> uploadProductImageWithOptimization({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    try {
+      // 1. Upload original image
+      final originalUrl = await uploadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        bucket: StorageConfig.defaultBucket,
+        folder: StorageFolders.productMain,
+      );
+
+      if (originalUrl == null) {
+        throw Exception('Failed to upload original image');
+      }
+
+      // 2. Create and upload optimized version
+      String? optimizedUrl;
+      try {
+        final optimizedBytes = await _createOptimizedImage(bytes, fileName);
+        if (optimizedBytes != null) {
+          // Generate optimized filename with .jpg extension
+          final baseName = fileName.replaceAll(RegExp(r'\.[^.]+$'), '');
+          final optimizedFileName = '${baseName}_optimized.jpg';
+          
+          optimizedUrl = await uploadBytes(
+            bytes: optimizedBytes,
+            fileName: optimizedFileName,
+            bucket: StorageConfig.defaultBucket,
+            folder: StorageFolders.productOptimized,
+            contentType: 'image/jpeg',
+          );
+          
+          if (optimizedUrl != null) {
+            final originalKB = (bytes.length / 1024).toStringAsFixed(1);
+            final optimizedKB = (optimizedBytes.length / 1024).toStringAsFixed(1);
+            final reduction = ((1 - optimizedBytes.length / bytes.length) * 100).toStringAsFixed(0);
+            debugPrint('📸 Image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
+          }
+        }
+      } catch (e) {
+        // Don't fail the entire upload if optimization fails
+        debugPrint('⚠️ Image optimization failed (using original only): $e');
+      }
+
+      return (originalUrl: originalUrl, optimizedUrl: optimizedUrl);
+    } catch (e, stackTrace) {
+      ErrorReportingService.report('Product image upload failed: $e', stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Create an optimized version of the image.
+  /// Resizes to max width and compresses as JPEG.
+  static Future<Uint8List?> _createOptimizedImage(Uint8List bytes, String fileName) async {
+    try {
+      // Decode the image
+      final originalImage = img.decodeImage(bytes);
+      if (originalImage == null) {
+        debugPrint('⚠️ Could not decode image for optimization');
+        return null;
+      }
+
+      // Resize if larger than max width
+      img.Image optimized = originalImage;
+      if (originalImage.width > _maxOptimizedWidth) {
+        optimized = img.copyResize(originalImage, width: _maxOptimizedWidth);
+        debugPrint('📐 Resized: ${originalImage.width}x${originalImage.height} → ${optimized.width}x${optimized.height}');
+      }
+
+      // Encode as compressed JPEG
+      final compressedBytes = img.encodeJpg(optimized, quality: _optimizedQuality);
+      
+      return Uint8List.fromList(compressedBytes);
+    } catch (e) {
+      debugPrint('⚠️ Image optimization error: $e');
+      return null;
+    }
+  }
+
+  /// Upload website block image with automatic optimization.
+  /// 
+  /// For banners, heroes, and other website blocks.
+  /// Returns optimized URL (falls back to original if optimization fails).
+  /// 
+  /// Unlike product images, we only return the optimized URL since
+  /// website blocks don't need dual storage tracking.
+  static Future<String?> uploadWebsiteImageWithOptimization({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    try {
+      // Try to create optimized version first
+      Uint8List bytesToUpload = bytes;
+      String uploadFileName = fileName;
+      String folder = 'website/blocks';
+      String? contentType;
+      
+      try {
+        final optimizedBytes = await _createOptimizedImage(bytes, fileName);
+        if (optimizedBytes != null && optimizedBytes.length < bytes.length) {
+          // Optimization successful and smaller - use it
+          bytesToUpload = optimizedBytes;
+          final baseName = fileName.replaceAll(RegExp(r'\.[^.]+$'), '');
+          uploadFileName = '${baseName}_optimized.jpg';
+          folder = 'website/blocks/optimized';
+          contentType = 'image/jpeg';
+          
+          final originalKB = (bytes.length / 1024).toStringAsFixed(1);
+          final optimizedKB = (optimizedBytes.length / 1024).toStringAsFixed(1);
+          final reduction = ((1 - optimizedBytes.length / bytes.length) * 100).toStringAsFixed(0);
+          debugPrint('🌐 Website image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Website image optimization failed (using original): $e');
+      }
+
+      // Upload (either optimized or original)
+      final url = await ImageService.uploadBytes(
+        bytes: bytesToUpload,
+        fileName: uploadFileName,
+        bucket: StorageConfig.defaultBucket,
+        folder: folder,
+        contentType: contentType,
+      );
+
+      return url;
+    } catch (e, stackTrace) {
+      ErrorReportingService.report('Website image upload failed: $e', stackTrace);
       rethrow;
     }
   }

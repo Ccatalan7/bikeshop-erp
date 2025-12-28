@@ -47,6 +47,12 @@ class EditableBlockRenderer {
         if (!isEditMode) {
           if (!isVisible) return const SizedBox.shrink();
 
+          // Debug: trace preview mode data
+          if (blockType == 'hero') {
+            debugPrint(
+                '🎨 [EditableBlockRenderer] Preview Mode - Hero data.style: ${data['style']}');
+          }
+
           return WebsiteBlockRenderer.build(
             context: context,
             blockType: blockType,

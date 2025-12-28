@@ -77,12 +77,19 @@ class _BrandedLoadingState extends State<BrandedLoading>
 
   @override
   Widget build(BuildContext context) {
-    // Try AppearanceService first (authenticated users)
-    final appearanceService = context.watch<AppearanceService>();
-    String? logoUrl = appearanceService.companyLogoUrl;
+    String? logoUrl;
+    
+    // Try AppearanceService first (authenticated users / ERP)
+    try {
+      final appearanceService = context.watch<AppearanceService>();
+      logoUrl = appearanceService.companyLogoUrl;
+    } catch (e) {
+      // AppearanceService not available (public store mobile app)
+      logoUrl = null;
+    }
     
     // Fallback to WebsiteService for public store (anonymous users)
-    if ((logoUrl == null || logoUrl.isEmpty)) {
+    if (logoUrl == null || logoUrl.isEmpty) {
       try {
         final websiteService = context.watch<WebsiteService>();
         logoUrl = websiteService.getSetting('company_logo_url', '');

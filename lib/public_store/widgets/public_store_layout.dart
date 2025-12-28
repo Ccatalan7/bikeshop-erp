@@ -24,6 +24,7 @@ import '../../modules/website/models/website_page_models.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
+import '../../shared/utils/seo_helper.dart';
 import '../services/customer_account_service.dart';
 import 'customer_chat_widget.dart';
 
@@ -169,14 +170,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       'Todo lo que necesitas para tu bicicleta en Viña del Mar',
     );
     final logoUrl = websiteService.getSetting('logo_url', '');
-    final topBannerText =
-        websiteService.getSetting('top_banner_text', 'Envíos a todo Chile');
-    final contactEmail = websiteService.getSetting('contact_email', '');
-    final contactPhone = websiteService.getSetting('contact_phone', '');
-    final contactAddress = websiteService.getSetting(
-      'contact_address',
-      '',
-    );
+    final topBannerText = websiteService
+        .getSetting('top_banner_text', 'Envíos a todo Chile')
+        .trim();
+    final contactEmail = websiteService.getSetting('contact_email', '').trim();
+    final contactPhone = websiteService.getSetting('contact_phone', '').trim();
+    final contactAddress = websiteService
+        .getSetting(
+          'contact_address',
+          '',
+        )
+        .trim();
     final facebookHandle = websiteService.getSetting('facebook', '');
     final instagramHandle = websiteService.getSetting('instagram', '');
     final twitterHandle = websiteService.getSetting('twitter', '');
@@ -234,14 +238,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             decoded.map((e) => Map<String, String>.from(e as Map)).toList();
       } catch (_) {
         navLinks = [
-          {'label': 'Inicio', 'url': '/tienda'},
-          {'label': 'Productos', 'url': '/tienda/productos'},
+          {'label': 'Inicio', 'url': '/'},
+          {'label': 'Productos', 'url': '/productos'},
         ];
       }
     } else {
       navLinks = [
-        {'label': 'Inicio', 'url': '/tienda'},
-        {'label': 'Productos', 'url': '/tienda/productos'},
+        {'label': 'Inicio', 'url': '/'},
+        {'label': 'Productos', 'url': '/productos'},
       ];
     }
 
@@ -273,12 +277,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final forceEditMode = qp['edit'] == 'true';
     final forcePreviewMode = qp['preview'] == 'true';
 
-    final isEditMode = editProvider.isEditMode || forceEditMode;
+    // If provider is explicitly in Preview Mode, don't let forceEditMode override
+    final isProviderInPreviewMode = editProvider.isPreviewMode;
+    final effectiveForceEdit = forceEditMode && !isProviderInPreviewMode;
+
+    final isEditMode = editProvider.isEditMode || effectiveForceEdit;
     final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
 
     final devicePreviewMode = editProvider.devicePreviewMode;
-    final isInEditorContext =
-        editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
+    final isInEditorContext = editProvider.isInEditorContext ||
+        effectiveForceEdit ||
+        forcePreviewMode;
 
     // If the site is unpublished, show a holding page to visitors.
     // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
@@ -461,14 +470,86 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 : Column(
                     children: [
                       Expanded(child: widget.child),
-                      // In fixed mode, footer is appended at bottom if needed, or omitted.
-                      // Usually for fixed apps, footer is not shown or is part of child.
+                      // In fixed mode, footer is not shown or is part of child.
                       // Let's hide footer for fixed layout to gain max space.
                     ],
                   ),
           ),
         ],
       );
+    }
+
+    // ========================================================================
+    // SEO BACKGROUND UPDATE
+    // ========================================================================
+    // Automatically update browser title and meta tags based on current page
+    if (kIsWeb && !isEditMode) {
+      String normalizedSlug = GoRouterState.of(context).uri.path;
+      if (normalizedSlug.startsWith('/tienda/')) {
+        normalizedSlug = normalizedSlug.substring(8);
+      } else if (normalizedSlug.startsWith('/tienda')) {
+        normalizedSlug = 'home';
+      }
+      if (normalizedSlug.startsWith('/')) {
+        normalizedSlug = normalizedSlug.substring(1);
+      }
+      if (normalizedSlug.isEmpty) normalizedSlug = 'home';
+
+      // Handle legacy route specific cases
+      if (GoRouterState.of(context).uri.path == '/') normalizedSlug = 'home';
+
+      WebsitePage? currentPage;
+      try {
+        // Try to find matching page
+        if (websiteService.pages.isNotEmpty) {
+          currentPage = websiteService.pages.firstWhere(
+            (p) =>
+                p.slug == normalizedSlug ||
+                (p.isHome && normalizedSlug == 'home'),
+            orElse: () => websiteService.pages.firstWhere((p) => p.isHome,
+                orElse: () => websiteService.pages.first),
+          );
+        }
+      } catch (_) {
+        // Page not found or list empty
+      }
+
+      String seoTitle = storeName;
+      String? seoDesc = storeDescription;
+      String? seoImage = logoUrl;
+
+      if (currentPage != null) {
+        // Only use page-specific SEO if we matched the correct page
+        bool isCorrectPage = currentPage.slug == normalizedSlug ||
+            (currentPage.isHome && normalizedSlug == 'home');
+
+        if (isCorrectPage) {
+          if (currentPage.metaTitle?.isNotEmpty == true) {
+            seoTitle = currentPage.metaTitle!;
+          } else if (currentPage.title.isNotEmpty) {
+            seoTitle = '${currentPage.title} | $storeName';
+          }
+
+          if (currentPage.metaDescription?.isNotEmpty == true) {
+            seoDesc = currentPage.metaDescription;
+          }
+
+          if (currentPage.ogImageUrl?.isNotEmpty == true) {
+            seoImage = currentPage.ogImageUrl;
+          }
+        }
+      }
+
+      // Defer SEO update to avoid build-phase conflicts
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          SeoHelper.updateSeo(
+            title: seoTitle,
+            description: seoDesc,
+            imageUrl: seoImage,
+          );
+        }
+      });
     }
 
     // When the editor panel is rendered externally (PersistentEditorShell),
@@ -547,70 +628,72 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     // Build the main content (normal view mode)
-    final mainContent = Scaffold(
-      backgroundColor: backgroundColor,
-      body: Stack(
-        children: [
-          pageContent,
-          // Internal Chat System (replaces WhatsApp for richer interaction)
-          const CustomerChatWidget(),
-          if (hasWhatsApp &&
-              1 ==
-                  0) // Disable WhatsApp button in favor of new chat (or make it configurable)
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: FloatingWhatsAppButton(
-                phoneNumber: whatsappNumber,
-                message:
-                    'Hola! Me gustaría consultar sobre ${storeName.isNotEmpty ? storeName : 'sus productos'}.',
-                backgroundColor: accentColor,
+    final mainContent = SelectionArea(
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: Stack(
+          children: [
+            pageContent,
+            // Internal Chat System (replaces WhatsApp for richer interaction)
+            const CustomerChatWidget(),
+            if (hasWhatsApp &&
+                1 ==
+                    0) // Disable WhatsApp button in favor of new chat (or make it configurable)
+              Positioned(
+                bottom: 24,
+                right: 24,
+                child: FloatingWhatsAppButton(
+                  phoneNumber: whatsappNumber,
+                  message:
+                      'Hola! Me gustaría consultar sobre ${storeName.isNotEmpty ? storeName : 'sus productos'}.',
+                  backgroundColor: accentColor,
+                ),
               ),
-            ),
-          // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
-          // This is for admin previewing the store from ERP, not for customers
-          if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
-            Positioned(
-              bottom: 24,
-              right: hasWhatsApp ? 104 : 24,
-              child: Builder(
-                builder: (context) {
-                  final editProvider = context.watch<WebsiteEditModeProvider>();
-                  final isInEditorContext = editProvider.isInEditorContext;
-                  final websiteService = context.read<WebsiteService>();
+            // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
+            // This is for admin previewing the store from ERP, not for customers
+            if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
+              Positioned(
+                bottom: 24,
+                right: hasWhatsApp ? 104 : 24,
+                child: Builder(
+                  builder: (context) {
+                    final editProvider = context.watch<WebsiteEditModeProvider>();
+                    final isInEditorContext = editProvider.isInEditorContext;
+                    final websiteService = context.read<WebsiteService>();
 
-                  // Don't show the floating button if we're already in editor context
-                  if (isInEditorContext) return const SizedBox.shrink();
+                    // Don't show the floating button if we're already in editor context
+                    if (isInEditorContext) return const SizedBox.shrink();
 
-                  return FloatingActionButton.extended(
-                    heroTag: 'edit_site_fab',
-                    onPressed: () {
-                      debugPrint(
-                          '🎨 [Layout] Edit button pressed. Entering preview mode');
-                      // Enter preview mode first (shows top bar with Editar button)
-                      final blocks = List<Map<String, dynamic>>.from(
-                          websiteService.blocks);
-                      final settings =
-                          Map<String, dynamic>.from(websiteService.settings);
-                      debugPrint(
-                          '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
-                      editProvider.enterPreviewMode(blocks, settings);
-                    },
-                    backgroundColor: accentColor,
-                    icon: const Icon(Icons.edit, color: Colors.white),
-                    label: const Text(
-                      'Editar Sitio',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                    return FloatingActionButton.extended(
+                      heroTag: 'edit_site_fab',
+                      onPressed: () {
+                        debugPrint(
+                            '🎨 [Layout] Edit button pressed. Entering preview mode');
+                        // Enter preview mode first (shows top bar with Editar button)
+                        final blocks = List<Map<String, dynamic>>.from(
+                            websiteService.blocks);
+                        final settings =
+                            Map<String, dynamic>.from(websiteService.settings);
+                        debugPrint(
+                            '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
+                        editProvider.enterPreviewMode(blocks, settings);
+                      },
+                      backgroundColor: accentColor,
+                      icon: const Icon(Icons.edit, color: Colors.white),
+                      label: const Text(
+                        'Editar Sitio',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    tooltip: 'Editar sitio web',
-                  );
-                },
+                      tooltip: 'Editar sitio web',
+                    );
+                  },
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -3155,7 +3238,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       onTap: () {
         final isEditMode = context.read<WebsiteEditModeProvider>().isEditMode;
         final target = isEditMode ? '$path?edit=true' : path;
-        debugPrint('🔗 [NavLink] Navigating to: $target');
+        // Debug: navigating
         context.go(target);
       },
       child: Container(

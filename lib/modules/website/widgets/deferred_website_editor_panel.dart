@@ -29,10 +29,13 @@ class _DeferredWebsiteEditorPanelState
 
   @override
   Widget build(BuildContext context) {
+    debugPrint(
+        '⏳ [DeferredPanel] build called. Future status: ${_libraryFuture.toString()}');
     return FutureBuilder<void>(
       future: _libraryFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
+          debugPrint('⏳ [DeferredPanel] Loading library...');
           return const SizedBox(
             width: 380,
             child: Center(
@@ -46,6 +49,8 @@ class _DeferredWebsiteEditorPanelState
         }
 
         if (snapshot.hasError) {
+          debugPrint(
+              '❌ [DeferredPanel] Error loading library: ${snapshot.error}');
           return SizedBox(
             width: 380,
             child: Center(
@@ -56,6 +61,8 @@ class _DeferredWebsiteEditorPanelState
             ),
           );
         }
+
+        debugPrint('✅ [DeferredPanel] Library loaded. Rendering content.');
 
         return editor.WebsiteEditorPanel(
           onSave: widget.onSave,

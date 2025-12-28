@@ -29,9 +29,6 @@ class PersistentEditorShell extends StatelessWidget {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
 
-    debugPrint(
-        '🎯 [PersistentEditorShell] build called - isEditMode: $isEditMode, isPreviewMode: ${editProvider.isPreviewMode}, isInEditorContext: ${editProvider.isInEditorContext}');
-
     // If not in edit mode, just return the child (router content)
     if (!isEditMode) {
       return child;
@@ -41,10 +38,8 @@ class PersistentEditorShell extends StatelessWidget {
     // doesn't pay the deferred-load cost (which feels like a slowdown).
     DeferredEditableBlockRenderer.preload();
 
-    // In edit mode, OVERLAY the editor panel instead of shrinking the website.
+    // In edit mode, OVERLAY the editor panel instead of shrinking the widget.
     // This keeps the panel persistent across navigations.
-    // IMPORTANT: To avoid the panel hiding content, we constrain the website
-    // to the left viewport (width = total - panelWidth).
     return Stack(
       children: [
         // Keep router child full-width so the top command bar uses all space.

@@ -14,6 +14,9 @@ class StorageFolders {
   /// Primary product hero images.
   static const String productMain = 'inventory/products/main';
 
+  /// Optimized WebP versions of product images for fast web loading.
+  static const String productOptimized = 'inventory/products/optimized';
+
   /// Additional gallery images linked to a product.
   static const String productGallery = 'inventory/products/gallery';
 

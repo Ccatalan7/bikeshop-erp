@@ -78,10 +78,18 @@ Future<void> main() async {
     FlutterError.onError = (FlutterErrorDetails details) {
       // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
       final errorString = details.exceptionAsString();
-      if (kIsWeb &&
-          errorString.contains('disposed') &&
-          errorString.contains('EngineFlutterView')) {
-        return;
+      if (kIsWeb) {
+        if (errorString.contains('disposed') &&
+            errorString.contains('EngineFlutterView')) {
+          return;
+        }
+        if (errorString.contains('BindingError') ||
+            errorString.contains('ColorSpace') ||
+            errorString.contains('Picture') ||
+            errorString.contains('Typeface') ||
+            errorString.contains('Shader')) {
+          return;
+        }
       }
 
       ErrorReportingService.report(details.exception, details.stack);
@@ -95,10 +103,22 @@ Future<void> main() async {
     }
   }, (error, stack) {
     final errorString = error.toString();
-    if (kIsWeb &&
-        errorString.contains('disposed') &&
-        errorString.contains('EngineFlutterView')) {
-      return;
+
+    // Suppress Flutter Web-specific errors that don't affect functionality
+    if (kIsWeb) {
+      // EngineFlutterView disposed errors
+      if (errorString.contains('disposed') &&
+          errorString.contains('EngineFlutterView')) {
+        return;
+      }
+      // CanvasKit BindingError (WebGL/ColorSpace/Picture issues)
+      if (errorString.contains('BindingError') ||
+          errorString.contains('ColorSpace') ||
+          errorString.contains('Picture') ||
+          errorString.contains('Typeface') ||
+          errorString.contains('Shader')) {
+        return;
+      }
     }
 
     ErrorReportingService.report(error, stack);
@@ -129,7 +149,8 @@ class PublicStoreApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
-        ChangeNotifierProxyProvider<PublicStoreTenantProvider, MercadoPagoService>(
+        ChangeNotifierProxyProvider<PublicStoreTenantProvider,
+            MercadoPagoService>(
           create: (_) => MercadoPagoService(),
           update: (context, tenantProvider, service) {
             service ??= MercadoPagoService();
@@ -140,7 +161,8 @@ class PublicStoreApp extends StatelessWidget {
             return service;
           },
         ),
-        ChangeNotifierProxyProvider<PublicStoreTenantProvider, CustomerAccountService>(
+        ChangeNotifierProxyProvider<PublicStoreTenantProvider,
+            CustomerAccountService>(
           create: (_) => CustomerAccountService(),
           update: (context, tenantProvider, service) {
             service ??= CustomerAccountService();

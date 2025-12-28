@@ -7,6 +7,7 @@ import '../models/website_models.dart';
 import '../models/website_page_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/web_data_bridge.dart';
 
 /// Service for managing website content, banners, featured products, and online orders
 class WebsiteService extends ChangeNotifier {
@@ -99,19 +100,34 @@ class WebsiteService extends ChangeNotifier {
       Map<String, dynamic>? response;
       String source = 'unknown';
 
+      // 1. Try PRE-FETCHED data (injected by index.html)
+      // This is the fastest path (0ms wait if download is faster than app load)
       try {
-        final cacheResponse = await _tryEdgeCache(tenantId);
-        if (cacheResponse != null) {
-          response = cacheResponse;
-          source = cacheResponse['_cache'] == 'HIT'
-              ? 'EDGE_CACHE_HIT'
-              : 'EDGE_CACHE_MISS';
+        final preloaded = await WebDataBridge.getPreloadedStoreData();
+        if (preloaded != null) {
+          response = preloaded;
+          source = 'PREFETCH_JS';
           debugPrint(
-              '⚡ [WebsiteService] Edge cache $source: ${sw.elapsedMilliseconds}ms '
-              '(edge: ${cacheResponse['_edge']})');
+              '🚀 [WebsiteService] Using JS Pre-fetched data! (0ms wait)');
         }
       } catch (e) {
-        debugPrint('⚠️ [WebsiteService] Edge cache failed: $e');
+        debugPrint('⚠️ [WebsiteService] Pre-fetch check failed: $e');
+      }
+
+      // 2. Try edge cache (if pre-fetch missed)
+      if (response == null) {
+        try {
+          final cacheResponse = await _tryEdgeCache(tenantId);
+          if (cacheResponse != null) {
+            response = cacheResponse;
+            source = cacheResponse['_cache'] == 'HIT'
+                ? 'EDGE_CACHE_HIT'
+                : 'EDGE_CACHE_MISS';
+            debugPrint('⚡ [WebsiteService] Edge cache $source');
+          }
+        } catch (e) {
+          debugPrint('⚠️ [WebsiteService] Edge cache failed: $e');
+        }
       }
 
       // Fallback to direct Supabase RPC if edge cache fails
@@ -122,8 +138,8 @@ class WebsiteService extends ChangeNotifier {
         source = 'SUPABASE_DIRECT';
       }
 
-      debugPrint(
-          '⏱️ [WebsiteService] Data loaded ($source): ${sw.elapsedMilliseconds}ms');
+      // debugPrint(
+      //     '⏱️ [WebsiteService] Data loaded ($source): ${sw.elapsedMilliseconds}ms');
 
       if (response != null) {
         // Parse settings
@@ -137,9 +153,8 @@ class WebsiteService extends ChangeNotifier {
         final blocksData = response['blocks'] as List? ?? [];
         _blocks = List<Map<String, dynamic>>.from(blocksData);
 
-        debugPrint(
-            '⏱️ [WebsiteService] Unified load complete: ${sw.elapsedMilliseconds}ms '
-            '(${_settings.length} settings, ${_blocks.length} blocks)');
+        debugPrint('✅ [WebsiteService] Load complete ($source): '
+            '${_settings.length} settings, ${_blocks.length} blocks');
       }
 
       _hasLoadedForTenant = true;

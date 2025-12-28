@@ -167,7 +167,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       'https://tienda.vinabike.cl',
     );
 
-    final productUrl = '$storeUrl/tienda/producto/${product.id}';
+    final productUrl = '$storeUrl/producto/${product.id}';
     final availability = product.stockQuantity > 0
         ? 'https://schema.org/InStock'
         : 'https://schema.org/OutOfStock';
@@ -246,7 +246,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         action: SnackBarAction(
           label: 'Ver Carrito',
           textColor: Colors.white,
-          onPressed: () => context.go('/tienda/carrito'),
+          onPressed: () => context.go('/carrito'),
         ),
       ),
     );
@@ -304,62 +304,77 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       );
     }
 
-    return SingleChildScrollView(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 1200),
-        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Breadcrumb
-            _buildBreadcrumb(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 768;
+        final horizontalMargin = isMobile ? 12.0 : 24.0;
+        final verticalMargin = isMobile ? 16.0 : 48.0;
 
-            const SizedBox(height: 32),
-
-            // Product Main Section
-            Row(
+        return SingleChildScrollView(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            margin: EdgeInsets.symmetric(
+                horizontal: horizontalMargin, vertical: verticalMargin),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image Gallery (Left)
-                Expanded(
-                  flex: 5,
-                  child: _buildImageGallery(),
-                ),
+                // Breadcrumb (hide on mobile to save space)
+                if (!isMobile) _buildBreadcrumb(),
+                if (!isMobile) const SizedBox(height: 32),
 
-                const SizedBox(width: 48),
+                // Product Main Section - Responsive layout
+                if (isMobile) ...[
+                  // Mobile: Stack vertically
+                  _buildImageGallery(isMobile: true),
+                  const SizedBox(height: 24),
+                  _buildProductInfo(isMobile: true),
+                ] else ...[
+                  // Desktop: Side by side
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: _buildImageGallery(),
+                      ),
+                      const SizedBox(width: 48),
+                      Expanded(
+                        flex: 4,
+                        child: _buildProductInfo(),
+                      ),
+                    ],
+                  ),
+                ],
 
-                // Product Info (Right)
-                Expanded(
-                  flex: 4,
-                  child: _buildProductInfo(),
-                ),
+                const SizedBox(height: 64),
+
+                // Product Details Tabs
+                _buildProductDetails(),
+
+                const SizedBox(height: 64),
+
+                // Related Products
+                if (_isLoadingRelated)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else if (_relatedProducts.isNotEmpty)
+                  _buildRelatedProducts(),
+
+                // Bottom spacing to prevent footer overlap
+                SizedBox(height: isMobile ? 80 : 64),
               ],
             ),
-
-            const SizedBox(height: 64),
-
-            // Product Details Tabs
-            _buildProductDetails(),
-
-            const SizedBox(height: 64),
-
-            // Related Products
-            if (_isLoadingRelated)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            else if (_relatedProducts.isNotEmpty)
-              _buildRelatedProducts(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -367,7 +382,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return Row(
       children: [
         InkWell(
-          onTap: () => context.go('/tienda'),
+          onTap: () => context.go('/'),
           child: Text(
             'Inicio',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -380,7 +395,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           child: Icon(Icons.chevron_right, size: 16),
         ),
         InkWell(
-          onTap: () => context.go('/tienda/productos'),
+          onTap: () => context.go('/productos'),
           child: Text(
             'Productos',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -404,23 +419,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildImageGallery() {
+  Widget _buildImageGallery({bool isMobile = false}) {
     final images = _product!.imageUrls.isNotEmpty
         ? _product!.imageUrls
         : _product!.imageUrl != null
             ? [_product!.imageUrl!]
             : <String>[];
 
+    final imageHeight = isMobile ? 300.0 : 500.0;
+
     if (images.isEmpty) {
       return Container(
-        height: 500,
+        height: imageHeight,
         decoration: const BoxDecoration(
           color: Colors.white,
         ),
-        child: const Center(
+        child: Center(
           child: Icon(
             Icons.pedal_bike_outlined,
-            size: 100,
+            size: isMobile ? 60 : 100,
             color: Colors.grey,
           ),
         ),
@@ -431,11 +448,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       children: [
         // Main Image - Clean, no border
         Container(
-          height: 500,
+          height: imageHeight,
           decoration: const BoxDecoration(
             color: Colors.white,
           ),
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isMobile ? 12 : 24),
           child: Image.network(
             images[_selectedImageIndex],
             fit: BoxFit.contain,
@@ -491,13 +508,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildProductInfo() {
+  Widget _buildProductInfo({bool isMobile = false}) {
     final cart = context.watch<CartProvider>();
     final inCart = cart.hasProduct(_product!.id);
     final inStock = _product!.stockQuantity > 0;
 
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.grey.shade200),
@@ -716,7 +733,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: () => context.go('/tienda/carrito'),
+                  onPressed: () => context.go('/carrito'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.black87,
                     side: const BorderSide(color: Colors.black87, width: 1),
@@ -994,7 +1011,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   Widget _buildRelatedProductCard(Product product) {
-    final hasImage = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+    // Prefer optimized image for related products (thumbnails)
+    final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
+    final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1023,7 +1042,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   padding: const EdgeInsets.all(12),
                   child: hasImage
                       ? Image.network(
-                          product.imageUrl!,
+                          displayImageUrl,
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) {
                             return Center(

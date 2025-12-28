@@ -959,6 +959,8 @@ class _CheckoutPageState extends State<CheckoutPage>
 
             // Product List
             ...cart.items.map((item) {
+              // Prefer optimized image for cart thumbnails
+              final displayImageUrl = item.product.imageUrlOptimized ?? item.product.imageUrl;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(
@@ -972,11 +974,11 @@ class _CheckoutPageState extends State<CheckoutPage>
                         color: PublicStoreTheme.surface,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: item.product.imageUrl != null
+                      child: displayImageUrl != null
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Image.network(
-                                item.product.imageUrl!,
+                                displayImageUrl,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(Icons.image_not_supported,

@@ -14,6 +14,7 @@ import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
 import '../services/website_service.dart';
 import 'block_resize_handle.dart';
+import '../services/google_business_service.dart';
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
@@ -43,7 +44,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   void _checkSelection(WebsiteEditModeProvider editProvider) {
@@ -93,6 +94,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   Widget build(BuildContext context) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
+    debugPrint(
+        '🔧 [WebsiteEditorPanel] build called. isEditMode: ${editProvider.isEditMode}');
 
     // Check selection changes after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -100,6 +103,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     });
 
     if (!editProvider.isEditMode) {
+      debugPrint(
+          '🔧 [WebsiteEditorPanel] isEditMode is false, returning SizedBox.shrink()');
       return const SizedBox.shrink();
     }
 
@@ -236,6 +241,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
           _buildTab('edit', 'Editar', Icons.edit_outlined),
           _buildTab('page', 'Página', Icons.article_outlined),
           _buildTab('theme', 'Tema', Icons.palette_outlined),
+          _buildTab('sync', 'Google', Icons.store_mall_directory_outlined),
         ],
       ),
     );
@@ -295,6 +301,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
         return _PageSettingsTab(editProvider: editProvider);
       case 'theme':
         return _ThemeTab();
+      case 'sync':
+        return _SyncTab();
       default:
         return const SizedBox.shrink();
     }
@@ -471,6 +479,8 @@ class _AddBlocksTab extends StatelessWidget {
           _buildSection('Social', [
             _BlockOption(
                 'testimonials', 'Testimonios', Icons.format_quote_rounded),
+            _BlockOption(
+                'googleReviews', 'Google Reviews', Icons.reviews_rounded),
             _BlockOption('team', 'Equipo', Icons.groups_rounded),
             _BlockOption('stats', 'Estadísticas', Icons.analytics_rounded),
           ]),
@@ -651,6 +661,8 @@ class _AddBlocksTab extends StatelessWidget {
         return Icons.handshake_rounded;
       case 'brandLogos':
         return Icons.branding_watermark_rounded;
+      case 'googleReviews':
+        return Icons.reviews_rounded;
       case 'canvas':
         return Icons.dashboard_customize_outlined;
       case 'text':
@@ -694,6 +706,8 @@ class _AddBlocksTab extends StatelessWidget {
         return 'Video Banner';
       case 'brandLogos':
         return 'Logos Marcas';
+      case 'googleReviews':
+        return 'Google Reviews';
       case 'partnersBanner':
         return 'Partners';
       case 'testimonials':
@@ -713,6 +727,345 @@ class _AddBlocksTab extends StatelessWidget {
       default:
         return type;
     }
+  }
+}
+
+class _SyncTab extends StatefulWidget {
+  const _SyncTab();
+
+  @override
+  State<_SyncTab> createState() => _SyncTabState();
+}
+
+class _SyncTabState extends State<_SyncTab> {
+  @override
+  Widget build(BuildContext context) {
+    // Only verify context types, do not assume they are ready if generic
+    final googleService = context.watch<GoogleBusinessService>();
+    final websiteService = context.watch<WebsiteService>();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'GOOGLE BUSINESS PROFILE',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Sincroniza tu información de negocio directamente desde Google para mejorar tu SEO y mostrar reseñas.',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 24),
+          if (googleService.error != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline,
+                      color: Colors.amber, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      googleService.error!,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (Supabase.instance.client.auth.currentSession?.providerToken !=
+              null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4285F4).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: const Color(0xFF4285F4).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle,
+                      color: Color(0xFF4285F4), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Conectado correctamente',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                        Text(
+                          'Google Business Profile',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh,
+                        color: Colors.white54, size: 18),
+                    tooltip: 'Reconectar',
+                    onPressed: () => googleService.connect(),
+                  ),
+                ],
+              ),
+            )
+          else
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: googleService.isLoading
+                    ? null
+                    : () => googleService.connect(),
+                icon: googleService.isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.add_link, size: 18),
+                label: Text(googleService.isLoading
+                    ? 'Conectando...'
+                    : 'Conectar Cuenta Google'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4285F4),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ),
+          const SizedBox(height: 32),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 24),
+          const Text(
+            'ACCIONES',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ActionCard(
+            title: 'Sincronizar Datos',
+            description: 'Importar dirección, horario y teléfono.',
+            icon: Icons.sync,
+            onTap: () async {
+              try {
+                final locations = await googleService.fetchLocations();
+                if (!context.mounted) return;
+
+                if (locations.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('No se encontraron ubicaciones')),
+                  );
+                } else {
+                  _showLocationSelectionDialog(
+                      context, locations, websiteService);
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          _ActionCard(
+            title: 'Sincronizar Reseñas',
+            description: 'Descargar últimas reseñas de Google.',
+            icon: Icons.reviews,
+            onTap: () async {
+              try {
+                // 1. Get location name from settings (saved in previous step)
+                final locationName =
+                    websiteService.getSetting('business_google_location_id');
+
+                if (locationName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'Primero debes sincronizar los datos del negocio para obtener la ubicación.')),
+                  );
+                  return;
+                }
+
+                // 2. Fetch reviews
+                final reviews = await googleService.fetchReviews(locationName);
+                if (!context.mounted) return;
+
+                // 3. Save to settings
+                if (reviews.isNotEmpty) {
+                  await websiteService.saveSetting(
+                      'google_reviews_data', jsonEncode(reviews));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          'Se descargaron ${reviews.length} reseñas correctamente!'),
+                      backgroundColor: const Color(0xFF00A09D),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'No se encontraron reseñas para esta ubicación.')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLocationSelectionDialog(BuildContext context,
+      List<GoogleLocation> locations, WebsiteService websiteService) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Seleccionar Ubicación',
+            style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: 300,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: locations.length,
+            itemBuilder: (context, index) {
+              final loc = locations[index];
+              return ListTile(
+                title: Text(loc.title,
+                    style: const TextStyle(color: Colors.white)),
+                subtitle: Text(loc.addressLine ?? '',
+                    style: const TextStyle(color: Colors.white70)),
+                onTap: () {
+                  websiteService.saveSetting('business_name', loc.title);
+                  websiteService.saveSetting('business_google_location_id',
+                      loc.name); // Save ID for reviews
+                  if (loc.phone != null) {
+                    websiteService.saveSetting('business_phone', loc.phone!);
+                  }
+
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Datos sincronizados correctamente!'),
+                      backgroundColor: Color(0xFF00A09D),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _ActionCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isEnabled ? const Color(0xFF00A09D) : Colors.grey)
+                    .withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon,
+                  color: isEnabled ? const Color(0xFF00A09D) : Colors.grey,
+                  size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isEnabled ? Colors.white : Colors.white54,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            if (isEnabled)
+              const Icon(Icons.arrow_forward_ios,
+                  color: Colors.white30, size: 14),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -5151,17 +5504,8 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     final specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
     _isSpecialRoute = specialRoutes.any((r) => _currentRoute.startsWith(r));
 
-    // For special routes, load SEO from website_settings
-    if (_isSpecialRoute) {
-      final service = context.read<WebsiteService>();
-      final routeKey = _currentRoute.split('/').first; // e.g., 'productos'
-      _metaTitleController.text =
-          service.getSetting('seo_${routeKey}_title', '');
-      _metaDescriptionController.text =
-          service.getSetting('seo_${routeKey}_description', '');
-      setState(() => _isLoading = false);
-      return;
-    }
+    // Special route check logic preserved, but early return removed.
+    // We now attempt to load from DB first for ALL routes.
 
     await _loadPageData();
   }
@@ -5170,16 +5514,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     final pageId = widget.editProvider.currentPageId;
     final pageSlug = widget.editProvider.currentPageSlug ?? _currentRoute;
 
-    // Home page
-    if ((pageId == null && pageSlug == 'inicio') || _currentRoute == 'inicio') {
-      final service = context.read<WebsiteService>();
-      _metaTitleController.text = service.getSetting('meta_title', '');
-      _metaDescriptionController.text =
-          service.getSetting('meta_description', '');
-      _currentRoute = 'inicio';
-      setState(() => _isLoading = false);
-      return;
-    }
+    // Home page check removed to use standard website_pages table logic
 
     try {
       final service = context.read<WebsiteService>();
@@ -5198,8 +5533,18 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
         _metaDescriptionController.text = page.metaDescription ?? '';
         setState(() => _isLoading = false);
       } else {
+        // Page not found in DB
+        if (_isSpecialRoute) {
+          // Fallback: Try loading from legacy website_settings
+          final service = context.read<WebsiteService>();
+          final routeKey = _currentRoute.split('/').first;
+          _metaTitleController.text =
+              service.getSetting('seo_${routeKey}_title', '');
+          _metaDescriptionController.text =
+              service.getSetting('seo_${routeKey}_description', '');
+        }
         setState(() {
-          _isSpecialRoute = true;
+          // Keep _isSpecialRoute as determined earlier
           _isLoading = false;
         });
       }
@@ -5220,29 +5565,22 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
 
     try {
       final service = context.read<WebsiteService>();
-      final pageId = widget.editProvider.currentPageId;
 
-      if (_isSpecialRoute) {
-        // Special route - save to website_settings with route-prefixed keys
-        final routeKey = _currentRoute.split('/').first;
-        await service.saveSettings({
-          'seo_${routeKey}_title': _metaTitleController.text,
-          'seo_${routeKey}_description': _metaDescriptionController.text,
-        });
-      } else if (pageId == null && _currentRoute == 'inicio') {
-        // Home page - save to website_settings
-        await service.saveSettings({
-          'meta_title': _metaTitleController.text,
-          'meta_description': _metaDescriptionController.text,
-        });
-      } else if (_currentPage != null) {
-        // Regular page - update page record
+      if (_currentPage != null) {
+        // DB Page takes precedence (Modern System)
         final updated = _currentPage!.copyWith(
           metaTitle: _metaTitleController.text,
           metaDescription: _metaDescriptionController.text,
         );
         await service.updatePage(updated);
         _currentPage = updated;
+      } else if (_isSpecialRoute) {
+        // Fallback to legacy settings (Old System)
+        final routeKey = _currentRoute.split('/').first;
+        await service.saveSettings({
+          'seo_${routeKey}_title': _metaTitleController.text,
+          'seo_${routeKey}_description': _metaDescriptionController.text,
+        });
       }
 
       if (mounted) {

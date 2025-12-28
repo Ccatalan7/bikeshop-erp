@@ -6,12 +6,16 @@ import 'package:flutter/material.dart';
 enum WebsiteBlockType {
   hero,
   carousel,
+
   /// Free-position canvas section (Wix-like)
   canvas,
+
   /// Simple text element (freeform text section)
   text,
+
   /// Button element (CTA button with link)
   button,
+
   /// Horizontal divider/separator
   divider,
   products,
@@ -28,10 +32,11 @@ enum WebsiteBlockType {
   stats,
   footer,
   // New modern blocks
-  categoryGrid,    // Large image cards for categories (MTB, Road, Kids, etc.)
-  videoBanner,     // Full-width video/image banner section
-  partnersBanner,  // Dark banner with text list (partners, locations)
-  brandLogos,      // Brand logos carousel/grid (like Commencal's accessory brands)
+  categoryGrid, // Large image cards for categories (MTB, Road, Kids, etc.)
+  videoBanner, // Full-width video/image banner section
+  partnersBanner, // Dark banner with text list (partners, locations)
+  brandLogos, // Brand logos carousel/grid (like Commencal's accessory brands)
+  googleReviews, // Google Reviews Carousel
 }
 
 extension WebsiteBlockTypeX on WebsiteBlockType {
@@ -61,6 +66,7 @@ extension WebsiteBlockTypeX on WebsiteBlockType {
         WebsiteBlockType.videoBanner => Icons.play_circle_outline,
         WebsiteBlockType.partnersBanner => Icons.handshake_outlined,
         WebsiteBlockType.brandLogos => Icons.branding_watermark,
+        WebsiteBlockType.googleReviews => Icons.reviews,
       };
 }
 

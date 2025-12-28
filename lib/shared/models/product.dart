@@ -9,6 +9,8 @@ class Product {
   final int minStockLevel;
   final int maxStockLevel;
   final String? imageUrl;
+  final String?
+      imageUrlOptimized; // WebP optimized version for fast web loading
   final List<String> imageUrls;
   final String? description;
   final ProductCategory category;
@@ -74,6 +76,7 @@ class Product {
     this.minStockLevel = 5,
     this.maxStockLevel = 100,
     this.imageUrl,
+    this.imageUrlOptimized,
     this.imageUrls = const [],
     this.description,
     required this.category,
@@ -141,6 +144,7 @@ class Product {
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
       imageUrl: json['image_url'] as String?,
+      imageUrlOptimized: json['image_url_optimized'] as String?,
       imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? [],
       description: json['description'] as String?,
       category: ProductCategory.values.firstWhere(
@@ -240,6 +244,7 @@ class Product {
       'min_stock_level': minStockLevel,
       'max_stock_level': maxStockLevel,
       'image_url': imageUrl,
+      'image_url_optimized': imageUrlOptimized,
       'image_urls': imageUrls,
       'description': description,
       'category': category.name,
@@ -307,6 +312,7 @@ class Product {
     int? minStockLevel,
     int? maxStockLevel,
     String? imageUrl,
+    String? imageUrlOptimized,
     List<String>? imageUrls,
     String? description,
     ProductCategory? category,
@@ -372,6 +378,7 @@ class Product {
       minStockLevel: minStockLevel ?? this.minStockLevel,
       maxStockLevel: maxStockLevel ?? this.maxStockLevel,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrlOptimized: imageUrlOptimized ?? this.imageUrlOptimized,
       imageUrls: imageUrls ?? this.imageUrls,
       description: description ?? this.description,
       category: category ?? this.category,

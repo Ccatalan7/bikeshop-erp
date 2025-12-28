@@ -199,6 +199,11 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         (editProvider.currentPageSlug != null &&
             editProvider.currentPageSlug == widget.slug);
 
+    // Note: Auto-switching context between cached policy pages was removed
+    // because it caused infinite loops. The _checkEditModeFromRouter handles
+    // entering edit mode when navigating to a page with ?edit=true.
+    // For context switching between already-cached pages, use block selection.
+
     final blocksToRender =
         (isEditMode && matchesPage) ? editProvider.blocks : _blocks;
 

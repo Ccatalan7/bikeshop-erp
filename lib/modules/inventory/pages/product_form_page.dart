@@ -75,6 +75,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   List<SetComponentDraft> _setComponents = [];
 
   String? _imageUrl;
+  String? _imageUrlOptimized; // Optimized WebP version for fast web loading
   // --- ARCHITECTURAL FIX ---
   // Do not store XFile in state. Store only pure, platform-agnostic data.
   Uint8List? _selectedImageBytes;
@@ -507,6 +508,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _isPublished = product.isPublished;
         _isGoogleMerchant = product.isGoogleMerchant;
         _imageUrl = product.imageUrl;
+        _imageUrlOptimized = product.imageUrlOptimized;
         _additionalImages
           ..clear()
           ..addAll(product.additionalImages);
@@ -628,6 +630,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       _selectedImageBytes = null;
       _selectedImageName = null;
       _imageUrl = null;
+      _imageUrlOptimized = null;
     });
   }
 
@@ -733,20 +736,18 @@ class _ProductFormPageState extends State<ProductFormPage> {
       }
 
       String? finalImageUrl = _imageUrl;
+      String? finalImageUrlOptimized = _imageUrlOptimized;
 
-      // --- ARCHITECTURAL FIX ---
+      // --- IMAGE UPLOAD WITH AUTO-OPTIMIZATION ---
       // Use the platform-agnostic bytes and name from the state.
+      // Automatically creates both original + optimized WebP version.
       if (_selectedImageBytes != null && _selectedImageName != null) {
-        final uploadUrl = await ImageService.uploadBytes(
+        final uploadResult = await ImageService.uploadProductImageWithOptimization(
           bytes: _selectedImageBytes!,
           fileName: _selectedImageName!,
-          bucket: StorageConfig.defaultBucket,
-          folder: StorageFolders.productMain,
         );
-        if (uploadUrl == null) {
-          throw Exception('No se pudo subir la imagen principal.');
-        }
-        finalImageUrl = uploadUrl;
+        finalImageUrl = uploadResult.originalUrl;
+        finalImageUrlOptimized = uploadResult.optimizedUrl;
       }
 
       // --- SAFEGUARD ---
@@ -821,6 +822,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             minStockLevel: minStockLevel,
             maxStockLevel: maxStockLevel,
             imageUrl: finalImageUrl,
+            imageUrlOptimized: finalImageUrlOptimized,
             additionalImages: safeAdditionalImages,
             isActive: _isActive,
             isPublished: _isPublished,
@@ -850,6 +852,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         minStockLevel: minStockLevel,
         maxStockLevel: maxStockLevel,
         imageUrl: finalImageUrl,
+        imageUrlOptimized: finalImageUrlOptimized,
         additionalImages: safeAdditionalImages,
         isActive: _isActive,
         isPublished: _isPublished,

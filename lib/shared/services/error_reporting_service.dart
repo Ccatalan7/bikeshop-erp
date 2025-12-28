@@ -26,8 +26,13 @@ class ErrorReportingService {
     'EngineFlutterView',
     'LegacyJavaScriptObject',
     'isDisposed',
-    'RenderFlex overflowed',  // Layout overflow (non-critical visual issue)
-    'overflowed by',          // Generic overflow pattern
+    'RenderFlex overflowed', // Layout overflow (non-critical visual issue)
+    'overflowed by', // Generic overflow pattern
+    'BindingError', // CanvasKit WebGL issues
+    'ColorSpace',
+    'Picture',
+    'Typeface',
+    'Shader',
   ];
 
   /// Check if an error should be suppressed (web-specific errors)
@@ -43,15 +48,16 @@ class ErrorReportingService {
 
   static void report(dynamic error, [StackTrace? stackTrace]) {
     final message = error is String ? error : error.toString();
-    
+
     // Suppress known Flutter Web-specific errors that don't affect functionality
     if (_shouldSuppressError(message)) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ErrorReportingService] Suppressed web-specific error: ${message.substring(0, message.length.clamp(0, 80))}...');
+        debugPrint(
+            '⚠️ [ErrorReportingService] Suppressed web-specific error: ${message.substring(0, message.length.clamp(0, 80))}...');
       }
       return;
     }
-    
+
     notifier.setError(message, stackTrace?.toString());
 
     // Always log to console for debugging

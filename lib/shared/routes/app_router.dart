@@ -3,93 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import '../widgets/main_layout.dart';
-import '../screens/dashboard_screen.dart';
-import '../screens/login_screen.dart';
-import '../screens/reset_password_screen.dart';
-import '../../modules/auth/pages/accept_invitation_page.dart';
+import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
-import '../../modules/accounting/pages/account_list_page.dart';
-import '../../modules/accounting/pages/account_form_page.dart';
-import '../../modules/accounting/pages/journal_entry_list_page.dart';
-import '../../modules/accounting/pages/journal_entry_form_page.dart';
-import '../../modules/accounting/pages/financial_reports_hub_page.dart';
-import '../../modules/accounting/pages/income_statement_page.dart';
-import '../../modules/accounting/pages/balance_sheet_page.dart';
-import '../../modules/accounting/pages/expense_list_page.dart';
-import '../../modules/accounting/pages/expense_detail_page.dart';
-import '../../modules/accounting/pages/expense_form_page.dart';
-import '../../modules/tax_reports/pages/f29_dashboard_page.dart';
-import '../../modules/crm/pages/customer_list_page.dart';
-import '../../modules/crm/pages/customer_form_page.dart';
-import '../../modules/crm/pages/customer_bike_directory_page.dart';
-import '../../modules/bikeshop/pages/client_logbook_page.dart';
-import '../../modules/bikeshop/pages/pegas_table_page.dart';
-import '../../modules/bikeshop/pages/job_statuses_page.dart';
-import '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
-import '../../modules/bikeshop/pages/workshop_calendar_page.dart';
-import '../../modules/bikeshop/pages/bike_brands_page.dart';
-import '../../modules/bikeshop/pages/wheel_hubs_page.dart';
-import '../../modules/bikeshop/pages/wheel_rims_page.dart';
-import '../../modules/bikeshop/pages/wheel_spokes_page.dart';
-import '../../modules/bikeshop/pages/wheel_builder_wizard_page.dart';
-import '../../modules/bikeshop/pages/spoke_length_calculator_page.dart';
-import '../../modules/bikeshop/pages/bike_encyclopedia_page.dart';
-import '../../modules/inventory/pages/product_list_page.dart';
-import '../../modules/inventory/pages/product_form_page.dart';
-import '../../modules/inventory/pages/product_import_page.dart';
-import '../../modules/inventory/pages/hierarchical_category_page.dart';
-import '../../modules/inventory/pages/category_form_page.dart';
-import '../../modules/inventory/pages/brand_list_page.dart';
-import '../../modules/inventory/pages/brand_form_page.dart';
-import '../../modules/inventory/pages/stock_movement_list_page.dart';
-import '../../modules/inventory/pages/stock_movements_page.dart';
-import '../../modules/sales/pages/invoice_list_page.dart';
-import '../../modules/sales/pages/invoice_form_page.dart';
-import '../../modules/sales/pages/invoice_payment_page.dart';
-import '../../modules/sales/pages/payment_form_page.dart';
-import '../../modules/sales/pages/sales_reports_page.dart';
-import '../../modules/sales/pages/reports/sales_by_product_page.dart';
-import '../../modules/sales/pages/reports/sales_by_product_detail_page.dart';
-import '../../modules/sales/pages/reports/sales_by_customer_page.dart';
-import '../../modules/purchases/pages/supplier_list_page.dart';
-import '../../modules/purchases/pages/supplier_form_page.dart';
-import '../../modules/purchases/pages/purchase_invoice_list_page.dart';
-import '../../modules/purchases/pages/purchase_invoice_form_page.dart';
-import '../../modules/purchases/pages/purchase_payment_form_page.dart';
-import '../../modules/purchases/pages/purchase_payments_list_page.dart';
-import '../../modules/purchases/pages/smart_purchase_list_page.dart';
-import '../../modules/pos/pages/pos_dashboard_page.dart';
-import '../../modules/pos/pages/pos_cart_page.dart';
-import '../../modules/pos/pages/pos_payment_page.dart';
-import '../../modules/pos/pages/pos_receipt_page.dart';
-import '../../modules/pos/models/pos_transaction.dart';
-import '../../modules/settings/pages/settings_page.dart';
-import '../../modules/settings/pages/factory_reset_page_new.dart';
-import '../../modules/settings/pages/backup_management_page.dart';
-import '../../modules/settings/pages/appearance_settings_page.dart';
-import '../../modules/settings/pages/user_management_page.dart';
-import '../../modules/settings/pages/payment_methods_settings_page.dart';
-import '../../modules/settings/pages/bluetooth_scanner_page.dart';
-import '../../modules/settings/pages/keyboard_scanner_page.dart';
-import '../../modules/settings/pages/remote_scanner_page.dart';
-import '../../modules/settings/pages/notification_settings_page.dart';
-import '../../modules/hr/pages/employee_list_page.dart';
-import '../../modules/hr/pages/attendances_page.dart';
-import '../../modules/hr/pages/kiosk_mode_page.dart';
-import '../../modules/hr/pages/medical_leaves_page.dart';
-import '../../modules/website/pages/website_management_page.dart';
-import '../../modules/website/pages/page_management_page.dart';
-import '../../modules/website/pages/navigation_management_page.dart';
-import '../../modules/website/pages/integrations_page.dart';
-import '../../modules/website/pages/featured_products_page.dart';
-import '../../modules/website/pages/content_management_page.dart';
-import '../../modules/website/pages/online_orders_page.dart';
-import '../../modules/website/pages/website_settings_page.dart';
-import '../../modules/website/pages/seo_settings_page.dart';
-import '../widgets/workspace_demo_page.dart';
+// ERP / Admin Modules (Deferred to reduce initial bundle size)
+import 'erp_routes_barrel.dart' deferred as erp;
 
-// WebView Modules (embedded websites)
-import '../../modules/webview_modules/webview_modules.dart';
+// WebView Modules (Deferred via barrel)
+// import '../../modules/webview_modules/webview_modules.dart'; // Already in barrel
 
 // Public Store Pages
 import '../../public_store/pages/public_home_page.dart';
@@ -112,7 +32,6 @@ import '../../public_store/pages/customer_chat_list_page.dart';
 import '../../public_store/pages/customer_chat_hub_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
-import '../../modules/messaging/pages/employee_chat_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 
 // Helper wrapper for public store pages
@@ -181,9 +100,11 @@ class _PublicStoreShellState extends State<_PublicStoreShell> {
         widget.currentPath.startsWith('/tienda/cuenta/mensajes/') ||
             widget.currentPath.startsWith('/tienda/cuenta/chats/');
 
-    return PublicStoreLayout(
-      enablePageViewScrolling: !disablePageViewScrolling,
-      child: widget.navigationShell,
+    return PersistentEditorShell(
+      child: PublicStoreLayout(
+        enablePageViewScrolling: !disablePageViewScrolling,
+        child: widget.navigationShell,
+      ),
     );
   }
 }
@@ -222,8 +143,7 @@ class AppRouter {
       // This prevents the bug where authService.notifyListeners() causes unwanted navigation to /
       refreshListenable: forcePublicStoreHost ? null : authService,
       redirect: (context, state) {
-        debugPrint(
-            '🧭 [Router] redirect called - path: ${state.uri.path}, matchedLocation: ${state.matchedLocation}');
+        // Debug: redirect called
         if (authService.isInitializing) {
           return null;
         }
@@ -419,6 +339,15 @@ class AppRouter {
         // Public store host (vinabike-store.web.app): ONLY allow public routes
         // Customer auth on store is for orders/addresses, NOT for ERP access
         if (forcePublicStoreHost) {
+          // FIX: Redirect legacy ERP paths (/tienda/*) to clean paths
+          // This catches defaults like '/tienda/productos' and rewrites to '/productos'
+          if (path.startsWith('/tienda/')) {
+            final newPath = path.replaceFirst('/tienda', '');
+            debugPrint(
+                '🔄 [Router] Redirecting legacy path: $path -> $newPath');
+            return newPath;
+          }
+
           // If somehow a non-public path sneaks in, send to home (should be rare)
           if (!isPublicRoute) {
             return '/';
@@ -1090,20 +1019,22 @@ class AppRouter {
         // Authentication
         GoRoute(
           path: '/login',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const LoginScreen(),
+            erp.loadLibrary(),
+            () => erp.LoginScreen(),
           ),
         ),
 
         // Password Reset
         GoRoute(
           path: '/reset-password',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const ResetPasswordScreen(),
+            erp.loadLibrary(),
+            () => erp.ResetPasswordScreen(),
           ),
         ),
 
@@ -1112,10 +1043,11 @@ class AppRouter {
           path: '/accept-invitation',
           pageBuilder: (context, state) {
             final token = state.uri.queryParameters['token'] ?? '';
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              AcceptInvitationPage(token: token),
+              erp.loadLibrary(),
+              () => erp.AcceptInvitationPage(token: token),
             );
           },
         ),
@@ -1123,56 +1055,62 @@ class AppRouter {
         // Dashboard
         GoRoute(
           path: '/dashboard',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const DashboardScreen(),
+            erp.loadLibrary(),
+            () => erp.DashboardScreen(),
           ),
         ),
 
         // Workspace Demo (for testing workspace tab system)
         GoRoute(
           path: '/workspace-demo',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WorkspaceDemoPage(),
+            erp.loadLibrary(),
+            () => erp.WorkspaceDemoPage(),
           ),
         ),
 
         // Accounting Module
         GoRoute(
           path: '/accounting/accounts',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const AccountListPage(),
+            erp.loadLibrary(),
+            () => erp.AccountListPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/expenses',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const ExpenseListPage(),
+            erp.loadLibrary(),
+            () => erp.ExpenseListPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/expenses/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const ExpenseFormPage(),
+            erp.loadLibrary(),
+            () => erp.ExpenseFormPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/expenses/:id',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              ExpenseDetailPage(expenseId: id),
+              erp.loadLibrary(),
+              () => erp.ExpenseDetailPage(expenseId: id),
             );
           },
         ),
@@ -1180,56 +1118,62 @@ class AppRouter {
           path: '/accounting/expenses/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              ExpenseFormPage(expenseId: id),
+              erp.loadLibrary(),
+              () => erp.ExpenseFormPage(expenseId: id),
             );
           },
         ),
         GoRoute(
           path: '/accounting/accounts/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const AccountFormPage(),
+            erp.loadLibrary(),
+            () => erp.AccountFormPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/accounts/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              AccountFormPage(accountId: id),
+              erp.loadLibrary(),
+              () => erp.AccountFormPage(accountId: id),
             );
           },
         ),
         GoRoute(
           path: '/accounting/journal-entries',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const JournalEntryListPage(),
+            erp.loadLibrary(),
+            () => erp.JournalEntryListPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/journal-entries/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const JournalEntryFormPage(),
+            erp.loadLibrary(),
+            () => erp.JournalEntryFormPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/journal-entries/:id/edit',
           pageBuilder: (context, state) {
             final entryId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              JournalEntryFormPage(entryId: entryId),
+              erp.loadLibrary(),
+              () => erp.JournalEntryFormPage(entryId: entryId),
             );
           },
         ),
@@ -1237,64 +1181,71 @@ class AppRouter {
         // Financial Reports
         GoRoute(
           path: '/accounting/reports',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const FinancialReportsHubPage(),
+            erp.loadLibrary(),
+            () => erp.FinancialReportsHubPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/reports/income-statement',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const IncomeStatementPage(),
+            erp.loadLibrary(),
+            () => erp.IncomeStatementPage(),
           ),
         ),
         GoRoute(
           path: '/accounting/reports/balance-sheet',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BalanceSheetPage(),
+            erp.loadLibrary(),
+            () => erp.BalanceSheetPage(),
           ),
         ),
 
         // Tax Reports (F29)
         GoRoute(
           path: '/tax-reports/f29',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const F29DashboardPage(),
+            erp.loadLibrary(),
+            () => erp.F29DashboardPage(),
           ),
         ),
 
         // Clientes Hub
         GoRoute(
           path: '/clientes',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const CustomerListPage(),
+            erp.loadLibrary(),
+            () => erp.CustomerListPage(),
           ),
         ),
         GoRoute(
           path: '/clientes/nuevo',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const CustomerFormPage(),
+            erp.loadLibrary(),
+            () => erp.CustomerFormPage(),
           ),
         ),
         GoRoute(
           path: '/clientes/:id/editar',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              CustomerFormPage(customerId: id),
+              erp.loadLibrary(),
+              () => erp.CustomerFormPage(customerId: id),
             );
           },
         ),
@@ -1303,10 +1254,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             final initialTab = state.uri.queryParameters['tab'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              ClientLogbookPage(
+              erp.loadLibrary(),
+              () => erp.ClientLogbookPage(
                 customerId: id,
                 initialTab: initialTab,
               ),
@@ -1317,27 +1269,30 @@ class AppRouter {
         // Taller Module
         GoRoute(
           path: '/taller/pegas',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const PegasTablePage(),
+            erp.loadLibrary(),
+            () => erp.PegasTablePage(),
           ),
         ),
         GoRoute(
           path: '/taller/estados',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const JobStatusesPage(),
+            erp.loadLibrary(),
+            () => erp.JobStatusesPage(),
           ),
         ),
         GoRoute(
           path: '/taller/pegas/nueva',
           pageBuilder: (context, state) {
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              const MechanicJobFormPage(),
+              erp.loadLibrary(),
+              () => erp.MechanicJobFormPage(),
             );
           },
         ),
@@ -1345,87 +1300,97 @@ class AppRouter {
           path: '/taller/pegas/:id',
           pageBuilder: (context, state) {
             final jobId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              MechanicJobFormPage(jobId: jobId),
+              erp.loadLibrary(),
+              () => erp.MechanicJobFormPage(jobId: jobId),
             );
           },
         ),
         GoRoute(
           path: '/taller/bicicletas',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const CustomerBikeDirectoryPage(),
+            erp.loadLibrary(),
+            () => erp.CustomerBikeDirectoryPage(),
           ),
         ),
         GoRoute(
           path: '/taller/calendario',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WorkshopCalendarPage(),
+            erp.loadLibrary(),
+            () => erp.WorkshopCalendarPage(),
           ),
         ),
         GoRoute(
           path: '/taller/marcas-modelos',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BikeBrandsPage(),
+            erp.loadLibrary(),
+            () => erp.BikeBrandsPage(),
           ),
         ),
 
         // Bike Encyclopedia
         GoRoute(
           path: '/taller/bike-encyclopedia',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BikeEncyclopediaPage(),
+            erp.loadLibrary(),
+            () => erp.BikeEncyclopediaPage(),
           ),
         ),
 
         // Wheel Building System
         GoRoute(
           path: '/taller/wheel-builder',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WheelBuilderWizardPage(),
+            erp.loadLibrary(),
+            () => erp.WheelBuilderWizardPage(),
           ),
         ),
         GoRoute(
           path: '/taller/spoke-calculator',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SpokeLengthCalculatorPage(),
+            erp.loadLibrary(),
+            () => erp.SpokeLengthCalculatorPage(),
           ),
         ),
         GoRoute(
           path: '/taller/wheel-hubs',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WheelHubsPage(),
+            erp.loadLibrary(),
+            () => erp.WheelHubsPage(),
           ),
         ),
         GoRoute(
           path: '/taller/wheel-rims',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WheelRimsPage(),
+            erp.loadLibrary(),
+            () => erp.WheelRimsPage(),
           ),
         ),
         GoRoute(
           path: '/taller/wheel-spokes',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WheelSpokesPage(),
+            erp.loadLibrary(),
+            () => erp.WheelSpokesPage(),
           ),
         ),
 
@@ -1436,10 +1401,11 @@ class AppRouter {
             final categoryId = state.uri.queryParameters['category'];
             final supplierId = state.uri.queryParameters['supplier'];
             final refreshToken = state.uri.queryParameters['refresh'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              ProductListPage(
+              erp.loadLibrary(),
+              () => erp.ProductListPage(
                 initialCategoryId: categoryId,
                 initialSupplierId: supplierId,
                 refreshToken: refreshToken,
@@ -1449,47 +1415,52 @@ class AppRouter {
         ),
         GoRoute(
           path: '/inventory/products/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const ProductFormPage(),
+            erp.loadLibrary(),
+            () => erp.ProductFormPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/products/import',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const ProductImportPage(),
+            erp.loadLibrary(),
+            () => erp.ProductImportPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/products/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              ProductFormPage(productId: id),
+              erp.loadLibrary(),
+              () => erp.ProductFormPage(productId: id),
             );
           },
         ),
         GoRoute(
           path: '/inventory/categories',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const HierarchicalCategoryPage(),
+            erp.loadLibrary(),
+            () => erp.HierarchicalCategoryPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/categories/new',
           pageBuilder: (context, state) {
             final parentId = state.uri.queryParameters['parent'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              CategoryFormPage(parentCategoryId: parentId),
+              erp.loadLibrary(),
+              () => erp.CategoryFormPage(parentCategoryId: parentId),
             );
           },
         ),
@@ -1499,17 +1470,19 @@ class AppRouter {
             final id = state.pathParameters['id']!;
             // Check if this is an edit route by looking at the full path
             if (state.uri.path.endsWith('/edit')) {
-              return _buildPageWithNoTransition(
+              return _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                CategoryFormPage(categoryId: id),
+                erp.loadLibrary(),
+                () => erp.CategoryFormPage(categoryId: id),
               );
             }
             // Otherwise it's a category view
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              HierarchicalCategoryPage(categoryId: id),
+              erp.loadLibrary(),
+              () => erp.HierarchicalCategoryPage(categoryId: id),
             );
           },
         ),
@@ -1517,64 +1490,71 @@ class AppRouter {
           path: '/inventory/categories/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              CategoryFormPage(categoryId: id),
+              erp.loadLibrary(),
+              () => erp.CategoryFormPage(categoryId: id),
             );
           },
         ),
         GoRoute(
           path: '/inventory/brands',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BrandListPage(),
+            erp.loadLibrary(),
+            () => erp.BrandListPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/movements',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const StockMovementsPage(),
+            erp.loadLibrary(),
+            () => erp.StockMovementsPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/brands/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BrandFormPage(),
+            erp.loadLibrary(),
+            () => erp.BrandFormPage(),
           ),
         ),
         GoRoute(
           path: '/inventory/brands/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              BrandFormPage(brandId: id),
+              erp.loadLibrary(),
+              () => erp.BrandFormPage(brandId: id),
             );
           },
         ),
         GoRoute(
           path: '/inventory/movements',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const StockMovementListPage(),
+            erp.loadLibrary(),
+            () => erp.StockMovementListPage(),
           ),
         ),
 
         // Sales Module
         GoRoute(
           path: '/sales/invoices',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const InvoiceListPage(),
+            erp.loadLibrary(),
+            () => erp.InvoiceListPage(),
           ),
         ),
         GoRoute(
@@ -1582,10 +1562,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final jobId = state.uri.queryParameters['job_id'];
             final customerId = state.uri.queryParameters['customer_id'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              InvoiceFormPage(
+              erp.loadLibrary(),
+              () => erp.InvoiceFormPage(
                 preselectedJobId: jobId,
                 preselectedCustomerId: customerId,
               ),
@@ -1598,10 +1579,11 @@ class AppRouter {
             final id = state.pathParameters['id']!;
             final referrer = state.uri.queryParameters['referrer'];
             final jobId = state.uri.queryParameters['jobId'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              InvoiceFormPage(
+              erp.loadLibrary(),
+              () => erp.InvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
                 referrerJobId: jobId,
@@ -1613,10 +1595,11 @@ class AppRouter {
           path: '/sales/invoices/:id/payment',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              InvoicePaymentPage(invoiceId: id),
+              erp.loadLibrary(),
+              () => erp.InvoicePaymentPage(invoiceId: id),
             );
           },
         ),
@@ -1626,10 +1609,11 @@ class AppRouter {
             final id = state.pathParameters['id']!;
             final referrer = state.uri.queryParameters['referrer'];
             final jobId = state.uri.queryParameters['jobId'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              InvoiceFormPage(
+              erp.loadLibrary(),
+              () => erp.InvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
                 referrerJobId: jobId,
@@ -1639,28 +1623,31 @@ class AppRouter {
         ),
         GoRoute(
           path: '/sales/payments',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const PaymentsPage(),
+            erp.loadLibrary(),
+            () => erp.PaymentsPage(),
           ),
         ),
 
         // Sales Reports
         GoRoute(
           path: '/sales/reports',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SalesReportsPage(),
+            erp.loadLibrary(),
+            () => erp.SalesReportsPage(),
           ),
         ),
         GoRoute(
           path: '/sales/reports/by-product',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SalesByProductPage(),
+            erp.loadLibrary(),
+            () => erp.SalesByProductPage(),
           ),
         ),
         GoRoute(
@@ -1678,10 +1665,11 @@ class AppRouter {
                 ? DateTime.tryParse(endStr)
                 : null;
 
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              SalesByProductDetailPage(
+              erp.loadLibrary(),
+              () => erp.SalesByProductDetailPage(
                 productId: id,
                 productName: name,
                 startDate: start,
@@ -1692,57 +1680,63 @@ class AppRouter {
         ),
         GoRoute(
           path: '/sales/reports/by-customer',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SalesByCustomerPage(),
+            erp.loadLibrary(),
+            () => erp.SalesByCustomerPage(),
           ),
         ),
 
         // Messaging Module
         GoRoute(
           path: '/chat',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(child: EmployeeChatPage()),
+            erp.loadLibrary(),
+            () => MainLayout(child: erp.EmployeeChatPage()),
           ),
         ),
 
         // Purchases Module
         GoRoute(
           path: '/purchases/suppliers',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SupplierListPage(),
+            erp.loadLibrary(),
+            () => erp.SupplierListPage(),
           ),
         ),
         GoRoute(
           path: '/purchases/suppliers/new',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SupplierFormPage(),
+            erp.loadLibrary(),
+            () => erp.SupplierFormPage(),
           ),
         ),
         GoRoute(
           path: '/purchases/suppliers/:id/edit',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              SupplierFormPage(supplierId: id),
+              erp.loadLibrary(),
+              () => erp.SupplierFormPage(supplierId: id),
             );
           },
         ),
         GoRoute(
           path: '/purchases',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const PurchaseInvoiceListPage(),
+            erp.loadLibrary(),
+            () => erp.PurchaseInvoiceListPage(),
           ),
         ),
         // Specific routes MUST come before dynamic :id route
@@ -1753,29 +1747,32 @@ class AppRouter {
             final isPrepayment = prepaymentParam == 'true';
             debugPrint(
                 '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
+              erp.loadLibrary(),
+              () => erp.PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
             );
           },
         ),
         GoRoute(
           path: '/purchases/payments',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: PurchasePaymentsListPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.PurchasePaymentsListPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/purchases/smart-list',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const SmartPurchaseListPage(),
+            erp.loadLibrary(),
+            () => erp.SmartPurchaseListPage(),
           ),
         ),
         // Dynamic route for viewing/editing invoices
@@ -1784,10 +1781,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             // Single page for create, edit, and workflow (like sales invoice)
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              PurchaseInvoiceFormPage(invoiceId: id),
+              erp.loadLibrary(),
+              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
         ),
@@ -1796,10 +1794,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             // DEPRECATED: Detail page is no longer used, redirects to form page
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              PurchaseInvoiceFormPage(invoiceId: id),
+              erp.loadLibrary(),
+              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
         ),
@@ -1808,10 +1807,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             // DEPRECATED: Edit route is no longer used, redirects to form page
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              PurchaseInvoiceFormPage(invoiceId: id),
+              erp.loadLibrary(),
+              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
         ),
@@ -1819,10 +1819,11 @@ class AppRouter {
           path: '/purchases/invoices/:id/payment',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              PurchasePaymentFormPage(invoiceId: id),
+              erp.loadLibrary(),
+              () => erp.PurchasePaymentFormPage(invoiceId: id),
             );
           },
         ),
@@ -1830,43 +1831,48 @@ class AppRouter {
         // POS Module
         GoRoute(
           path: '/pos',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: POSDashboardPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.POSDashboardPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/pos/cart',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: POSCartPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.POSCartPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/pos/payment',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: POSPaymentPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.POSPaymentPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/pos/receipt',
           pageBuilder: (context, state) {
-            final transaction = state.extra as POSTransaction;
-            return _buildPageWithNoTransition(
+            // Note: POSTransaction type requires direct import, not deferred
+            final transaction = state.extra;
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              MainLayout(
-                child: POSReceiptPage(transaction: transaction),
+              erp.loadLibrary(),
+              () => MainLayout(
+                child: erp.POSReceiptPage(transaction: transaction),
               ),
             );
           },
@@ -1875,126 +1881,140 @@ class AppRouter {
         // Settings routes
         GoRoute(
           path: '/settings',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: SettingsPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.SettingsPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/settings/factory-reset',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: FactoryResetPageNew(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.FactoryResetPageNew(),
             ),
           ),
         ),
         GoRoute(
           path: '/settings/backup',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BackupManagementPage(),
+            erp.loadLibrary(),
+            () => erp.BackupManagementPage(),
           ),
         ),
         GoRoute(
           path: '/settings/appearance',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: AppearanceSettingsPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.AppearanceSettingsPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/settings/users',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: UserManagementPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.UserManagementPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/settings/payment-methods',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              child: PaymentMethodsSettingsPage(),
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.PaymentMethodsSettingsPage(),
             ),
           ),
         ),
         GoRoute(
           path: '/settings/bluetooth-scanner',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const BluetoothScannerPage(),
+            erp.loadLibrary(),
+            () => erp.BluetoothScannerPage(),
           ),
         ),
         GoRoute(
           path: '/settings/keyboard-scanner',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const KeyboardScannerPage(),
+            erp.loadLibrary(),
+            () => erp.KeyboardScannerPage(),
           ),
         ),
         GoRoute(
           path: '/settings/remote-scanner',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const RemoteScannerPage(),
+            erp.loadLibrary(),
+            () => erp.RemoteScannerPage(),
           ),
         ),
         GoRoute(
           path: '/settings/notifications',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const NotificationSettingsPage(),
+            erp.loadLibrary(),
+            () => erp.NotificationSettingsPage(),
           ),
         ),
 
         // HR routes
         GoRoute(
           path: '/hr/employees',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const EmployeeListPage(),
+            erp.loadLibrary(),
+            () => erp.EmployeeListPage(),
           ),
         ),
         GoRoute(
           path: '/hr/attendances',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const AttendancesPage(),
+            erp.loadLibrary(),
+            () => erp.AttendancesPage(),
           ),
         ),
         GoRoute(
           path: '/hr/kiosk',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const KioskModePage(), // Full screen, no MainLayout
+            erp.loadLibrary(),
+            () => erp.KioskModePage(), // Full screen, no MainLayout
           ),
         ),
         GoRoute(
           path: '/hr/medical-leaves',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MedicalLeavesPage(),
+            erp.loadLibrary(),
+            () => erp.MedicalLeavesPage(),
           ),
         ),
         GoRoute(
@@ -2023,82 +2043,99 @@ class AppRouter {
         // Website Module
         GoRoute(
           path: '/website',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WebsiteManagementPage(),
+            erp.loadLibrary(),
+            () => erp.WebsiteManagementPage(),
           ),
           routes: [
             // Page Management (Dec 2025)
             GoRoute(
               path: 'pages',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const PageManagementPage(),
+                erp.loadLibrary(),
+                () => erp.PageManagementPage(),
               ),
             ),
             // Navigation Management (Dec 2025)
             GoRoute(
               path: 'navigation',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const NavigationManagementPage(),
+                erp.loadLibrary(),
+                () => erp.NavigationManagementPage(),
               ),
             ),
             // Integrations (Dec 2025)
             GoRoute(
               path: 'integrations',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const IntegrationsPage(),
+                erp.loadLibrary(),
+                () => erp.IntegrationsPage(),
               ),
             ),
             // SEO Settings (Dec 2025)
             GoRoute(
               path: 'seo',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const SeoSettingsPage(),
+                erp.loadLibrary(),
+                () => erp.SeoSettingsPage(),
               ),
             ),
             // Featured Products
             GoRoute(
               path: 'featured',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const FeaturedProductsPage(),
+                erp.loadLibrary(),
+                () => erp.FeaturedProductsPage(),
               ),
             ),
             // Content Management
             GoRoute(
               path: 'content',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const ContentManagementPage(),
+                erp.loadLibrary(),
+                () => erp.ContentManagementPage(),
               ),
             ),
             // Online Orders
             GoRoute(
               path: 'orders',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const OnlineOrdersPage(),
+                erp.loadLibrary(),
+                () => erp.OnlineOrdersPage(),
               ),
             ),
             // Website Settings
             GoRoute(
               path: 'settings',
-              pageBuilder: (context, state) => _buildPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                const WebsiteSettingsPage(),
+                erp.loadLibrary(),
+                () => erp.WebsiteSettingsPage(),
               ),
             ),
           ],
@@ -2111,10 +2148,11 @@ class AppRouter {
         // WhatsApp Web
         GoRoute(
           path: '/tools/whatsapp-web',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const WhatsAppWebModulePage(),
+            erp.loadLibrary(),
+            () => erp.WhatsAppWebModulePage(),
           ),
         ),
 
@@ -2123,10 +2161,11 @@ class AppRouter {
           path: '/tools/sheets',
           pageBuilder: (context, state) {
             final url = state.uri.queryParameters['url'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              GoogleSheetsModulePage(sheetUrl: url),
+              erp.loadLibrary(),
+              () => erp.GoogleSheetsModulePage(sheetUrl: url),
             );
           },
         ),
@@ -2136,10 +2175,11 @@ class AppRouter {
           path: '/tools/notion',
           pageBuilder: (context, state) {
             final url = state.uri.queryParameters['url'];
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              NotionModulePage(workspaceUrl: url),
+              erp.loadLibrary(),
+              () => erp.NotionModulePage(workspaceUrl: url),
             );
           },
         ),
@@ -2150,10 +2190,11 @@ class AppRouter {
           pageBuilder: (context, state) {
             final url = state.uri.queryParameters['url'] ??
                 'https://analytics.google.com';
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              AnalyticsDashboardPage(dashboardUrl: url),
+              erp.loadLibrary(),
+              () => erp.AnalyticsDashboardPage(dashboardUrl: url),
             );
           },
         ),
@@ -2165,10 +2206,11 @@ class AppRouter {
             final url =
                 state.uri.queryParameters['url'] ?? 'https://www.google.com';
             final name = state.uri.queryParameters['name'] ?? 'Web Tool';
-            return _buildPageWithNoTransition(
+            return _buildDeferredPageWithNoTransition(
               context,
               state,
-              GenericWebToolPage(url: url, name: name),
+              erp.loadLibrary(),
+              () => erp.GenericWebToolPage(url: url, name: name),
             );
           },
         ),
@@ -2176,5 +2218,38 @@ class AppRouter {
     );
 
     return router;
+  }
+
+  // Helper for deferred routes (Code Splitting)
+  // Shows a loading indicator while the library chunk loads
+  static Page<void> _buildDeferredPageWithNoTransition(
+    BuildContext context,
+    GoRouterState state,
+    Future<dynamic> libraryFuture,
+    Widget Function() widgetBuilder,
+  ) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: FutureBuilder(
+        future: libraryFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            return widgetBuilder();
+          }
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        },
+      ),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+          child,
+    );
   }
 }
