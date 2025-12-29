@@ -53,35 +53,75 @@
       "headers": [
         {
           "source": "/index.html",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/flutter_bootstrap.js",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/main.dart.js",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/manifest.json",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/version.json",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/flutter_service_worker.js",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
         },
         {
           "source": "**/*.{png,jpg,jpeg,webp,svg,ico,woff,woff2,ttf,otf,wasm,mjs}",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=2592000"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=2592000"
+            }
+          ]
         },
         {
           "source": "assets/**",
-          "headers": [{"key": "Cache-Control", "value": "public, max-age=2592000"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=2592000"
+            }
+          ]
         }
       ],
       "rewrites": [

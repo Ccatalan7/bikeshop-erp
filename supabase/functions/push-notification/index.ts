@@ -136,12 +136,8 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({
                     message: {
                         token: t.fcm_token,
-                        // NOTIFICATION payload - ensures Android shows notification even when app is killed
-                        notification: {
-                            title: senderName,
-                            body: messageBody,
-                        },
-                        // DATA payload - enables custom handling for grouping when app is alive
+                        // DATA-ONLY payload - prevents FCM auto-display, lets our code handle it
+                        // This prevents duplicate notifications on web
                         data: {
                             conversation_id: record.conversation_id,
                             sender_id: record.sender_id,
@@ -155,9 +151,12 @@ Deno.serve(async (req) => {
                         // Android-specific: high priority for background wake + custom channel
                         android: {
                             priority: 'high',
+                            // Include notification for Android since native app handles it
                             notification: {
-                                channel_id: 'chat_channel',
-                                tag: record.conversation_id, // Group by conversation
+                                title: senderName,
+                                body: messageBody,
+                                channel_id: 'chat_messages',
+                                tag: record.conversation_id,
                             },
                         },
                         // iOS-specific
@@ -170,8 +169,25 @@ Deno.serve(async (req) => {
                                         title: senderName,
                                         body: messageBody
                                     },
-                                    threadId: record.conversation_id, // iOS grouping
+                                    threadId: record.conversation_id,
                                 }
+                            }
+                        },
+                        // Web-specific: include notification here (not at top level) to prevent duplicate
+                        webpush: {
+                            headers: {
+                                Urgency: 'high'
+                            },
+                            notification: {
+                                title: senderName,
+                                body: messageBody,
+                                icon: '/icons/Icon-192.png',
+                                badge: '/icons/Icon-192.png',
+                                tag: record.conversation_id,
+                                renotify: true
+                            },
+                            fcm_options: {
+                                link: `/chat?conversation=${record.conversation_id}`
                             }
                         }
                     }

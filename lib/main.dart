@@ -67,6 +67,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
+import 'public_router_app.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -137,14 +138,23 @@ Future<void> main() async {
     }
 
     if (!isPublicStoreHost) {
-      try {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-        _logTiming('FIREBASE_INIT');
-      } catch (e) {
-        debugPrint('⚠️ Firebase Config missing for this platform: $e');
-        _logTiming('FIREBASE_INIT_SKIPPED');
+      // Skip Firebase on Safari/iOS web - they don't support FCM properly
+      // and cause the app to hang during initialization
+      final skipFirebase = kIsWeb && shouldSkipFirebase();
+      if (skipFirebase) {
+        debugPrint(
+            '⚠️ [Main] Safari/iOS detected - skipping Firebase initialization');
+        _logTiming('FIREBASE_INIT_SKIPPED', 'safari_ios');
+      } else {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+          _logTiming('FIREBASE_INIT');
+        } catch (e) {
+          debugPrint('⚠️ Firebase Config missing for this platform: $e');
+          _logTiming('FIREBASE_INIT_SKIPPED');
+        }
       }
     } else {
       _logTiming('FIREBASE_INIT_SKIPPED', 'public_store_host');
@@ -162,9 +172,10 @@ Future<void> main() async {
     // Handle deep links for OAuth callbacks on desktop and mobile
     // Initialize Notifications (FCM for Mobile/Web, Local for Desktop)
     // Skip on public store: visitors don't need ERP notifications, and web plugins can crash startup.
+    // NOTE: Don't await - let init run in background to avoid blocking app startup
     if (!isPublicStoreHost) {
-      await NotificationService().init();
-      _logTiming('NOTIFICATIONS_INIT');
+      NotificationService().init(); // No await - non-blocking
+      _logTiming('NOTIFICATIONS_INIT_STARTED');
     } else {
       _logTiming('NOTIFICATIONS_INIT_SKIPPED', 'public_store_host');
     }
@@ -515,11 +526,15 @@ class VinabikeApp extends StatelessWidget {
           }
 
           // Initialize data preload service (preloads critical data after auth)
-          // SKIP on public store - visitors don't need ERP data
+          // SKIP on public store AND for non-staff users - they don't need ERP data
           final dataPreloadService = context.read<DataPreloadService>();
-          if (!isPublicStoreHost &&
+          final shouldPreload = !isPublicStoreHost &&
               !dataPreloadService.hasPreloaded &&
-              authService.isAuthenticated) {
+              authService.isAuthenticated &&
+              authService.isStaffProfileLoaded &&
+              authService.isStaff; // Only preload for actual staff
+
+          if (shouldPreload) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               dataPreloadService.initialize(
                 bikeshopService: context.read<BikeshopService>(),
@@ -536,18 +551,19 @@ class VinabikeApp extends StatelessWidget {
             });
           }
 
-          // Reload appearance settings after authentication completes
-          // Use hasLoadedWithTenant to ensure we reload if initial load had no tenant
-          if (authService.isAuthenticated &&
-              !appearanceService.hasLoadedWithTenant) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              appearanceService.reloadSettings();
-            });
-          }
+          // NOTE: Removed reloadSettings call from here - it caused infinite loops
+          // for customers (hasLoadedWithTenant is always false for them).
+          // AppearanceService already listens to auth changes and reloads automatically.
 
-          // Show loading screen while auth is initializing
-          // BUT skip for public store hosts - they don't need auth
-          if (authService.isInitializing && !isPublicStoreHost) {
+          // Show loading screen while:
+          // 1. Auth is initializing, OR
+          // 2. User is authenticated but staff profile check hasn't completed yet
+          // This prevents the flicker where customers briefly see Workspace before redirect
+          final isWaitingForStaffCheck =
+              authService.isAuthenticated && !authService.isStaffProfileLoaded;
+
+          if ((authService.isInitializing || isWaitingForStaffCheck) &&
+              !isPublicStoreHost) {
             return MaterialApp(
               title: 'Vinabike',
               theme: AppTheme.lightTheme,
@@ -560,7 +576,11 @@ class VinabikeApp extends StatelessWidget {
           }
 
           // Public store or not authenticated = single router
-          if (isPublicStoreHost || !authService.isAuthenticated) {
+          // Also force non-staff users (customers) to use this router to show Access Denied
+          // This prevents building the Workspace System for unauthorized users
+          if (isPublicStoreHost ||
+              !authService.isAuthenticated ||
+              (authService.isStaffProfileLoaded && !authService.isStaff)) {
             // Use the URL captured at startup (before usePathUrlStrategy modified it)
             // This is critical for MercadoPago redirects and direct URL navigation
             final initialLocationOverride = () {
@@ -568,45 +588,18 @@ class VinabikeApp extends StatelessWidget {
                 final uri = Uri.parse(_initialBrowserUrl!);
                 debugPrint(
                     '🔍 [Main] Using captured initial URL: $_initialBrowserUrl');
-                debugPrint('🔍 [Main] parsed path = ${uri.path}');
-                debugPrint('🔍 [Main] parsed query = ${uri.query}');
-                final path = uri.path.isEmpty ? '/' : uri.path;
-                final query = uri.hasQuery ? '?${uri.query}' : '';
-                final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
-                final result = '$path$query$fragment';
-                debugPrint('🔍 [Main] initialLocationOverride = $result');
-                return result;
+                return uri
+                    .toString(); // Just pass the full URL string (or path+query)
               }
               return null;
             }();
 
-            return MaterialApp.router(
-              title: 'Vinabike',
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: appearanceService.themeMode,
-              scrollBehavior: AppScrollBehavior(),
-              routerConfig: AppRouter.createRouter(
-                authService,
-                forcePublicStoreHost: isPublicStoreHost,
-                initialLocationOverride: initialLocationOverride,
-              ),
-              debugShowCheckedModeBanner: false,
-              localizationsDelegates: const [
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              supportedLocales: const [
-                Locale('es', ''),
-                Locale('en', ''),
-              ],
-              locale: const Locale('es', ''),
-              builder: (context, child) => WindowZoomScope(
-                child: ScannerBridgeScope(
-                  child: child ?? const SizedBox.shrink(),
-                ),
-              ),
+            return VinabikePublicRouterApp(
+              key: const ValueKey('PublicRouter'),
+              authService: authService,
+              appearanceService: appearanceService,
+              isPublicStoreHost: isPublicStoreHost,
+              initialUrl: initialLocationOverride,
             );
           }
 
@@ -712,6 +705,7 @@ class _WorkspaceRouterView extends StatefulWidget {
 class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     with AutomaticKeepAliveClientMixin {
   late final GoRouter _router;
+  StreamSubscription<String>? _notificationTapSubscription;
 
   @override
   bool get wantKeepAlive => true;
@@ -737,10 +731,32 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
         debugPrint('❌ [WorkspaceRouterView] Navigation error: $e');
       }
     });
+
+    // Listen for notification taps to navigate to specific chats
+    // Only handle if this is the active workspace
+    _notificationTapSubscription =
+        NotificationService().onNotificationTap.listen((route) {
+      final workspaceManager =
+          Provider.of<WorkspaceManager>(context, listen: false);
+      final myIndex = workspaceManager.workspaces.indexOf(widget.workspace);
+
+      // Only navigate if this workspace is the active one
+      if (myIndex == workspaceManager.activeIndex) {
+        debugPrint(
+            '🔔 [WorkspaceRouterView] Notification tap → navigating to: $route');
+        try {
+          _router.go(route);
+        } catch (e) {
+          debugPrint(
+              '❌ [WorkspaceRouterView] Notification navigation error: $e');
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    _notificationTapSubscription?.cancel();
     _router.dispose();
     super.dispose();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../messaging/models/conversation.dart';
 import '../../messaging/providers/chat_provider.dart';
@@ -9,8 +10,14 @@ import '../../messaging/widgets/chat_context_panel.dart';
 import '../../messaging/utils/message_parser.dart';
 import '../../messaging/widgets/conversation_tile.dart';
 
+// Track last handled deep link with timestamp to prevent rapid re-processing
+String? _lastHandledConversationId;
+DateTime? _lastHandledTime;
+
 class EmployeeChatPage extends StatefulWidget {
-  const EmployeeChatPage({super.key});
+  final String? initialConversationId;
+
+  const EmployeeChatPage({super.key, this.initialConversationId});
 
   @override
   State<EmployeeChatPage> createState() => _EmployeeChatPageState();
@@ -39,7 +46,58 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   void _loadConversations() {
     // Load all once - filter client-side
-    context.read<ChatProvider>().loadConversations();
+    final provider = context.read<ChatProvider>();
+    provider.loadConversations().then((_) {
+      // If opened from notification with a specific conversation, select it
+      // Use time-based deduplication: skip if same conversation handled within 2 seconds
+      final now = DateTime.now();
+      final isDuplicate =
+          widget.initialConversationId == _lastHandledConversationId &&
+              _lastHandledTime != null &&
+              now.difference(_lastHandledTime!).inSeconds < 2;
+
+      if (widget.initialConversationId != null && !isDuplicate) {
+        _lastHandledConversationId = widget.initialConversationId;
+        _lastHandledTime = now;
+
+        // Strip the query param from URL to prevent re-triggering
+        if (mounted) {
+          context.go('/chat');
+        }
+
+        debugPrint(
+            '🔔 Deep link: selecting conversation ${widget.initialConversationId}');
+        provider.setActiveConversation(widget.initialConversationId!);
+
+        // Find the conversation to determine its type and switch tabs
+        final conversations = provider.conversations;
+        final targetConv = conversations
+            .where((c) => c.id == widget.initialConversationId)
+            .firstOrNull;
+
+        if (targetConv != null) {
+          debugPrint('🔔 Found conversation type: ${targetConv.type}');
+
+          // Switch to correct tab (0 = Internal, 1 = Clients)
+          if (targetConv.type == 'support') {
+            _tabController.animateTo(1); // Clients tab
+          } else {
+            _tabController.animateTo(0); // Internal tab
+          }
+
+          // On mobile, navigate directly to the chat
+          final isMobile = MediaQuery.of(context).size.width < 900;
+          if (isMobile) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatWindow(conversation: targetConv),
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 
   void _closeSidePanel() {

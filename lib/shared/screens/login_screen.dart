@@ -20,11 +20,34 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _shopNameController = TextEditingController(); // NEW: Shop name for signup
-  final _phoneController = TextEditingController();     // NEW: Optional phone number
+  final _shopNameController =
+      TextEditingController(); // NEW: Shop name for signup
+  final _phoneController =
+      TextEditingController(); // NEW: Optional phone number
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isRegisterMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Check for access denied error from Staff-Only guard
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uri = Uri.base;
+      final error = uri.queryParameters['error'];
+      if (error == 'access_denied' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '🚫 Acceso denegado. Solo usuarios del equipo pueden acceder al panel de administración.',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -92,23 +115,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final supabase = Supabase.instance.client;
-      
+
       // Step 1: Sign up user with shop metadata (for database trigger)
       final response = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         data: {
           'shop_name': _shopNameController.text.trim(),
-          'subdomain': _shopNameController.text.trim()
-              .toLowerCase()
-              .replaceAll(RegExp(r'[^a-z0-9]'), ''), // Generate subdomain from shop name
+          'subdomain': _shopNameController.text.trim().toLowerCase().replaceAll(
+              RegExp(r'[^a-z0-9]'), ''), // Generate subdomain from shop name
         },
       );
 
       // Step 2: Check if user was created
       final user = response.user;
       if (user == null) {
-        throw Exception('Error al crear la cuenta. Por favor intente con otro correo.');
+        throw Exception(
+            'Error al crear la cuenta. Por favor intente con otro correo.');
       }
 
       // Step 3: Check if email confirmation is required
@@ -129,9 +152,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 8),
                   Text('Te enviamos un correo a: ${_emailController.text}'),
                   const SizedBox(height: 4),
-                  const Text('Por favor, haz clic en el enlace de confirmación.'),
+                  const Text(
+                      'Por favor, haz clic en el enlace de confirmación.'),
                   const SizedBox(height: 4),
-                  const Text('Después podrás iniciar sesión y configurar tu tienda.'),
+                  const Text(
+                      'Después podrás iniciar sesión y configurar tu tienda.'),
                 ],
               ),
               backgroundColor: Colors.blue,
@@ -158,15 +183,16 @@ class _LoginScreenState extends State<LoginScreen> {
         userId: user.id,
         email: _emailController.text.trim(),
         shopName: _shopNameController.text.trim(),
-        phoneNumber: _phoneController.text.trim().isEmpty 
-            ? null 
+        phoneNumber: _phoneController.text.trim().isEmpty
+            ? null
             : _phoneController.text.trim(),
       );
 
       if (tenant == null) {
         // Failed to create tenant - show error and sign out
         await supabase.auth.signOut();
-        throw Exception('Error al crear la tienda. Por favor intente nuevamente.');
+        throw Exception(
+            'Error al crear la tienda. Por favor intente nuevamente.');
       }
 
       // Step 5: Show success message with store URL
@@ -231,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // For desktop, OAuth opens in browser
       // The auth state listener will handle navigation automatically
       // No need to manually navigate here - just show loading state
-      
+
       if (kIsWeb) {
         // On web, show message that redirect is happening
         if (mounted) {
@@ -332,7 +358,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: 'Nombre de tu Tienda',
                         prefixIcon: Icon(Icons.store),
                         hintText: 'Ej: Vinabike',
-                        helperText: 'Se usará para crear tu URL: nombre.bikeshop-erp.app',
+                        helperText:
+                            'Se usará para crear tu URL: nombre.bikeshop-erp.app',
                       ),
                       validator: (value) {
                         if (!_isRegisterMode) return null;
@@ -346,7 +373,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
@@ -407,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
-                  
+
                   // Forgot Password Link (only in login mode)
                   if (!_isRegisterMode) ...[
                     Align(
@@ -423,7 +449,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ],
-                  
+
                   const SizedBox(height: 24),
 
                   if (_isRegisterMode) ...[

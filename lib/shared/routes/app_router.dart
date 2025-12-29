@@ -386,8 +386,27 @@ class AppRouter {
           return '/login';
         }
 
-        // Redirect logged-in users from login to dashboard
-        if (isLoggedIn && loggingIn) {
+        // ============================================================================
+        // STAFF-ONLY GUARD: Block non-staff users from ERP routes
+        // ============================================================================
+        // If user is logged in but NOT a staff member (no user_profiles entry),
+        // they cannot access ERP routes. Redirect them to login with error.
+        // IMPORTANT: Only block AFTER staff profile check completes to avoid loops.
+        if (isLoggedIn &&
+            authService.isStaffProfileLoaded &&
+            !authService.isStaff &&
+            !loggingIn) {
+          debugPrint(
+              '🚫 [Router] Non-staff user blocked from ERP route: ${state.uri.path}');
+          return '/login?error=access_denied';
+        }
+
+        // Redirect logged-in STAFF users from login to dashboard
+        // Only redirect after staff profile is confirmed loaded
+        if (isLoggedIn &&
+            authService.isStaffProfileLoaded &&
+            authService.isStaff &&
+            loggingIn) {
           return '/dashboard';
         }
 
@@ -1691,12 +1710,19 @@ class AppRouter {
         // Messaging Module
         GoRoute(
           path: '/chat',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => MainLayout(child: erp.EmployeeChatPage()),
-          ),
+          pageBuilder: (context, state) {
+            final conversationId = state.uri.queryParameters['conversation'];
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => MainLayout(
+                child: erp.EmployeeChatPage(
+                  initialConversationId: conversationId,
+                ),
+              ),
+            );
+          },
         ),
 
         // Purchases Module

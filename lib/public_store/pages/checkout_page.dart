@@ -533,33 +533,65 @@ class _CheckoutPageState extends State<CheckoutPage>
     return Container(
       constraints: const BoxConstraints(maxWidth: 1200),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Checkout Form (Left - 60%)
-          Expanded(
-            flex: 60,
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 900;
+
+          if (isMobile) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Finalizar Compra',
-                  style: Theme.of(context).textTheme.displaySmall,
+                // Checkout Form (Full Width)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Finalizar Compra',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 32),
+                    _buildCheckoutForm(),
+                  ],
                 ),
+
                 const SizedBox(height: 32),
-                _buildCheckoutForm(),
+
+                // Order Summary (Full Width)
+                _buildOrderSummary(context, cart),
               ],
-            ),
-          ),
+            );
+          }
 
-          const SizedBox(width: 32),
+          // Desktop Layout (Row)
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Checkout Form (Left - 60%)
+              Expanded(
+                flex: 60,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Finalizar Compra',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 32),
+                    _buildCheckoutForm(),
+                  ],
+                ),
+              ),
 
-          // Order Summary (Right - 40%)
-          Expanded(
-            flex: 40,
-            child: _buildOrderSummary(context, cart),
-          ),
-        ],
+              const SizedBox(width: 32),
+
+              // Order Summary (Right - 40%)
+              Expanded(
+                flex: 40,
+                child: _buildOrderSummary(context, cart),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -960,7 +992,8 @@ class _CheckoutPageState extends State<CheckoutPage>
             // Product List
             ...cart.items.map((item) {
               // Prefer optimized image for cart thumbnails
-              final displayImageUrl = item.product.imageUrlOptimized ?? item.product.imageUrl;
+              final displayImageUrl =
+                  item.product.imageUrlOptimized ?? item.product.imageUrl;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Row(

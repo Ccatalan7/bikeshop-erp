@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
@@ -56,6 +57,11 @@ Future<void> main() async {
 
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // Initialize SharedPreferences BEFORE the app starts
+    // This allows us to access cache synchronously in the first frame
+    final prefs = await SharedPreferences.getInstance();
+    WebsiteService.setSharedPreferences(prefs);
 
     // Clean URLs (no hash #) for web
     usePathUrlStrategy();

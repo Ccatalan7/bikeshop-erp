@@ -94,8 +94,9 @@ class _CustomerChatPanelState extends State<CustomerChatPanel> {
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
+        // With reverse: true, 0.0 is the bottom of the list
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0.0,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -374,12 +375,14 @@ class _CustomerChatPanelState extends State<CustomerChatPanel> {
       },
       child: ListView.builder(
         controller: _scrollController,
+        reverse: true, // Anchor to bottom, newest messages at bottom
         padding: const EdgeInsets.all(14),
         itemCount: _messages.length,
         primary:
             false, // Ensure this list doesn't try to be the primary scroll view
         itemBuilder: (context, index) {
-          final msg = _messages[index];
+          // Reverse index since list is reversed
+          final msg = _messages[_messages.length - 1 - index];
           return _buildMessageBubble(msg);
         },
       ),

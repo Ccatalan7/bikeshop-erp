@@ -10,3 +10,8 @@ String? getInitialBrowserUrl() {
 void hideHtmlLoadingScreen() {
   // No-op on non-web platforms
 }
+
+/// Stub - never skip Firebase on native platforms
+bool shouldSkipFirebase() {
+  return false;
+}

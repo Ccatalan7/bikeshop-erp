@@ -219,20 +219,13 @@ cat > "$INDEX_FILE" << HEREDOC
     }, { passive: false });
   </script>
   <script src="flutter_bootstrap.js" async></script>
-  <script>
-    // Configure Flutter renderer: HTML for mobile (faster), CanvasKit for desktop (quality)
-    window.addEventListener('load', function() {
-      if (window._flutter && window._flutter.loader) {
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-                      || window.innerWidth < 768;
-        window._flutter.loader.load({
-          config: {
-            renderer: isMobile ? 'html' : 'canvaskit'
-          }
-        });
-      }
-    });
-  </script>
+  <!-- 
+    NOTE: Using default flutter_bootstrap.js loading.
+    Custom renderer selection was removed because:
+    1. It caused double initialization (flutter_bootstrap.js + custom load call)
+    2. CanvasKit has font loading bugs (BindingError with Noto fonts)
+    The app now uses Flutter's default renderer selection.
+  -->
 </body>
 
 </html>

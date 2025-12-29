@@ -1,11 +1,11 @@
 {
-    "name": "vinabike_erp",
-    "short_name": "vinabike_erp",
+    "name": "Viñabike",
+    "short_name": "Viñabike",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#ffffff",
-    "description": "A new Flutter project.",
+    "theme_color": "#1a1a2e",
+    "description": "Tienda de bicicletas en Viña del Mar",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

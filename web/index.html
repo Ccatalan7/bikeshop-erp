@@ -46,13 +46,6 @@
   <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preload" href="flutter_bootstrap.js" as="script">
-  <link rel="preload" href="main.dart.js" as="script">
-
-  <!-- Preconnect to reduce connection latency -->
-  <link rel="preconnect" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co" crossorigin>
-  <link rel="dns-prefetch" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co">
-  <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
-  <link rel="dns-prefetch" href="https://vinabike-edge-cache.vinabike.workers.dev">
 
   <style>
     html,
@@ -163,29 +156,25 @@
       }
     }, { passive: false });
   </script>
-
-  <!-- Pre-fetch store data while Flutter loads (runs in parallel) -->
   <script>
-    (function () {
-      // Only run on public store domains
-      const host = window.location.hostname;
-      if (!host.includes('vinabike.cl') && !host.includes('vinabike-store.web.app')) return;
-
-      const TENANT_ID = '5443b130-cc28-45af-a420-cd500b288890';
-      const EDGE_CACHE_URL = 'https://vinabike-edge-cache.vinabike.workers.dev/cache/public-store-data';
-
-      // Create a promise that Dart can await (must be named exactly flutter_injected_preloaded_data)
-      window.flutter_injected_preloaded_data = fetch(EDGE_CACHE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_tenant_id: TENANT_ID })
-      })
-        .then(response => response.ok ? response.json() : null)
-        .catch(() => null);
-    })();
+    // Detect Safari/iOS - they don't fully support Web Push API
+    // This flag can be read by Flutter to skip FCM initialization
+    var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    window.skipFCM = isSafari || isIOS;
+    if (window.skipFCM) {
+      console.log('[Vinabike] Safari/iOS detected - FCM disabled');
+    }
   </script>
-
+  <!-- NOTE: FCM Service Worker registration DISABLED for now - causes startup delays -->
   <script src="flutter_bootstrap.js" async></script>
+  <!-- 
+    NOTE: Using default flutter_bootstrap.js loading.
+    Custom renderer selection was removed because:
+    1. It caused double initialization (flutter_bootstrap.js + custom load call)
+    2. CanvasKit has font loading bugs (BindingError with Noto fonts)
+    The app now uses Flutter's default renderer selection.
+  -->
 </body>
 
 </html>

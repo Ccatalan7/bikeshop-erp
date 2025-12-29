@@ -49,6 +49,9 @@ class NotificationService {
   // Cache for sender names to avoid repeated DB lookups
   final Map<String, String> _senderNames = {};
 
+  // Track last handled notification to prevent duplicate navigation
+  String? _lastHandledNotificationId;
+
   // User Settings
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
@@ -65,6 +68,10 @@ class NotificationService {
 
   // Deprecated getter, keeping for backward compatibility if needed, map to new stream
   Stream<RemoteMessage> get messageStream => _messageStreamController.stream;
+
+  /// Stream for notification taps that require navigation (deep links)
+  final _navigationStreamController = StreamController<String>.broadcast();
+  Stream<String> get onNotificationTap => _navigationStreamController.stream;
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -96,8 +103,8 @@ class NotificationService {
       // Use a simple system beep or bundled sound
       // For cross-platform, we use a URL approach or asset
       _audioPlayer ??= AudioPlayer();
-      await _audioPlayer!.play(AssetSource('sounds/notification.mp3'),
-          volume: 1.0);
+      await _audioPlayer!
+          .play(AssetSource('sounds/notification.mp3'), volume: 1.0);
     } catch (e) {
       // On Web, browsers block audio if not triggered by user interaction.
       // We catch this to prevent the app from crashing.
@@ -118,11 +125,13 @@ class NotificationService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    // Web: flutter_local_notifications has no stable web implementation.
-    // Skip to avoid MissingPluginException during app boot.
+    // Web: Skip FCM for now - causes service worker conflicts and permission violations
+    // TODO: Re-enable web push with proper user-initiated permission flow
     if (kIsWeb) {
       await _loadSettings();
       _isInitialized = true;
+      debugPrint(
+          'ℹ️ [NotificationService] Web push disabled - using in-app only');
       return;
     }
 
@@ -138,11 +147,38 @@ class NotificationService {
       linux: initializationSettingsLinux,
     );
 
+    debugPrint('🔔 [NotificationService] Initializing...');
     await _localNotifications.initialize(initializationSettings);
     _isInitialized = true;
+    debugPrint('✅ [NotificationService] Local notifications initialized');
+
+    // Create dedicated chat notification channel on Android
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      const chatChannel = AndroidNotificationChannel(
+        'chat_messages',
+        'Mensajes de chat',
+        description: 'Notificaciones de mensajes de chat',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+      );
+
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(chatChannel);
+    }
 
     // Load user settings
     await _loadSettings();
+
+    // Listen for auth changes to save token when user logs in
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.session != null && _fcmToken != null) {
+        debugPrint('👤 [NotificationService] User logged in, saving token...');
+        _saveTokenToDatabase(_fcmToken!);
+      }
+    });
 
     if (kIsWeb ||
         defaultTargetPlatform == TargetPlatform.android ||
@@ -223,9 +259,135 @@ class NotificationService {
           handleIncomingMessage(message);
         }
       });
+
+      // 7. Handle notification tap when app is in background (not terminated)
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        debugPrint('🔔 Notification tapped (background): ${message.data}');
+        _handleNotificationTap(message);
+      });
+
+      // 8. Handle notification tap when app was terminated (cold start)
+      FirebaseMessaging.instance.getInitialMessage().then((message) {
+        if (message != null) {
+          debugPrint('🔔 Notification tapped (cold start): ${message.data}');
+          // Delay slightly to ensure app is ready
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _handleNotificationTap(message);
+          });
+        }
+      });
     } else {
       debugPrint('User declined or has not accepted permission');
     }
+  }
+
+  /// Handle navigation when user taps a notification
+  void _handleNotificationTap(RemoteMessage message) {
+    // Prevent duplicate handling of the same notification
+    final messageId = message.messageId ?? message.data['conversation_id'];
+    if (messageId != null && messageId == _lastHandledNotificationId) {
+      debugPrint('🔔 Already handled notification $messageId, skipping');
+      return;
+    }
+    _lastHandledNotificationId = messageId;
+
+    final conversationId = message.data['conversation_id'];
+    if (conversationId != null && conversationId.toString().isNotEmpty) {
+      debugPrint('🔔 Navigating to chat: $conversationId');
+      // Emit to stream for main.dart to handle navigation
+      _navigationStreamController.add('/chat?conversation=$conversationId');
+    } else {
+      // Fallback: just go to chat list
+      debugPrint('🔔 No conversation_id, navigating to chat list');
+      _navigationStreamController.add('/chat');
+    }
+  }
+
+  /// Initialize web push notifications using Firebase Messaging
+  /// NOTE: Does NOT request permission - only checks existing status
+  /// Use requestWebNotificationPermission() after user gesture
+  Future<void> _initWeb() async {
+    debugPrint('🌐 [NotificationService] Initializing Web Push...');
+
+    try {
+      // Check if Firebase is initialized
+      if (Firebase.apps.isEmpty) {
+        debugPrint('⚠️ Firebase not initialized, skipping web push setup.');
+        return;
+      }
+
+      final firebaseMessaging = FirebaseMessaging.instance;
+
+      // Check EXISTING permission status (don't request - violates Chrome policy)
+      NotificationSettings settings =
+          await firebaseMessaging.getNotificationSettings();
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('✅ Web push already authorized');
+        await _setupWebMessaging(firebaseMessaging);
+      } else if (settings.authorizationStatus ==
+          AuthorizationStatus.notDetermined) {
+        debugPrint('ℹ️ Web push permission not yet requested');
+        // Don't auto-request - wait for user gesture
+      } else {
+        debugPrint('❌ Web push permission denied');
+      }
+    } catch (e) {
+      debugPrint('❌ Web push init failed: $e');
+    }
+  }
+
+  /// Request web notification permission - MUST be called from user gesture (click/tap)
+  Future<bool> requestWebNotificationPermission() async {
+    if (!kIsWeb) return false;
+
+    try {
+      final firebaseMessaging = FirebaseMessaging.instance;
+
+      NotificationSettings settings = await firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('✅ Web push permission granted');
+        await _setupWebMessaging(firebaseMessaging);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('❌ Error requesting web permission: $e');
+    }
+    return false;
+  }
+
+  /// Set up FCM messaging after permission is granted
+  Future<void> _setupWebMessaging(FirebaseMessaging firebaseMessaging) async {
+    // Get FCM token with VAPID key
+    _fcmToken = await firebaseMessaging.getToken(
+      vapidKey:
+          'BEiJc0XNBT3YycnP1Rk1_lojF3EKAEQzyiOceq1vWM20OmeoS4bkDShbVSHIuVCuNP6uHDHYhpaFbNayxv24Iws',
+    );
+
+    debugPrint('🔑 Web FCM Token: $_fcmToken');
+
+    if (_fcmToken != null) {
+      await _saveTokenToDatabase(_fcmToken!);
+    }
+
+    // Listen for foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('🔔 Web foreground message: ${message.data}');
+      _messageStreamController.add(message);
+      // The in-app notification overlay will handle display
+    });
+
+    // Listen for token refresh
+    firebaseMessaging.onTokenRefresh.listen((newToken) {
+      debugPrint('🔄 Web FCM token refreshed');
+      _fcmToken = newToken;
+      _saveTokenToDatabase(newToken);
+    });
   }
 
   // ignore: unused_element
@@ -411,15 +573,18 @@ class NotificationService {
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'default_channel', // Reverted to default to ensure it shows up
-      'General Notifications', // Reverted name
-      channelDescription: 'Notificaciones generales',
+      'chat_messages', // Dedicated chat channel
+      'Mensajes de chat',
+      channelDescription: 'Notificaciones de mensajes de chat',
       importance: Importance.max,
       priority: Priority.high,
       styleInformation: styleInfo,
-      groupKey: 'com.bikeshop.messages', // Group grouping key
+      groupKey: 'com.vinabike.chat', // Group key for stacking
+      tag:
+          conversationId, // Same tag = replaces previous notification for this conversation
       setAsGroupSummary: false, // Individual conversation
-      color: const Color(0xFF000000), // Brand color ideally
+      onlyAlertOnce: true, // Don't re-alert for updates to same notification
+      color: const Color(0xFF000000),
     );
 
     final NotificationDetails details = NotificationDetails(

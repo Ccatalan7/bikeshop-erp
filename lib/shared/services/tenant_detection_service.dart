@@ -39,6 +39,8 @@ class TenantDetectionService {
     'www.vinabike.cl': '5443b130-cc28-45af-a420-cd500b288890',
     'vinabike-store.web.app': '5443b130-cc28-45af-a420-cd500b288890',
     'vinabike-store.firebaseapp.com': '5443b130-cc28-45af-a420-cd500b288890',
+    // Local debugging (User's Phone)
+    '192.168.12.169': '5443b130-cc28-45af-a420-cd500b288890',
   };
 
   /// Extract subdomain from current URL
@@ -169,10 +171,11 @@ class TenantDetectionService {
           return tenantFromAuth;
         }
       }
-      
+
       // For public store mobile app, default to Viñabike tenant
       // This allows the store to work without authentication
-      const defaultTenantId = '5443b130-cc28-45af-a420-cd500b288890'; // Viñabike
+      const defaultTenantId =
+          '5443b130-cc28-45af-a420-cd500b288890'; // Viñabike
       debugPrint('📱 [TenantDetection] Using default mobile tenant (Viñabike)');
       return Tenant(
         id: defaultTenantId,
@@ -216,13 +219,30 @@ class TenantDetectionService {
       );
     }
 
+    // WILDCARD OPTIMIZATION: Check for Firebase Preview Channels
+    // matches: vinabike-store--mobile-test-i0dyo35h.web.app
+    if (normalizedHost.startsWith('vinabike-store--') &&
+        normalizedHost.endsWith('.web.app')) {
+      debugPrint(
+          '⚡ [TenantDetection] Using hardcoded tenant for PREVIEW CHANNEL');
+      return Tenant(
+        id: '5443b130-cc28-45af-a420-cd500b288890',
+        shopName: 'Vinabike',
+        subdomain: 'vinabike',
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
+
     // OPTIMIZED: Single query that checks BOTH subdomain AND custom_domain
     // This reduces 2 DB calls to 1 for most cases
     String? subdomain;
 
-    // Special handling for Firebase Hosting site-specific domains
-    if (host == 'vinabike-store.web.app' ||
-        host == 'vinabike-store.firebaseapp.com') {
+    // Special handling for Firebase Hosting site-specific domains AND Preview Channels
+    // matches: vinabike-store.web.app, project-vinabike--mobile-test.web.app, etc.
+    if (host.contains('vinabike') &&
+        (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com'))) {
       subdomain = 'vinabike';
     } else {
       subdomain = extractSubdomain(hostWithoutWww);

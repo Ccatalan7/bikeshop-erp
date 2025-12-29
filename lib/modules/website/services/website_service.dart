@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -155,6 +156,9 @@ class WebsiteService extends ChangeNotifier {
 
         debugPrint('✅ [WebsiteService] Load complete ($source): '
             '${_settings.length} settings, ${_blocks.length} blocks');
+
+        // Persist settings to local cache for instant next load
+        _persistSettingsToLocalCache(tenantId, settingsData);
       }
 
       _hasLoadedForTenant = true;
@@ -170,6 +174,68 @@ class WebsiteService extends ChangeNotifier {
         loadSettingsForTenant(tenantId),
         loadBlocksForTenant(tenantId),
       ]);
+    }
+  }
+
+  // Shared preferences instance (injected from main)
+  static SharedPreferences? _prefs;
+
+  static void setSharedPreferences(SharedPreferences prefs) {
+    _prefs = prefs;
+  }
+
+  /// Try to load settings from synchronous cache (0ms wait)
+  /// Returns true if settings were successfully loaded
+  bool loadSettingsFromSynchronousCache(String tenantId) {
+    if (_prefs == null) return false;
+
+    try {
+      final cacheKey = 'website_settings_$tenantId';
+      final cachedJson = _prefs!.getString(cacheKey);
+
+      if (cachedJson != null) {
+        final settingsData = jsonDecode(cachedJson) as Map<String, dynamic>;
+        _settings =
+            settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+        _themePresets = _parseThemePresets(_settings['theme_presets']);
+
+        debugPrint('💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
+        _safeNotifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Failed to load sync cache: $e');
+    }
+    return false;
+  }
+
+  /// Load settings from local device cache (SharedPreferences)
+  /// Returns true if settings were successfully loaded
+  Future<bool> loadSettingsFromLocalCache(String tenantId) async {
+    // If we have sync cache, try that first
+    if (_prefs != null) {
+      return loadSettingsFromSynchronousCache(tenantId);
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _prefs = prefs; // Store for future sync access
+      return loadSettingsFromSynchronousCache(tenantId);
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Failed to load local cache: $e');
+    }
+    return false;
+  }
+
+  Future<void> _persistSettingsToLocalCache(
+      String tenantId, Map<String, dynamic> settingsData) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final cacheKey = 'website_settings_$tenantId';
+      await prefs.setString(cacheKey, jsonEncode(settingsData));
+    } catch (e) {
+      // Ignore cache write errors
     }
   }
 

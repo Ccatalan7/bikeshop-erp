@@ -19,40 +19,79 @@ class CartPage extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(maxWidth: 1200),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Cart Items (Left - 65%)
-          Expanded(
-            flex: 65,
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 900;
+
+          if (isMobile) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Carrito de Compras',
-                  style: Theme.of(context).textTheme.displaySmall,
+                // Title and Items
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Carrito de Compras',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'}',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: PublicStoreTheme.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildCartItems(context, cart),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'}',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: PublicStoreTheme.textSecondary,
-                      ),
-                ),
+
                 const SizedBox(height: 32),
-                _buildCartItems(context, cart),
+
+                // Order Summary (Full width on mobile)
+                _buildOrderSummary(context, cart),
               ],
-            ),
-          ),
+            );
+          }
 
-          const SizedBox(width: 32),
+          // Desktop Layout (Row)
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Cart Items (Left - 65%)
+              Expanded(
+                flex: 65,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Carrito de Compras',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'}',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: PublicStoreTheme.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildCartItems(context, cart),
+                  ],
+                ),
+              ),
 
-          // Order Summary (Right - 35%)
-          Expanded(
-            flex: 35,
-            child: _buildOrderSummary(context, cart),
-          ),
-        ],
+              const SizedBox(width: 32),
+
+              // Order Summary (Right - 35%)
+              Expanded(
+                flex: 35,
+                child: _buildOrderSummary(context, cart),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
