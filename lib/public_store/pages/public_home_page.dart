@@ -489,25 +489,10 @@ class _PublicHomePageState extends State<PublicHomePage>
     final blocksToRender = websiteService.blocks;
     final isDataLoading = !websiteService.hasLoadedForTenant;
 
-    // Show loading skeleton if data is still loading (and we don't have blocks yet)
+    // Show nothing while loading - HTML splash is still visible behind
+    // This prevents the flash of spinner + footer before content loads
     if (isDataLoading && blocksToRender.isEmpty) {
-      // Use LayoutBuilder to fill the full available height
-      // This prevents the footer from appearing in the middle of the screen
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          // Calculate minimum height to fill viewport (minus header/footer space)
-          final viewportHeight = MediaQuery.of(context).size.height;
-          final minHeight =
-              viewportHeight - 200; // Approximate header + footer height
-
-          return SizedBox(
-            height: minHeight > 400 ? minHeight : 400,
-            child: const Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        },
-      );
+      return const SizedBox.shrink();
     }
 
     // Show empty state ONLY if:

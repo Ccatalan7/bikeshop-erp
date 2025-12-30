@@ -5,6 +5,7 @@ import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
+import '../widgets/full_page_loading.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
@@ -258,19 +259,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     if (_isLoading) {
-      return Container(
-        constraints: const BoxConstraints(maxWidth: 1200),
-        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: CircularProgressIndicator(),
-            ),
-          ),
-        ),
-      );
+      return const FullPageLoading();
     }
 
     if (_product == null) {

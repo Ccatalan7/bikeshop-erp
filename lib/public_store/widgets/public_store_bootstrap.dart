@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
 import '../../modules/website/services/website_service.dart';
+import '../../shared/utils/web_url.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 
@@ -26,12 +28,22 @@ class PublicStoreBootstrap extends StatefulWidget {
 
 class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
   late Future<bool> _initFuture;
-  bool _isLoadedSync = false;
+  bool _splashHidden = false;
 
   @override
   void initState() {
     super.initState();
     _initFuture = _initialize();
+  }
+
+  void _hideHtmlSplash() {
+    if (_splashHidden) return;
+    _splashHidden = true;
+    if (kIsWeb) {
+      try {
+        hideHtmlLoadingScreen();
+      } catch (_) {}
+    }
   }
 
   Future<bool> _initialize() async {
@@ -45,54 +57,35 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
 
     final tenantId = tenantProvider.tenantId;
     if (tenantId == null) {
+      _hideHtmlSplash(); // Hide splash even on error
       return false; // No tenant found
     }
 
-    // Step 2: Try SYNCHRONOUS CACHE first (Instant Header)
-    // This allows us to render in the VERY FIRST FRAME if data is available
-    if (websiteService.loadSettingsFromSynchronousCache(tenantId)) {
-      if (mounted) {
-        setState(() {
-          _isLoadedSync = true;
-        });
-      }
+    // Step 2: Pre-populate settings from sync cache for faster header render
+    // But DON'T hide splash yet - we still need to load blocks
+    websiteService.loadSettingsFromSynchronousCache(tenantId);
+
+    // Step 3: Load ALL data from network (settings + blocks)
+    // Always await this to ensure blocks are loaded before showing content
+    try {
+      await websiteService.loadPublicStoreDataUnified(tenantId);
+    } catch (e) {
+      debugPrint('⚠️ [Bootstrap] Network load failed: $e');
     }
 
-    // Step 3: Trigger network refresh in background
-    // If we have cache, we don't await this (UI renders now).
-    final networkLoad = websiteService.loadPublicStoreDataUnified(tenantId);
-
-    if (_isLoadedSync) {
-      // Unblock UI immediately!
-      networkLoad.catchError((e) {
-        debugPrint('⚠️ [Bootstrap] Background network refresh failed: $e');
-      });
-      return true;
-    } else {
-      // First time load: must wait for network
-      await networkLoad;
-      return true;
-    }
+    // Step 4: NOW hide the splash - all data is loaded
+    _hideHtmlSplash();
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
-    // If loaded synchronously, show child IMMEDIATELY (no FutureBuilder overhead)
-    if (_isLoadedSync) {
-      return widget.child;
-    }
-
     return FutureBuilder<bool>(
       future: _initFuture,
       builder: (context, snapshot) {
-        // Still loading
+        // Still loading - show NOTHING (HTML splash is still visible behind)
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
+          return const SizedBox.shrink();
         }
 
         // Error or no tenant

@@ -3,6 +3,7 @@ class StockMovement {
   final String productId;
   final String productName;
   final String? productSku;
+  final String? productImageUrl;
   final DateTime transactionDate;
   final String movementType;
   final String source;
@@ -20,6 +21,7 @@ class StockMovement {
     required this.productId,
     required this.productName,
     this.productSku,
+    this.productImageUrl,
     required this.transactionDate,
     required this.movementType,
     required this.source,
@@ -35,8 +37,8 @@ class StockMovement {
 
   factory StockMovement.fromJson(Map<String, dynamic> json) {
     return StockMovement(
-      id: json['id'] as String,
-      productId: json['product_id'] as String,
+      id: json['id']?.toString() ?? '',
+      productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] as String? ?? '',
       productSku: json['product_sku'] as String?,
       transactionDate: json['transaction_date'] != null
@@ -44,16 +46,58 @@ class StockMovement {
           : DateTime.now(),
       movementType: json['movement_type'] as String? ?? 'adjustment',
       source: json['source'] as String? ?? 'unknown',
-      referenceId: json['reference_id'] as String?,
+      referenceId: json['reference_id']?.toString(),
       referenceNumber: json['reference_number'] as String?,
       stockBefore: json['stock_before'] as int? ?? 0,
       quantity: json['quantity'] as int? ?? 0,
       stockAfter: json['stock_after'] as int? ?? 0,
       notes: json['notes'] as String?,
-      createdBy: json['created_by'] as String?,
+      createdBy: json['created_by']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
+      productImageUrl: json['product_image_url'] as String? ??
+          (json['products'] != null
+              ? (json['products'] as Map)['image_url'] as String?
+              : null),
+    );
+  }
+
+  StockMovement copyWith({
+    String? id,
+    String? productId,
+    String? productName,
+    String? productSku,
+    String? productImageUrl,
+    DateTime? transactionDate,
+    String? movementType,
+    String? source,
+    String? referenceId,
+    String? referenceNumber,
+    int? stockBefore,
+    int? quantity,
+    int? stockAfter,
+    String? notes,
+    String? createdBy,
+    DateTime? createdAt,
+  }) {
+    return StockMovement(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productSku: productSku ?? this.productSku,
+      productImageUrl: productImageUrl ?? this.productImageUrl,
+      transactionDate: transactionDate ?? this.transactionDate,
+      movementType: movementType ?? this.movementType,
+      source: source ?? this.source,
+      referenceId: referenceId ?? this.referenceId,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
+      stockBefore: stockBefore ?? this.stockBefore,
+      quantity: quantity ?? this.quantity,
+      stockAfter: stockAfter ?? this.stockAfter,
+      notes: notes ?? this.notes,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -79,34 +123,53 @@ class StockMovement {
 
   bool get isIncrease => quantity > 0;
   bool get isDecrease => quantity < 0;
-  
+
   String get movementTypeDisplay {
     switch (movementType) {
-      case 'purchase': return 'Compra';
-      case 'sale': return 'Venta';
-      case 'adjustment': return 'Ajuste';
-      case 'transfer': return 'Transferencia';
-      default: return movementType;
+      case 'purchase':
+        return 'Compra';
+      case 'sale':
+        return 'Venta';
+      case 'adjustment':
+        return 'Ajuste';
+      case 'transfer':
+        return 'Transferencia';
+      default:
+        return movementType;
     }
   }
 
   String get sourceDisplay {
     switch (source) {
-      case 'pos': return 'POS';
-      case 'manual_sale': return 'Venta Manual';
-      case 'manual_purchase': return 'Compra Manual';
-      case 'stock_adjustment': return 'Ajuste de Stock';
-      case 'ecommerce': return 'Tienda Online';
-      case 'mechanic_job': return 'Taller';
+      case 'pos':
+        return 'POS';
+      case 'manual_sale':
+        return 'Venta Manual';
+      case 'manual_purchase':
+        return 'Compra Manual';
+      case 'stock_adjustment':
+        return 'Ajuste de Stock';
+      case 'ecommerce':
+        return 'Tienda Online';
+      case 'mechanic_job':
+        return 'Taller';
       // Adjustment types (when movement_type = 'adjustment')
-      case 'manual': return 'Ajuste Manual';
-      case 'import': return 'Importación';
-      case 'correction': return 'Corrección';
-      case 'initial': return 'Stock Inicial';
-      case 'damage': return 'Daño';
-      case 'loss': return 'Pérdida';
-      case 'found': return 'Hallazgo';
-      default: return source;
+      case 'manual':
+        return 'Ajuste Manual';
+      case 'import':
+        return 'Importación';
+      case 'correction':
+        return 'Corrección';
+      case 'initial':
+        return 'Stock Inicial';
+      case 'damage':
+        return 'Daño';
+      case 'loss':
+        return 'Pérdida';
+      case 'found':
+        return 'Hallazgo';
+      default:
+        return source;
     }
   }
 }

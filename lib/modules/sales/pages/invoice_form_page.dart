@@ -1346,6 +1346,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         debugPrint(
                             '🔙 Navigating back to job: ${widget.referrerJobId}');
                         context.go('/taller/pegas/${widget.referrerJobId}');
+                      } else if (widget.referrer == 'movements') {
+                        debugPrint('🔙 Navigating back to movements');
+                        context.go('/inventory/movements');
                       } else if (returnTo != null && returnTo.isNotEmpty) {
                         debugPrint('🔙 Navigating to returnTo: $returnTo');
                         context.go(returnTo);

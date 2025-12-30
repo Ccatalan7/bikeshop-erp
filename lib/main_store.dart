@@ -40,15 +40,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 String? _initialBrowserUrl;
 
-void _hideLoadingScreen() {
-  if (!kIsWeb) return;
-  try {
-    hideHtmlLoadingScreen();
-  } catch (_) {
-    // Ignore
-  }
-}
-
 Future<void> main() async {
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
@@ -104,9 +95,8 @@ Future<void> main() async {
 
     runApp(const PublicStoreApp());
 
-    if (kIsWeb) {
-      _hideLoadingScreen();
-    }
+    // NOTE: HTML splash screen is now hidden by PublicStoreBootstrap
+    // AFTER data is loaded, for a seamless transition without spinner flash
   }, (error, stack) {
     final errorString = error.toString();
 

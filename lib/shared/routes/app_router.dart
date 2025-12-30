@@ -1806,12 +1806,16 @@ class AppRouter {
           path: '/purchases/:id',
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
+            final referrer = state.uri.queryParameters['referrer'];
             // Single page for create, edit, and workflow (like sales invoice)
             return _buildDeferredPageWithNoTransition(
               context,
               state,
               erp.loadLibrary(),
-              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
+              () => erp.PurchaseInvoiceFormPage(
+                invoiceId: id,
+                referrer: referrer,
+              ),
             );
           },
         ),

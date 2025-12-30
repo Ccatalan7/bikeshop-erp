@@ -33,6 +33,13 @@ Deno.serve(async (req) => {
 
     const { record } = payload
 
+    // DEBUG: Log incoming message details
+    console.log("📩 Message received:", {
+        conversation_id: record.conversation_id,
+        sender_id: record.sender_id,
+        content_preview: record.content?.substring(0, 50)
+    })
+
     // 1. Get recipients (other participants)
     const { data: participants, error: pError } = await supabase
         .from('conversation_participants')
@@ -40,21 +47,30 @@ Deno.serve(async (req) => {
         .eq('conversation_id', record.conversation_id)
         .neq('user_id', record.sender_id) // Exclude sender
 
+    console.log("👥 Participants query result:", { participants, error: pError })
+
     if (pError || !participants || participants.length === 0) {
         console.error("No participants found or error", pError)
         return new Response(JSON.stringify({ message: 'No recipients' }), { headers: { 'Content-Type': 'application/json' } })
     }
 
     const recipientIds = participants.map(p => p.user_id)
+    console.log("📋 Recipient IDs to notify:", recipientIds)
 
     // 2. Get FCM tokens for recipients
     const { data: tokens, error: tError } = await supabase
         .from('user_fcm_tokens')
-        .select('fcm_token')
+        .select('fcm_token, user_id')
         .in('user_id', recipientIds)
 
+    console.log("🔑 Token query result:", {
+        tokenCount: tokens?.length || 0,
+        error: tError,
+        userIds: tokens?.map(t => t.user_id)
+    })
+
     if (tError || !tokens || tokens.length === 0) {
-        console.log("No FCM tokens found for recipients")
+        console.log("❌ No FCM tokens found for recipients:", recipientIds)
         return new Response(JSON.stringify({ message: 'No tokens found' }), { headers: { 'Content-Type': 'application/json' } })
     }
 

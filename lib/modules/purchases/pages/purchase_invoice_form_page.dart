@@ -39,7 +39,10 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
     this.initialSupplierId,
     this.initialLineItems,
     this.readOnly = false,
+    this.referrer,
   });
+
+  final String? referrer;
 
   @override
   State<PurchaseInvoiceFormPage> createState() =>
@@ -1644,7 +1647,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => context.pop(),
+                      onPressed: () {
+                        if (widget.referrer == 'movements') {
+                          context.go('/inventory/movements');
+                        } else {
+                          context.pop();
+                        }
+                      },
                       icon: const Icon(Icons.arrow_back),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -1702,7 +1711,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    if (widget.referrer == 'movements') {
+                      context.go('/inventory/movements');
+                    } else {
+                      context.pop();
+                    }
+                  },
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Volver',
                 ),

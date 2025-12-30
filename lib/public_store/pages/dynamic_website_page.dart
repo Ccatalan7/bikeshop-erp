@@ -11,6 +11,7 @@ import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/services/tenant_service.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../widgets/full_page_loading.dart';
 
 /// Dynamic page that renders website_blocks for any page based on slug
 ///
@@ -448,9 +449,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     final blocksToRender = isEditMode ? editProvider.blocks : _blocks;
 
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const FullPageLoading();
     }
 
     if (_error != null) {

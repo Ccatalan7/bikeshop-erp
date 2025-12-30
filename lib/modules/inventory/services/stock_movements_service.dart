@@ -13,6 +13,9 @@ class StockMovementsService extends ChangeNotifier {
   String? _error;
   String? _selectedProductId;
 
+  // View mode: 'recent' (all products) or 'by_product' (single product)
+  String _viewMode = 'recent';
+
   // Realtime channels
   RealtimeChannel? _movementsChannel;
   RealtimeChannel? _adjustmentsChannel;
@@ -21,6 +24,8 @@ class StockMovementsService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get selectedProductId => _selectedProductId;
+  String get viewMode => _viewMode;
+  bool get isRecentMode => _viewMode == 'recent';
 
   StockMovementsService() {
     _setupRealtime();
@@ -54,8 +59,10 @@ class StockMovementsService extends ChangeNotifier {
             callback: (payload) {
               debugPrint(
                   '🔔 [StockMovementsService] Stock movement changed: ${payload.eventType}');
-              // Reload if we have a product selected
-              if (_selectedProductId != null) {
+              // Reload based on current view mode
+              if (_viewMode == 'recent') {
+                loadRecentMovements();
+              } else if (_selectedProductId != null) {
                 loadMovementsForProduct(_selectedProductId!);
               }
             },
@@ -77,8 +84,10 @@ class StockMovementsService extends ChangeNotifier {
             callback: (payload) {
               debugPrint(
                   '🔔 [StockMovementsService] Stock adjustment changed: ${payload.eventType}');
-              // Reload if we have a product selected
-              if (_selectedProductId != null) {
+              // Reload based on current view mode
+              if (_viewMode == 'recent') {
+                loadRecentMovements();
+              } else if (_selectedProductId != null) {
                 loadMovementsForProduct(_selectedProductId!);
               }
             },
@@ -91,11 +100,67 @@ class StockMovementsService extends ChangeNotifier {
     }
   }
 
+  /// Set view mode and load appropriate data
+  void setViewMode(String mode) {
+    if (mode == _viewMode) return;
+    _viewMode = mode;
+    _selectedProductId = null;
+    _movements = [];
+    notifyListeners();
+
+    if (mode == 'recent') {
+      loadRecentMovements();
+    }
+  }
+
+  /// Load recent movements across ALL products (for 'recent' view mode)
+  Future<void> loadRecentMovements({int limit = 100}) async {
+    _isLoading = true;
+    _error = null;
+    _selectedProductId = null;
+    _viewMode = 'recent';
+    notifyListeners();
+
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+
+      // Query stock_movements_view without product_id filter
+      final response = await _supabase
+          .from('stock_movements_view')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      final rawMovements = (response as List)
+          .map((json) => StockMovement.fromJson(json))
+          .toList();
+
+      _movements = await _enrichWithImages(rawMovements);
+
+      _error = null;
+      debugPrint(
+          '✅ [StockMovementsService] Loaded ${_movements.length} recent movements');
+    } catch (e) {
+      _error = e.toString();
+      debugPrint(
+          '❌ [StockMovementsService] Error loading recent movements: $e');
+      _movements = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Load movements for a specific product
   Future<void> loadMovementsForProduct(String productId) async {
     _isLoading = true;
     _error = null;
     _selectedProductId = productId;
+    _viewMode = 'by_product';
     notifyListeners();
 
     try {
@@ -114,9 +179,11 @@ class StockMovementsService extends ChangeNotifier {
               ascending:
                   false); // Order by actual creation time (UTC), not transaction_date
 
-      _movements = (response as List)
+      final rawMovements = (response as List)
           .map((json) => StockMovement.fromJson(json))
           .toList();
+
+      _movements = await _enrichWithImages(rawMovements);
 
       _error = null;
       debugPrint(
@@ -136,6 +203,61 @@ class StockMovementsService extends ChangeNotifier {
     _movementsChannel?.unsubscribe();
     _adjustmentsChannel?.unsubscribe();
     super.dispose();
+  }
+
+  Future<List<StockMovement>> _enrichWithImages(
+      List<StockMovement> movements) async {
+    if (movements.isEmpty) return movements;
+
+    final productIds = movements
+        .map((m) => m.productId)
+        .where((id) => id.isNotEmpty) // Filter empty IDs
+        .toSet()
+        .toList();
+    if (productIds.isEmpty) return movements;
+
+    debugPrint('🖼️ Fetching images for ${productIds.length} products');
+
+    try {
+      // Format as PostgREST filter: (val1,val2,val3)
+      final filterValue = '(${productIds.join(',')})';
+
+      final response = await _supabase
+          .from('products')
+          .select('id, image_url')
+          .filter('id', 'in', filterValue);
+
+      debugPrint('🖼️ Got ${(response as List).length} product records');
+
+      final imageMap = <String, String?>{};
+      for (var item in response) {
+        final id = item['id']?.toString();
+        final url = item['image_url'] as String?;
+        if (id != null) {
+          imageMap[id] = url;
+          if (url != null && url.isNotEmpty) {
+            debugPrint(
+                '🖼️ Found image for $id: ${url.substring(0, url.length > 50 ? 50 : url.length)}...');
+          }
+        }
+      }
+
+      var enrichedCount = 0;
+      final result = movements.map((m) {
+        final img = imageMap[m.productId];
+        if (img != null && img.isNotEmpty) {
+          enrichedCount++;
+          return m.copyWith(productImageUrl: img);
+        }
+        return m;
+      }).toList();
+
+      debugPrint('🖼️ Enriched $enrichedCount movements with images');
+      return result;
+    } catch (e) {
+      debugPrint('⚠️ Error fetching product images: $e');
+      return movements;
+    }
   }
 
   /// Clear selection

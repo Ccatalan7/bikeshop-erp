@@ -7,7 +7,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 // import '../providers/cart_provider.dart'; // Unused
-import '../../shared/widgets/branded_loading.dart';
+import '../widgets/full_page_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/services/tenant_service.dart';
 
@@ -293,7 +293,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     // Debug: build
     if (_isLoading) {
-      return const Center(child: BrandedLoading());
+      return const FullPageLoading();
     }
 
     return Container(
