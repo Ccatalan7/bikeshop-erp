@@ -9,6 +9,8 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../widgets/payroll_voucher_dialog.dart';
+import '../pages/payroll_list_page.dart';
 
 enum TimeView { day, week, month, quarter, year }
 
@@ -457,12 +459,38 @@ class _AttendancesPageState extends State<AttendancesPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _navigateToday,
                         child: const Text('Hoy'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Payroll History
+                    IconButton(
+                      icon: const Icon(Icons.history_edu),
+                      tooltip: 'Historial Nóminas',
+                      onPressed: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const PayrollListPage()));
+                      },
+                    ),
+                    // Generate Payroll
+                    Expanded(
+                      child: AppButton(
+                        text: 'Nómina',
+                        onPressed: () {
+                          showDialog(
+                              context: context,
+                              builder: (_) => const PayrollVoucherDialog());
+                        },
+                        icon: Icons.payments,
+                        type: ButtonType.secondary,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -517,6 +545,29 @@ class _AttendancesPageState extends State<AttendancesPage> {
                     onTap: () => _changeView(TimeView.year),
                   ),
                   const Spacer(),
+                  // Payroll Actions
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.history_edu),
+                    label: const Text('Nóminas'),
+                    onPressed: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const PayrollListPage()));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  AppButton(
+                    text: 'Generar Nómina',
+                    onPressed: () {
+                      showDialog(
+                          context: context,
+                          builder: (_) => const PayrollVoucherDialog());
+                    },
+                    icon: Icons.payments,
+                    type: ButtonType.secondary,
+                  ),
+                  const SizedBox(width: 8),
                   AppButton(
                     text: 'Nuevo',
                     onPressed: () {

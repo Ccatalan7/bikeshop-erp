@@ -1,5 +1,5 @@
--- Migration to add Cash Flow support to Income Statement
--- Replaces get_income_statement_data to accept p_is_cash_flow parameter
+-- Cash Flow Statement (Efectivo) vs Income Statement (Devengado)
+-- Updated Dec 31, 2025
 
 create or replace function public.get_income_statement_data(
   p_start_date timestamp with time zone,
@@ -19,16 +19,16 @@ set search_path = public
 as $$
 begin
   if p_is_cash_flow then
-    -- CASH FLOW BASIS
-    -- Returns simplified categories based on actual payments
+    -- CASH FLOW STATEMENT (Estado de Flujo de Efectivo)
+    -- Shows ACTUAL cash movements, not accrual accounting
     return query
     
-    -- 1. Sales Income (Realized) from Sales Payments
+    -- CASH IN: Payments received from customers
     select 
       'operatingIncome'::text as category,
-      'Ingresos Operacionales'::text as category_label,
+      'Ingresos de Efectivo'::text as category_label,
       '4000'::text as account_code,
-      'Ventas Cobradas (Efectivo)'::text as account_name,
+      'Cobros de Clientes'::text as account_name,
       coalesce(sum(sp.amount), 0)::numeric(14,2) as amount
     from sales_payments sp
     where sp.date >= p_start_date
@@ -37,21 +37,40 @@ begin
       
     union all
     
-    -- 2. Cost of Sales / Expenses (Realized) from Purchase Payments
+    -- CASH OUT: Payments to suppliers (inventory purchases)
     select 
-      'operatingExpense'::text as category,
-      'Gastos Operacionales'::text as category_label,
+      'costOfGoodsSold'::text as category,
+      'Egresos de Efectivo - Proveedores'::text as category_label,
       '5000'::text as account_code,
-      'Compras Pagadas (Efectivo)'::text as account_name,
+      'Pagos a Proveedores'::text as account_name,
       coalesce(sum(pp.amount), 0)::numeric(14,2) as amount
     from purchase_payments pp
     where pp.date >= p_start_date
       and pp.date <= p_end_date
-      and pp.tenant_id = user_tenant_id();
+      and pp.tenant_id = user_tenant_id()
+      
+    union all
+    
+    -- CASH OUT: Operating expenses paid (payroll, rent, utilities, etc.)
+    select 
+      a.category,
+      'Egresos de Efectivo - Gastos'::text as category_label,
+      a.code as account_code,
+      a.name as account_name,
+      coalesce(sum(el.total), 0)::numeric(14,2) as amount
+    from expenses e
+    join expense_lines el on el.expense_id = e.id
+    join accounts a on a.id = el.account_id
+    where e.payment_status = 'paid'
+      and e.paid_at >= p_start_date
+      and e.paid_at <= p_end_date
+      and e.tenant_id = user_tenant_id()
+      and a.type = 'expense'
+    group by a.category, a.code, a.name;
 
   else
-    -- ACCRUAL BASIS (Standard Logic)
-    -- Uses INNER JOIN to strictly respect date range
+    -- INCOME STATEMENT (Estado de Resultados) - Accrual Basis
+    -- Shows revenue when earned, expenses when incurred
     return query
     select
       a.category,

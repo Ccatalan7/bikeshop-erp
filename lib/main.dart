@@ -43,6 +43,7 @@ import 'modules/bikeshop/services/wheel_building_service.dart';
 import 'modules/bikeshop/services/smart_task_service.dart';
 import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
+import 'modules/hr/services/payroll_voucher_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
 import 'modules/website/services/google_business_service.dart';
@@ -344,6 +345,10 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => HRService(
                   Provider.of<TenantService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => PayrollVoucherService(
+                  Provider.of<DatabaseService>(context, listen: false),
                 )),
         ChangeNotifierProvider(
             create: (context) => JobRoleService(

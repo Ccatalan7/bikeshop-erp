@@ -4008,3 +4008,458 @@ SELECT * FROM your_table WHERE tenant_id = public.user_tenant_id();
 ```
 
 **Never test in SQL Editor with service role** - it bypasses RLS! Always test from Flutter app as authenticated user.
+
+---
+
+# 💰 PAYROLL SYSTEM ARCHITECTURE (Dec 2025)
+
+**Complete documentation of the Payroll Voucher system and its integration with Accounting.**
+
+## Overview
+
+The Payroll system automates:
+1. Salary calculations based on attendance/hours worked
+2. Expense creation for each employee payment
+3. Journal entry generation for proper accounting
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `payroll_vouchers` | Header record for each payroll period (weekly/monthly) |
+| `payroll_voucher_lines` | One line per employee with hours, rates, totals |
+| `employees.salary_account_id` | FK to personal expense account (6101-XX) |
+
+## Account Structure (6101-XX Hierarchy)
+
+```
+6101 - Sueldos y Salarios (Parent)
+├── 6101-01 - Salario - [Employee 1]
+├── 6101-02 - Salario - [Employee 2]
+└── 6101-XX - Salario - [Employee N]
+```
+
+**Auto-creation:** When an employee is created, trigger `trg_create_employee_salary_account` automatically creates a sub-account under 6101.
+
+## Key Fields for Payment Tracking
+
+**In `payroll_voucher_lines`:**
+```sql
+payment_method_id UUID REFERENCES payment_methods(id)  -- FK to payment method
+payment_account_id UUID REFERENCES accounts(id)        -- FK to Bank/Cash account (source)
+salary_account_id UUID REFERENCES accounts(id)         -- FK to expense account (destination)
+```
+
+**⚠️ CRITICAL:** Both `payment_method_id` AND `payment_account_id` must be populated for correct journal entries!
+
+## RPC Functions
+
+### `generate_payroll_voucher_draft(period_start, period_end, period_label)`
+- Creates voucher header and line items from attendance summary
+- Pre-fills hours, rates, and calculated amounts
+- Status: `draft`
+
+### `pay_payroll_voucher(voucher_id)`
+- Creates an `expense` record for each employee line
+- Creates `expense_lines` with proper account references
+- Triggers `create_expense_journal_entry()` via database triggers
+- Status: `paid`
+
+## Journal Entry Flow
+
+When `pay_payroll_voucher` is called:
+
+```
+1. INSERT expenses (payment_status='paid', balance=0, posting_status='posted')
+      ↓
+2. INSERT expense_lines (account_id = salary_account_id from employee)
+      ↓
+3. TRIGGER: trg_expense_lines_change fires handle_expense_line_change()
+      ↓
+4. TRIGGER calls: create_expense_journal_entry(expense_id)
+      ↓
+5. JE Created with:
+   - DEBIT: 6101-XX (Salary Expense)
+   - CREDIT: 1102 (Bank) or 1101 (Cash)
+```
+
+## Income Statement Visibility
+
+**Accrual Mode (Devengado):** Queries `journal_entries` + `journal_lines` by account type
+
+**Cash Flow Mode (Efectivo):** Queries:
+1. `sales_payments` for income
+2. `purchase_payments` for supplier payments
+3. `expenses` (where `payment_status='paid'`) for operating expenses including payroll
+
+**⚠️ If payroll doesn't appear in Cash Flow mode, check:**
+- `expenses.paid_at` is within date range
+- `expenses.payment_status = 'paid'`
+- `expenses.balance = 0`
+- The `get_income_statement_data` function has the UNION for paid expenses
+
+---
+
+# 🔢 ACCOUNTING CONSISTENCY RULES (CRITICAL!)
+
+**Common bugs and how to prevent them when creating accounting-related features.**
+
+## Rule 1: Journal Entries Must Balance
+
+```sql
+-- ✅ Every JE must have: SUM(debits) = SUM(credits)
+-- Verify with:
+SELECT je.entry_number, 
+       SUM(jl.debit_amount) as total_debit,
+       SUM(jl.credit_amount) as total_credit
+FROM journal_entries je
+JOIN journal_lines jl ON jl.entry_id = je.id
+GROUP BY je.id, je.entry_number
+HAVING SUM(jl.debit_amount) <> SUM(jl.credit_amount);
+-- Should return NO ROWS if balanced
+```
+
+## Rule 2: Expense JE Requires `balance = 0` AND `payment_status = 'paid'`
+
+See `create_expense_journal_entry()` lines 7412-7414:
+```sql
+if payment_status = 'paid'
+   AND balance <= 0.01
+   AND v_cash_account.id IS NOT NULL then
+   -- Creates CREDIT to Bank/Cash
+```
+
+**⚠️ If you create expenses via RPC, include:**
+```sql
+payment_status := 'paid',
+balance := 0,
+payment_account_id := [valid bank/cash account UUID],
+payment_method_id := [valid payment method UUID],
+```
+
+## Rule 3: Account Types Must Be Correct
+
+| Account Code Range | Type | Category | Shows In |
+|--------------------|------|----------|----------|
+| 4000-4999 | `income` | `operatingIncome` | Income Statement (Ingresos) |
+| 5000-5199 | `expense` | `costOfGoodsSold` | Income Statement (Costo de Ventas) |
+| 6000-6999 | `expense` | `operatingExpense` | Income Statement (Gastos Operacionales) |
+| 1000-1999 | `asset` | varies | Balance Sheet (Activos) |
+| 2000-2999 | `liability` | varies | Balance Sheet (Pasivos) |
+
+**⚠️ If expenses don't appear in reports, verify:**
+```sql
+SELECT code, name, type, category, is_active 
+FROM accounts WHERE code LIKE '6%';
+-- Must have: type='expense', category='operatingExpense', is_active=true
+```
+
+## Rule 4: Cash Flow Reports Need Specific Tables
+
+**Cash Flow Mode reads from:**
+- `sales_payments` - for realized income
+- `purchase_payments` - for supplier payments
+- `expenses` (paid) - for direct expenses (payroll, operating)
+
+**⚠️ If you create a new payment type, update `get_income_statement_data` to include it!**
+
+## Rule 5: Always Set `is_active = true` for New Accounts
+
+The Income Statement filter includes:
+```sql
+WHERE a.is_active = true
+```
+
+If accounts are created without `is_active` or with `false`, they won't appear.
+
+## Debugging Checklist
+
+When a transaction doesn't appear in financial reports:
+
+1. ✅ Does the journal entry exist? (`SELECT * FROM journal_entries WHERE source_reference = ...`)
+2. ✅ Does it have journal lines? (`SELECT * FROM journal_lines WHERE entry_id = ...`)
+3. ✅ Is `status = 'posted'`? (Draft entries don't count)
+4. ✅ Is `entry_date` within the report's date range?
+5. ✅ Do the accounts have correct `type` and `category`?
+6. ✅ Are the accounts `is_active = true`?
+7. ✅ For Cash Flow: is `paid_at` within the date range?
+8. ✅ For Cash Flow: is `payment_status = 'paid'` and `balance = 0`?
+
+---
+
+# 🔧 PAYROLL DEPLOYMENT CHECKLIST
+
+**When deploying payroll changes:**
+
+1. ✅ **Schema:** `payroll_vouchers`, `payroll_voucher_lines` tables exist
+2. ✅ **Columns:** `payment_method_id`, `payment_account_id` on lines table
+3. ✅ **Employee Accounts:** All employees have `salary_account_id` populated
+4. ✅ **Account 6101:** Parent account exists with correct structure
+5. ✅ **RPC:** `pay_payroll_voucher` includes `balance = 0` in expense INSERT
+6. ✅ **RPC:** Uses explicit `payment_account_id` and `payment_method_id` from lines
+7. ✅ **Cash Flow:** `get_income_statement_data` has UNION for paid expenses
+
+**Quick Fix SQL if payroll expenses are missing from Cash Flow:**
+
+```sql
+-- Verify expenses exist and are paid
+SELECT expense_number, payment_status, balance, paid_at 
+FROM expenses WHERE reference LIKE 'Semana%';
+
+-- If balance is NULL or > 0, fix:
+UPDATE expenses SET balance = 0 
+WHERE payment_status = 'paid' AND (balance IS NULL OR balance > 0);
+
+-- Regenerate journal entries if needed
+UPDATE expenses SET updated_at = NOW() 
+WHERE reference LIKE 'Semana%' AND payment_status = 'paid';
+```
+
+---
+
+# 📊 ACCOUNTING FUNDAMENTALS (IFRS/GAAP COMPLIANT)
+
+**THIS SECTION IS CRITICAL FOR ANYONE WORKING ON FINANCIAL FEATURES.**
+
+This ERP follows international accounting standards (IFRS/GAAP). Understanding these principles is **mandatory** before making changes to accounting-related code.
+
+---
+
+## 1️⃣ The Two Financial Statements
+
+| Statement | Spanish Name | Purpose | Accounting Method |
+|-----------|--------------|---------|-------------------|
+| **Income Statement** | Estado de Resultados | Shows profitability (Did we make money?) | **Accrual** |
+| **Cash Flow Statement** | Estado de Flujo de Efectivo | Shows liquidity (Do we have money?) | **Cash** |
+
+### Key Mental Model:
+- **Income Statement:** *Did we make money?* (Profitability)
+- **Cash Flow Statement:** *Do we have money?* (Liquidity)
+
+**⚠️ CRITICAL: A profitable business can fail if it runs out of cash. These are DIFFERENT concepts!**
+
+---
+
+## 2️⃣ Accrual vs Cash Basis Accounting
+
+| Aspect | Accrual Basis (Devengado) | Cash Basis (Efectivo) |
+|--------|---------------------------|------------------------|
+| **Revenue recognition** | When earned (sale made) | When cash received |
+| **Expense recognition** | When incurred (obligation exists) | When cash paid |
+| **Primary focus** | Profitability | Liquidity |
+| **Used for** | Income Statement | Cash Flow Statement |
+
+### Example:
+You sell a bike on December 15 for $1,000, customer pays on January 5.
+
+- **Income Statement (December):** Shows $1,000 revenue ✅
+- **Cash Flow Statement (December):** Shows $0 from this sale ❌
+- **Cash Flow Statement (January):** Shows $1,000 received ✅
+
+---
+
+## 3️⃣ COGS: The Most Common Misunderstanding
+
+> **COGS measures cost recognition; cash flow measures cash movement — the difference is inventory and payables.**
+
+### ❌ Common Mistake:
+*"COGS equals cash spent on inventory"* — **WRONG**
+
+### ✅ Correct Understanding:
+
+| Concept | What It Is | When Recorded | Which Report |
+|---------|------------|---------------|--------------|
+| **COGS** | Cost of goods **SOLD** | When sale happens | Income Statement |
+| **Payments to Suppliers** | Cash paid for inventory | When cash is paid | Cash Flow Statement |
+
+### Example:
+You buy 100 bikes in January for $500 each ($50,000 total).
+You sell 80 bikes in March.
+
+- **Income Statement (January):** COGS = $0 (nothing sold yet)
+- **Income Statement (March):** COGS = $40,000 (80 bikes × $500)
+- **Cash Flow Statement (January):** Payments to Suppliers = -$50,000
+
+### The Formula:
+```
+Cash Paid to Suppliers = COGS + Increase in Inventory − Increase in Accounts Payable
+```
+
+**High COGS with low cash outflow** → You're buying on credit
+**Low COGS with high cash outflow** → You're paying down old supplier bills
+
+---
+
+## 4️⃣ Journal Entry Rules
+
+### Double-Entry Accounting:
+Every transaction has **two sides** that must balance:
+```
+DEBIT = CREDIT (always!)
+```
+
+### The Nature of Accounts:
+
+| Account Type | Normal Balance | To Increase | To Decrease |
+|--------------|----------------|-------------|-------------|
+| **Asset** (1xxx) | Debit | Debit | Credit |
+| **Liability** (2xxx) | Credit | Credit | Debit |
+| **Equity** (3xxx) | Credit | Credit | Debit |
+| **Revenue** (4xxx) | Credit | Credit | Debit |
+| **Expense** (5xxx-6xxx) | Debit | Debit | Credit |
+
+### Common Journal Entries:
+
+**Sale (Invoice Created):**
+```
+DEBIT:  1200 Accounts Receivable     $1,000
+CREDIT: 4100 Sales Revenue                   $1,000
+DEBIT:  5100 Cost of Goods Sold      $600
+CREDIT: 1300 Inventory                       $600
+```
+
+**Sale Payment Received:**
+```
+DEBIT:  1102 Bank                    $1,000
+CREDIT: 1200 Accounts Receivable             $1,000
+```
+
+**Purchase (Invoice Created):**
+```
+DEBIT:  1300 Inventory               $500
+CREDIT: 2100 Accounts Payable                $500
+```
+
+**Purchase Payment Made:**
+```
+DEBIT:  2100 Accounts Payable        $500
+CREDIT: 1102 Bank                            $500
+```
+
+**Payroll Expense:**
+```
+DEBIT:  6101-XX Salary - [Employee]  $5,000
+CREDIT: 1102 Bank                            $5,000
+```
+
+---
+
+## 5️⃣ Account Code Structure (Chile SII Aligned)
+
+```
+1xxx - ASSETS (Activos)
+  1100 - Cash & Bank
+    1101 - Caja General
+    1102 - Bancos - Cuenta Corriente
+  1200 - Accounts Receivable
+  1300 - Inventory (Inventario)
+
+2xxx - LIABILITIES (Pasivos)
+  2100 - Accounts Payable (Proveedores)
+  2200 - Taxes Payable
+
+3xxx - EQUITY (Patrimonio)
+  3100 - Capital
+  3200 - Retained Earnings
+
+4xxx - REVENUE (Ingresos)
+  4100 - Sales Revenue (Ventas)
+
+5xxx - COST OF GOODS SOLD (Costo de Ventas)
+  5100 - COGS (calculated when inventory is sold)
+
+6xxx - OPERATING EXPENSES (Gastos Operacionales)
+  6100 - Payroll & HR
+    6101 - Sueldos y Salarios
+      6101-01 - Salario - [Employee 1]
+      6101-02 - Salario - [Employee 2]
+  6200 - Rent & Utilities
+  6300 - Marketing & Advertising
+  6400 - Office Expenses
+```
+
+---
+
+## 6️⃣ Report Implementation in This ERP
+
+### Income Statement (Devengado) - `get_income_statement_data(is_cash_flow=false)`
+
+Queries **journal entries** and **journal lines** to show:
+- Revenue (when earned)
+- COGS (when sold)
+- Operating Expenses (when incurred)
+
+```sql
+-- Uses journal entries grouped by account
+FROM accounts a
+JOIN journal_lines jl ON jl.account_id = a.id
+JOIN journal_entries je ON je.id = jl.entry_id
+WHERE je.entry_date BETWEEN start_date AND end_date
+  AND je.status = 'posted'
+```
+
+### Cash Flow Statement (Efectivo) - `get_income_statement_data(is_cash_flow=true)`
+
+Queries **payment tables** to show actual cash movements:
+- Cash IN: `sales_payments` (customer payments)
+- Cash OUT: `purchase_payments` (supplier payments)
+- Cash OUT: `expenses` where `payment_status='paid'` (operating expenses)
+
+```sql
+-- Uses payment tables directly
+FROM sales_payments WHERE date BETWEEN start_date AND end_date
+UNION ALL
+FROM purchase_payments WHERE date BETWEEN start_date AND end_date
+UNION ALL
+FROM expenses WHERE paid_at BETWEEN start_date AND end_date
+```
+
+---
+
+## 7️⃣ Common Accounting Bugs and Prevention
+
+### Bug: Expenses don't appear in Cash Flow
+**Cause:** Missing `payment_status = 'paid'` or `paid_at` is NULL
+**Fix:** Set both when paying an expense
+
+### Bug: COGS shows on wrong report
+**Cause:** Confusing "payments to suppliers" with COGS
+**Fix:** Purchase payments → Cash Flow; COGS from sales → Income Statement
+
+### Bug: Journal entry doesn't balance
+**Cause:** Only created debit side, forgot credit
+**Fix:** Every INSERT into journal_lines must have matching debit/credit
+
+### Bug: Transaction appears in wrong period
+**Cause:** Using `created_at` instead of `entry_date` or `paid_at`
+**Fix:** Always use the proper date field for the report type
+
+### Bug: Account shows $0 in reports
+**Cause:** `is_active = false` or wrong `type`/`category`
+**Fix:** Verify account configuration
+
+---
+
+## 8️⃣ Before Creating Any Accounting Feature
+
+**Mandatory Questions:**
+
+1. ✅ Is this going on the Income Statement or Cash Flow Statement?
+2. ✅ Am I using accrual (journal entries) or cash (payment tables)?
+3. ✅ Does every journal entry balance (debits = credits)?
+4. ✅ Am I using the correct account codes and types?
+5. ✅ Is the timing correct (entry_date for accrual, paid_at for cash)?
+
+**⚠️ DO NOT:**
+- ❌ Confuse COGS with payments to suppliers
+- ❌ Put cash transactions in journal entries (use payment tables)
+- ❌ Create unbalanced journal entries
+- ❌ Forget to set `is_active = true` on new accounts
+- ❌ Use wrong account types/categories
+
+**✅ ALWAYS:**
+- ✅ Understand the difference between profitability and liquidity
+- ✅ Use proper account codes from the chart of accounts
+- ✅ Test reports in both Devengado AND Efectivo modes
+- ✅ Verify journal entries balance
+- ✅ Check that transactions appear in correct periods
