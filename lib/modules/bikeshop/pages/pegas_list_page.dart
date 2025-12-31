@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/branded_loading.dart';
@@ -37,6 +39,9 @@ class _PegasListPageState extends State<PegasListPage> {
   bool _showCompleted = false;
   String _sortBy = 'arrival_date'; // arrival_date, deadline, priority, status
   bool _sortAscending = false;
+
+  // Mobile search state
+  bool _isSearchExpanded = false;
 
   // View mode: 'cards' or 'table'
   String _viewMode = 'cards';
@@ -337,285 +342,900 @@ class _PegasListPageState extends State<PegasListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final stats = _calculateStats();
+    // Use MediaQuery for robust detection, ignoring parent constraints issues
+    // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 1100 ||
+        (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
 
     return MainLayout(
-      child: LayoutBuilder(builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
+      // On mobile, let the child Scaffold handle the title/AppBar to avoid double headers
+      title: isMobile ? '' : 'Vinabike ERP',
+      child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
+    );
+  }
 
-        // Force cards view on mobile
-        if (isMobile && _viewMode == 'table') {
-          // We don't change state here to avoid rebuild loops during build,
-          // but we'll render as cards or hide the table option in UI
-        }
+  // ============================================================
+  // MOBILE LAYOUT - Compact, content-first design
+  // ============================================================
+  Widget _buildMobileLayout() {
+    final theme = Theme.of(context);
 
-        return Column(
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Pegas (Trabajos en Curso)',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+    // If viewing job details, show full-screen detail view
+    if (_selectedJob != null) {
+      return _buildDetailView(isMobile: true);
+    }
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          // ─────────────────────────────────────────────────────
+          // COMPACT HEADER (48px) - Title + Search + Actions
+          // ─────────────────────────────────────────────────────
+          _buildMobileHeader(theme),
+
+          // ─────────────────────────────────────────────────────
+          // FILTER TABS (40px) - Horizontal scroll + sort
+          // ─────────────────────────────────────────────────────
+          _buildMobileFilterTabs(theme),
+
+          // ─────────────────────────────────────────────────────
+          // CONTENT - The list itself
+          // ─────────────────────────────────────────────────────
+          Expanded(
+            child: _isLoading
+                ? const Center(child: BrandedLoading())
+                : RefreshIndicator(
+                    onRefresh: _loadData,
+                    child: _buildMobileJobsList(),
+                  ),
+          ),
+        ],
+      ),
+      // FAB for primary action
+      floatingActionButton: FloatingActionButton(
+        onPressed: () =>
+            context.push('/taller/pegas/new').then((_) => _loadData()),
+        backgroundColor: theme.colorScheme.primary,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(ThemeData theme) {
+    final stats = _calculateStats();
+    final urgentCount = stats['urgente'] ?? 0;
+    final overdueCount = stats['overdue'] ?? 0;
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          // Title with count badge
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  'Trabajos',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_filteredJobs.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
-                  AppButton(
-                    text: isMobile ? 'Nuevo' : 'Nuevo Trabajo',
-                    icon: Icons.add_circle,
-                    onPressed: () {
-                      context
-                          .push('/taller/pegas/new')
-                          .then((_) => _loadData());
-                    },
+                ),
+                // Urgent/Overdue indicator
+                if (urgentCount > 0 || overdueCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning_amber,
+                            size: 12, color: Colors.red[700]),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${overdueCount > 0 ? overdueCount : urgentCount}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+              ],
+            ),
+          ),
+
+          // Search button (expandable)
+          IconButton(
+            icon: Icon(_isSearchExpanded ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearchExpanded = !_isSearchExpanded;
+                if (!_isSearchExpanded) {
+                  _searchTerm = '';
+                  _applyFiltersAndSort();
+                }
+              });
+            },
+          ),
+
+          // More options menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              switch (value) {
+                case 'calendar':
+                  context.push('/taller/calendario');
+                  break;
+                case 'completed':
+                  setState(() => _showCompleted = !_showCompleted);
+                  _loadData();
+                  break;
+                case 'refresh':
+                  _loadData();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'calendar',
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month, size: 20),
+                    const SizedBox(width: 12),
+                    const Text('Ver Calendario'),
+                  ],
+                ),
               ),
-            ),
-
-            // Search
-            SearchWidget(
-              hintText: 'Buscar por trabajo, cliente, o bicicleta...',
-              onSearchChanged: _onSearchChanged,
-            ),
-
-            // Filters and controls
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  // Status filters
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip('Todos', null, isStatus: true),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Pendiente', JobStatus.pendiente,
-                            isStatus: true),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Diagnóstico', JobStatus.diagnostico,
-                            isStatus: true),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('En Curso', JobStatus.enCurso,
-                            isStatus: true),
-                        const SizedBox(width: 8),
-                        _buildFilterChip(
-                            'Esperando Repuestos', JobStatus.esperandoRepuestos,
-                            isStatus: true),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Finalizado', JobStatus.finalizado,
-                            isStatus: true),
-                      ],
+              PopupMenuItem(
+                value: 'completed',
+                child: Row(
+                  children: [
+                    Icon(
+                      _showCompleted
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
+                      size: 20,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Priority filters
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        const Text('Prioridad: ',
-                            style: TextStyle(fontSize: 13)),
-                        _buildFilterChip('Todas', null, isStatus: false),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Urgente', JobPriority.urgente,
-                            isStatus: false),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Alta', JobPriority.alta,
-                            isStatus: false),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Normal', JobPriority.normal,
-                            isStatus: false),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Controls row
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        // Sort dropdown
-                        DropdownButton<String>(
-                          value: _sortBy,
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'arrival_date',
-                                child: Text('Fecha Ingreso')),
-                            DropdownMenuItem(
-                                value: 'deadline', child: Text('Plazo')),
-                            DropdownMenuItem(
-                                value: 'priority', child: Text('Prioridad')),
-                            DropdownMenuItem(
-                                value: 'status', child: Text('Estado')),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _sortBy = value!;
-                              _applyFiltersAndSort();
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        // Show completed toggle
-                        FilterChip(
-                          label: Text('Ver completados'),
-                          selected: _showCompleted,
-                          onSelected: (selected) {
-                            setState(() {
-                              _showCompleted = selected;
-                            });
-                            _loadData();
-                          },
-                        ),
-                        const SizedBox(width: 8),
+                    const SizedBox(width: 12),
+                    const Text('Ver completados'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    const Icon(Icons.refresh, size: 20),
+                    const SizedBox(width: 12),
+                    const Text('Actualizar'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-                        // View mode toggle - Hide on mobile
-                        if (!isMobile) ...[
-                          SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'cards',
-                                icon: Icon(Icons.view_agenda, size: 16),
-                                label: Text('Tarjetas'),
-                              ),
-                              ButtonSegment(
-                                value: 'table',
-                                icon: Icon(Icons.table_rows, size: 16),
-                                label: Text('Tabla'),
-                              ),
-                            ],
-                            selected: {_viewMode},
-                            onSelectionChanged: (Set<String> selected) {
-                              setState(() {
-                                _viewMode = selected.first;
-                                _currentPage = 0;
-                              });
-                              _saveViewMode(_viewMode);
-                            },
-                            style: ButtonStyle(
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
+  Widget _buildMobileFilterTabs(ThemeData theme) {
+    return Column(
+      children: [
+        // Expandable search bar
+        if (_isSearchExpanded)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: theme.cardColor,
+            child: TextField(
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Buscar trabajo, cliente, bicicleta...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          setState(() {
+                            _searchTerm = '';
+                            _applyFiltersAndSort();
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: theme.brightness == Brightness.dark
+                    ? Colors.grey[800]
+                    : Colors.grey[100],
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                isDense: true,
+              ),
+              onChanged: _onSearchChanged,
+            ),
+          ),
+
+        // Filter tabs row
+        Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            border: Border(bottom: BorderSide(color: theme.dividerColor)),
+          ),
+          child: Row(
+            children: [
+              // Scrollable status filters
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      _buildMobileFilterChip('Todos', null),
+                      _buildMobileFilterChip('Pendiente', JobStatus.pendiente),
+                      _buildMobileFilterChip(
+                          'Diagnóstico', JobStatus.diagnostico),
+                      _buildMobileFilterChip('En Curso', JobStatus.enCurso),
+                      _buildMobileFilterChip(
+                          'Esperando', JobStatus.esperandoRepuestos),
+                      _buildMobileFilterChip('Listo', JobStatus.finalizado),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Sort dropdown
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(left: BorderSide(color: theme.dividerColor)),
+                ),
+                child: PopupMenuButton<String>(
+                  icon: Icon(Icons.sort, size: 20, color: theme.hintColor),
+                  tooltip: 'Ordenar',
+                  onSelected: (value) {
+                    setState(() {
+                      if (_sortBy == value) {
+                        _sortAscending = !_sortAscending;
+                      } else {
+                        _sortBy = value;
+                        _sortAscending = false;
+                      }
+                      _applyFiltersAndSort();
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    _buildSortMenuItem('arrival_date', 'Fecha ingreso'),
+                    _buildSortMenuItem('deadline', 'Plazo'),
+                    _buildSortMenuItem('priority', 'Prioridad'),
+                    _buildSortMenuItem('status', 'Estado'),
+                  ],
+                ),
+              ),
+
+              // Priority filter dropdown
+              PopupMenuButton<JobPriority?>(
+                icon: Icon(
+                  Icons.flag,
+                  size: 20,
+                  color: _filterPriority != null
+                      ? _getPriorityColor(_filterPriority!)
+                      : theme.hintColor,
+                ),
+                tooltip: 'Prioridad',
+                onSelected: (value) {
+                  setState(() {
+                    _filterPriority = value;
+                    _applyFiltersAndSort();
+                  });
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: null,
+                    child: Row(
+                      children: [
+                        Icon(Icons.flag_outlined, color: theme.hintColor),
+                        const SizedBox(width: 8),
+                        const Text('Todas'),
+                        if (_filterPriority == null) ...[
+                          const Spacer(),
+                          Icon(Icons.check,
+                              size: 18, color: theme.colorScheme.primary),
                         ],
-
-                        // Calendar view button
-                        OutlinedButton.icon(
-                          onPressed: () => context.push('/taller/calendario'),
-                          icon: const Icon(Icons.calendar_month, size: 16),
-                          label: const Text('Calendario'),
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // Stats
-            if (!_isLoading)
-              isMobile
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.blue[50]!, Colors.blue[100]!],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue[200]!),
-                        ),
+                  const PopupMenuDivider(),
+                  ...JobPriority.values.map((p) => PopupMenuItem(
+                        value: p,
                         child: Row(
                           children: [
-                            _buildStatItem('Total', stats['total'].toString(),
-                                Icons.view_list),
-                            const SizedBox(width: 16),
-                            _buildStatItem(
-                                'Urgente',
-                                stats['urgente'].toString(),
-                                Icons.priority_high,
-                                color: Colors.red),
-                            const SizedBox(width: 16),
-                            _buildStatItem('En Curso',
-                                stats['en_curso'].toString(), Icons.build,
-                                color: Colors.green),
-                            const SizedBox(width: 16),
-                            _buildStatItem('Atrasados',
-                                stats['overdue'].toString(), Icons.warning,
-                                color: Colors.orange),
+                            Icon(Icons.flag, color: _getPriorityColor(p)),
+                            const SizedBox(width: 8),
+                            Text(p.displayName),
+                            if (_filterPriority == p) ...[
+                              const Spacer(),
+                              Icon(Icons.check,
+                                  size: 18, color: theme.colorScheme.primary),
+                            ],
                           ],
                         ),
-                      ),
-                    )
-                  : Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue[50]!, Colors.blue[100]!],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildStatItem('Total', stats['total'].toString(),
-                              Icons.view_list),
-                          _buildStatItem('Urgente', stats['urgente'].toString(),
-                              Icons.priority_high,
-                              color: Colors.red),
-                          _buildStatItem('En Curso',
-                              stats['en_curso'].toString(), Icons.build,
-                              color: Colors.green),
-                          _buildStatItem('Atrasados',
-                              stats['overdue'].toString(), Icons.warning,
-                              color: Colors.orange),
-                          _buildStatItem(
-                              'Mostrando',
-                              _filteredJobs.length.toString(),
-                              Icons.filter_list),
-                        ],
-                      ),
-                    ),
-            const SizedBox(height: 16),
+                      )),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-            // Content
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: BrandedLoading())
-                  : Builder(
-                      builder: (context) {
-                        // Mobile: show list or full detail if selected (no split)
-                        if (isMobile) {
-                          if (_selectedJob != null) {
-                            return _buildDetailView(isMobile: true);
-                          }
-                          return _buildJobsList(); // Always cards on mobile
-                        }
-
-                        // Desktop: split view or full view
-                        return _selectedJob == null
-                            ? _buildFullView()
-                            : _buildSplitView();
-                      },
-                    ),
+  PopupMenuItem<String> _buildSortMenuItem(String value, String label) {
+    final isSelected = _sortBy == value;
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Text(label),
+          if (isSelected) ...[
+            const Spacer(),
+            Icon(
+              _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 16,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ],
-        );
-      }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFilterChip(String label, JobStatus? status) {
+    final isSelected = _filterStatus == status;
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _filterStatus = status;
+            _applyFiltersAndSort();
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color:
+                  isSelected ? theme.colorScheme.primary : theme.dividerColor,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color:
+                  isSelected ? Colors.white : theme.textTheme.bodyMedium?.color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getPriorityColor(JobPriority priority) {
+    switch (priority) {
+      case JobPriority.urgente:
+        return Colors.red;
+      case JobPriority.alta:
+        return Colors.orange;
+      case JobPriority.normal:
+        return Colors.blue;
+      case JobPriority.baja:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildMobileJobsList() {
+    if (_filteredJobs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.build_circle_outlined,
+                size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              _searchTerm.isEmpty ? 'No hay trabajos' : 'Sin resultados',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8, bottom: 80), // Space for FAB
+      itemCount: _filteredJobs.length,
+      itemBuilder: (context, index) {
+        final job = _filteredJobs[index];
+        final customer = _customers[job.customerId];
+        final bike = _bikes[job.bikeId];
+        return _buildMobileJobCard(job, customer, bike);
+      },
+    );
+  }
+
+  Widget _buildMobileJobCard(MechanicJob job, Customer? customer, Bike? bike) {
+    final theme = Theme.of(context);
+    final isOverdue = job.isOverdue && job.isActive;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOverdue ? Colors.red.shade300 : theme.dividerColor,
+          width: isOverdue ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedJob = job;
+            _loadingDetails = true;
+            _selectedJobItems = [];
+            _productImages = {};
+          });
+          _loadJobDetails(job);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Row 1: Job number + Priority + Status
+              Row(
+                children: [
+                  Text(
+                    job.jobNumber ?? 'Sin #',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCompactPriorityBadge(job.priority),
+                  const Spacer(),
+                  _buildCompactStatusBadge(job.status),
+                ],
+              ),
+              const SizedBox(height: 6),
+
+              // Row 2: Customer name
+              if (customer != null)
+                Row(
+                  children: [
+                    Icon(Icons.person_outline,
+                        size: 14, color: theme.hintColor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        customer.name,
+                        style: TextStyle(fontSize: 13, color: theme.hintColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
+              // Row 3: Bike
+              if (bike != null) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.pedal_bike, size: 14, color: theme.hintColor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        bike.displayName,
+                        style: TextStyle(fontSize: 12, color: theme.hintColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 8),
+
+              // Row 4: Date + Deadline + Cost
+              Row(
+                children: [
+                  // Arrival date
+                  Icon(Icons.calendar_today, size: 12, color: theme.hintColor),
+                  const SizedBox(width: 3),
+                  Text(
+                    _formatDate(job.arrivalDate),
+                    style: TextStyle(fontSize: 11, color: theme.hintColor),
+                  ),
+
+                  // Deadline
+                  if (job.deadline != null) ...[
+                    const SizedBox(width: 10),
+                    Icon(
+                      Icons.timer,
+                      size: 12,
+                      color: isOverdue ? Colors.red : theme.hintColor,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      _formatDate(job.deadline!),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isOverdue ? Colors.red : theme.hintColor,
+                        fontWeight:
+                            isOverdue ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+
+                  const Spacer(),
+
+                  // Cost
+                  if (job.totalCost > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '\$${job.totalCost.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactPriorityBadge(JobPriority priority) {
+    if (priority == JobPriority.normal || priority == JobPriority.baja) {
+      return const SizedBox.shrink();
+    }
+
+    final color = _getPriorityColor(priority);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        priority == JobPriority.urgente ? '🔥' : '⚡',
+        style: const TextStyle(fontSize: 10),
+      ),
+    );
+  }
+
+  Widget _buildCompactStatusBadge(JobStatus status) {
+    Color bgColor;
+    Color textColor;
+
+    switch (status) {
+      case JobStatus.pendiente:
+        bgColor = Colors.grey.shade100;
+        textColor = Colors.grey.shade700;
+        break;
+      case JobStatus.diagnostico:
+        bgColor = Colors.blue.shade50;
+        textColor = Colors.blue.shade700;
+        break;
+      case JobStatus.enCurso:
+        bgColor = Colors.green.shade50;
+        textColor = Colors.green.shade700;
+        break;
+      case JobStatus.esperandoRepuestos:
+        bgColor = Colors.orange.shade50;
+        textColor = Colors.orange.shade700;
+        break;
+      case JobStatus.finalizado:
+        bgColor = Colors.purple.shade50;
+        textColor = Colors.purple.shade700;
+        break;
+      case JobStatus.entregado:
+        bgColor = Colors.teal.shade50;
+        textColor = Colors.teal.shade700;
+        break;
+      case JobStatus.cancelado:
+        bgColor = Colors.red.shade50;
+        textColor = Colors.red.shade700;
+        break;
+      case JobStatus.esperandoAprobacion:
+        bgColor = Colors.amber.shade50;
+        textColor = Colors.amber.shade700;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        status.displayName,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DESKTOP LAYOUT - Keep existing design
+  // ============================================================
+  Widget _buildDesktopLayout() {
+    final stats = _calculateStats();
+
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Gestión de Trabajos',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              AppButton(
+                text: 'Nuevo Trabajo',
+                icon: Icons.add_circle,
+                onPressed: () {
+                  context.push('/taller/pegas/new').then((_) => _loadData());
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Search
+        SearchWidget(
+          hintText: 'Buscar por trabajo, cliente, o bicicleta...',
+          onSearchChanged: _onSearchChanged,
+        ),
+
+        // Filters and controls
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            children: [
+              // Status filters
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip('Todos', null, isStatus: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Pendiente', JobStatus.pendiente,
+                        isStatus: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Diagnóstico', JobStatus.diagnostico,
+                        isStatus: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('En Curso', JobStatus.enCurso,
+                        isStatus: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip(
+                        'Esperando Repuestos', JobStatus.esperandoRepuestos,
+                        isStatus: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Finalizado', JobStatus.finalizado,
+                        isStatus: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Priority filters
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    const Text('Prioridad: ', style: TextStyle(fontSize: 13)),
+                    _buildFilterChip('Todas', null, isStatus: false),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Urgente', JobPriority.urgente,
+                        isStatus: false),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Alta', JobPriority.alta, isStatus: false),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Normal', JobPriority.normal,
+                        isStatus: false),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Controls row
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    DropdownButton<String>(
+                      value: _sortBy,
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'arrival_date',
+                            child: Text('Fecha Ingreso')),
+                        DropdownMenuItem(
+                            value: 'deadline', child: Text('Plazo')),
+                        DropdownMenuItem(
+                            value: 'priority', child: Text('Prioridad')),
+                        DropdownMenuItem(
+                            value: 'status', child: Text('Estado')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _sortBy = value!;
+                          _applyFiltersAndSort();
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: const Text('Ver completados'),
+                      selected: _showCompleted,
+                      onSelected: (selected) {
+                        setState(() => _showCompleted = selected);
+                        _loadData();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                            value: 'cards',
+                            icon: Icon(Icons.view_agenda, size: 16),
+                            label: Text('Tarjetas')),
+                        ButtonSegment(
+                            value: 'table',
+                            icon: Icon(Icons.table_rows, size: 16),
+                            label: Text('Tabla')),
+                      ],
+                      selected: {_viewMode},
+                      onSelectionChanged: (selected) {
+                        setState(() {
+                          _viewMode = selected.first;
+                          _currentPage = 0;
+                        });
+                        _saveViewMode(_viewMode);
+                      },
+                      style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/taller/calendario'),
+                      icon: const Icon(Icons.calendar_month, size: 16),
+                      label: const Text('Calendario'),
+                      style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Stats
+        if (!_isLoading)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient:
+                  LinearGradient(colors: [Colors.blue[50]!, Colors.blue[100]!]),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                    'Total', stats['total'].toString(), Icons.view_list),
+                _buildStatItem(
+                    'Urgente', stats['urgente'].toString(), Icons.priority_high,
+                    color: Colors.red),
+                _buildStatItem(
+                    'En Curso', stats['en_curso'].toString(), Icons.build,
+                    color: Colors.green),
+                _buildStatItem(
+                    'Atrasados', stats['overdue'].toString(), Icons.warning,
+                    color: Colors.orange),
+                _buildStatItem('Mostrando', _filteredJobs.length.toString(),
+                    Icons.filter_list),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _selectedJob == null
+                  ? _buildFullView()
+                  : _buildSplitView(),
+        ),
+      ],
     );
   }
 

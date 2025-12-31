@@ -1724,6 +1724,167 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
+  /// Shows a bottom sheet with reorderable module list
+  void _showReorderSheet(BuildContext context) {
+    final navigationService = context.read<NavigationService>();
+
+    // Module key to display name and icon mapping
+    const moduleInfo = <String, (String, IconData)>{
+      'accounting': ('Contabilidad', Icons.account_balance),
+      'tax_reports': ('Impuestos', Icons.receipt_long),
+      'customers': ('Clientes', Icons.people),
+      'chat': ('Mensajería', Icons.chat_bubble),
+      'workshop': ('Taller', Icons.build),
+      'smart_features': ('Smart Features', Icons.auto_awesome),
+      'inventory': ('Inventario', Icons.inventory_2),
+      'sales': ('Ventas', Icons.point_of_sale),
+      'purchases': ('Compras', Icons.shopping_cart),
+      'pos': ('POS', Icons.storefront),
+      'hr': ('RR.HH.', Icons.badge),
+      'tools': ('Herramientas', Icons.build_circle),
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            // Get a mutable copy of the order
+            final moduleOrder =
+                List<String>.from(navigationService.moduleOrder);
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.swap_vert),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Reordenar Módulos',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              navigationService.resetModuleOrder();
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Orden restaurado'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            child: const Text('Restaurar'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Instruction
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Mantén presionado y arrastra para reordenar',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                    // Reorderable List
+                    Expanded(
+                      child: ReorderableListView.builder(
+                        itemCount: moduleOrder.length,
+                        onReorder: (oldIndex, newIndex) {
+                          setSheetState(() {
+                            if (oldIndex < newIndex) newIndex -= 1;
+                            final item = moduleOrder.removeAt(oldIndex);
+                            moduleOrder.insert(newIndex, item);
+                          });
+                          // Persist the change
+                          navigationService.reorderModules(oldIndex, newIndex);
+                        },
+                        itemBuilder: (context, index) {
+                          final key = moduleOrder[index];
+                          final info = moduleInfo[key];
+                          final title = info?.$1 ?? key;
+                          final icon = info?.$2 ?? Icons.extension;
+
+                          return ListTile(
+                            key: ValueKey(key),
+                            leading: Icon(icon),
+                            title: Text(title),
+                            trailing: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // Done button
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.pop(context); // Close drawer too
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Orden guardado'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            child: const Text('Listo'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safely get current location
@@ -2020,6 +2181,96 @@ class _AppDrawerState extends State<AppDrawer> {
             isSingleItem: true,
             enabled: false,
             onNavigate: (_) {},
+          ),
+
+          // Sitio Web module - ADDED for mobile access
+          ExpandableMenuItem(
+            icon: Icons.web_outlined,
+            activeIcon: Icons.web,
+            title: 'Sitio Web',
+            subItems: const [
+              MenuSubItem(
+                  icon: Icons.web, title: 'Sitio Web', route: '/website')
+            ],
+            currentLocation: currentLocation,
+            isSingleItem: true,
+            enabled: true,
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Sitio Web');
+            },
+          ),
+
+          const Divider(),
+
+          // Mobile Options Panel (Dark Mode, Zoom, Reorder)
+          _Helper.buildSectionHeader(context, 'OPCIONES'),
+
+          // Dark Mode Toggle
+          Consumer<AppearanceService>(
+            builder: (context, appearanceService, _) {
+              final isDark = appearanceService.themeMode == ThemeMode.dark;
+              return ListTile(
+                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                title: Text(isDark ? 'Modo claro' : 'Modo oscuro'),
+                trailing: Switch(
+                  value: isDark,
+                  onChanged: (value) {
+                    appearanceService
+                        .setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+                  },
+                ),
+                onTap: () {
+                  final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
+                  appearanceService.setThemeMode(newMode);
+                },
+              );
+            },
+          ),
+
+          // Zoom Controls - Now works on all platforms!
+          Consumer<WindowZoomService>(
+            builder: (context, zoomService, _) {
+              final zoomPercent = (zoomService.scale * 100).round();
+              return ListTile(
+                leading: const Icon(Icons.zoom_in),
+                title: const Text('Zoom'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove, size: 18),
+                      onPressed: zoomService.scale > 0.5
+                          ? () => zoomService.zoomOut()
+                          : null,
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: Text(
+                        '$zoomPercent%',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add, size: 18),
+                      onPressed: zoomService.scale < 3.0
+                          ? () => zoomService.zoomIn()
+                          : null,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          // Reorder Modules - Opens bottom sheet with drag-to-reorder
+          ListTile(
+            leading: const Icon(Icons.swap_vert),
+            title: const Text('Reordenar módulos'),
+            onTap: () => _showReorderSheet(context),
           ),
 
           const Divider(),

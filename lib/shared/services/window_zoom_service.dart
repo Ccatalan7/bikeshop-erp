@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Centralizes desktop zoom handling so we can mirror browser-style shortcuts
-/// on Windows and macOS builds without affecting other platforms.
+/// Centralizes zoom handling - works on all platforms
+/// Desktop: keyboard shortcuts (Cmd/Ctrl +/-), Mobile: manual controls only
 class WindowZoomService extends ChangeNotifier {
   WindowZoomService() {
     _registerGlobalZoomShortcuts();
@@ -23,18 +23,23 @@ class WindowZoomService extends ChangeNotifier {
   double get scale => _scale;
   bool get isZoomed => _scale != _defaultScale;
 
-  /// Supported on Windows and macOS desktop platforms
-  static bool get isSupportedPlatform =>
+  /// Zoom is now supported on all platforms
+  static bool get isSupportedPlatform => true;
+
+  /// Check if running on desktop (for keyboard shortcut support)
+  static bool get isDesktop =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.macOS);
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   /// Check if running on macOS (for keyboard shortcut modifier)
   static bool get isMacOS =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
   void _registerGlobalZoomShortcuts() {
-    if (!isSupportedPlatform) return;
+    // Only register keyboard shortcuts on desktop platforms
+    if (!isDesktop) return;
     if (_shortcutsRegistered) return;
 
     // Shortcuts/Actions can be overridden by focused widgets (like EditableText).
@@ -79,17 +84,14 @@ class WindowZoomService extends ChangeNotifier {
   }
 
   void zoomIn() {
-    if (!isSupportedPlatform) return;
     _updateScale(_scale + _step);
   }
 
   void zoomOut() {
-    if (!isSupportedPlatform) return;
     _updateScale(_scale - _step);
   }
 
   void reset() {
-    if (!isSupportedPlatform) return;
     _updateScale(_defaultScale);
   }
 

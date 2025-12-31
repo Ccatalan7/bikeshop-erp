@@ -2021,6 +2021,16 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/hr/employees/:id',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () =>
+                erp.EmployeeDetailPage(employeeId: state.pathParameters['id']!),
+          ),
+        ),
+        GoRoute(
           path: '/hr/attendances',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2251,7 +2261,8 @@ class AppRouter {
   }
 
   // Helper for deferred routes (Code Splitting)
-  // Shows a loading indicator while the library chunk loads
+  // Shows MainLayout with loading indicator while the library chunk loads
+  // This preserves the sidebar during navigation
   static Page<void> _buildDeferredPageWithNoTransition(
     BuildContext context,
     GoRouterState state,
@@ -2266,9 +2277,10 @@ class AppRouter {
           if (snapshot.connectionState == ConnectionState.done) {
             return widgetBuilder();
           }
-          return const Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
+          // Use MainLayout as skeleton to preserve sidebar during load
+          return MainLayout(
+            title: '...',
+            body: const Center(
               child: SizedBox(
                 width: 40,
                 height: 40,

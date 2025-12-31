@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Clipboard
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -534,7 +535,7 @@ class _EmployeeCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: onEdit,
+        onTap: () => context.push('/hr/employees/${employee.id}'),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),

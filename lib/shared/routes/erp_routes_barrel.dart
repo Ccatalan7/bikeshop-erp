@@ -71,6 +71,7 @@ export '../../modules/settings/pages/keyboard_scanner_page.dart';
 export '../../modules/settings/pages/remote_scanner_page.dart';
 export '../../modules/settings/pages/notification_settings_page.dart';
 export '../../modules/hr/pages/employee_list_page.dart';
+export '../../modules/hr/pages/employee_detail_page.dart';
 export '../../modules/hr/pages/attendances_page.dart';
 export '../../modules/hr/pages/kiosk_mode_page.dart';
 export '../../modules/hr/pages/medical_leaves_page.dart';

@@ -5,29 +5,29 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-
+  
   <!-- Primary Meta Tags -->
   <title>Vinabike - Tienda de Bicicletas</title>
   <meta name="title" content="Vinabike - Tienda de Bicicletas">
   <meta name="description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
-
+  
   <!-- Canonical -->
   <link rel="canonical" href="https://vinabike.cl">
-
+  
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://vinabike.cl">
   <meta property="og:title" content="Vinabike - Tienda de Bicicletas">
   <meta property="og:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
   <meta property="og:site_name" content="Vinabike">
-
-
+  
+  
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://vinabike.cl">
   <meta name="twitter:title" content="Vinabike - Tienda de Bicicletas">
   <meta name="twitter:description" content="Tu tienda especializada en ciclismo, repuestos y servicio técnico.">
-
+  
 
   <!-- Google Analytics GA4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-FR5Q37BW43"></script>
@@ -46,7 +46,7 @@
   <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preload" href="flutter_bootstrap.js" as="script">
-
+  
   <style>
     html,
     body {
@@ -62,7 +62,7 @@
       touch-action: pan-y pinch-zoom;
     }
 
-    /* Branded loading screen - shows immediately while Flutter loads */
+    /* Minimal loading - just white page, Flutter takes over */
     #app-shell {
       position: fixed;
       top: 0;
@@ -71,38 +71,12 @@
       height: 100%;
       background: #ffffff;
       z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 0.3s ease-out;
+      transition: opacity 0.2s ease-out;
     }
 
     #app-shell.hidden {
       opacity: 0;
       pointer-events: none;
-    }
-
-    /* Logo with pulse animation */
-    .splash-logo {
-      width: 120px;
-      height: 120px;
-      object-fit: contain;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 0.6;
-        transform: scale(0.95);
-      }
-
-      50% {
-        opacity: 1;
-        transform: scale(1.05);
-      }
     }
 
     /* Visually hidden SEO content (for Merchant Center bots) */
@@ -118,7 +92,7 @@
       white-space: nowrap;
     }
   </style>
-
+  
   <!-- JSON-LD Structured Data for LocalBusiness -->
   <script type="application/ld+json">
   {
@@ -139,30 +113,27 @@
 </head>
 
 <body>
-  <!-- Branded splash screen - shows Vinabike logo while Flutter loads -->
+  <!-- Minimal shell - just white background, hidden SEO content for bots -->
   <div id="app-shell">
-    <!-- Logo with smooth pulse animation -->
-    <img src="vinabike-logo.png" alt="Vinabike" class="splash-logo" />
-
     <!-- SEO Content (Visually Hidden for Merchant Center bots) -->
     <div class="sr-only">
       <h1>Vinabike - Tienda de Bicicletas en Viña del Mar</h1>
       <p>Tu tienda especializada en ciclismo, repuestos y servicio técnico.</p>
-
+      
       <!-- Navigation -->
       <nav>
         <a href="/productos">Productos</a>
         <a href="/servicios">Servicios</a>
         <a href="/contacto">Contacto</a>
       </nav>
-
+      
       <!-- Business Contact Info -->
       <address>
         <p>Dirección: Álvarez 32, Local 17, Viña del Mar, Chile, Viña del Mar, Chile</p>
         <p>Teléfono: +56998357797</p>
         <p>Email: vinabikechile@gmail.com</p>
       </address>
-
+      
       <!-- Legal Links (Required by Google Merchant Center) -->
       <footer>
         <a href="/devoluciones">Política de Reembolso</a>
@@ -185,17 +156,6 @@
       }
     }, { passive: false });
   </script>
-  <script>
-    // Detect Safari/iOS - they don't fully support Web Push API
-    // This flag can be read by Flutter to skip FCM initialization
-    var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    window.skipFCM = isSafari || isIOS;
-    if (window.skipFCM) {
-      console.log('[Vinabike] Safari/iOS detected - FCM disabled');
-    }
-  </script>
-  <!-- NOTE: FCM Service Worker registration DISABLED for now - causes startup delays -->
   <script src="flutter_bootstrap.js" async></script>
   <!-- 
     NOTE: Using default flutter_bootstrap.js loading.

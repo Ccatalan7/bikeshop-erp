@@ -24,6 +24,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
 
+  // Mobile UI state
+  bool _isSearchExpanded = false;
+  String _selectedStatus = 'all'; // all, draft, pending, paid, overdue
+
   PurchaseInvoice? _selectedInvoice;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
@@ -117,6 +121,29 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       List<PurchaseInvoice> invoices) {
     List<PurchaseInvoice> filtered = List.from(invoices);
 
+    // Status filter
+    if (_selectedStatus != 'all') {
+      filtered = filtered.where((invoice) {
+        final now = DateTime.now();
+        switch (_selectedStatus) {
+          case 'draft':
+            return invoice.status == PurchaseInvoiceStatus.draft;
+          case 'pending':
+            return invoice.paidAmount < invoice.total &&
+                invoice.status != PurchaseInvoiceStatus.draft;
+          case 'paid':
+            return invoice.paidAmount >= invoice.total;
+          case 'overdue':
+            return invoice.dueDate != null &&
+                invoice.dueDate!.isBefore(now) &&
+                invoice.paidAmount < invoice.total;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // Search filter
     if (_searchTerm.isNotEmpty) {
       final term = _searchTerm.toLowerCase();
       filtered = filtered.where((invoice) {
@@ -227,23 +254,226 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     context.push('/purchases/new?prepayment=true');
   }
 
+  // ============ MOBILE LAYOUT METHODS ============
+
+  Widget _buildMobileLayout(List<PurchaseInvoice> invoices) {
+    return Column(
+      children: [
+        _buildMobileHeader(invoices),
+        _buildMobileFilterTabs(invoices),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => context
+                .read<PurchaseService>()
+                .getPurchaseInvoices(forceRefresh: true),
+            child: _buildInvoiceCardsList(invoices),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileHeader(List<PurchaseInvoice> invoices) {
+    final theme = Theme.of(context);
+
+    if (_isSearchExpanded) {
+      // Expanded search mode
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchTerm = v),
+                decoration: InputDecoration(
+                  hintText: 'Buscar factura, proveedor...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchTerm = '';
+                        _isSearchExpanded = false;
+                      });
+                    },
+                  ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Collapsed header
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Compras',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${invoices.length}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => setState(() => _isSearchExpanded = true),
+            tooltip: 'Buscar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _createNewInvoice,
+            tooltip: 'Nueva factura',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFilterTabs(List<PurchaseInvoice> allInvoices) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+
+    // Calculate counts for each status
+    final draftCount = allInvoices
+        .where((i) => i.status == PurchaseInvoiceStatus.draft)
+        .length;
+    final pendingCount = allInvoices
+        .where((i) =>
+            i.paidAmount < i.total && i.status != PurchaseInvoiceStatus.draft)
+        .length;
+    final paidCount = allInvoices.where((i) => i.paidAmount >= i.total).length;
+    final overdueCount = allInvoices
+        .where((i) =>
+            i.dueDate != null &&
+            i.dueDate!.isBefore(now) &&
+            i.paidAmount < i.total)
+        .length;
+
+    final filters = [
+      ('all', 'Todas', allInvoices.length, null),
+      ('draft', 'Borrador', draftCount, Colors.grey),
+      ('pending', 'Pendiente', pendingCount, Colors.orange),
+      ('paid', 'Pagadas', paidCount, Colors.green),
+      ('overdue', 'Vencidas', overdueCount, Colors.red),
+    ];
+
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: filters.length,
+        itemBuilder: (context, index) {
+          final (key, label, count, color) = filters[index];
+          final isSelected = _selectedStatus == key;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: FilterChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label),
+                  if (count > 0) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected
+                            ? theme.colorScheme.onPrimary
+                            : color ?? theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              selected: isSelected,
+              onSelected: (_) => setState(() => _selectedStatus = key),
+              selectedColor: color ?? theme.colorScheme.primary,
+              checkmarkColor: Colors.white,
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : null,
+                fontWeight: isSelected ? FontWeight.w600 : null,
+              ),
+              side: BorderSide(
+                color: isSelected
+                    ? (color ?? theme.colorScheme.primary)
+                    : theme.dividerColor,
+              ),
+              showCheckmark: false,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ============ DESKTOP LAYOUT METHODS ============
+
   Widget _buildFullListView(
       List<PurchaseInvoice> invoices, PurchaseService purchaseService) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 800;
 
+        if (isMobile) {
+          return _buildMobileLayout(invoices);
+        }
+
         return Column(
           children: [
             _buildSummaryCards(invoices),
             const SizedBox(height: 16),
-            _buildSearchBar(isMobile),
+            _buildSearchBar(false),
             const SizedBox(height: 8),
             Expanded(
-              child: isMobile
-                  ? _buildInvoiceCardsList(invoices)
-                  : _buildInvoiceTable(invoices, purchaseService,
-                      isFullWidth: true),
+              child: _buildInvoiceTable(invoices, purchaseService,
+                  isFullWidth: true),
             ),
           ],
         );

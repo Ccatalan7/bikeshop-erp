@@ -452,11 +452,17 @@ class _ProductListPageState extends State<ProductListPage> {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < 800;
+              final isMobileWidth = constraints.maxWidth < 800;
               if (_filteredProducts.isEmpty) {
                 return _buildEmptyState(theme);
               }
-              return isMobile || _viewMode == ProductViewMode.cards
+              // Mobile: support cards and list view, Desktop: support cards and table
+              if (isMobileWidth) {
+                return _viewMode == ProductViewMode.cards
+                    ? _buildCardGridView(theme)
+                    : _buildMobileListView(theme);
+              }
+              return _viewMode == ProductViewMode.cards
                   ? _buildCardGridView(theme)
                   : _buildTableViewWithScrollableHeader(theme);
             },
@@ -467,6 +473,259 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildHeaderArea(ThemeData theme) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
+    if (isMobile) {
+      return _buildMobileHeader(theme);
+    }
+
+    return _buildDesktopHeader(theme);
+  }
+
+  Widget _buildMobileHeader(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Title
+          Text(
+            'Productos',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Count Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '${_filteredProducts.length}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Scanner Toggle Icon
+          IconButton(
+            icon: Icon(
+              _isScannerEnabled
+                  ? Icons.qr_code_scanner
+                  : Icons.qr_code_2_outlined,
+              color: _isScannerEnabled
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            tooltip: _isScannerEnabled ? 'Escáner activo' : 'Escáner inactivo',
+            onPressed: () {
+              setState(() => _isScannerEnabled = !_isScannerEnabled);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_isScannerEnabled
+                      ? 'Escáner habilitado'
+                      : 'Escáner deshabilitado'),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+
+          // View Toggle (Cards/List)
+          IconButton(
+            icon: Icon(
+              _viewMode == ProductViewMode.cards
+                  ? Icons.grid_view_rounded
+                  : Icons.view_list_rounded,
+            ),
+            tooltip: _viewMode == ProductViewMode.cards
+                ? 'Vista lista'
+                : 'Vista tarjetas',
+            onPressed: () {
+              setState(() {
+                _viewMode = _viewMode == ProductViewMode.cards
+                    ? ProductViewMode.table // table mode = list view on mobile
+                    : ProductViewMode.cards;
+              });
+            },
+          ),
+
+          // Sort & More Options Menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Más opciones',
+            onSelected: (value) async {
+              if (value == 'import') {
+                final result = await context.push('/inventory/products/import');
+                if (result == true) _loadProducts(forceRefresh: true);
+              } else if (value == 'new') {
+                final result = await context.push('/inventory/products/new');
+                if (result == true) _loadProducts(forceRefresh: true);
+              } else if (value.startsWith('sort_')) {
+                final sortKey = value.replaceFirst('sort_', '');
+                setState(() {
+                  _sortOption = ProductSortOption.values.firstWhere(
+                    (e) => e.name == sortKey,
+                    orElse: () => ProductSortOption.nameAsc,
+                  );
+                  _applyFilters();
+                });
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'new',
+                child: Row(
+                  children: [
+                    Icon(Icons.add),
+                    SizedBox(width: 12),
+                    Text('Nuevo Producto'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'import',
+                child: Row(
+                  children: [
+                    Icon(Icons.upload_file_outlined),
+                    SizedBox(width: 12),
+                    Text('Importar'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              // Sort Options
+              PopupMenuItem(
+                enabled: false,
+                child: Text('Ordenar por',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary)),
+              ),
+              PopupMenuItem(
+                value: 'sort_nameAsc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.nameAsc
+                            ? Icons.check
+                            : Icons.sort_by_alpha,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.nameAsc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Nombre A-Z'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'sort_nameDesc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.nameDesc
+                            ? Icons.check
+                            : Icons.sort_by_alpha,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.nameDesc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Nombre Z-A'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'sort_priceDesc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.priceDesc
+                            ? Icons.check
+                            : Icons.attach_money,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.priceDesc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Precio Mayor'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'sort_priceAsc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.priceAsc
+                            ? Icons.check
+                            : Icons.attach_money,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.priceAsc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Precio Menor'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'sort_stockDesc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.stockDesc
+                            ? Icons.check
+                            : Icons.inventory_2,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.stockDesc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Stock Mayor'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'sort_createdAtDesc',
+                child: Row(
+                  children: [
+                    Icon(
+                        _sortOption == ProductSortOption.createdAtDesc
+                            ? Icons.check
+                            : Icons.schedule,
+                        size: 18,
+                        color: _sortOption == ProductSortOption.createdAtDesc
+                            ? theme.colorScheme.primary
+                            : null),
+                    const SizedBox(width: 12),
+                    const Text('Más Recientes'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopHeader(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
@@ -576,7 +835,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
     if (isMobile) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           border: Border(
@@ -588,10 +847,11 @@ class _ProductListPageState extends State<ProductListPage> {
           children: [
             Expanded(
               child: SizedBox(
-                height: 48,
+                height: 40,
                 child: TextField(
                   controller: _searchController,
                   onChanged: _onSearchChanged,
+                  style: const TextStyle(fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Buscar productos...',
                     prefixIcon: const Icon(Icons.search),
@@ -615,18 +875,18 @@ class _ProductListPageState extends State<ProductListPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             InkWell(
               onTap: () => _showMobileFilters(theme),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               child: Container(
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: _hasActiveFilters
                       ? theme.colorScheme.primaryContainer
                       : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _hasActiveFilters
                         ? theme.colorScheme.primary
@@ -634,6 +894,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   ),
                 ),
                 child: Icon(Icons.tune,
+                    size: 20,
                     color: _hasActiveFilters
                         ? theme.colorScheme.primary
                         : theme.colorScheme.onSurfaceVariant),
@@ -1321,6 +1582,137 @@ class _ProductListPageState extends State<ProductListPage> {
         ],
       );
     });
+  }
+
+  /// Mobile-optimized compact list view with proper rows
+  Widget _buildMobileListView(ThemeData theme) {
+    return ListView.builder(
+      itemCount: _filteredProducts.length,
+      itemBuilder: (context, index) {
+        final product = _filteredProducts[index];
+        return _buildMobileProductRow(product, theme);
+      },
+    );
+  }
+
+  Widget _buildMobileProductRow(Product product, ThemeData theme) {
+    final stockQty = product.inventoryQty;
+    final isLowStock = stockQty > 0 && stockQty <= product.minStockLevel;
+    final isOutOfStock = stockQty <= 0;
+
+    return InkWell(
+      onTap: () => _handleProductAction('edit', product),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Thumbnail
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: product.imageUrl != null
+                  ? Image.network(
+                      product.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.image_not_supported,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Icon(
+                      Icons.inventory_2_outlined,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+            ),
+            const SizedBox(width: 12),
+
+            // Name & SKU
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    product.name,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (product.sku.isNotEmpty)
+                    Text(
+                      product.sku,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                    ),
+                ],
+              ),
+            ),
+
+            // Stock indicator
+            Container(
+              width: 32,
+              alignment: Alignment.center,
+              child: Text(
+                '$stockQty',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isOutOfStock
+                      ? theme.colorScheme.error
+                      : isLowStock
+                          ? Colors.orange
+                          : theme.colorScheme.primary,
+                ),
+              ),
+            ),
+
+            // Price
+            SizedBox(
+              width: 70,
+              child: Text(
+                ChileanUtils.formatCurrency(product.price),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ),
+
+            // More actions
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert,
+                  size: 18, color: theme.colorScheme.onSurfaceVariant),
+              padding: EdgeInsets.zero,
+              onSelected: (action) => _handleProductAction(action, product),
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                const PopupMenuItem(
+                    value: 'duplicate', child: Text('Duplicar')),
+                const PopupMenuItem(
+                    value: 'adjust_stock', child: Text('Ajustar Stock')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildCardGridView(ThemeData theme) {

@@ -23,25 +23,28 @@ class HRService extends ChangeNotifier {
   static const Duration _cacheMaxAge = Duration(minutes: 5);
   bool _isLoadingEmployees = false;
   bool _isLoadingDepartments = false;
-  
+
   // Public getters for cached data (instant UI access)
   List<Employee> get cachedEmployees => List.unmodifiable(_employeesCache);
-  List<Department> get cachedDepartments => List.unmodifiable(_departmentsCache);
-  bool get hasEmployeesCache => _employeesCache.isNotEmpty && _employeesCacheTime != null;
-  bool get hasDepartmentsCache => _departmentsCache.isNotEmpty && _departmentsCacheTime != null;
-  
+  List<Department> get cachedDepartments =>
+      List.unmodifiable(_departmentsCache);
+  bool get hasEmployeesCache =>
+      _employeesCache.isNotEmpty && _employeesCacheTime != null;
+  bool get hasDepartmentsCache =>
+      _departmentsCache.isNotEmpty && _departmentsCacheTime != null;
+
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   /// Invalidate employee cache (call after create/update/delete)
   void invalidateEmployeesCache() {
     _employeesCacheTime = null;
     debugPrint('🗑️ [HRService] Employees cache invalidated');
   }
-  
+
   /// Invalidate department cache (call after create/update/delete)
   void invalidateDepartmentsCache() {
     _departmentsCacheTime = null;
@@ -52,23 +55,28 @@ class HRService extends ChangeNotifier {
   // DEPARTMENTS
   // ============================================================================
 
-  Future<List<Department>> getDepartments({bool activeOnly = true, bool forceRefresh = false}) async {
+  Future<List<Department>> getDepartments(
+      {bool activeOnly = true, bool forceRefresh = false}) async {
     // Return cached data if valid (for non-filtered queries)
-    if (!forceRefresh && !activeOnly && _isCacheValid(_departmentsCacheTime) && _departmentsCache.isNotEmpty) {
-      debugPrint('📦 [HRService] Using cached departments (${_departmentsCache.length} items)');
+    if (!forceRefresh &&
+        !activeOnly &&
+        _isCacheValid(_departmentsCacheTime) &&
+        _departmentsCache.isNotEmpty) {
+      debugPrint(
+          '📦 [HRService] Using cached departments (${_departmentsCache.length} items)');
       return _departmentsCache;
     }
-    
+
     if (_isLoadingDepartments && !activeOnly) {
       while (_isLoadingDepartments) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
       if (_departmentsCache.isNotEmpty && !activeOnly) return _departmentsCache;
     }
-    
+
     try {
       if (!activeOnly) _isLoadingDepartments = true;
-      
+
       var query = _client.from('departments').select();
 
       if (activeOnly) {
@@ -76,17 +84,16 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('name');
-      final departments = (response as List)
-          .map((json) => Department.fromMap(json))
-          .toList();
-      
+      final departments =
+          (response as List).map((json) => Department.fromMap(json)).toList();
+
       // Cache only non-filtered queries
       if (!activeOnly) {
         _departmentsCache = departments;
         _departmentsCacheTime = DateTime.now();
         debugPrint('✅ [HRService] Cached ${departments.length} departments');
       }
-      
+
       return departments;
     } catch (e) {
       debugPrint('Error getting departments: $e');
@@ -162,25 +169,31 @@ class HRService extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     // Check if this is a filtered query
-    final isFilteredQuery = status != null || departmentId != null || 
+    final isFilteredQuery = status != null ||
+        departmentId != null ||
         (searchQuery != null && searchQuery.isNotEmpty);
-    
+
     // Return cached data if valid and not a filtered query
-    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_employeesCacheTime) && _employeesCache.isNotEmpty) {
-      debugPrint('📦 [HRService] Using cached employees (${_employeesCache.length} items)');
+    if (!forceRefresh &&
+        !isFilteredQuery &&
+        _isCacheValid(_employeesCacheTime) &&
+        _employeesCache.isNotEmpty) {
+      debugPrint(
+          '📦 [HRService] Using cached employees (${_employeesCache.length} items)');
       return _employeesCache;
     }
-    
+
     if (_isLoadingEmployees && !isFilteredQuery) {
       while (_isLoadingEmployees) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
-      if (_employeesCache.isNotEmpty && !isFilteredQuery) return _employeesCache;
+      if (_employeesCache.isNotEmpty && !isFilteredQuery)
+        return _employeesCache;
     }
-    
+
     try {
       if (!isFilteredQuery) _isLoadingEmployees = true;
-      
+
       var query = _client.from('employees').select();
 
       if (status != null) {
@@ -197,15 +210,16 @@ class HRService extends ChangeNotifier {
       }
 
       final response = await query.order('last_name').order('first_name');
-      final employees = (response as List).map((json) => Employee.fromMap(json)).toList();
-      
+      final employees =
+          (response as List).map((json) => Employee.fromMap(json)).toList();
+
       // Cache only non-filtered queries
       if (!isFilteredQuery) {
         _employeesCache = employees;
         _employeesCacheTime = DateTime.now();
         debugPrint('✅ [HRService] Cached ${employees.length} employees');
       }
-      
+
       return employees;
     } catch (e) {
       debugPrint('Error getting employees: $e');
@@ -559,6 +573,29 @@ class HRService extends ChangeNotifier {
     }
   }
 
+  /// Get comprehensive hours summary for salary calculations
+  Future<EmployeeHoursSummary?> getEmployeeHoursSummary(
+    String employeeId,
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    try {
+      final response = await _client.rpc('get_employee_hours_summary', params: {
+        'p_employee_id': employeeId,
+        'p_start_date': startDate.toIso8601String().split('T')[0],
+        'p_end_date': endDate.toIso8601String().split('T')[0],
+      });
+
+      if (response != null && response is Map<String, dynamic>) {
+        return EmployeeHoursSummary.fromMap(response);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting employee hours summary: $e');
+      return null;
+    }
+  }
+
   // Check in employee
   Future<Attendance> checkIn(
     String employeeId, {
@@ -868,7 +905,8 @@ class HRService extends ChangeNotifier {
       if (existingInvitation != null) {
         // Reuse existing invitation and resend email
         invitationId = existingInvitation['id'];
-        debugPrint('⚠️ Pending invitation already exists for $emailLower, resending email...');
+        debugPrint(
+            '⚠️ Pending invitation already exists for $emailLower, resending email...');
       } else {
         // Create new user invitation record
         final invitationData = {
@@ -879,7 +917,8 @@ class HRService extends ChangeNotifier {
           'invited_by': _client.auth.currentUser?.id,
           'status': 'pending',
           'employee_id': employeeId, // Link to employee
-          'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+          'expires_at':
+              DateTime.now().add(const Duration(days: 7)).toIso8601String(),
           'metadata': {
             'first_name': firstName,
             'last_name': lastName,
@@ -887,21 +926,27 @@ class HRService extends ChangeNotifier {
           },
         };
 
-        final response = await _client.from('user_invitations').insert(invitationData).select().single();
+        final response = await _client
+            .from('user_invitations')
+            .insert(invitationData)
+            .select()
+            .single();
         invitationId = response['id'];
       }
 
       // Send invitation email via Supabase Edge Function
       String? invitationLink;
       try {
-        debugPrint('📧 Calling send-invitation edge function with invitationId: $invitationId');
-        
+        debugPrint(
+            '📧 Calling send-invitation edge function with invitationId: $invitationId');
+
         final emailResponse = await _client.functions.invoke(
           'send-invitation',
           body: {'invitationId': invitationId},
         );
 
-        debugPrint('📧 Edge function response - Status: ${emailResponse.status}, Data: ${emailResponse.data}');
+        debugPrint(
+            '📧 Edge function response - Status: ${emailResponse.status}, Data: ${emailResponse.data}');
 
         if (emailResponse.status == 200 && emailResponse.data != null) {
           // Extract invitation link from response
@@ -915,9 +960,10 @@ class HRService extends ChangeNotifier {
         // Don't throw - invitation is still created, email just failed
       }
 
-      debugPrint('✅ User invitation created for $emailLower (employee: $employeeId)');
+      debugPrint(
+          '✅ User invitation created for $emailLower (employee: $employeeId)');
       notifyListeners();
-      
+
       return invitationLink; // Return link for manual sharing
     } catch (e) {
       debugPrint('❌ Error creating user invitation: $e');
@@ -955,7 +1001,8 @@ class HRService extends ChangeNotifier {
       );
 
       if (emailResponse.status != 200) {
-        throw Exception('Failed to send invitation email: ${emailResponse.data}');
+        throw Exception(
+            'Failed to send invitation email: ${emailResponse.data}');
       }
 
       debugPrint('✅ Invitation email resent to $email');
@@ -975,14 +1022,12 @@ class HRService extends ChangeNotifier {
       // Update employee with user_id
       await _client
           .from('employees')
-          .update({'user_id': userId})
-          .eq('id', employeeId);
+          .update({'user_id': userId}).eq('id', employeeId);
 
       // Update user_profile with employee_id
       await _client
           .from('user_profiles')
-          .update({'employee_id': employeeId})
-          .eq('user_id', userId);
+          .update({'employee_id': employeeId}).eq('user_id', userId);
 
       debugPrint('✅ Linked employee $employeeId to user $userId');
       notifyListeners();
@@ -1004,16 +1049,15 @@ class HRService extends ChangeNotifier {
       // Remove user_id from employee
       await _client
           .from('employees')
-          .update({'user_id': null})
-          .eq('id', employeeId);
+          .update({'user_id': null}).eq('id', employeeId);
 
       // Remove employee_id from user_profile
       await _client
           .from('user_profiles')
-          .update({'employee_id': null})
-          .eq('user_id', employee!.userId!);
+          .update({'employee_id': null}).eq('user_id', employee!.userId!);
 
-      debugPrint('✅ Unlinked employee $employeeId from user ${employee.userId}');
+      debugPrint(
+          '✅ Unlinked employee $employeeId from user ${employee.userId}');
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error unlinking employee from user: $e');
@@ -1040,9 +1084,8 @@ class HRService extends ChangeNotifier {
           .select()
           .order('start_date', ascending: false);
 
-      _medicalLeaves = (response as List)
-          .map((json) => MedicalLeave.fromMap(json))
-          .toList();
+      _medicalLeaves =
+          (response as List).map((json) => MedicalLeave.fromMap(json)).toList();
 
       debugPrint('✅ Loaded ${_medicalLeaves.length} medical leaves');
     } catch (e) {
@@ -1143,7 +1186,8 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  Future<EmploymentContract> createEmploymentContract(EmploymentContract contract) async {
+  Future<EmploymentContract> createEmploymentContract(
+      EmploymentContract contract) async {
     try {
       final response = await _client
           .from('employment_contracts')
@@ -1163,7 +1207,8 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  Future<EmploymentContract> updateEmploymentContract(EmploymentContract contract) async {
+  Future<EmploymentContract> updateEmploymentContract(
+      EmploymentContract contract) async {
     try {
       final response = await _client
           .from('employment_contracts')
@@ -1222,7 +1267,9 @@ class HRService extends ChangeNotifier {
         query = query.eq('period_year', year);
       }
 
-      final response = await query.order('period_year', ascending: false).order('period_month', ascending: false);
+      final response = await query
+          .order('period_year', ascending: false)
+          .order('period_month', ascending: false);
 
       _payrollRecords = (response as List)
           .map((json) => PayrollRecord.fromMap(json))
@@ -1312,4 +1359,3 @@ class HRService extends ChangeNotifier {
     }
   }
 }
-

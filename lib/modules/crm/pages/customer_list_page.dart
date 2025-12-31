@@ -24,6 +24,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
 
+  // Mobile UI state
+  bool _isSearchExpanded = false;
+
   // Pagination
   int _currentPage = 1;
   int _itemsPerPage = 50;
@@ -204,103 +207,192 @@ class _CustomerListPageState extends State<CustomerListPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Clientes',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                AppButton(
-                  text: 'Nuevo Cliente',
-                  icon: Icons.person_add,
-                  onPressed: () {
-                    context.push('/clientes/nuevo').then((_) {
-                      _loadCustomers();
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 800;
 
-          // Search
-          SearchWidget(
+          if (isMobile) {
+            return _buildMobileLayout();
+          }
+
+          return _buildDesktopLayout();
+        },
+      ),
+    );
+  }
+
+  // ============ MOBILE LAYOUT ============
+
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        // Compact Mobile Header
+        _buildMobileHeader(),
+
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _buildCustomersList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileHeader() {
+    final theme = Theme.of(context);
+
+    if (_isSearchExpanded) {
+      // Expanded search mode
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        ),
+        child: TextField(
+          autofocus: true,
+          onChanged: _onSearchChanged,
+          decoration: InputDecoration(
             hintText: 'Buscar por nombre, RUT o email...',
-            onSearchChanged: _onSearchChanged,
-          ),
-
-          // Stats
-          if (!_isLoading && _customers.isNotEmpty)
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 600;
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: isNarrow
-                      ? Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem(
-                                    'Total', _customers.length.toString()),
-                                _buildStatItem(
-                                    'Activos',
-                                    _customers
-                                        .where((c) => c.isActive)
-                                        .length
-                                        .toString()),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            _buildStatItem('Mostrando',
-                                _filteredCustomers.length.toString()),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            _buildStatItem(
-                                'Total', _customers.length.toString()),
-                            const SizedBox(width: 24),
-                            _buildStatItem(
-                                'Activos',
-                                _customers
-                                    .where((c) => c.isActive)
-                                    .length
-                                    .toString()),
-                            const SizedBox(width: 24),
-                            _buildStatItem('Mostrando',
-                                _filteredCustomers.length.toString()),
-                          ],
-                        ),
-                );
+            prefixIcon: const Icon(Icons.search, size: 20),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: () {
+                _onSearchChanged('');
+                setState(() => _isSearchExpanded = false);
               },
             ),
-          const SizedBox(height: 16),
+            isDense: true,
+            filled: true,
+            fillColor: theme.colorScheme.surfaceContainerHighest,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          ),
+        ),
+      );
+    }
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _buildCustomersList(),
+    // Collapsed header
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Clientes',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_filteredCustomers.length}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => setState(() => _isSearchExpanded = true),
+            tooltip: 'Buscar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            onPressed: () {
+              context.push('/clientes/nuevo').then((_) => _loadCustomers());
+            },
+            tooltip: 'Nuevo cliente',
           ),
         ],
       ),
+    );
+  }
+
+  // ============ DESKTOP LAYOUT ============
+
+  Widget _buildDesktopLayout() {
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Clientes',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              AppButton(
+                text: 'Nuevo Cliente',
+                icon: Icons.person_add,
+                onPressed: () {
+                  context.push('/clientes/nuevo').then((_) {
+                    _loadCustomers();
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Search
+        SearchWidget(
+          hintText: 'Buscar por nombre, RUT o email...',
+          onSearchChanged: _onSearchChanged,
+        ),
+
+        // Stats
+        if (!_isLoading && _customers.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                _buildStatItem('Total', _customers.length.toString()),
+                const SizedBox(width: 24),
+                _buildStatItem('Activos',
+                    _customers.where((c) => c.isActive).length.toString()),
+                const SizedBox(width: 24),
+                _buildStatItem(
+                    'Mostrando', _filteredCustomers.length.toString()),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _buildCustomersList(),
+        ),
+      ],
     );
   }
 

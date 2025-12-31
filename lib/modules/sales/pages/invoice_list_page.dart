@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,6 +61,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   String _sortColumn = 'date';
   bool _sortAscending = false;
+
+  // Mobile state
+  bool _isSearchExpanded = false;
+  InvoiceStatus? _filterStatus;
 
   @override
   void initState() {
@@ -129,6 +136,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       }).toList();
     }
 
+    if (_filterStatus != null) {
+      filtered =
+          filtered.where((invoice) => invoice.status == _filterStatus).toList();
+    }
+
     filtered.sort((a, b) {
       int comparison = 0;
 
@@ -175,70 +187,333 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     final salesService = context.watch<SalesService>();
     final invoices = _getFilteredAndSortedInvoices(salesService.invoices);
 
+    // Use MediaQuery for robust detection, ignoring parent constraints issues
+    // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 1100 ||
+        (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
+
     return MainLayout(
-      title: 'Facturas',
-      child: Column(
+      title: isMobile ? 'Ventas' : 'Facturas',
+      child: isMobile
+          ? _buildMobileLayout(invoices)
+          : _buildDesktopLayout(invoices, salesService),
+    );
+  }
+
+  // ============================================================
+  // MOBILE LAYOUT
+  // ============================================================
+  Widget _buildMobileLayout(List<Invoice> invoices) {
+    final theme = Theme.of(context);
+
+    // If viewing details, show detail view (simulated for now by context.go, but for split pane logic...)
+    // Note: Invoice list currently uses context.push for mobile details, so we just show list here.
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
         children: [
-          // Header with New button
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
-              ),
+          // Compact Header
+          _buildMobileHeader(theme, invoices.length),
+
+          // Filter Tabs
+          _buildMobileFilterTabs(theme),
+
+          // Content
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await context.read<SalesService>().loadInvoices();
+              },
+              child: _buildInvoiceCardsList(invoices),
             ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.go('/sales/invoices/new'),
+        backgroundColor: theme.colorScheme.primary,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(ThemeData theme, int count) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          // Title with count badge
+          Expanded(
             child: Row(
               children: [
                 Text(
-                  'Facturas de Venta',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  'Ventas',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    context.go('/sales/invoices/new');
-                  },
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Nuevo'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Main content
-          Expanded(
-            child: _selectedInvoice == null
-                ? _buildFullListView(invoices, salesService)
-                : _buildSplitView(invoices, salesService),
+          // Search button
+          IconButton(
+            icon: Icon(_isSearchExpanded ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearchExpanded = !_isSearchExpanded;
+                if (!_isSearchExpanded) {
+                  _searchTerm = '';
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
+
+          // More options
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'refresh') {
+                context.read<SalesService>().loadInvoices();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh, size: 20),
+                    SizedBox(width: 12),
+                    Text('Actualizar'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFullListView(List<Invoice> invoices, SalesService salesService) {
+  Widget _buildMobileFilterTabs(ThemeData theme) {
+    return Column(
+      children: [
+        if (_isSearchExpanded)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: theme.cardColor,
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Buscar factura, cliente...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          setState(() {
+                            _searchTerm = '';
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: theme.brightness == Brightness.dark
+                    ? Colors.grey[800]
+                    : Colors.grey[100],
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                isDense: true,
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchTerm = value;
+                });
+              },
+            ),
+          ),
+
+        // Filter tabs
+        Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            border: Border(bottom: BorderSide(color: theme.dividerColor)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                _buildMobileStatusChip('Todas', null),
+                _buildMobileStatusChip('Borrador', InvoiceStatus.draft),
+                _buildMobileStatusChip('Enviada', InvoiceStatus.sent),
+                _buildMobileStatusChip('Confirmada', InvoiceStatus.confirmed),
+                _buildMobileStatusChip('Pagada', InvoiceStatus.paid),
+                _buildMobileStatusChip('Anulada', InvoiceStatus.cancelled),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileStatusChip(String label, InvoiceStatus? status) {
+    final isSelected = _filterStatus == status;
+    final theme = Theme.of(context);
+
+    // Status colors
+    Color color = theme.colorScheme.primary;
+    if (status != null) {
+      // Simple mapping for chip color
+      switch (status) {
+        case InvoiceStatus.draft:
+          color = Colors.grey;
+          break;
+        case InvoiceStatus.sent:
+          color = Colors.blue;
+          break;
+        case InvoiceStatus.confirmed:
+          color = Colors.orange;
+          break;
+        case InvoiceStatus.paid:
+          color = Colors.green;
+          break;
+        case InvoiceStatus.cancelled:
+          color = Colors.red;
+          break;
+        case InvoiceStatus.overdue:
+          color = Colors.redAccent;
+          break;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _filterStatus = status;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? color : theme.dividerColor,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color:
+                  isSelected ? Colors.white : theme.textTheme.bodyMedium?.color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DESKTOP LAYOUT
+  // ============================================================
+  Widget _buildDesktopLayout(
+      List<Invoice> invoices, SalesService salesService) {
+    return Column(
+      children: [
+        // Header with New button
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            border: Border(
+              bottom: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+          ),
+          child: Row(
+            children: [
+              Text(
+                'Facturas de Venta',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () {
+                  context.go('/sales/invoices/new');
+                },
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nuevo'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Main content
+        Expanded(
+          child: _selectedInvoice == null
+              ? _buildDesktopFullList(invoices, salesService)
+              : _buildSplitView(invoices, salesService),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopFullList(
+      List<Invoice> invoices, SalesService salesService) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
-
         return Column(
           children: [
             _buildSummaryCards(invoices),
             const SizedBox(height: 16),
-            _buildSearchBar(isMobile),
+            _buildSearchBar(false),
             const SizedBox(height: 8),
             Expanded(
-              child: isMobile
-                  ? _buildInvoiceCardsList(invoices)
-                  : _buildInvoiceTable(invoices, salesService,
-                      isFullWidth: true),
+              child:
+                  _buildInvoiceTable(invoices, salesService, isFullWidth: true),
             ),
           ],
         );

@@ -94,6 +94,10 @@ enum EmploymentType { fullTime, partTime, contractor, intern }
 
 enum EmployeeStatus { active, inactive, onLeave, terminated }
 
+enum PaymentMethod { cash, transfer, check }
+
+enum BankAccountType { checking, savings, vista }
+
 class Employee {
   final String? id;
   final String tenantId;
@@ -118,6 +122,12 @@ class Employee {
   final String? emergencyContactName;
   final String? emergencyContactPhone;
   final String? notes;
+  // Salary & Payment fields
+  final double? hourlyRate;
+  final PaymentMethod? preferredPaymentMethod;
+  final String? bankName;
+  final String? bankAccountNumber;
+  final BankAccountType? bankAccountType;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -149,6 +159,11 @@ class Employee {
     this.emergencyContactName,
     this.emergencyContactPhone,
     this.notes,
+    this.hourlyRate,
+    this.preferredPaymentMethod,
+    this.bankName,
+    this.bankAccountNumber,
+    this.bankAccountType,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : hireDate = hireDate ?? DateTime.now(),
@@ -185,6 +200,12 @@ class Employee {
       emergencyContactName: map['emergency_contact_name'],
       emergencyContactPhone: map['emergency_contact_phone'],
       notes: map['notes'],
+      hourlyRate: map['hourly_rate']?.toDouble(),
+      preferredPaymentMethod:
+          _paymentMethodFromString(map['preferred_payment_method']),
+      bankName: map['bank_name'],
+      bankAccountNumber: map['bank_account_number'],
+      bankAccountType: _bankAccountTypeFromString(map['bank_account_type']),
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'])
           : DateTime.now(),
@@ -223,6 +244,14 @@ class Employee {
       if (emergencyContactPhone != null)
         'emergency_contact_phone': emergencyContactPhone,
       if (notes != null) 'notes': notes,
+      if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (preferredPaymentMethod != null)
+        'preferred_payment_method':
+            _paymentMethodToString(preferredPaymentMethod!),
+      if (bankName != null) 'bank_name': bankName,
+      if (bankAccountNumber != null) 'bank_account_number': bankAccountNumber,
+      if (bankAccountType != null)
+        'bank_account_type': _bankAccountTypeToString(bankAccountType!),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -280,6 +309,54 @@ class Employee {
     }
   }
 
+  static PaymentMethod? _paymentMethodFromString(String? value) {
+    switch (value) {
+      case 'cash':
+        return PaymentMethod.cash;
+      case 'transfer':
+        return PaymentMethod.transfer;
+      case 'check':
+        return PaymentMethod.check;
+      default:
+        return null;
+    }
+  }
+
+  static String _paymentMethodToString(PaymentMethod method) {
+    switch (method) {
+      case PaymentMethod.cash:
+        return 'cash';
+      case PaymentMethod.transfer:
+        return 'transfer';
+      case PaymentMethod.check:
+        return 'check';
+    }
+  }
+
+  static BankAccountType? _bankAccountTypeFromString(String? value) {
+    switch (value) {
+      case 'checking':
+        return BankAccountType.checking;
+      case 'savings':
+        return BankAccountType.savings;
+      case 'vista':
+        return BankAccountType.vista;
+      default:
+        return null;
+    }
+  }
+
+  static String _bankAccountTypeToString(BankAccountType type) {
+    switch (type) {
+      case BankAccountType.checking:
+        return 'checking';
+      case BankAccountType.savings:
+        return 'savings';
+      case BankAccountType.vista:
+        return 'vista';
+    }
+  }
+
   Employee copyWith({
     String? id,
     String? tenantId,
@@ -303,6 +380,11 @@ class Employee {
     String? emergencyContactName,
     String? emergencyContactPhone,
     String? notes,
+    double? hourlyRate,
+    PaymentMethod? preferredPaymentMethod,
+    String? bankName,
+    String? bankAccountNumber,
+    BankAccountType? bankAccountType,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -330,9 +412,84 @@ class Employee {
       emergencyContactPhone:
           emergencyContactPhone ?? this.emergencyContactPhone,
       notes: notes ?? this.notes,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      preferredPaymentMethod:
+          preferredPaymentMethod ?? this.preferredPaymentMethod,
+      bankName: bankName ?? this.bankName,
+      bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
+      bankAccountType: bankAccountType ?? this.bankAccountType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+}
+
+// ============================================================================
+// EMPLOYEE HOURS SUMMARY MODEL (for salary/hours statistics)
+// ============================================================================
+class EmployeeHoursSummary {
+  final int totalDaysWorked;
+  final double totalHours;
+  final double totalOvertime;
+  final int totalBreakMinutes;
+  final double averageHoursPerDay;
+  final String? earliestCheckIn; // Time string (HH:mm)
+  final String? latestCheckOut; // Time string (HH:mm)
+  final int daysWithOvertime;
+  final int lateArrivals;
+  final int earlyDepartures;
+  final int perfectAttendanceDays;
+  final int shortDays;
+
+  EmployeeHoursSummary({
+    required this.totalDaysWorked,
+    required this.totalHours,
+    required this.totalOvertime,
+    required this.totalBreakMinutes,
+    required this.averageHoursPerDay,
+    this.earliestCheckIn,
+    this.latestCheckOut,
+    required this.daysWithOvertime,
+    required this.lateArrivals,
+    required this.earlyDepartures,
+    required this.perfectAttendanceDays,
+    required this.shortDays,
+  });
+
+  factory EmployeeHoursSummary.fromMap(Map<String, dynamic> map) {
+    return EmployeeHoursSummary(
+      totalDaysWorked: map['total_days_worked'] ?? 0,
+      totalHours: (map['total_hours'] ?? 0).toDouble(),
+      totalOvertime: (map['total_overtime'] ?? 0).toDouble(),
+      totalBreakMinutes: map['total_break_minutes'] ?? 0,
+      averageHoursPerDay: (map['average_hours_per_day'] ?? 0).toDouble(),
+      earliestCheckIn: map['earliest_check_in'],
+      latestCheckOut: map['latest_check_out'],
+      daysWithOvertime: map['days_with_overtime'] ?? 0,
+      lateArrivals: map['late_arrivals'] ?? 0,
+      earlyDepartures: map['early_departures'] ?? 0,
+      perfectAttendanceDays: map['perfect_attendance_days'] ?? 0,
+      shortDays: map['short_days'] ?? 0,
+    );
+  }
+
+  /// Calculate estimated earnings based on hourly rate
+  double estimatedEarnings(double hourlyRate) => hourlyRate * totalHours;
+
+  /// Calculate overtime earnings (typically 1.5x rate)
+  double overtimeEarnings(double hourlyRate, {double multiplier = 1.5}) =>
+      hourlyRate * totalOvertime * multiplier;
+
+  /// Attendance score (0-100) based on perfect days and punctuality
+  double get attendanceScore {
+    if (totalDaysWorked == 0) return 100;
+    final perfectRatio = perfectAttendanceDays / totalDaysWorked;
+    final lateRatio = lateArrivals / totalDaysWorked;
+    final earlyRatio = earlyDepartures / totalDaysWorked;
+    return ((perfectRatio * 0.6) +
+            ((1 - lateRatio) * 0.2) +
+            ((1 - earlyRatio) * 0.2)) *
+        100;
   }
 }
 
@@ -689,8 +846,9 @@ class Attendance {
       tenantId: map['tenant_id']?.toString() ?? '',
       employeeId: map['employee_id'] ?? '',
       checkIn: DateTime.parse(map['check_in']).toLocal(),
-      checkOut:
-          map['check_out'] != null ? DateTime.parse(map['check_out']).toLocal() : null,
+      checkOut: map['check_out'] != null
+          ? DateTime.parse(map['check_out']).toLocal()
+          : null,
       workedHours: map['worked_hours']?.toDouble(),
       overtimeHours: map['overtime_hours']?.toDouble(),
       breakMinutes: map['break_minutes'] ?? 0,
@@ -726,7 +884,8 @@ class Attendance {
       if (notes != null) 'notes': notes,
       'status': _statusToString(status),
       if (approvedBy != null) 'approved_by': approvedBy,
-      if (approvedAt != null) 'approved_at': approvedAt!.toUtc().toIso8601String(),
+      if (approvedAt != null)
+        'approved_at': approvedAt!.toUtc().toIso8601String(),
       'created_at': createdAt.toUtc().toIso8601String(),
       'updated_at': updatedAt.toUtc().toIso8601String(),
     };
@@ -941,8 +1100,10 @@ class MedicalLeave {
       if (doctorRut != null) 'doctor_rut': doctorRut,
       if (issuingInstitution != null) 'issuing_institution': issuingInstitution,
       'status': _leaveStatusToString(status),
-      if (dailySubsidyAmount != null) 'daily_subsidy_amount': dailySubsidyAmount,
-      if (totalSubsidyAmount != null) 'total_subsidy_amount': totalSubsidyAmount,
+      if (dailySubsidyAmount != null)
+        'daily_subsidy_amount': dailySubsidyAmount,
+      if (totalSubsidyAmount != null)
+        'total_subsidy_amount': totalSubsidyAmount,
       if (paidBy != null) 'paid_by': paidBy,
       if (paidAt != null) 'paid_at': paidAt!.toIso8601String(),
       if (certificateUrl != null) 'certificate_url': certificateUrl,
@@ -1063,7 +1224,13 @@ class MedicalLeave {
 // ============================================================================
 // EMPLOYMENT CONTRACT MODEL (CHILEAN LABOR LAW)
 // ============================================================================
-enum ChileanContractType { indefinido, plazoFijo, obraFaena, partTime, honorarios }
+enum ChileanContractType {
+  indefinido,
+  plazoFijo,
+  obraFaena,
+  partTime,
+  honorarios
+}
 
 enum ChileanContractStatus { active, terminated, suspended }
 
@@ -1332,7 +1499,7 @@ class PayrollRecord {
   final int periodMonth;
   final int periodYear;
   final DateTime paymentDate;
-  
+
   // Haberes (Income)
   final double baseSalary;
   final double overtimePay;
@@ -1343,7 +1510,7 @@ class PayrollRecord {
   final double housingAllowance;
   final double otherIncome;
   final double totalHaberes;
-  
+
   // Descuentos (Deductions)
   final double afpContribution;
   final double healthContribution;
@@ -1351,10 +1518,10 @@ class PayrollRecord {
   final double incomeTax;
   final double otherDeductions;
   final double totalDescuentos;
-  
+
   // Líquido
   final double netPay;
-  
+
   // Status
   final String status;
   final DateTime? paidAt;
