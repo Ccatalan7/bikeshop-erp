@@ -261,7 +261,8 @@ enum JournalEntryType {
   receipt('Cobro'),
   adjustment('Ajuste'),
   closing('Cierre'),
-  opening('Apertura');
+  opening('Apertura'),
+  payroll('Nómina');
 
   const JournalEntryType(this.displayName);
   final String displayName;

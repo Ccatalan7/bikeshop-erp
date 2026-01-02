@@ -104,7 +104,8 @@ class ExpenseService extends ChangeNotifier {
     }
   }
 
-  Future<List<ExpenseCategory>> fetchCategories({bool forceRefresh = false}) async {
+  Future<List<ExpenseCategory>> fetchCategories(
+      {bool forceRefresh = false}) async {
     if (_categoriesLoaded && !forceRefresh) {
       return _categories;
     }
@@ -120,6 +121,18 @@ class ExpenseService extends ChangeNotifier {
       return _categories;
     } catch (e) {
       throw Exception('No se pudieron cargar las categorías de gasto: $e');
+    }
+  }
+
+  Future<Map<String, String>> fetchPaymentMethods() async {
+    try {
+      final rows = await _databaseService.select('payment_methods');
+      return {
+        for (var row in rows) row['id'].toString(): row['name'].toString(),
+      };
+    } catch (e) {
+      // Return empty map on error to avoid breaking UI, log internally if needed
+      return {};
     }
   }
 
@@ -285,7 +298,8 @@ class ExpenseService extends ChangeNotifier {
           .map((row) => ExpensePayment.fromJson(Map<String, dynamic>.from(row)))
           .toList(),
       attachments: attachmentsRaw
-          .map((row) => ExpenseAttachment.fromJson(Map<String, dynamic>.from(row)))
+          .map((row) =>
+              ExpenseAttachment.fromJson(Map<String, dynamic>.from(row)))
           .toList(),
       category: category,
     );
@@ -323,10 +337,7 @@ class ExpenseService extends ChangeNotifier {
       } else {
         incomingIds.add(line.id!);
         payload.remove('created_at');
-    await _client
-      .from('expense_lines')
-      .update(payload)
-      .eq('id', line.id!);
+        await _client.from('expense_lines').update(payload).eq('id', line.id!);
       }
     }
 
@@ -349,7 +360,10 @@ class ExpenseService extends ChangeNotifier {
       final row = await _databaseService.selectById('expense_categories', id);
       if (row == null) return null;
       final category = ExpenseCategory.fromJson(row);
-      _categories = [..._categories.where((c) => c.id != category.id), category];
+      _categories = [
+        ..._categories.where((c) => c.id != category.id),
+        category
+      ];
       return category;
     }
   }

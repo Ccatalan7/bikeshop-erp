@@ -29,6 +29,7 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
   bool _isProcessing = false;
   String? _error;
   bool _hasChanges = false;
+  Map<String, String> _paymentMethods = {};
 
   @override
   void initState() {
@@ -46,13 +47,15 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     });
 
     try {
-      final expense = await _expenseService.getExpense(
-        widget.expenseId,
-        forceRefresh: refresh,
-      );
+      final results = await Future.wait([
+        _expenseService.getExpense(widget.expenseId, forceRefresh: refresh),
+        _expenseService.fetchPaymentMethods(),
+      ]);
+
       if (mounted) {
         setState(() {
-          _expense = expense;
+          _expense = results[0] as Expense;
+          _paymentMethods = results[1] as Map<String, String>;
           _isLoading = false;
         });
       }
@@ -143,15 +146,486 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      title: 'Detalle de gasto',
-      body: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _error != null
-              ? _buildErrorState(context)
-              : _expense == null
-                  ? _buildEmptyState(context)
-                  : _buildContent(context),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        return MainLayout(
+          title: 'Detalle de gasto',
+          onBackPressed: () => context.pop(_hasChanges),
+          body: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _error != null
+                  ? _buildErrorState(context)
+                  : _expense == null
+                      ? _buildEmptyState(context)
+                      : _buildContent(context, _expense!, isMobile),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(BuildContext context, Expense expense, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // New Professional Header
+          _buildProfessionalHeader(context, expense, isMobile),
+          const SizedBox(height: 24),
+
+          // Reference Block (Moved here)
+          if (expense.reference != null && expense.reference!.isNotEmpty) ...[
+            _buildReferenceBlock(context, expense.reference!),
+            const SizedBox(height: 24),
+          ],
+
+          // Lines Section
+          Text('Detalle', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _buildLinesTable(context, expense.lines, isMobile),
+          const SizedBox(height: 24),
+
+          // Summary Footer
+          _buildTotalsFooter(context, expense),
+          const SizedBox(height: 32),
+
+          // Payments & Attachments
+          if (expense.payments.isNotEmpty) ...[
+            Text('Pagos', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            _buildPaymentsList(context, expense.payments),
+            const SizedBox(height: 24),
+          ],
+
+          if (expense.attachments.isNotEmpty) ...[
+            Text('Adjuntos', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            _buildAttachmentsList(context, expense.attachments),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfessionalHeader(
+      BuildContext context, Expense expense, bool isMobile) {
+    final paymentMethodName =
+        _paymentMethods[expense.paymentMethodId] ?? 'Sin medio de pago';
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: ID + Spacer + Status
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  expense.expenseNumber,
+                  style: TextStyle(
+                      color: Colors.blue.shade900,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14),
+                ),
+              ),
+              Wrap(spacing: 8, children: [
+                _StatusBadge(status: expense.paymentStatus),
+                if (expense.postingStatus != ExpensePostingStatus.posted)
+                  _StatusBadge(status: expense.postingStatus, isPosting: true),
+              ]),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Row 2: Hero Amount
+          Text(
+            _currencyFormat.format(expense.totalAmount),
+            style: const TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1F2937), // Dark slate
+                letterSpacing: -0.5),
+          ),
+          const SizedBox(height: 20),
+          // Row 3: Meta Data (Category, Payment, Date)
+          Wrap(
+            spacing: 24,
+            runSpacing: 12,
+            children: [
+              _buildMetaItem(Icons.category_outlined,
+                  expense.category?.name ?? 'Sin cat.'),
+              _buildMetaItem(Icons.payment_outlined, paymentMethodName),
+              _buildMetaItem(Icons.calendar_today_outlined,
+                  ChileanUtils.formatDate(expense.issueDate)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          // Row 4: Supplier (Demoted) + Actions
+          Row(
+            children: [
+              Icon(Icons.store_outlined, size: 18, color: Colors.grey.shade500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  expense.supplierName ?? 'Proveedor sin nombre',
+                  style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14),
+                ),
+              ),
+              // Action Buttons
+              if (!isMobile) ...[
+                if (expense.postingStatus != ExpensePostingStatus.posted)
+                  AppButton(
+                    text: 'Contabilizar',
+                    icon: Icons.check,
+                    onPressed: _isProcessing ? null : _postExpense,
+                    type: ButtonType.primary,
+                  ),
+                const SizedBox(width: 8),
+                IconButton.outlined(
+                  onPressed: () async {
+                    if (expense.id == null) return;
+                    final updated = await context.push<bool>(
+                      '/accounting/expenses/${expense.id}/edit',
+                    );
+                    if (updated == true && mounted) {
+                      _hasChanges = true;
+                      await _loadExpense(refresh: true);
+                    }
+                  },
+                  icon: const Icon(Icons.edit, size: 18),
+                  tooltip: 'Editar',
+                ),
+              ]
+            ],
+          ),
+          // Mobile Actions (Row 5)
+          if (isMobile) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      if (expense.id == null) return;
+                      final updated = await context.push<bool>(
+                        '/accounting/expenses/${expense.id}/edit',
+                      );
+                      if (updated == true && mounted) {
+                        _hasChanges = true;
+                        await _loadExpense(refresh: true);
+                      }
+                    },
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Editar'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (expense.postingStatus != ExpensePostingStatus.posted)
+                  Expanded(
+                    child: AppButton(
+                      text: 'Contabilizar',
+                      onPressed: _isProcessing ? null : _postExpense,
+                      type: ButtonType.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetaItem(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade500),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: TextStyle(
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w500,
+              fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReferenceBlock(BuildContext context, String reference) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'REFERENCIA / NOTAS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.blueGrey.shade700,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            reference,
+            style: const TextStyle(fontSize: 14, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method for details grid if needed by legacy, but for now mostly cleaned up.
+  // Replaced by _buildContent methods.
+
+  Widget _buildInfoItemWidget(_InfoItem item) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(item.label,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(item.value!,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+      ],
+    );
+  }
+
+  Widget _buildLinesTable(
+      BuildContext context, List<ExpenseLine> lines, bool isMobile) {
+    if (lines.isEmpty) return const Text('Sin líneas de detalle.');
+
+    if (isMobile) {
+      return Column(
+        children: lines
+            .map((line) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(line.accountCode,
+                              style: TextStyle(
+                                  color: Colors.blueGrey.shade700,
+                                  fontWeight: FontWeight.bold)),
+                          Text(_currencyFormat.format(line.total),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      Text(line.accountName,
+                          style: const TextStyle(fontWeight: FontWeight.w500)),
+                      if (line.description != null)
+                        Text(line.description!,
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 13)),
+                      const Divider(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                              '${line.quantity.toStringAsFixed(1)} x ${_currencyFormat.format(line.unitPrice)}'),
+                          Text('IVA (${line.taxRate.toStringAsFixed(0)}%)'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ))
+            .toList(),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Table(
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        columnWidths: const {
+          0: FlexColumnWidth(2),
+          1: FlexColumnWidth(3),
+          2: FixedColumnWidth(80),
+          3: FixedColumnWidth(100),
+          4: FixedColumnWidth(100),
+        },
+        children: [
+          TableRow(
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(12))),
+              children: const [
+                Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('Cuenta',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('Descripción',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('Cant.',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('Precio',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('Total',
+                        style: TextStyle(fontWeight: FontWeight.bold))),
+              ]),
+          ...lines.map((line) => TableRow(children: [
+                Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(line.accountCode,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(line.accountName)
+                        ])),
+                Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(line.description ?? '—')),
+                Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(line.quantity.toStringAsFixed(1))),
+                Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(_currencyFormat.format(line.unitPrice))),
+                Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(_currencyFormat.format(line.total),
+                        style: const TextStyle(fontWeight: FontWeight.bold))),
+              ])),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotalsFooter(BuildContext context, Expense expense) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            _buildTotalRow(
+                'Subtotal', _currencyFormat.format(expense.subtotal)),
+            const SizedBox(height: 8),
+            _buildTotalRow('IVA', _currencyFormat.format(expense.taxAmount)),
+            const Divider(),
+            _buildTotalRow('Total', _currencyFormat.format(expense.totalAmount),
+                isBold: true),
+            if (expense.amountPaid > 0) ...[
+              const SizedBox(height: 8),
+              _buildTotalRow(
+                  'Pagado', _currencyFormat.format(expense.amountPaid),
+                  color: Colors.green),
+              _buildTotalRow('Saldo', _currencyFormat.format(expense.balance),
+                  color: expense.balance > 0 ? Colors.orange : Colors.grey),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTotalRow(String label, String value,
+      {bool isBold = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                color: color)),
+        Text(value,
+            style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontSize: isBold ? 18 : 14,
+                color: color)),
+      ],
+    );
+  }
+
+  Widget _buildPaymentsList(BuildContext context, List<dynamic> payments) {
+    // Implementation depends on payment model, using generic card for now
+    return Column(
+      children: payments
+          .map((p) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.payment),
+                  title: Text(_currencyFormat.format(p.amount)),
+                  subtitle: Text(ChileanUtils.formatDate(p.paymentDate)),
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildAttachmentsList(
+      BuildContext context, List<dynamic> attachments) {
+    return Column(
+      children: attachments
+          .map((a) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.attach_file),
+                  title: Text(a.fileName),
+                ),
+              ))
+          .toList(),
     );
   }
 
@@ -163,693 +637,88 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
           Icon(Icons.error_outline,
               color: Theme.of(context).colorScheme.error, size: 48),
           const SizedBox(height: 12),
-          Text(
-            'No se pudo cargar el gasto',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
           Text(_error ?? 'Error desconocido'),
           const SizedBox(height: 16),
           AppButton(
-            text: 'Reintentar',
-            icon: Icons.refresh,
-            onPressed: () => _loadExpense(refresh: true),
-          ),
+              text: 'Reintentar',
+              icon: Icons.refresh,
+              onPressed: () => _loadExpense(refresh: true)),
         ],
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.receipt_long,
-              size: 48, color: Theme.of(context).disabledColor),
-          const SizedBox(height: 12),
-          Text('No encontramos este gasto'),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => context.pop(_hasChanges),
-            child: const Text('Volver'),
-          ),
-        ],
+    return const Center(child: Text('Gasto no encontrado'));
+  }
+}
+
+class _InfoItem {
+  final String label;
+  final String? value;
+  _InfoItem(this.label, this.value);
+}
+
+class _StatusBadge extends StatelessWidget {
+  final dynamic status;
+  final bool isPosting;
+  const _StatusBadge({required this.status, this.isPosting = false});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color = Colors.grey;
+    String text = '';
+
+    if (isPosting) {
+      switch (status) {
+        case ExpensePostingStatus.draft:
+          color = Colors.orange;
+          text = 'Borrador';
+          break;
+        case ExpensePostingStatus.posted:
+          color = Colors.green;
+          text = 'Contabilizado';
+          break;
+        case ExpensePostingStatus.voided:
+          color = Colors.red;
+          text = 'Anulado';
+          break;
+      }
+    } else {
+      switch (status) {
+        case ExpensePaymentStatus.pending:
+          color = Colors.orange;
+          text = 'Pendiente';
+          break;
+        case ExpensePaymentStatus.scheduled:
+          color = Colors.blueGrey;
+          text = 'Programado';
+          break;
+        case ExpensePaymentStatus.partial:
+          color = Colors.purple;
+          text = 'Parcial';
+          break;
+        case ExpensePaymentStatus.paid:
+          color = Colors.green;
+          text = 'Pagado';
+          break;
+        case ExpensePaymentStatus.voided:
+          color = Colors.red;
+          text = 'Anulado';
+          break;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.bold, fontSize: 12)),
     );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    final expense = _expense!;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeaderRow(context, expense),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSummaryCard(context, expense),
-                  const SizedBox(height: 16),
-                  _buildStatusChips(context, expense),
-                  const SizedBox(height: 24),
-                  _buildInfoCards(context, expense),
-                  const SizedBox(height: 24),
-                  _buildLinesSection(context, expense.lines),
-                  const SizedBox(height: 24),
-                  _buildPaymentsSection(context, expense),
-                  const SizedBox(height: 24),
-                  _buildAttachmentsSection(context, expense),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderRow(BuildContext context, Expense expense) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => context.pop(_hasChanges),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        Expanded(
-          child: Text(
-            'Gasto ${expense.expenseNumber}',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-        ),
-        if (!_isLoading) ...[
-          IconButton(
-            tooltip: 'Actualizar',
-            onPressed: () => _loadExpense(refresh: true),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          AppButton(
-            text: 'Editar',
-            icon: Icons.edit_outlined,
-            type: ButtonType.secondary,
-            onPressed: () async {
-              if (expense.id == null) return;
-              final updated = await context.push<bool>(
-                '/accounting/expenses/${expense.id}/edit',
-              );
-              if (updated == true && mounted) {
-                _hasChanges = true;
-                await _loadExpense(refresh: true);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Gasto actualizado correctamente'),
-                  ),
-                );
-              }
-            },
-          ),
-          const SizedBox(width: 8),
-          PopupMenuButton<String>(
-            enabled: !_isProcessing,
-            onSelected: (value) {
-              switch (value) {
-                case 'post':
-                  _postExpense();
-                  break;
-                case 'draft':
-                  _revertExpense();
-                  break;
-                case 'paid':
-                  _markPaid();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'post',
-                enabled: expense.postingStatus != ExpensePostingStatus.posted,
-                child: const ListTile(
-                  leading: Icon(Icons.task_alt_outlined),
-                  title: Text('Marcar como contabilizado'),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'draft',
-                enabled: expense.postingStatus == ExpensePostingStatus.posted,
-                child: const ListTile(
-                  leading: Icon(Icons.undo_outlined),
-                  title: Text('Volver a borrador'),
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'paid',
-                enabled: expense.paymentStatus != ExpensePaymentStatus.paid,
-                child: const ListTile(
-                  leading: Icon(Icons.payments_outlined),
-                  title: Text('Marcar como pagado'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard(BuildContext context, Expense expense) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _currencyFormat.format(expense.totalAmount),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Subtotal: ${_currencyFormat.format(expense.subtotal)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  Text(
-                    'IVA: ${_currencyFormat.format(expense.taxAmount)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  if (expense.amountPaid > 0) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Pagado: ${_currencyFormat.format(expense.amountPaid)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.green.shade700),
-                    ),
-                    Text(
-                      'Saldo pendiente: ${_currencyFormat.format(expense.balance)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.orange.shade700),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'Emitido: ${ChileanUtils.formatDate(expense.issueDate)}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                if (expense.dueDate != null)
-                  Text(
-                    'Vence: ${ChileanUtils.formatDate(expense.dueDate!)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                if (expense.category?.name != null) ...[
-                  const SizedBox(height: 12),
-                  Chip(
-                    avatar: const Icon(Icons.label_outline, size: 16),
-                    label: Text(expense.category!.name),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusChips(BuildContext context, Expense expense) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _statusChip(
-          context,
-          label: _postingStatusLabel(expense.postingStatus),
-          color: _postingStatusColor(expense.postingStatus),
-          icon: Icons.account_balance_outlined,
-        ),
-        _statusChip(
-          context,
-          label: _paymentStatusLabel(expense.paymentStatus),
-          color: _paymentStatusColor(expense.paymentStatus),
-          icon: Icons.payments_outlined,
-        ),
-        _statusChip(
-          context,
-          label: _documentTypeLabel(expense.documentType),
-          color: Theme.of(context).colorScheme.secondaryContainer,
-          icon: Icons.description_outlined,
-        ),
-        if (expense.approvalStatus != ExpenseApprovalStatus.pending)
-          _statusChip(
-            context,
-            label: _approvalStatusLabel(expense.approvalStatus),
-            color: expense.approvalStatus == ExpenseApprovalStatus.approved
-                ? Colors.green.shade100
-                : Colors.red.shade100,
-            icon: Icons.verified_user_outlined,
-          ),
-      ],
-    );
-  }
-
-  Widget _statusChip(
-    BuildContext context, {
-    required String label,
-    required Color color,
-    required IconData icon,
-  }) {
-    return Chip(
-      avatar: Icon(icon, size: 18, color: Colors.black87),
-      label: Text(label),
-      backgroundColor: color,
-    );
-  }
-
-  Widget _buildInfoCards(BuildContext context, Expense expense) {
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: [
-        _infoCard(
-          context,
-          title: 'Proveedor',
-          content: expense.supplierName ?? 'Sin proveedor',
-          subtitle: expense.supplierRut,
-          icon: Icons.store_outlined,
-        ),
-        _infoCard(
-          context,
-          title: 'Referencia',
-          content: expense.reference ?? 'Sin referencia',
-          subtitle: expense.paymentTerms,
-          icon: Icons.notes_outlined,
-        ),
-        _infoCard(
-          context,
-          title: 'Cuentas contables',
-          content: expense.liabilityAccountId ?? 'Cuenta por pagar',
-          subtitle: expense.paymentAccountId,
-          icon: Icons.account_tree_outlined,
-        ),
-        _infoCard(
-          context,
-          title: 'Creado por',
-          content: expense.createdBy ?? 'No registrado',
-          subtitle: expense.createdAt != null
-              ? ChileanUtils.formatDateTime(expense.createdAt!)
-              : null,
-          icon: Icons.person_outline,
-        ),
-      ],
-    );
-  }
-
-  Widget _infoCard(
-    BuildContext context, {
-    required String title,
-    required String content,
-    String? subtitle,
-    required IconData icon,
-  }) {
-    return SizedBox(
-      width: 280,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 20, color: Theme.of(context).primaryColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                content,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (subtitle != null && subtitle.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLinesSection(BuildContext context, List<ExpenseLine> lines) {
-    if (lines.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Detalle contable'),
-              SizedBox(height: 8),
-              Text('Este gasto no tiene líneas asociadas.'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Detalle contable',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 800) {
-                  return Column(
-                    children: lines
-                        .map((line) => _buildMobileLineCard(context, line))
-                        .toList(),
-                  );
-                }
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('#')),
-                      DataColumn(label: Text('Cuenta')),
-                      DataColumn(label: Text('Descripción')),
-                      DataColumn(label: Text('Cantidad')),
-                      DataColumn(label: Text('Precio unitario')),
-                      DataColumn(label: Text('Subtotal')),
-                      DataColumn(label: Text('IVA')),
-                      DataColumn(label: Text('Total')),
-                    ],
-                    rows: [
-                      for (var i = 0; i < lines.length; i++)
-                        DataRow(
-                          cells: [
-                            DataCell(Text((i + 1).toString())),
-                            DataCell(Text(
-                                '${lines[i].accountCode} · ${lines[i].accountName}')),
-                            DataCell(Text(lines[i].description ?? '—')),
-                            DataCell(
-                                Text(lines[i].quantity.toStringAsFixed(2))),
-                            DataCell(Text(
-                                _currencyFormat.format(lines[i].unitPrice))),
-                            DataCell(Text(
-                                _currencyFormat.format(lines[i].subtotal))),
-                            DataCell(Text(
-                                '${lines[i].taxRate.toStringAsFixed(0)}% (${_currencyFormat.format(lines[i].taxAmount)})')),
-                            DataCell(
-                                Text(_currencyFormat.format(lines[i].total))),
-                          ],
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileLineCard(BuildContext context, ExpenseLine line) {
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${line.accountCode} · ${line.accountName}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Text(
-                  _currencyFormat.format(line.total),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            if (line.description != null && line.description!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(line.description!,
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Cantidad',
-                        style: Theme.of(context).textTheme.labelSmall),
-                    Text(line.quantity.toStringAsFixed(2)),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Precio Unit.',
-                        style: Theme.of(context).textTheme.labelSmall),
-                    Text(_currencyFormat.format(line.unitPrice)),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('IVA (${line.taxRate.toStringAsFixed(0)}%)',
-                        style: Theme.of(context).textTheme.labelSmall),
-                    Text(_currencyFormat.format(line.taxAmount)),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentsSection(BuildContext context, Expense expense) {
-    if (expense.payments.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Pagos'),
-              SizedBox(height: 8),
-              Text('Este gasto aún no registra pagos.'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pagos',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ...expense.payments.map(
-              (payment) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.payments_outlined),
-                title: Text(_currencyFormat.format(payment.amount)),
-                subtitle: Text(
-                  'Fecha: ${ChileanUtils.formatDate(payment.paymentDate)}'
-                  '${payment.reference != null ? ' · Ref: ${payment.reference}' : ''}',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentsSection(BuildContext context, Expense expense) {
-    if (expense.attachments.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Adjuntos'),
-              SizedBox(height: 8),
-              Text('No hay documentos adjuntos en este gasto.'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Adjuntos',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ...expense.attachments.map(
-              (attachment) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.attach_file_outlined),
-                title: Text(attachment.fileName),
-                subtitle: Text(
-                  attachment.uploadedAt != null
-                      ? 'Subido el ${ChileanUtils.formatDateTime(attachment.uploadedAt!)}'
-                      : 'Sin fecha registrada',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _postingStatusLabel(ExpensePostingStatus status) {
-    switch (status) {
-      case ExpensePostingStatus.draft:
-        return 'Borrador';
-      case ExpensePostingStatus.posted:
-        return 'Contabilizado';
-      case ExpensePostingStatus.voided:
-        return 'Anulado';
-    }
-  }
-
-  Color _postingStatusColor(ExpensePostingStatus status) {
-    switch (status) {
-      case ExpensePostingStatus.draft:
-        return Colors.orange.shade100;
-      case ExpensePostingStatus.posted:
-        return Colors.green.shade100;
-      case ExpensePostingStatus.voided:
-        return Colors.red.shade100;
-    }
-  }
-
-  String _paymentStatusLabel(ExpensePaymentStatus status) {
-    switch (status) {
-      case ExpensePaymentStatus.pending:
-        return 'Pendiente';
-      case ExpensePaymentStatus.scheduled:
-        return 'Programado';
-      case ExpensePaymentStatus.partial:
-        return 'Parcial';
-      case ExpensePaymentStatus.paid:
-        return 'Pagado';
-      case ExpensePaymentStatus.voided:
-        return 'Anulado';
-    }
-  }
-
-  Color _paymentStatusColor(ExpensePaymentStatus status) {
-    switch (status) {
-      case ExpensePaymentStatus.pending:
-        return Colors.orange.shade100;
-      case ExpensePaymentStatus.scheduled:
-        return Colors.blueGrey.shade100;
-      case ExpensePaymentStatus.partial:
-        return Colors.deepPurple.shade100;
-      case ExpensePaymentStatus.paid:
-        return Colors.green.shade100;
-      case ExpensePaymentStatus.voided:
-        return Colors.red.shade100;
-    }
-  }
-
-  String _documentTypeLabel(ExpenseDocumentType type) {
-    switch (type) {
-      case ExpenseDocumentType.invoice:
-        return 'Factura';
-      case ExpenseDocumentType.receipt:
-        return 'Boleta';
-      case ExpenseDocumentType.ticket:
-        return 'Ticket';
-      case ExpenseDocumentType.reimbursement:
-        return 'Reembolso';
-      case ExpenseDocumentType.other:
-        return 'Otro';
-    }
-  }
-
-  String _approvalStatusLabel(ExpenseApprovalStatus status) {
-    switch (status) {
-      case ExpenseApprovalStatus.pending:
-        return 'Pendiente';
-      case ExpenseApprovalStatus.approved:
-        return 'Aprobado';
-      case ExpenseApprovalStatus.rejected:
-        return 'Rechazado';
-    }
   }
 }

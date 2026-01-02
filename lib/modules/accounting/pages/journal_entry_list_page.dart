@@ -159,127 +159,153 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
         body: Column(
           children: [
             // Search and Filter Bar
+            // Search and Filter Bar
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 border: Border(
                   bottom: BorderSide(color: Theme.of(context).dividerColor),
                 ),
               ),
-              child: Column(
-                children: [
-                  if (isMobile)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: isMobile
+                  ? Column(
                       children: [
-                        SearchWidget(
-                          hintText: 'Buscar...',
-                          onSearchChanged: _onSearchChanged,
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<JournalEntryType?>(
-                          decoration: const InputDecoration(
-                            labelText: 'Tipo',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SearchWidget(
+                                hintText: 'Buscar...',
+                                onSearchChanged: _onSearchChanged,
+                              ),
                             ),
-                          ),
-                          value: _selectedType,
-                          items: [
-                            const DropdownMenuItem<JournalEntryType?>(
-                              value: null,
-                              child: Text('Todos'),
-                            ),
-                            ...JournalEntryType.values.map(
-                              (type) => DropdownMenuItem<JournalEntryType?>(
-                                value: type,
-                                child: Text(type.displayName),
+                            const SizedBox(width: 8),
+                            // Compact Mobile Filter Button
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<JournalEntryType?>(
+                                  value: _selectedType,
+                                  hint: const Icon(Icons.filter_list, size: 20),
+                                  icon: const SizedBox.shrink(),
+                                  alignment: Alignment.center,
+                                  items: [
+                                    const DropdownMenuItem<JournalEntryType?>(
+                                      value: null,
+                                      child: Text('Todos'),
+                                    ),
+                                    ...JournalEntryType.values.map(
+                                      (type) =>
+                                          DropdownMenuItem<JournalEntryType?>(
+                                        value: type,
+                                        child: Text(type.displayName),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: _onTypeFilterChanged,
+                                ),
                               ),
                             ),
                           ],
-                          onChanged: _onTypeFilterChanged,
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(
-                              child: AppButton(
-                                text: 'Nuevo Asiento',
-                                onPressed: () => context
-                                    .push('/accounting/journal-entries/new'),
-                                icon: Icons.add,
-                              ),
+                            Text(
+                              '${_filteredEntries.length} resultados',
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            const SizedBox(width: 8),
+                            const Spacer(),
                             IconButton(
                               onPressed:
                                   _isLoading ? null : _loadJournalEntries,
-                              icon: const Icon(Icons.refresh),
+                              icon: const Icon(Icons.refresh, size: 20),
+                              constraints: const BoxConstraints(),
+                              splashRadius: 20,
                               tooltip: 'Actualizar',
-                              style: IconButton.styleFrom(
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            AppButton(
+                              text: 'Nuevo',
+                              onPressed: () => context
+                                  .push('/accounting/journal-entries/new'),
+                              icon: Icons.add,
                             ),
                           ],
                         ),
                       ],
                     )
-                  else
-                    Row(
+                  : Row(
                       children: [
-                        Expanded(
-                          flex: 3,
+                        SizedBox(
+                          width: 320,
                           child: SearchWidget(
-                            hintText:
-                                'Buscar por número, descripción, módulo...',
+                            hintText: 'Buscar por número, descripción...',
                             onSearchChanged: _onSearchChanged,
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<JournalEntryType?>(
-                            decoration: const InputDecoration(
-                              labelText: 'Tipo',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                            ),
-                            value: _selectedType,
-                            items: [
-                              const DropdownMenuItem<JournalEntryType?>(
-                                value: null,
-                                child: Text('Todos'),
-                              ),
-                              ...JournalEntryType.values.map(
-                                (type) => DropdownMenuItem<JournalEntryType?>(
-                                  value: type,
-                                  child: Text(type.displayName),
-                                ),
-                              ),
-                            ],
-                            onChanged: _onTypeFilterChanged,
-                          ),
+                        Container(
+                          height: 24,
+                          width: 1,
+                          color: Theme.of(context).dividerColor,
                         ),
                         const SizedBox(width: 16),
-                        IconButton(
-                          onPressed: _isLoading ? null : _loadJournalEntries,
-                          icon: const Icon(Icons.refresh),
-                          tooltip: 'Actualizar',
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
+                        // Desktop Filter
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<JournalEntryType?>(
+                              value: _selectedType,
+                              hint: Text('Tipo de asiento',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600)),
+                              icon: const Icon(Icons.arrow_drop_down,
+                                  size: 20, color: Colors.grey),
+                              style: const TextStyle(
+                                  fontSize: 13, color: Colors.black87),
+                              items: [
+                                const DropdownMenuItem<JournalEntryType?>(
+                                  value: null,
+                                  child: Text('Todos los tipos'),
+                                ),
+                                ...JournalEntryType.values.map(
+                                  (type) => DropdownMenuItem<JournalEntryType?>(
+                                    value: type,
+                                    child: Text(type.displayName),
+                                  ),
+                                ),
+                              ],
+                              onChanged: _onTypeFilterChanged,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const Spacer(),
+                        if (_isLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 16),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        IconButton(
+                          onPressed: _isLoading ? null : _loadJournalEntries,
+                          icon: const Icon(Icons.refresh_rounded),
+                          tooltip: 'Actualizar',
+                        ),
+                        const SizedBox(width: 12),
                         AppButton(
                           text: 'Nuevo Asiento',
                           onPressed: () =>
@@ -288,24 +314,6 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        'Total: ${_filteredEntries.length} asientos',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const Spacer(),
-                      if (_isLoading)
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
             ),
 
             // Entries List
@@ -350,617 +358,18 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                             ],
                           ),
                         )
-                      : ListView.builder(
+                      : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _filteredEntries.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final entry = _filteredEntries[index];
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ExpansionTile(
-                                title: isMobile
-                                    ? Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                entry.entryNumber,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                              ),
-                                              Text(
-                                                _currencyFormat
-                                                    .format(entry.totalDebit),
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: entry.isBalanced
-                                                          ? null
-                                                          : Colors.red,
-                                                    ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _dateFormat.format(entry.date),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            entry.description,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      _getTypeColor(entry.type)
-                                                          .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                      color: _getTypeColor(
-                                                          entry.type)),
-                                                ),
-                                                child: Text(
-                                                  entry.type.displayName,
-                                                  style: TextStyle(
-                                                    color: _getTypeColor(
-                                                        entry.type),
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: _getStatusColor(
-                                                          entry.status)
-                                                      .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                      color: _getStatusColor(
-                                                          entry.status)),
-                                                ),
-                                                child: Text(
-                                                  entry.status.displayName,
-                                                  style: TextStyle(
-                                                    color: _getStatusColor(
-                                                        entry.status),
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      )
-                                    : Row(
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  entry.entryNumber,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                ),
-                                                Text(
-                                                  _dateFormat
-                                                      .format(entry.date),
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Text(
-                                              entry.description,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium,
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: _getTypeColor(entry.type)
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color:
-                                                      _getTypeColor(entry.type),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                entry.type.displayName,
-                                                style: TextStyle(
-                                                  color:
-                                                      _getTypeColor(entry.type),
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  _getStatusColor(entry.status)
-                                                      .withOpacity(0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: _getStatusColor(
-                                                    entry.status),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              entry.status.displayName,
-                                              style: TextStyle(
-                                                color: _getStatusColor(
-                                                    entry.status),
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            _currencyFormat
-                                                .format(entry.totalDebit),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: entry.isBalanced
-                                                      ? null
-                                                      : Colors.red,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                subtitle: entry.sourceModule != null ||
-                                        entry.sourceReference != null
-                                    ? Text(
-                                        '${entry.sourceModule ?? ''} ${entry.sourceReference ?? ''}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .secondary,
-                                            ),
-                                      )
-                                    : null,
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      onPressed: () => _quickDeleteEntry(entry),
-                                      icon: const Icon(Icons.delete_forever,
-                                          color: Colors.red, size: 20),
-                                      tooltip: 'Eliminar (Testing)',
-                                    ),
-                                  ],
-                                ),
-                                children: [
-                                  Container(
-                                    margin: const EdgeInsets.fromLTRB(
-                                        16, 0, 16, 16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Divider(),
-                                        Text(
-                                          'Líneas del Asiento',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        if (!isMobile)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceVariant,
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                const Expanded(
-                                                  flex: 3,
-                                                  child: Text(
-                                                    'Cuenta',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const Expanded(
-                                                  flex: 3,
-                                                  child: Text(
-                                                    'Descripción',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                ),
-                                                SizedBox(
-                                                  width: 120,
-                                                  child: Text(
-                                                    'Debe',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .labelMedium
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                    textAlign: TextAlign.right,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 16),
-                                                SizedBox(
-                                                  width: 120,
-                                                  child: Text(
-                                                    'Haber',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .labelMedium
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                    textAlign: TextAlign.right,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        const SizedBox(height: 8),
-                                        ...entry.lines
-                                            .map((line) => isMobile
-                                                ? Card(
-                                                    elevation: 0,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .surfaceVariant
-                                                        .withOpacity(0.3),
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                            bottom: 8),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              12),
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                            '${line.accountCode} - ${line.accountName}',
-                                                            style: const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold),
-                                                          ),
-                                                          if (line.description
-                                                              .isNotEmpty)
-                                                            Text(
-                                                                line
-                                                                    .description,
-                                                                style: Theme.of(
-                                                                        context)
-                                                                    .textTheme
-                                                                    .bodySmall),
-                                                          const SizedBox(
-                                                              height: 8),
-                                                          Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              if (line.debitAmount >
-                                                                  0)
-                                                                Text(
-                                                                    'Debe: ${_currencyFormat.format(line.debitAmount)}',
-                                                                    style: const TextStyle(
-                                                                        color: Colors
-                                                                            .green)),
-                                                              if (line.creditAmount >
-                                                                  0)
-                                                                Text(
-                                                                    'Haber: ${_currencyFormat.format(line.creditAmount)}',
-                                                                    style: const TextStyle(
-                                                                        color: Colors
-                                                                            .red)),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  )
-                                                : Container(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 8),
-                                                    decoration: BoxDecoration(
-                                                      border: Border(
-                                                        bottom: BorderSide(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .dividerColor,
-                                                          width: 0.5,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      children: [
-                                                        Expanded(
-                                                          flex: 3,
-                                                          child: Text(
-                                                            '${line.accountCode} - ${line.accountName}',
-                                                            style: Theme.of(
-                                                                    context)
-                                                                .textTheme
-                                                                .bodyMedium
-                                                                ?.copyWith(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        Expanded(
-                                                          flex: 3,
-                                                          child: Text(
-                                                            line.description,
-                                                            style: Theme.of(
-                                                                    context)
-                                                                .textTheme
-                                                                .bodySmall,
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 120,
-                                                          child: Text(
-                                                            line.debitAmount > 0
-                                                                ? _currencyFormat
-                                                                    .format(line
-                                                                        .debitAmount)
-                                                                : '',
-                                                            style: Theme.of(
-                                                                    context)
-                                                                .textTheme
-                                                                .bodyMedium
-                                                                ?.copyWith(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                            textAlign:
-                                                                TextAlign.right,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                            width: 16),
-                                                        SizedBox(
-                                                          width: 120,
-                                                          child: Text(
-                                                            line.creditAmount >
-                                                                    0
-                                                                ? _currencyFormat
-                                                                    .format(line
-                                                                        .creditAmount)
-                                                                : '',
-                                                            style: Theme.of(
-                                                                    context)
-                                                                .textTheme
-                                                                .bodyMedium
-                                                                ?.copyWith(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                            textAlign:
-                                                                TextAlign.right,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ))
-                                            .toList(),
-                                        const SizedBox(height: 8),
-                                        if (isMobile)
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              if (!entry.isBalanced)
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.all(8),
-                                                  color: Colors.red
-                                                      .withOpacity(0.1),
-                                                  child: Row(
-                                                    children: [
-                                                      const Icon(Icons.error,
-                                                          color: Colors.red),
-                                                      const SizedBox(width: 8),
-                                                      Text('Desbalanceado',
-                                                          style: TextStyle(
-                                                              color:
-                                                                  Colors.red)),
-                                                    ],
-                                                  ),
-                                                ),
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('Total Debe:',
-                                                      style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold)),
-                                                  Text(_currencyFormat.format(
-                                                      entry.totalDebit)),
-                                                ],
-                                              ),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('Total Haber:',
-                                                      style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold)),
-                                                  Text(_currencyFormat.format(
-                                                      entry.totalCredit)),
-                                                ],
-                                              ),
-                                            ],
-                                          )
-                                        else
-                                          Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: entry.isBalanced
-                                                  ? Colors.green
-                                                      .withOpacity(0.1)
-                                                  : Colors.red.withOpacity(0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: entry.isBalanced
-                                                    ? Colors.green
-                                                    : Colors.red,
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  entry.isBalanced
-                                                      ? Icons.check_circle
-                                                      : Icons.error,
-                                                  color: entry.isBalanced
-                                                      ? Colors.green
-                                                      : Colors.red,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  entry.isBalanced
-                                                      ? 'Asiento balanceado'
-                                                      : 'Asiento desbalanceado',
-                                                  style: TextStyle(
-                                                    color: entry.isBalanced
-                                                        ? Colors.green
-                                                        : Colors.red,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                const Spacer(),
-                                                Text(
-                                                  'Debe: ${_currencyFormat.format(entry.totalDebit)}',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall,
-                                                ),
-                                                const SizedBox(width: 16),
-                                                Text(
-                                                  'Haber: ${_currencyFormat.format(entry.totalCredit)}',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            return _JournalEntryCard(
+                              entry: entry,
+                              dateFormat: _dateFormat,
+                              currencyFormat: _currencyFormat,
+                              onDelete: () => _quickDeleteEntry(entry),
                             );
                           },
                         ),
@@ -969,6 +378,32 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
         ),
       );
     });
+  }
+}
+
+class _JournalEntryCard extends StatelessWidget {
+  final JournalEntry entry;
+  final DateFormat dateFormat;
+  final NumberFormat currencyFormat;
+  final VoidCallback onDelete;
+
+  const _JournalEntryCard({
+    required this.entry,
+    required this.dateFormat,
+    required this.currencyFormat,
+    required this.onDelete,
+  });
+
+  String _formatSource(String? module, String? ref) {
+    if (module == null && ref == null) return '';
+    String modName = module ?? '';
+    if (module == 'sales_invoices') modName = 'Factura Venta';
+    if (module == 'purchase_invoices') modName = 'Factura Compra';
+    if (module == 'sales_payments') modName = 'Cobro Venta';
+    if (module == 'purchase_payments') modName = 'Pago Compra';
+    if (module == 'expenses') modName = 'Gasto';
+    if (module == 'payroll') modName = 'Nómina';
+    return '$modName ${ref ?? ''}'.trim();
   }
 
   Color _getTypeColor(JournalEntryType type) {
@@ -983,10 +418,12 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
         return Colors.purple;
       case JournalEntryType.receipt:
         return Colors.teal;
+      case JournalEntryType.payroll:
+        return Colors.pink;
       case JournalEntryType.adjustment:
-        return Colors.yellow.shade700;
+        return Colors.yellow.shade800;
       case JournalEntryType.closing:
-        return Colors.red;
+        return Colors.red.shade800;
       case JournalEntryType.opening:
         return Colors.indigo;
     }
@@ -995,11 +432,347 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   Color _getStatusColor(JournalEntryStatus status) {
     switch (status) {
       case JournalEntryStatus.draft:
-        return Colors.grey;
+        return Colors.amber.shade700;
       case JournalEntryStatus.posted:
-        return Colors.green;
+        return Colors.green.shade700;
       case JournalEntryStatus.reversed:
-        return Colors.red;
+        return Colors.red.shade700;
     }
+  }
+
+  IconData _getTypeIcon(JournalEntryType type) {
+    switch (type) {
+      case JournalEntryType.manual:
+        return Icons.edit_note;
+      case JournalEntryType.sales:
+        return Icons.sell;
+      case JournalEntryType.purchase:
+        return Icons.shopping_cart;
+      case JournalEntryType.payment:
+        return Icons.payment;
+      case JournalEntryType.receipt:
+        return Icons.receipt;
+      case JournalEntryType.payroll:
+        return Icons.groups;
+      default:
+        return Icons.article;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sourceText = _formatSource(entry.sourceModule, entry.sourceReference);
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      color: Colors.white,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          // Hide default trailing icon to manage layout manually
+          trailing: const SizedBox.shrink(),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // LEFT SIDE: Main Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Row 1: Badge + Date
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            entry.entryNumber,
+                            style: TextStyle(
+                              color: Colors.blue.shade900,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(Icons.calendar_today_outlined,
+                            size: 14, color: Colors.grey.shade500),
+                        const SizedBox(width: 4),
+                        Text(
+                          dateFormat.format(entry.date),
+                          style: TextStyle(
+                              color: Colors.grey.shade600, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Description
+                    Text(
+                      entry.description.isEmpty
+                          ? 'Sin descripción'
+                          : entry.description,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Color(0xFF1F2937),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Meta Tags (Type, Status, Source)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        // Type
+                        _buildBadge(
+                          color: _getTypeColor(entry.type),
+                          icon: _getTypeIcon(entry.type),
+                          text: entry.type.displayName,
+                        ),
+                        // Status
+                        _buildBadge(
+                          color: _getStatusColor(entry.status),
+                          text: entry.status.displayName,
+                        ),
+                        // Source
+                        if (sourceText.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.link,
+                                  size: 14, color: Colors.grey.shade400),
+                              const SizedBox(width: 4),
+                              Container(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 150),
+                                child: Text(
+                                  sourceText,
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // RIGHT SIDE: Actions & Amount
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Amount (Top Right)
+                  Text(
+                    currencyFormat.format(entry.totalDebit),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color:
+                          entry.isBalanced ? Colors.grey.shade900 : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Actions (Bottom Right)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_horiz,
+                            size: 20, color: Colors.grey.shade400),
+                        tooltip: 'Opciones',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (value) {
+                          if (value == 'delete') onDelete();
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline,
+                                    color: Colors.red, size: 20),
+                                SizedBox(width: 8),
+                                Text('Eliminar',
+                                    style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.keyboard_arrow_down,
+                          size: 24, color: Colors.grey.shade400),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  // Table Header
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                            flex: 3,
+                            child: Text('Cuenta',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700))),
+                        if (isDesktop)
+                          Expanded(
+                              flex: 3,
+                              child: Text('Descripción',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700))),
+                        SizedBox(
+                            width: 100,
+                            child: Text('Debe',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700))),
+                        SizedBox(
+                            width: 100,
+                            child: Text('Haber',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700))),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  // Lines
+                  ...entry.lines.map((line) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${line.accountCode} ${line.accountName}',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500)),
+                                if (!isDesktop && line.description.isNotEmpty)
+                                  Text(line.description,
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade500)),
+                              ],
+                            ),
+                          ),
+                          if (isDesktop)
+                            Expanded(
+                              flex: 3,
+                              child: Text(line.description,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600)),
+                            ),
+                          SizedBox(
+                              width: 100,
+                              child: Text(
+                                  line.debitAmount > 0
+                                      ? currencyFormat.format(line.debitAmount)
+                                      : '-',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700))),
+                          SizedBox(
+                              width: 100,
+                              child: Text(
+                                  line.creditAmount > 0
+                                      ? currencyFormat.format(line.creditAmount)
+                                      : '-',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700))),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadge(
+      {required Color color, IconData? icon, required String text}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -32,6 +32,22 @@
         "-d",
         "windows"
       ]
+    },
+    {
+      "name": "📱 Flutter: Run (iPad)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "00008110-000C708A3A38801E",
+      "args": []
+    },
+    {
+      "name": "📱 Flutter: Run (Android)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "adb-R28M2189XQF-QsJGTZ._adb-tls-connect._tcp",
+      "args": []
     }
   ]
 }

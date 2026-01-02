@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/payroll_voucher_service.dart';
+import '../services/hr_service.dart';
 import '../models/payroll_voucher.dart';
+import '../models/hr_models.dart';
 
 /// Dialog for confirming payment of a payroll voucher.
 /// Allows selecting Payment Method (DB) and Source Account (DB) per employee.
@@ -22,11 +24,10 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
 
   // Dynamic Data
   List<Map<String, dynamic>> _availableMethods = [];
-  List<Map<String, dynamic>> _availableAccounts = [];
+  Map<String, Employee> _employeeMap = {}; // Cache for profiles
 
-  // Selections [lineId] -> ID
+  // Selections [lineId] -> methodId
   final Map<String, String> _selectedMethodIds = {};
-  final Map<String, String> _selectedAccountIds = {};
 
   @override
   void initState() {
@@ -37,48 +38,76 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   Future<void> _loadData() async {
     try {
       final service = context.read<PayrollVoucherService>();
+      final hrService = context.read<HRService>();
 
-      // Load Voucher and Options in parallel
+      // Load Voucher, Methods, and Current Employee Profiles in parallel
       final results = await Future.wait([
         service.getVoucher(widget.voucherId),
         service.getPaymentMethods(),
-        service.getPaymentAccounts(),
+        hrService
+            .getEmployees(), // Fetch current profiles to respect latest preferences
       ]);
 
       if (mounted) {
         final voucher = results[0] as PayrollVoucher?;
         final methods = results[1] as List<Map<String, dynamic>>;
-        final accounts = results[2] as List<Map<String, dynamic>>;
+        final employees = results[2] as List<Employee>;
+
+        // Cache employees for salary account lookup
+        _employeeMap = {
+          for (var e in employees)
+            if (e.id != null) e.id!: e
+        };
+
+        // Create a map of updated employee preferences: ID -> preferredPaymentMethodId
+        final empPreferences = <String, String>{};
+        for (var e in employees) {
+          if (e.id != null && e.preferredPaymentMethodId != null) {
+            empPreferences[e.id!] = e.preferredPaymentMethodId!;
+          }
+        }
 
         if (voucher != null) {
           setState(() {
             _voucher = voucher;
             _availableMethods = methods;
-            _availableAccounts = accounts;
             _isLoading = false;
 
-            // Initialize selections from existing line data
+            // Initialize selections
             for (var line in voucher.lines) {
-              if (line.id != null) {
-                // Pre-select if saved, otherwise default
-                if (line.paymentMethodId != null) {
-                  _selectedMethodIds[line.id!] = line.paymentMethodId!;
-                } else if (methods.isNotEmpty) {
-                  // Default: Try to match legacy string or pick first
-                  final match = methods.firstWhere(
-                      (m) => m['name']
-                          .toString()
-                          .toLowerCase()
-                          .contains(line.paymentMethod.toLowerCase()),
-                      orElse: () => methods.first);
-                  _selectedMethodIds[line.id!] = match['id'];
+              if (line.id != null && line.employeeId != null) {
+                String? targetMethodId;
+
+                // 1. Try to use Current Employee Profile Preference (Highest Priority)
+                if (empPreferences.containsKey(line.employeeId)) {
+                  targetMethodId = empPreferences[line.employeeId];
                 }
 
-                if (line.paymentAccountId != null) {
-                  _selectedAccountIds[line.id!] = line.paymentAccountId!;
-                } else {
-                  // Auto-select account based on method
-                  _autoSelectAccount(line.id!, _selectedMethodIds[line.id]);
+                // 2. Fallback to what was saved on the line
+                targetMethodId ??= line.paymentMethodId;
+
+                if (targetMethodId != null) {
+                  // Verify the ID still exists in available methods
+                  if (methods.any((m) => m['id'] == targetMethodId)) {
+                    _selectedMethodIds[line.id!] = targetMethodId;
+                    continue;
+                  }
+                }
+
+                // 3. Fallback to legacy string matching if still no valid ID
+                if (methods.isNotEmpty) {
+                  final lineMethod = line.paymentMethod.toLowerCase();
+                  final match = methods.firstWhere((m) {
+                    final dbName = m['name'].toString().toLowerCase();
+                    if (dbName.contains(lineMethod)) return true;
+                    if (lineMethod == 'cash' && dbName.contains('efectivo'))
+                      return true;
+                    if (lineMethod == 'check' && dbName.contains('cheque'))
+                      return true;
+                    return false;
+                  }, orElse: () => methods.first);
+
+                  _selectedMethodIds[line.id!] = match['id'];
                 }
               }
             }
@@ -99,41 +128,6 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
     }
   }
 
-  void _autoSelectAccount(String lineId, String? methodId) {
-    if (methodId == null || _availableAccounts.isEmpty) return;
-
-    final method = _availableMethods.firstWhere((m) => m['id'] == methodId,
-        orElse: () => {});
-    final methodName = (method['name'] ?? '').toString().toLowerCase();
-
-    // Logic: If 'efectivo' -> find 'box' or 'cash' account
-    // If 'transfer' -> find 'bank' account
-
-    Map<String, dynamic>? match;
-
-    if (methodName.contains('efectivo') ||
-        methodName.contains('cash') ||
-        methodName.contains('caja')) {
-      // Find account with '1101' or name 'caja'
-      match = _availableAccounts.firstWhere(
-          (a) =>
-              (a['code'] ?? '').toString().startsWith('1101') ||
-              (a['name'] ?? '').toString().toLowerCase().contains('caja'),
-          orElse: () => _availableAccounts.first);
-    } else {
-      // Assume Bank (1102)
-      match = _availableAccounts.firstWhere(
-          (a) =>
-              (a['code'] ?? '').toString().startsWith('1102') ||
-              (a['name'] ?? '').toString().toLowerCase().contains('banco'),
-          orElse: () => _availableAccounts.first);
-    }
-
-    if (match != null) {
-      _selectedAccountIds[lineId] = match['id'];
-    }
-  }
-
   Future<void> _confirmPayment() async {
     if (_voucher == null) return;
 
@@ -142,23 +136,34 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
     try {
       final service = context.read<PayrollVoucherService>();
 
-      // Update lines with explicit Primary Key selections
+      // Update lines with payment method selections
       for (var line in _voucher!.lines.where((l) => l.isIncluded)) {
         if (line.id == null) continue;
 
-        final methodId = _selectedMethodIds[line.id];
-        final accountId = _selectedAccountIds[line.id];
+        // Update line logic
+        final em = _employeeMap[line.employeeId];
 
-        // Update if changed or if missing
+        // Use updated method, or keep existing
+        final methodId = _selectedMethodIds[line.id] ?? line.paymentMethodId;
+
+        // Sync salary account from current profile if available
+        final salaryAccountId = em?.salaryAccountId ?? line.salaryAccountId;
+
+        // Determine method name for legacy string
+        String? methodName = line.paymentMethod;
+        if (methodId != null) {
+          final m = _availableMethods.firstWhere((m) => m['id'] == methodId,
+              orElse: () => {'name': 'transfer'});
+          methodName = m['name'];
+        }
+
+        // Only update if something changed (Method or Account mismatch)
         if (methodId != line.paymentMethodId ||
-            accountId != line.paymentAccountId) {
+            salaryAccountId != line.salaryAccountId) {
           await service.updateLine(line.copyWith(
             paymentMethodId: methodId,
-            paymentAccountId: accountId,
-            // Update legacy string just in case
-            paymentMethod: _availableMethods.firstWhere(
-                (m) => m['id'] == methodId,
-                orElse: () => {'name': 'transfer'})['name'],
+            paymentMethod: methodName,
+            salaryAccountId: salaryAccountId,
           ));
         }
       }
@@ -259,9 +264,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                 separatorBuilder: (_, __) => const Divider(),
                 itemBuilder: (context, index) {
                   final line = includedLines[index];
-                  // Ensure we have a valid selection or default
                   final currentMethodId = _selectedMethodIds[line.id];
-                  final currentAccountId = _selectedAccountIds[line.id];
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -280,18 +283,9 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                       fontSize: 16)),
                               const SizedBox(height: 4),
                               Text(
-                                  '${line.workedHours} hrs + ${line.overtimeHours} extras',
+                                  '${line.workedHours.toStringAsFixed(1)} hrs${line.overtimeHours > 0 ? ' + ${line.overtimeHours.toStringAsFixed(1)} extras' : ''}',
                                   style: TextStyle(
                                       color: Colors.grey[600], fontSize: 13)),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Cuenta Salario: ${line.salaryAccountId != null ? 'Configurada ✅' : '⚠️ Faltante'}',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: line.salaryAccountId != null
-                                        ? Colors.green
-                                        : Colors.red),
-                              ),
                             ],
                           ),
                         ),
@@ -308,62 +302,31 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                           ),
                         ),
 
-                        // 3. Payment Selection (Method + Account)
+                        // 3. Payment Method Only (accounting handled automatically)
                         Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Method
-                              DropdownButtonFormField<String>(
-                                value: currentMethodId,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Método de Pago',
-                                  isDense: true,
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 12),
-                                ),
-                                items: _availableMethods
-                                    .map((m) => DropdownMenuItem(
-                                        value: m['id'] as String,
-                                        child: Text(m['name'])))
-                                    .toList(),
-                                onChanged: (val) {
-                                  if (val != null && line.id != null) {
-                                    setState(() {
-                                      _selectedMethodIds[line.id!] = val;
-                                      _autoSelectAccount(line.id!, val);
-                                    });
-                                  }
-                                },
-                              ),
-                              const SizedBox(height: 8),
-                              // Account
-                              DropdownButtonFormField<String>(
-                                value: currentAccountId,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Cuenta Origen (Banco/Caja)',
-                                  isDense: true,
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 12),
-                                ),
-                                items: _availableAccounts
-                                    .map((a) => DropdownMenuItem(
-                                        value: a['id'] as String,
-                                        child: Text(
-                                            '${a['code']} - ${a['name']}')))
-                                    .toList(),
-                                onChanged: (val) {
-                                  if (val != null && line.id != null)
-                                    setState(() =>
-                                        _selectedAccountIds[line.id!] = val);
-                                },
-                              ),
-                            ],
+                          flex: 4,
+                          child: DropdownButtonFormField<String>(
+                            value: currentMethodId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Método de Pago',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 12),
+                            ),
+                            items: _availableMethods
+                                .map((m) => DropdownMenuItem(
+                                    value: m['id'] as String,
+                                    child: Text(m['name'])))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null && line.id != null) {
+                                setState(() {
+                                  _selectedMethodIds[line.id!] = val;
+                                });
+                              }
+                            },
                           ),
                         ),
                       ],

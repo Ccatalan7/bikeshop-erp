@@ -59,8 +59,12 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
   bool _isSaving = false;
   String? _error;
   // Salary/Hours state
-  PaymentMethod _paymentMethod = PaymentMethod.transfer;
+  PaymentMethod _paymentMethod = PaymentMethod.transfer; // Keep for fallback
+  String? _preferredPaymentMethodId; // New FK
   BankAccountType? _bankAccountType;
+  String? _salaryAccountId;
+  List<Map<String, dynamic>> _salaryAccounts = []; // Available salary accounts
+  List<Map<String, dynamic>> _paymentMethods = []; // Available payment methods
   EmployeeHoursSummary? _hoursSummary;
   bool _isLoadingHours = false;
   // Filtering
@@ -187,10 +191,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _birthDate = employee.birthDate;
     _hireDate = employee.hireDate;
     _paymentMethod = employee.preferredPaymentMethod ?? PaymentMethod.transfer;
+    _preferredPaymentMethodId = employee.preferredPaymentMethodId;
     _bankAccountType = employee.bankAccountType;
+    _salaryAccountId = employee.salaryAccountId;
 
-    // Load hours summary in background
+    // Load hours summary and references (accounts, payment methods)
     _loadHoursSummary();
+    _loadReferences(); // Renamed from _loadSalaryAccounts
   }
 
   // Basic Date Calculations
@@ -293,6 +300,27 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     }
   }
 
+  Future<void> _loadReferences() async {
+    try {
+      final hrService = context.read<HRService>();
+
+      // Load salary accounts and payment methods in parallel
+      final results = await Future.wait([
+        hrService.getSalaryAccounts(),
+        hrService.getPaymentMethods(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _salaryAccounts = results[0];
+          _paymentMethods = results[1];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading references: $e');
+    }
+  }
+
   Future<void> _saveEmployee() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -338,6 +366,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             ? null
             : double.tryParse(_hourlyRateController.text),
         preferredPaymentMethod: _paymentMethod,
+        preferredPaymentMethodId: _preferredPaymentMethodId, // New FK
         bankName: _bankNameController.text.isEmpty
             ? null
             : _bankNameController.text.trim(),
@@ -345,6 +374,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             ? null
             : _bankAccountNumberController.text.trim(),
         bankAccountType: _bankAccountType,
+        salaryAccountId: _salaryAccountId,
       );
 
       await hrService.updateEmployee(updatedEmployee);
@@ -1123,6 +1153,9 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                     'N° Cuenta',
                     Icons.credit_card,
                   ),
+                  const SizedBox(height: 16),
+                  // Salary Account Dropdown
+                  _buildSalaryAccountDropdown(),
                 ],
               ),
             ),
@@ -1478,8 +1511,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
   }
 
   Widget _buildPaymentMethodDropdown() {
-    return DropdownButtonFormField<PaymentMethod>(
-      value: _paymentMethod,
+    // Determine the current value (ensure it exists in the list)
+    final validValue =
+        _paymentMethods.any((m) => m['id'] == _preferredPaymentMethodId)
+            ? _preferredPaymentMethodId
+            : null;
+
+    return DropdownButtonFormField<String?>(
+      value: validValue,
       decoration: InputDecoration(
         labelText: 'Método de Pago',
         prefixIcon: const Icon(Icons.payment, size: 20),
@@ -1488,14 +1527,33 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
         ),
+        helperText: _paymentMethods.isEmpty ? 'Cargando métodos...' : null,
       ),
-      items: const [
-        DropdownMenuItem(
-            value: PaymentMethod.transfer, child: Text('Transferencia')),
-        DropdownMenuItem(value: PaymentMethod.cash, child: Text('Efectivo')),
-        DropdownMenuItem(value: PaymentMethod.check, child: Text('Cheque')),
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Sin especificar')),
+        ..._paymentMethods.map((method) => DropdownMenuItem(
+              value: method['id'] as String,
+              child: Text(method['name'] ?? ''),
+            )),
       ],
-      onChanged: (value) => setState(() => _paymentMethod = value!),
+      onChanged: (value) {
+        setState(() {
+          _preferredPaymentMethodId = value;
+          // Optimistically update legacy enum for UI consistency if needed
+          if (value != null) {
+            final name = _paymentMethods
+                .firstWhere((m) => m['id'] == value)['name']
+                .toString()
+                .toLowerCase();
+            if (name.contains('efectivo'))
+              _paymentMethod = PaymentMethod.cash;
+            else if (name.contains('cheque'))
+              _paymentMethod = PaymentMethod.check;
+            else
+              _paymentMethod = PaymentMethod.transfer;
+          }
+        });
+      },
     );
   }
 
@@ -1521,6 +1579,38 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             value: BankAccountType.vista, child: Text('Cuenta Vista')),
       ],
       onChanged: (value) => setState(() => _bankAccountType = value),
+    );
+  }
+
+  Widget _buildSalaryAccountDropdown() {
+    // Ensure value exists in items list, otherwise set to null to avoid assertion error
+    final validValue =
+        _salaryAccounts.any((acc) => acc['id'] == _salaryAccountId)
+            ? _salaryAccountId
+            : null;
+
+    return DropdownButtonFormField<String?>(
+      value: validValue,
+      decoration: InputDecoration(
+        labelText: 'Cuenta de Gasto Salario',
+        prefixIcon: const Icon(Icons.receipt_long, size: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+        ),
+        helperText: _salaryAccounts.isEmpty
+            ? 'Cargando cuentas...'
+            : 'Cuenta contable para registrar el gasto de salario',
+      ),
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Sin especificar')),
+        ..._salaryAccounts.map((acc) => DropdownMenuItem(
+              value: acc['id'] as String,
+              child: Text('${acc['code']} - ${acc['name']}'),
+            )),
+      ],
+      onChanged: (value) => setState(() => _salaryAccountId = value),
     );
   }
 }

@@ -323,6 +323,19 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
+  /// Delete records matching a where clause (e.g., 'voucher_id', voucherId)
+  Future<void> deleteWhere(String table, String column, String value) async {
+    try {
+      await _client.from(table).delete().eq(column, value);
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Database deleteWhere error: $e');
+      }
+      rethrow;
+    }
+  }
+
   Future<String?> ensureAccount({
     required String code,
     required String name,

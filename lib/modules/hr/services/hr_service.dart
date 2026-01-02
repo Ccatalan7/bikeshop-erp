@@ -300,6 +300,33 @@ class HRService extends ChangeNotifier {
     }
   }
 
+  /// Get salary accounts (accounts starting with 6101 - Sueldos y Salarios)
+  Future<List<Map<String, dynamic>>> getSalaryAccounts() async {
+    try {
+      final response = await _client
+          .from('accounts')
+          .select('id, code, name')
+          .like('code', '6101%')
+          .order('code');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error getting salary accounts: $e');
+      return [];
+    }
+  }
+
+  /// Get available payment methods
+  Future<List<Map<String, dynamic>>> getPaymentMethods() async {
+    try {
+      final response =
+          await _client.from('payment_methods').select().order('name');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error getting payment methods: $e');
+      return [];
+    }
+  }
+
   // ============================================================================
   // WORK SCHEDULES
   // ============================================================================

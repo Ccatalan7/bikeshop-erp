@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/payroll_voucher.dart';
 import '../../../../shared/services/database_service.dart';
 
@@ -15,16 +16,236 @@ class PayrollVoucherService extends ChangeNotifier {
 
   void _setLoading(bool value) {
     _isLoading = value;
-    notifyListeners();
+    _notifySafe();
   }
 
   void _setError(String? value) {
     _error = value;
-    notifyListeners();
+    _notifySafe();
+  }
+
+  /// Safely notify listeners, even during build phase
+  void _notifySafe() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
+  }
+
+  /// Generates a PREVIEW of the payroll voucher for the given period.
+  /// This does NOT save to the database - it's for user review only.
+  /// Returns a PayrollVoucher object with calculated lines.
+  Future<PayrollVoucher> generatePreview(
+    DateTime startDate,
+    DateTime endDate, {
+    String? periodLabel,
+  }) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+
+      // Fetch active employees with their salary info
+      final employees = await _db.select(
+        'employees',
+        where: 'status=active',
+        orderBy: 'first_name',
+      );
+
+      // Fetch attendance records for the period
+      final attendances = await _db.rpc(
+            'get_attendance_summary_for_period',
+            params: {
+              'p_start_date': startDate.toIso8601String().split('T')[0],
+              'p_end_date': endDate.toIso8601String().split('T')[0],
+            },
+          ) as List<dynamic>? ??
+          [];
+
+      // Build a map of employee_id -> total hours
+      final hoursMap = <String, double>{};
+      for (var att in attendances) {
+        final empId = att['employee_id'] as String;
+        final hours = (att['total_hours'] as num?)?.toDouble() ?? 0;
+        hoursMap[empId] = hours;
+      }
+
+      // Generate preview lines
+      final lines = <PayrollVoucherLine>[];
+      double totalAmount = 0;
+      double totalHours = 0;
+
+      for (var emp in employees) {
+        final empId = emp['id'] as String;
+        final workedHours = hoursMap[empId] ?? 0;
+        final hourlyRate = (emp['hourly_rate'] as num?)?.toDouble() ?? 0;
+        final lineTotal = workedHours * hourlyRate;
+
+        lines.add(PayrollVoucherLine(
+          id: empId, // Use employee ID as temp ID for preview
+          voucherId: 'preview',
+          employeeId: empId,
+          employeeName:
+              '${emp['first_name'] ?? ''} ${emp['last_name'] ?? ''}'.trim(),
+          workedHours: workedHours,
+          overtimeHours: 0,
+          hourlyRate: hourlyRate,
+          overtimeRate: hourlyRate * 1.5,
+          regularAmount: lineTotal,
+          overtimeAmount: 0,
+          totalAmount: lineTotal,
+          isIncluded: true,
+          paymentMethod: emp['preferred_payment_method'] ?? 'transfer',
+          paymentMethodId: emp['preferred_payment_method_id'],
+          salaryAccountId: emp['salary_account_id'],
+        ));
+
+        totalAmount += lineTotal;
+        totalHours += workedHours;
+      }
+
+      // Create preview voucher (not saved)
+      final label = periodLabel ??
+          '${startDate.day}/${startDate.month} - ${endDate.day}/${endDate.month}';
+
+      return PayrollVoucher(
+        id: 'preview', // Special ID to indicate not saved
+        tenantId: '', // Will be set by DB on actual save
+        voucherNumber: 'PREVIEW',
+        periodStart: startDate,
+        periodEnd: endDate,
+        periodLabel: label,
+        status: PayrollVoucherStatus.draft,
+        totalAmount: totalAmount,
+        totalHours: totalHours,
+        employeeCount: lines.where((l) => l.isIncluded).length,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        lines: lines,
+      );
+    } catch (e) {
+      _setError('Error generating preview: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Saves the preview voucher as a draft to the database.
+  /// Call this AFTER user reviews and possibly modifies the preview.
+  Future<String> saveDraft(PayrollVoucher preview) async {
+    try {
+      _setLoading(true);
+      _setError(null);
+
+      // Generate sequential voucher number like NOM-00001
+      final existing = await _db.select(
+        'payroll_vouchers',
+        orderBy: 'voucher_number',
+        descending: true,
+        limit: 1,
+      );
+
+      int nextNum = 1;
+      if (existing.isNotEmpty) {
+        final lastNumber = existing.first['voucher_number'] as String? ?? '';
+        final match = RegExp(r'NOM-(\d+)').firstMatch(lastNumber);
+        if (match != null) {
+          nextNum = int.parse(match.group(1)!) + 1;
+        }
+      }
+      final voucherNumber = 'NOM-${nextNum.toString().padLeft(5, '0')}';
+
+      // Insert voucher header
+      final voucherData = await _db.insert('payroll_vouchers', {
+        'voucher_number': voucherNumber,
+        'period_start': preview.periodStart.toIso8601String().split('T')[0],
+        'period_end': preview.periodEnd.toIso8601String().split('T')[0],
+        'period_label': preview.periodLabel,
+        'status': 'draft',
+        'total_amount': preview.totalAmount,
+        'total_hours': preview.totalHours,
+        'employee_count': preview.employeeCount,
+      });
+
+      final voucherId = voucherData['id'] as String;
+
+      // Insert lines
+      for (var line in preview.lines) {
+        if (!line.isIncluded) continue;
+        await _db.insert('payroll_voucher_lines', {
+          'voucher_id': voucherId,
+          'employee_id': line.employeeId,
+          'employee_name': line.employeeName,
+          'worked_hours': line.workedHours,
+          'overtime_hours': line.overtimeHours,
+          'hourly_rate': line.hourlyRate,
+          'overtime_rate': line.overtimeRate,
+          'regular_amount': line.regularAmount,
+          'overtime_amount': line.overtimeAmount,
+          'total_amount': line.totalAmount,
+          'is_included': line.isIncluded,
+        });
+      }
+
+      return voucherId;
+    } catch (e) {
+      _setError('Error saving draft: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Updates an existing voucher (for editing)
+  Future<void> updateVoucher(PayrollVoucher voucher) async {
+    if (voucher.id == null) {
+      throw Exception('Cannot update voucher without ID');
+    }
+
+    try {
+      _setLoading(true);
+      _setError(null);
+
+      // Update voucher header
+      await _db.update('payroll_vouchers', voucher.id!, {
+        'period_start': voucher.periodStart.toIso8601String().split('T')[0],
+        'period_end': voucher.periodEnd.toIso8601String().split('T')[0],
+        'period_label': voucher.periodLabel,
+        'total_amount': voucher.totalAmount,
+        'total_hours': voucher.totalHours,
+        'employee_count': voucher.employeeCount,
+      });
+
+      // Delete existing lines and re-insert
+      await _db.delete('payroll_voucher_lines', 'voucher_id=${voucher.id}');
+
+      // Insert updated lines
+      for (var line in voucher.lines) {
+        if (!line.isIncluded) continue;
+        await _db.insert('payroll_voucher_lines', {
+          'voucher_id': voucher.id,
+          'employee_id': line.employeeId,
+          'employee_name': line.employeeName,
+          'worked_hours': line.workedHours,
+          'overtime_hours': line.overtimeHours,
+          'hourly_rate': line.hourlyRate,
+          'overtime_rate': line.overtimeRate,
+          'regular_amount': line.regularAmount,
+          'overtime_amount': line.overtimeAmount,
+          'total_amount': line.totalAmount,
+          'is_included': line.isIncluded,
+        });
+      }
+    } catch (e) {
+      _setError('Error updating voucher: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
   }
 
   /// Generates a new voucher draft for the given period.
   /// Returns the ID of the created voucher.
+  /// @deprecated Use generatePreview() + saveDraft() instead
   Future<String> generateDraft(
     DateTime startDate,
     DateTime endDate, {
@@ -96,7 +317,24 @@ class PayrollVoucherService extends ChangeNotifier {
         descending: true,
       );
 
-      return data.map((e) => PayrollVoucher.fromMap(e)).toList();
+      // Fetch lines for each voucher
+      final vouchers = <PayrollVoucher>[];
+      for (var v in data) {
+        final voucherId = v['id'] as String;
+
+        // Fetch lines directly
+        final rawLines = await _db.select(
+          'payroll_voucher_lines',
+          where: 'voucher_id=$voucherId',
+        );
+        final lines =
+            rawLines.map((l) => PayrollVoucherLine.fromMap(l)).toList();
+
+        final voucher = PayrollVoucher.fromMap(v).copyWith(lines: lines);
+        vouchers.add(voucher);
+      }
+
+      return vouchers;
     } catch (e) {
       _setError('Error loading vouchers: $e');
       return [];
@@ -108,18 +346,6 @@ class PayrollVoucherService extends ChangeNotifier {
   /// Fetches available payment methods.
   Future<List<Map<String, dynamic>>> getPaymentMethods() async {
     return await _db.select('payment_methods', orderBy: 'name');
-  }
-
-  /// Fetches available payment/asset accounts.
-  Future<List<Map<String, dynamic>>> getPaymentAccounts() async {
-    // We want accounts that can pay (Assets/Banks/Cash)
-    // Using Postgrest syntax for IN filter if supported by wrapper, or just fetching all assets
-    // Attempting to fetch all active accounts and filter in memory if wrapper is restrictive,
-    // but assuming we can pass a where clause.
-    // 'type' is usually 'asset', 'liability', etc. Bank/Cash are subtypes or categories?
-    // Based on user prompt, we just want accounts.
-    return await _db.select('accounts',
-        where: 'type=in.(asset,bank,cash)', orderBy: 'code');
   }
 
   /// Updates a specific line (e.g., changing hours or payment method).
@@ -208,13 +434,101 @@ class PayrollVoucherService extends ChangeNotifier {
     }
   }
 
-  /// Deletes a draft voucher.
+  /// Deletes a draft voucher along with its expenses and journal entries.
   Future<void> deleteVoucher(String id) async {
     try {
+      _setLoading(true);
+
+      // 1. Fetch lines to get expense IDs
+      final lines = await _db.select(
+        'payroll_voucher_lines',
+        where: 'voucher_id=$id',
+      );
+
+      // 2. Delete expenses linked to each line
+      for (var line in lines) {
+        final expenseId = line['expense_id'] as String?;
+        if (expenseId != null) {
+          // Delete journal entries for this expense (will cascade if lines table exists)
+          try {
+            await _db.delete('journal_entries',
+                'source_type=\'expense\' AND source_id=\'$expenseId\'');
+          } catch (_) {}
+
+          // Delete the expense
+          await _db.delete('expenses', expenseId);
+        }
+      }
+
+      // 3. Delete any journal entries linked directly to the payroll voucher
+      try {
+        await _db.delete(
+            'journal_entries', 'source_type=\'payroll\' AND source_id=\'$id\'');
+      } catch (_) {}
+
+      // 4. Delete lines (will cascade via FK, but explicit is safer)
+      await _db.deleteWhere('payroll_voucher_lines', 'voucher_id', id);
+
+      // 5. Delete the voucher itself
       await _db.delete('payroll_vouchers', id);
     } catch (e) {
       _setError('Error deleting voucher: $e');
       rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Reverts a pending voucher back to draft status, clearing expenses and journal entries.
+  Future<void> revertToDraft(String id) async {
+    try {
+      _setLoading(true);
+
+      // 1. Fetch lines to get expense IDs
+      final lines = await _db.select(
+        'payroll_voucher_lines',
+        where: 'voucher_id=$id',
+      );
+
+      // 2. Delete expenses linked to each line
+      for (var line in lines) {
+        final expenseId = line['expense_id'] as String?;
+        if (expenseId != null) {
+          // Delete journal entries for this expense (will cascade if lines table exists)
+          try {
+            await _db.delete('journal_entries',
+                'source_type=\'expense\' AND source_id=\'$expenseId\'');
+          } catch (_) {}
+
+          // Delete the expense
+          await _db.delete('expenses', expenseId);
+        }
+
+        // Clear the expense_id from the line
+        if (line['id'] != null) {
+          await _db.update('payroll_voucher_lines', line['id'] as String, {
+            'expense_id': null,
+          });
+        }
+      }
+
+      // 3. Delete any journal entries linked directly to the payroll voucher
+      try {
+        await _db.delete(
+            'journal_entries', 'source_type=\'payroll\' AND source_id=\'$id\'');
+      } catch (_) {}
+
+      // 4. Update voucher status back to draft
+      await _db.update('payroll_vouchers', id, {
+        'status': 'draft',
+        'paid_at': null,
+        'paid_by': null,
+      });
+    } catch (e) {
+      _setError('Error reverting voucher: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
     }
   }
 }

@@ -7,7 +7,9 @@ import '../models/payroll_voucher.dart';
 enum PayrollPeriodMode { week, month }
 
 class PayrollVoucherDialog extends StatefulWidget {
-  const PayrollVoucherDialog({super.key});
+  final PayrollVoucher? existingVoucher; // For editing existing voucher
+
+  const PayrollVoucherDialog({super.key, this.existingVoucher});
 
   @override
   State<PayrollVoucherDialog> createState() => _PayrollVoucherDialogState();
@@ -22,10 +24,26 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
   final Map<String, TextEditingController> _hoursControllers = {};
   final Map<String, TextEditingController> _rateControllers = {};
 
+  // Track original decimal values to avoid rounding errors
+  final Map<String, double> _originalHours = {};
+  final Map<String, double> _originalRates = {};
+  final Set<String> _dirtyLines = {}; // Lines that user actually edited
+  bool get _isEditMode => widget.existingVoucher != null;
+
   @override
   void initState() {
     super.initState();
-    _setCurrentPeriod();
+    if (widget.existingVoucher != null) {
+      // Edit mode: load existing voucher
+      _draftVoucher = widget.existingVoucher;
+      _dateRange = DateTimeRange(
+        start: widget.existingVoucher!.periodStart,
+        end: widget.existingVoucher!.periodEnd,
+      );
+      _initializeControllers(widget.existingVoucher);
+    } else {
+      _setCurrentPeriod();
+    }
   }
 
   bool get _isCurrentPeriod {
@@ -146,30 +164,42 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
   void _initializeControllers(PayrollVoucher? voucher) {
     _hoursControllers.clear();
     _rateControllers.clear();
+    _originalHours.clear();
+    _originalRates.clear();
+    _dirtyLines.clear();
+
     if (voucher == null) return;
     for (var line in voucher.lines) {
       if (line.id == null) continue;
+      // Use decimal format for hours (e.g., 19.78) to avoid HH:MM parsing issues
       _hoursControllers[line.id!] =
-          TextEditingController(text: _formatHoursHHMM(line.workedHours));
+          TextEditingController(text: line.workedHours.toStringAsFixed(2));
       _rateControllers[line.id!] =
           TextEditingController(text: line.hourlyRate.toInt().toString());
+
+      // Store original decimal values
+      _originalHours[line.id!] = line.workedHours;
+      _originalRates[line.id!] = line.hourlyRate;
     }
   }
 
-  Future<void> _generateDraft() async {
+  /// Generates a PREVIEW (not saved to DB) for user review
+  Future<void> _generatePreview() async {
     if (_dateRange == null) return;
     final service = context.read<PayrollVoucherService>();
     setState(() => _isLoading = true);
     try {
-      final voucherId =
-          await service.generateDraft(_dateRange!.start, _dateRange!.end);
-      final voucher = await service.getVoucher(voucherId);
+      final preview = await service.generatePreview(
+        _dateRange!.start,
+        _dateRange!.end,
+        periodLabel: _periodLabel,
+      );
       if (mounted) {
         setState(() {
-          _draftVoucher = voucher;
+          _draftVoucher = preview;
           _isLoading = false;
         });
-        _initializeControllers(voucher);
+        _initializeControllers(preview);
       }
     } catch (e) {
       if (mounted) {
@@ -181,29 +211,172 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
     }
   }
 
-  Future<void> _updateLine(PayrollVoucherLine line) async {
-    final hours = _parseHHMMToDecimal(_hoursControllers[line.id]!.text);
-    final rate = double.tryParse(_rateControllers[line.id]!.text) ?? 0;
-    final updatedLine =
-        line.copyWith(workedHours: hours, overtimeHours: 0, hourlyRate: rate);
-    await context.read<PayrollVoucherService>().updateLine(updatedLine);
-    if (_draftVoucher?.id != null) {
-      final v = await context
-          .read<PayrollVoucherService>()
-          .getVoucher(_draftVoucher!.id!);
-      setState(() => _draftVoucher = v);
+  /// Saves the preview to the database as a draft
+  Future<void> _saveDraft() async {
+    if (_draftVoucher == null) return;
+    final service = context.read<PayrollVoucherService>();
+    setState(() => _isLoading = true);
+    try {
+      // Apply any pending edits to the preview before saving
+      _applyPendingEdits();
+
+      if (_isEditMode) {
+        // Update existing voucher
+        await service.updateVoucher(_draftVoucher!);
+      } else {
+        // Create new draft
+        await service.saveDraft(_draftVoucher!);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode
+                ? 'Nómina actualizada'
+                : 'Borrador guardado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
-  Future<void> _toggleInclude(PayrollVoucherLine line, bool included) async {
-    final updatedLine = line.copyWith(isIncluded: included);
-    await context.read<PayrollVoucherService>().updateLine(updatedLine);
-    if (_draftVoucher?.id != null) {
-      final v = await context
-          .read<PayrollVoucherService>()
-          .getVoucher(_draftVoucher!.id!);
-      setState(() => _draftVoucher = v);
+  /// Applies pending edits from controllers to the preview voucher.
+  /// Only updates lines where hours/rate text actually changed from original.
+  void _applyPendingEdits() {
+    if (_draftVoucher == null) return;
+
+    final updatedLines = _draftVoucher!.lines.map((line) {
+      final hoursText = _hoursControllers[line.id]?.text ?? '';
+      final rateText = _rateControllers[line.id]?.text ?? '';
+
+      // Parse current text values (decimal format)
+      final hours = double.tryParse(hoursText) ?? line.workedHours;
+      final rate = double.tryParse(rateText) ?? line.hourlyRate;
+      final total = hours * rate;
+
+      return line.copyWith(
+        workedHours: hours,
+        hourlyRate: rate,
+        regularAmount: total,
+        totalAmount: total,
+      );
+    }).toList();
+
+    double totalAmount = 0;
+    double totalHours = 0;
+    int employeeCount = 0;
+
+    for (var line in updatedLines) {
+      if (line.isIncluded) {
+        totalAmount += line.totalAmount;
+        totalHours += line.workedHours;
+        employeeCount++;
+      }
     }
+
+    _draftVoucher = _draftVoucher!.copyWith(
+      lines: updatedLines,
+      totalAmount: totalAmount,
+      totalHours: totalHours,
+      employeeCount: employeeCount,
+    );
+  }
+
+  /// Recalculates footer totals without modifying line objects.
+  /// Use this for live updates while typing to avoid rounding drift.
+  void _recalculateTotalsOnly() {
+    if (_draftVoucher == null) return;
+
+    double totalAmount = 0;
+    double totalHours = 0;
+    int employeeCount = 0;
+
+    for (var line in _draftVoucher!.lines) {
+      if (!line.isIncluded) continue;
+
+      final lineId = line.id ?? '';
+      double hours;
+      double rate;
+
+      // Use original values for untouched lines, parsed values for dirty lines
+      if (_dirtyLines.contains(lineId)) {
+        final hoursText = _hoursControllers[lineId]?.text;
+        final rateText = _rateControllers[lineId]?.text;
+        hours = hoursText != null
+            ? (double.tryParse(hoursText) ?? line.workedHours)
+            : line.workedHours;
+        rate = rateText != null
+            ? (double.tryParse(rateText) ?? line.hourlyRate)
+            : line.hourlyRate;
+      } else {
+        // Use stored original values to avoid rounding errors
+        hours = _originalHours[lineId] ?? line.workedHours;
+        rate = _originalRates[lineId] ?? line.hourlyRate;
+      }
+
+      totalAmount += hours * rate;
+      totalHours += hours;
+      employeeCount++;
+    }
+
+    // Only update totals, not lines (avoid rounding drift in line objects)
+    _draftVoucher = _draftVoucher!.copyWith(
+      totalAmount: totalAmount,
+      totalHours: totalHours,
+      employeeCount: employeeCount,
+    );
+  }
+
+  /// Updates totals locally as user types (preview only, no line modification)
+  void _updateLineLocal(PayrollVoucherLine line) {
+    // Mark this line as dirty (user edited it)
+    if (line.id != null) {
+      _dirtyLines.add(line.id!);
+    }
+    _recalculateTotalsOnly();
+    setState(() {}); // Refresh UI
+  }
+
+  /// Toggles include status locally (preview only, no DB call)
+  void _toggleIncludeLocal(PayrollVoucherLine line, bool included) {
+    if (_draftVoucher == null) return;
+
+    final updatedLines = _draftVoucher!.lines.map((l) {
+      if (l.id == line.id) {
+        return l.copyWith(isIncluded: included);
+      }
+      return l;
+    }).toList();
+
+    double totalAmount = 0;
+    double totalHours = 0;
+    int employeeCount = 0;
+
+    for (var l in updatedLines) {
+      if (l.isIncluded) {
+        totalAmount += l.totalAmount;
+        totalHours += l.workedHours;
+        employeeCount++;
+      }
+    }
+
+    setState(() {
+      _draftVoucher = _draftVoucher!.copyWith(
+        lines: updatedLines,
+        totalAmount: totalAmount,
+        totalHours: totalHours,
+        employeeCount: employeeCount,
+      );
+    });
   }
 
   @override
@@ -424,7 +597,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
           if (_draftVoucher == null && _dateRange != null) ...[
             const SizedBox(width: 12),
             FilledButton(
-              onPressed: _isLoading ? null : _generateDraft,
+              onPressed: _isLoading ? null : _generatePreview,
               style: FilledButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
@@ -477,7 +650,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                       Checkbox(
                           value: line.isIncluded,
                           onChanged: (val) =>
-                              _toggleInclude(line, val ?? false)),
+                              _toggleIncludeLocal(line, val ?? false)),
                       Expanded(
                           child: Text(line.employeeName,
                               style: const TextStyle(
@@ -500,7 +673,8 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                               labelText: 'Horas',
                               isDense: true,
                               border: OutlineInputBorder()),
-                          onSubmitted: (_) => _updateLine(line),
+                          onChanged: (_) => _updateLineLocal(line),
+                          onSubmitted: (_) => _updateLineLocal(line),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -512,7 +686,8 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                               labelText: 'Tarifa/Hr',
                               isDense: true,
                               border: OutlineInputBorder()),
-                          onSubmitted: (_) => _updateLine(line),
+                          onChanged: (_) => _updateLineLocal(line),
+                          onSubmitted: (_) => _updateLineLocal(line),
                         ),
                       ),
                     ],
@@ -569,7 +744,8 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
               children: [
                 Checkbox(
                     value: line.isIncluded,
-                    onChanged: (val) => _toggleInclude(line, val ?? false)),
+                    onChanged: (val) =>
+                        _toggleIncludeLocal(line, val ?? false)),
                 Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(line.employeeName)),
@@ -599,7 +775,8 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
             isDense: true,
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             border: OutlineInputBorder()),
-        onSubmitted: (_) => _updateLine(line),
+        onChanged: (_) => _updateLineLocal(line),
+        onSubmitted: (_) => _updateLineLocal(line),
       ),
     );
   }
@@ -627,8 +804,9 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed:
-                    (_isLoading || _dateRange == null) ? null : _generateDraft,
+                onPressed: (_isLoading || _dateRange == null)
+                    ? null
+                    : _generatePreview,
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Generar Nómina'),
                 style: FilledButton.styleFrom(
@@ -667,12 +845,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                           fontWeight: FontWeight.bold,
                           color: Colors.green[700])),
                   FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context, true);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Borrador guardado'),
-                          backgroundColor: Colors.green));
-                    },
+                    onPressed: _isLoading ? null : _saveDraft,
                     icon: const Icon(Icons.save),
                     label: const Text('Guardar'),
                   ),
@@ -703,13 +876,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
             ],
           ),
           FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context, true);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text(
-                      'Borrador guardado. Puedes pagarlo desde el Historial de Nóminas.'),
-                  backgroundColor: Colors.green));
-            },
+            onPressed: _isLoading ? null : _saveDraft,
             icon: const Icon(Icons.save),
             label: const Text('Guardar Borrador'),
           ),

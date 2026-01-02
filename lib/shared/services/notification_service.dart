@@ -138,11 +138,17 @@ class NotificationService {
     // 1. Initialize Local Notifications for ALL platforms
     const initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettingsIOS = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
     const initializationSettingsMacOS = DarwinInitializationSettings();
     const initializationSettingsLinux =
         LinuxInitializationSettings(defaultActionName: 'Open notification');
     const initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
       macOS: initializationSettingsMacOS,
       linux: initializationSettingsLinux,
     );
@@ -213,12 +219,28 @@ class NotificationService {
       FirebaseMessaging.onBackgroundMessage(
           _firebaseMessagingBackgroundHandler);
 
-      // 3. Get Token
-      _fcmToken = await firebaseMessaging.getToken(
-        vapidKey: kIsWeb
-            ? 'BEiJc0XNBT3YycnP1Rk1_lojF3EKAEQzyiOceq1vWM20OmeoS4bkDShbVSHIuVCuNP6uHDHYhpaFbNayxv24Iws'
-            : null,
-      );
+      // 3. Get Token (with retry for iOS APNS token not ready)
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        // Wait a bit for APNS token to be ready on iOS
+        for (int i = 0; i < 5; i++) {
+          try {
+            final apnsToken = await firebaseMessaging.getAPNSToken();
+            if (apnsToken != null) {
+              _fcmToken = await firebaseMessaging.getToken();
+              break;
+            }
+          } catch (e) {
+            debugPrint('⏳ APNS token not ready, retrying... ($i/5)');
+          }
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      } else {
+        _fcmToken = await firebaseMessaging.getToken(
+          vapidKey: kIsWeb
+              ? 'BEiJc0XNBT3YycnP1Rk1_lojF3EKAEQzyiOceq1vWM20OmeoS4bkDShbVSHIuVCuNP6uHDHYhpaFbNayxv24Iws'
+              : null,
+        );
+      }
 
       debugPrint('\n\n##################################################');
       debugPrint('### FCM TOKEN: $_fcmToken');

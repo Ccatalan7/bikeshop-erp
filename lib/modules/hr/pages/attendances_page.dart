@@ -44,6 +44,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Map<String, List<Attendance>> _attendancesByEmployee = {};
   bool _isLoading = true;
   Timer? _refreshTimer;
+  bool _showPayrollHistory = false; // Toggle to show payroll list inline
 
   @override
   void initState() {
@@ -359,17 +360,44 @@ class _AttendancesPageState extends State<AttendancesPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      title: 'Asistencias',
-      child: Column(
-        children: [
-          _buildToolbar(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _buildAttendanceGrid(),
-          ),
-        ],
-      ),
+      title: _showPayrollHistory ? 'Nóminas' : 'Asistencias',
+      child: _showPayrollHistory
+          ? Column(
+              children: [
+                // Back button bar
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () =>
+                            setState(() => _showPayrollHistory = false),
+                      ),
+                      const Text(
+                        'Volver a Asistencias',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                const Expanded(child: PayrollListPage()),
+              ],
+            )
+          : Column(
+              children: [
+                _buildToolbar(),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: BrandedLoading())
+                      : _buildAttendanceGrid(),
+                ),
+              ],
+            ),
     );
   }
 
@@ -469,15 +497,12 @@ class _AttendancesPageState extends State<AttendancesPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Payroll History
+                    // Payroll History (toggle inline view)
                     IconButton(
                       icon: const Icon(Icons.history_edu),
                       tooltip: 'Historial Nóminas',
                       onPressed: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const PayrollListPage()));
+                        setState(() => _showPayrollHistory = true);
                       },
                     ),
                     // Generate Payroll
@@ -550,10 +575,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
                     icon: const Icon(Icons.history_edu),
                     label: const Text('Nóminas'),
                     onPressed: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const PayrollListPage()));
+                      setState(() => _showPayrollHistory = true);
                     },
                   ),
                   const SizedBox(width: 8),

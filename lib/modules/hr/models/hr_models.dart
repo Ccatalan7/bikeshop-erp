@@ -124,10 +124,12 @@ class Employee {
   final String? notes;
   // Salary & Payment fields
   final double? hourlyRate;
-  final PaymentMethod? preferredPaymentMethod;
+  final PaymentMethod? preferredPaymentMethod; // Legacy
+  final String? preferredPaymentMethodId; // New FK
   final String? bankName;
   final String? bankAccountNumber;
   final BankAccountType? bankAccountType;
+  final String? salaryAccountId; // Links to accounts table for salary expense
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -160,10 +162,12 @@ class Employee {
     this.emergencyContactPhone,
     this.notes,
     this.hourlyRate,
-    this.preferredPaymentMethod,
+    this.preferredPaymentMethod, // Legacy enum
+    this.preferredPaymentMethodId, // New FK
     this.bankName,
     this.bankAccountNumber,
     this.bankAccountType,
+    this.salaryAccountId,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : hireDate = hireDate ?? DateTime.now(),
@@ -203,9 +207,11 @@ class Employee {
       hourlyRate: map['hourly_rate']?.toDouble(),
       preferredPaymentMethod:
           _paymentMethodFromString(map['preferred_payment_method']),
+      preferredPaymentMethodId: map['preferred_payment_method_id'],
       bankName: map['bank_name'],
       bankAccountNumber: map['bank_account_number'],
       bankAccountType: _bankAccountTypeFromString(map['bank_account_type']),
+      salaryAccountId: map['salary_account_id'],
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'])
           : DateTime.now(),
@@ -248,10 +254,13 @@ class Employee {
       if (preferredPaymentMethod != null)
         'preferred_payment_method':
             _paymentMethodToString(preferredPaymentMethod!),
+      if (preferredPaymentMethodId != null)
+        'preferred_payment_method_id': preferredPaymentMethodId,
       if (bankName != null) 'bank_name': bankName,
       if (bankAccountNumber != null) 'bank_account_number': bankAccountNumber,
       if (bankAccountType != null)
         'bank_account_type': _bankAccountTypeToString(bankAccountType!),
+      if (salaryAccountId != null) 'salary_account_id': salaryAccountId,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -382,9 +391,11 @@ class Employee {
     String? notes,
     double? hourlyRate,
     PaymentMethod? preferredPaymentMethod,
+    String? preferredPaymentMethodId,
     String? bankName,
     String? bankAccountNumber,
     BankAccountType? bankAccountType,
+    String? salaryAccountId,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -415,9 +426,12 @@ class Employee {
       hourlyRate: hourlyRate ?? this.hourlyRate,
       preferredPaymentMethod:
           preferredPaymentMethod ?? this.preferredPaymentMethod,
+      preferredPaymentMethodId:
+          preferredPaymentMethodId ?? this.preferredPaymentMethodId,
       bankName: bankName ?? this.bankName,
       bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
       bankAccountType: bankAccountType ?? this.bankAccountType,
+      salaryAccountId: salaryAccountId ?? this.salaryAccountId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

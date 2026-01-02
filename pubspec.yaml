@@ -74,8 +74,8 @@ dependencies:
   qr_flutter: ^4.1.0
   
   # OCR (Text Recognition)
-  google_mlkit_text_recognition: ^0.13.1
-  google_mlkit_commons: ^0.8.0
+  google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_commons: ^0.11.0
   flutter_dotenv: ^5.0.2
   
   # PDF Processing (digital PDFs only - text extraction)
