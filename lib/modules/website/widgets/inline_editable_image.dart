@@ -9,6 +9,7 @@ class InlineEditableImage extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final Alignment alignment;
   final bool isEditMode;
   final ValueChanged<String>? onChanged;
   final String? tenantId;
@@ -21,6 +22,7 @@ class InlineEditableImage extends StatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.isEditMode = false,
     this.onChanged,
     this.tenantId,
@@ -53,8 +55,9 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
 
     try {
       final bytes = await pickedFile.readAsBytes();
-      final fileName = 'website_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
-      
+      final fileName =
+          'website_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
+
       // Upload with automatic optimization (resizes to max 1200px, compresses as JPEG)
       final url = await ImageService.uploadWebsiteImageWithOptimization(
         bytes: bytes,
@@ -84,15 +87,16 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
   @override
   Widget build(BuildContext context) {
     final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
-    
+
     Widget imageWidget;
-    
+
     if (hasImage) {
       imageWidget = Image.network(
         widget.imageUrl!,
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
+        alignment: widget.alignment,
         errorBuilder: (context, error, stackTrace) {
           return _buildPlaceholder();
         },
@@ -126,7 +130,7 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
         child: Stack(
           children: [
             imageWidget,
-            
+
             // Hover overlay
             if (_isHovering || _isUploading)
               Positioned.fill(
@@ -176,13 +180,15 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
                   ),
                 ),
               ),
-            
+
             // Edit border
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: _isHovering ? Colors.blue : Colors.blue.withValues(alpha: 0.3),
+                    color: _isHovering
+                        ? Colors.blue
+                        : Colors.blue.withValues(alpha: 0.3),
                     width: _isHovering ? 3 : 1,
                   ),
                   borderRadius: widget.borderRadius,
@@ -226,9 +232,10 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
 
   Widget _buildLoadingPlaceholder(ImageChunkEvent loadingProgress) {
     final progress = loadingProgress.expectedTotalBytes != null
-        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+        ? loadingProgress.cumulativeBytesLoaded /
+            loadingProgress.expectedTotalBytes!
         : null;
-    
+
     return Container(
       width: widget.width,
       height: widget.height ?? 200,

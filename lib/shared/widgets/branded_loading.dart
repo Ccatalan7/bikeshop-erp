@@ -6,28 +6,28 @@ import '../../modules/website/services/website_service.dart';
 
 /// A branded loading indicator that shows the company logo if configured,
 /// otherwise falls back to a standard circular progress indicator.
-/// 
+///
 /// For authenticated users: Tries AppearanceService first (ERP logo)
 /// For public users: Falls back to WebsiteService (store logo)
-/// 
+///
 /// Usage:
 /// ```dart
 /// // Simple usage - uses logo from AppearanceService/WebsiteService
 /// const BrandedLoading()
-/// 
+///
 /// // With custom size
 /// const BrandedLoading(size: 64)
-/// 
+///
 /// // In a center widget
 /// const Center(child: BrandedLoading())
 /// ```
 class BrandedLoading extends StatefulWidget {
   /// The size of the loading indicator (width and height)
   final double size;
-  
+
   /// Whether to show a pulsing animation on the logo
   final bool animate;
-  
+
   /// Optional message to show below the loading indicator
   final String? message;
 
@@ -78,7 +78,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
   @override
   Widget build(BuildContext context) {
     String? logoUrl;
-    
+
     // Try AppearanceService first (authenticated users / ERP)
     try {
       final appearanceService = context.watch<AppearanceService>();
@@ -87,7 +87,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
       // AppearanceService not available (public store mobile app)
       logoUrl = null;
     }
-    
+
     // Fallback to WebsiteService for public store (anonymous users)
     if (logoUrl == null || logoUrl.isEmpty) {
       try {
@@ -99,7 +99,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
         logoUrl = null;
       }
     }
-    
+
     final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
 
     Widget loadingWidget;
@@ -124,7 +124,8 @@ class _BrandedLoadingState extends State<BrandedLoading>
             width: widget.size,
             height: widget.size,
             fit: BoxFit.contain,
-            placeholder: (context, url) => const SizedBox.shrink(), // Don't show spinner while loading
+            placeholder: (context, url) =>
+                const SizedBox.shrink(), // Don't show spinner while loading
             errorWidget: (context, url, error) => _buildFallbackIndicator(),
           ),
         ),
@@ -170,7 +171,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
 /// A full-screen branded loading overlay
 class BrandedLoadingOverlay extends StatelessWidget {
   final String? message;
-  
+
   const BrandedLoadingOverlay({
     super.key,
     this.message,

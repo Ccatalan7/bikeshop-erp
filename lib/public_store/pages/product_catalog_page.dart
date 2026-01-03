@@ -986,7 +986,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
             children: [
               // Product Image
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: Stack(
                   children: [
                     Container(
@@ -1063,7 +1063,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
               ),
               // Product Info
               Expanded(
-                flex: 3,
+                flex: 4,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -1092,7 +1092,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                             color: Colors.black87,
                             height: 1.3,
                           ),
-                          maxLines: 2,
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

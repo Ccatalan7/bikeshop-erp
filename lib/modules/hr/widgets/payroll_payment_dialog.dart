@@ -75,7 +75,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
 
             // Initialize selections
             for (var line in voucher.lines) {
-              if (line.id != null && line.employeeId != null) {
+              {
                 String? targetMethodId;
 
                 // 1. Try to use Current Employee Profile Preference (Highest Priority)

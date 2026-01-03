@@ -168,100 +168,113 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Main toolbar row
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Bold
-                _ToolbarButton(
-                  icon: Icons.format_bold,
-                  tooltip: 'Negrita (Ctrl+B)',
-                  isActive: widget.currentFormatting.isBold,
-                  onPressed: () => _toggleBold(),
-                ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Bold
+                  _ToolbarButton(
+                    icon: Icons.format_bold,
+                    tooltip: 'Negrita (Ctrl+B)',
+                    isActive: widget.currentFormatting.isBold,
+                    onPressed: () => _toggleBold(),
+                  ),
 
-                // Italic
-                _ToolbarButton(
-                  icon: Icons.format_italic,
-                  tooltip: 'Cursiva (Ctrl+I)',
-                  isActive: widget.currentFormatting.isItalic,
-                  onPressed: () => _toggleItalic(),
-                ),
+                  // Italic
+                  _ToolbarButton(
+                    icon: Icons.format_italic,
+                    tooltip: 'Cursiva (Ctrl+I)',
+                    isActive: widget.currentFormatting.isItalic,
+                    onPressed: () => _toggleItalic(),
+                  ),
 
-                // Underline
-                _ToolbarButton(
-                  icon: Icons.format_underlined,
-                  tooltip: 'Subrayado (Ctrl+U)',
-                  isActive: widget.currentFormatting.isUnderline,
-                  onPressed: () => _toggleUnderline(),
-                ),
+                  // Underline
+                  _ToolbarButton(
+                    icon: Icons.format_underlined,
+                    tooltip: 'Subrayado (Ctrl+U)',
+                    isActive: widget.currentFormatting.isUnderline,
+                    onPressed: () => _toggleUnderline(),
+                  ),
 
-                _ToolbarDivider(),
-
-                // Text alignment
-                _ToolbarButton(
-                  icon: _getAlignIcon(widget.currentFormatting.textAlign),
-                  tooltip: 'Alineación',
-                  onPressed: () => _cycleAlignment(),
-                ),
-
-                _ToolbarDivider(),
-
-                // Font size
-                _FontSizeButton(
-                  currentSize: widget.currentFormatting.fontSize ??
-                      widget.baseStyle?.fontSize ??
-                      16,
-                  onSizeChanged: (size) => _setFontSize(size),
-                  isExpanded: _showFontSizePicker,
-                  onToggleExpanded: () => setState(() {
-                    _showFontSizePicker = !_showFontSizePicker;
-                    _showColorPicker = false;
-                    _showMoreOptions = false;
-                  }),
-                ),
-
-                _ToolbarDivider(),
-
-                // Text color
-                _ColorPickerButton(
-                  currentColor: widget.currentFormatting.textColor ??
-                      widget.baseStyle?.color ??
-                      Colors.white,
-                  onColorChanged: (color) => _setTextColor(color),
-                  isExpanded: _showColorPicker,
-                  onToggleExpanded: () => setState(() {
-                    _showColorPicker = !_showColorPicker;
-                    _showFontSizePicker = false;
-                    _showMoreOptions = false;
-                  }),
-                ),
-
-                _ToolbarDivider(),
-
-                // Link
-                _ToolbarButton(
-                  icon: Icons.link,
-                  tooltip: 'Insertar enlace',
-                  isActive: widget.currentFormatting.linkUrl != null,
-                  onPressed: () => _showLinkDialog(),
-                ),
-
-                if (widget.showAdvancedOptions) ...[
                   _ToolbarDivider(),
 
-                  // More options
+                  // Text alignment
                   _ToolbarButton(
-                    icon:
-                        _showMoreOptions ? Icons.expand_less : Icons.more_horiz,
-                    tooltip: 'Más opciones',
-                    onPressed: () => setState(() {
-                      _showMoreOptions = !_showMoreOptions;
+                    icon: _getAlignIcon(widget.currentFormatting.textAlign),
+                    tooltip: 'Alineación',
+                    onPressed: () => _cycleAlignment(),
+                  ),
+
+                  _ToolbarDivider(),
+
+                  // Font size
+                  _FontSizeButton(
+                    currentSize: widget.currentFormatting.fontSize ??
+                        widget.baseStyle?.fontSize ??
+                        16,
+                    onSizeChanged: (size) => _setFontSize(size),
+                    isExpanded: _showFontSizePicker,
+                    onToggleExpanded: () => setState(() {
+                      _showFontSizePicker = !_showFontSizePicker;
                       _showColorPicker = false;
-                      _showFontSizePicker = false;
+                      _showMoreOptions = false;
                     }),
                   ),
+
+                  _ToolbarDivider(),
+
+                  // Text color
+                  _ColorPickerButton(
+                    currentColor: widget.currentFormatting.textColor ??
+                        widget.baseStyle?.color ??
+                        Colors.white,
+                    onColorChanged: (color) => _setTextColor(color),
+                    isExpanded: _showColorPicker,
+                    onToggleExpanded: () => setState(() {
+                      _showColorPicker = !_showColorPicker;
+                      _showFontSizePicker = false;
+                      _showMoreOptions = false;
+                    }),
+                  ),
+
+                  _ToolbarDivider(),
+
+                  // Link
+                  _ToolbarButton(
+                    icon: Icons.link,
+                    tooltip: 'Insertar enlace',
+                    isActive: widget.currentFormatting.linkUrl != null,
+                    onPressed: () => _showLinkDialog(),
+                  ),
+
+                  if (widget.showAdvancedOptions) ...[
+                    _ToolbarDivider(),
+
+                    // More options
+                    _ToolbarButton(
+                      icon: _showMoreOptions
+                          ? Icons.expand_less
+                          : Icons.more_horiz,
+                      tooltip: 'Más opciones',
+                      onPressed: () => setState(() {
+                        _showMoreOptions = !_showMoreOptions;
+                        _showColorPicker = false;
+                        _showFontSizePicker = false;
+                      }),
+                    ),
+                  ],
+
+                  if (widget.onClose != null) ...[
+                    _ToolbarDivider(),
+                    _ToolbarButton(
+                      icon: Icons.close,
+                      tooltip: 'Cerrar',
+                      onPressed: widget.onClose!,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
 
             // Font size picker dropdown
@@ -399,14 +412,13 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               final url = controller.text.trim();
-              if (url.isNotEmpty) {
-                widget.onFormattingChanged(
-                  widget.currentFormatting.copyWith(linkUrl: url),
-                );
-              }
+              widget.onFormattingChanged(
+                widget.currentFormatting
+                    .copyWith(linkUrl: url.isEmpty ? null : url),
+              );
               Navigator.pop(context);
             },
             child: const Text('Aplicar'),

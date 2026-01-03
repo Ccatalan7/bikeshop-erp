@@ -15,6 +15,7 @@ import '../services/website_backup_service.dart';
 import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
+import 'focal_point_picker.dart';
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
@@ -1790,6 +1791,24 @@ class _HeroBlockControls extends StatelessWidget {
           onChanged: (url) =>
               provider.updateBlockData(blockId, 'backgroundImage', url),
         ),
+        const SizedBox(height: 16),
+        // Focal point picker for mobile background alignment
+        FocalPointPicker(
+          imageUrl: data['backgroundImage']?.toString(),
+          focalX: (data['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
+          focalY: (data['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
+          onChanged: (x, y) {
+            // Update both values atomically, don't save history for each drag
+            // (history will be saved when user releases or clicks elsewhere)
+            provider.updateBlockDataMultiple(
+                blockId,
+                {
+                  'mobileFocalPointX': x,
+                  'mobileFocalPointY': y,
+                },
+                saveHistory: false);
+          },
+        ),
       ],
     );
   }
@@ -1842,6 +1861,17 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     } else {
       debugPrint(
           '🎠⚠️ [CarouselControls] _updateSlide: INVALID INDEX index=$index, slides.length=${slides.length}');
+    }
+  }
+
+  /// Update multiple slide properties atomically
+  void _updateSlideMultiple(int index, Map<String, dynamic> updates) {
+    final slides = List<Map<String, dynamic>>.from(_slides);
+    if (index >= 0 && index < slides.length) {
+      slides[index] = {...slides[index], ...updates};
+      debugPrint(
+          '🎠 [CarouselControls] _updateSlideMultiple: index=$index, keys=${updates.keys.join(", ")}');
+      _updateSlides(slides);
     }
   }
 
@@ -1917,6 +1947,20 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           currentUrl: slide['imageUrl']?.toString(),
           onChanged: (url) =>
               _updateSlide(_selectedSlideIndex, 'imageUrl', url),
+        ),
+        const SizedBox(height: 12),
+        // Focal point picker for mobile background alignment
+        FocalPointPicker(
+          imageUrl: slide['imageUrl']?.toString(),
+          focalX: (slide['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
+          focalY: (slide['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
+          onChanged: (x, y) {
+            // Update both values atomically
+            _updateSlideMultiple(_selectedSlideIndex, {
+              'mobileFocalPointX': x,
+              'mobileFocalPointY': y,
+            });
+          },
         ),
 
         const SizedBox(height: 20),

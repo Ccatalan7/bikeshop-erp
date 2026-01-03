@@ -1019,16 +1019,59 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         final dataHeight = (widget.data['blockHeight'] as num?)?.toDouble();
         final blockHeight = constraintHeight ?? dataHeight ?? 480.0;
 
+        // Detect mobile based on available width (for editor preview)
+        final isMobile = constraints.maxWidth < 600;
+
+        // Resolve mobile background alignment
+        // Priority: focal point values > legacy preset alignment > center default
+        Alignment bgAlignment = Alignment.center;
+        if (isMobile) {
+          final focalX = (widget.data['mobileFocalPointX'] as num?)?.toDouble();
+          final focalY = (widget.data['mobileFocalPointY'] as num?)?.toDouble();
+
+          if (focalX != null && focalY != null) {
+            // Convert from 0-1 range to -1 to 1 range for Alignment
+            bgAlignment = Alignment(
+              (focalX * 2) - 1,
+              (focalY * 2) - 1,
+            );
+          } else if (widget.data['mobileBgAlignment'] != null) {
+            // Legacy fallback
+            switch (widget.data['mobileBgAlignment'].toString()) {
+              case 'left':
+              case 'centerLeft':
+                bgAlignment = Alignment.centerLeft;
+                break;
+              case 'right':
+              case 'centerRight':
+                bgAlignment = Alignment.centerRight;
+                break;
+              case 'top':
+              case 'topCenter':
+                bgAlignment = Alignment.topCenter;
+                break;
+              case 'bottom':
+              case 'bottomCenter':
+                bgAlignment = Alignment.bottomCenter;
+                break;
+              case 'center':
+              default:
+                bgAlignment = Alignment.center;
+            }
+          }
+        }
+
         return Container(
           height: blockHeight,
           width: double.infinity,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image (editable)
+              // Background image (editable) with alignment
               InlineEditableImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.cover,
+                alignment: bgAlignment,
                 isEditMode: true,
                 onChanged: (url) => editProvider.updateBlockData(
                     widget.blockId, 'backgroundImage', url),
@@ -3783,78 +3826,86 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
       return const SizedBox.shrink();
     }
 
-    // Use custom height if set, otherwise default to 520
-    final height = widget.blockHeight ?? 520.0;
+    // Use LayoutBuilder to get width for mobile detection
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use custom height if set, otherwise default to 520
+        final height = widget.blockHeight ?? 520.0;
 
-    return SizedBox(
-      height: height,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Current slide
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 600),
-            child: _buildEditableSlide(
-                context, widget.slides[_currentIndex], _currentIndex),
-          ),
+        return SizedBox(
+          height: height,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Current slide
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                child: _buildEditableSlide(
+                    context,
+                    widget.slides[_currentIndex],
+                    _currentIndex,
+                    constraints.maxWidth),
+              ),
 
-          // Indicators
-          if (widget.showIndicators && widget.slides.length > 1)
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(widget.slides.length, (index) {
-                  final isActive = index == _currentIndex;
-                  return GestureDetector(
-                    onTap: () => _goToSlide(index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.symmetric(horizontal: 5),
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.4),
-                        shape: BoxShape.circle,
-                      ),
+              // Indicators
+              if (widget.showIndicators && widget.slides.length > 1)
+                Positioned(
+                  bottom: 32,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(widget.slides.length, (index) {
+                      final isActive = index == _currentIndex;
+                      return GestureDetector(
+                        onTap: () => _goToSlide(index),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.symmetric(horizontal: 5),
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.4),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+
+              // Arrows
+              if (widget.showArrows && widget.slides.length > 1) ...[
+                Positioned(
+                  left: 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _buildArrowButton(
+                      icon: Icons.chevron_left,
+                      onTap: _previousSlide,
                     ),
-                  );
-                }),
-              ),
-            ),
-
-          // Arrows
-          if (widget.showArrows && widget.slides.length > 1) ...[
-            Positioned(
-              left: 24,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildArrowButton(
-                  icon: Icons.chevron_left,
-                  onTap: _previousSlide,
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              right: 24,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildArrowButton(
-                  icon: Icons.chevron_right,
-                  onTap: _nextSlide,
+                Positioned(
+                  right: 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _buildArrowButton(
+                      icon: Icons.chevron_right,
+                      onTap: _nextSlide,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ],
-      ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -3876,8 +3927,8 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     );
   }
 
-  Widget _buildEditableSlide(
-      BuildContext context, Map<String, dynamic> slide, int index) {
+  Widget _buildEditableSlide(BuildContext context, Map<String, dynamic> slide,
+      int index, double maxWidth) {
     final theme = Theme.of(context);
 
     final title = (slide['title'] ?? 'Título').toString().trim();
@@ -3897,6 +3948,46 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     overlayOpacity = overlayOpacity.clamp(0.0, 1.0);
 
     final hasImage = imageUrl != null && imageUrl.toString().isNotEmpty;
+
+    // Detect mobile and resolve background alignment
+    // Priority: focal point values > legacy preset alignment > center default
+    final isMobile = maxWidth < 600;
+    Alignment bgAlignment = Alignment.center;
+    if (isMobile) {
+      final focalX = (slide['mobileFocalPointX'] as num?)?.toDouble();
+      final focalY = (slide['mobileFocalPointY'] as num?)?.toDouble();
+
+      if (focalX != null && focalY != null) {
+        // Convert from 0-1 range to -1 to 1 range for Alignment
+        bgAlignment = Alignment(
+          (focalX * 2) - 1,
+          (focalY * 2) - 1,
+        );
+      } else if (slide['mobileBgAlignment'] != null) {
+        // Legacy fallback
+        switch (slide['mobileBgAlignment'].toString()) {
+          case 'left':
+          case 'centerLeft':
+            bgAlignment = Alignment.centerLeft;
+            break;
+          case 'right':
+          case 'centerRight':
+            bgAlignment = Alignment.centerRight;
+            break;
+          case 'top':
+          case 'topCenter':
+            bgAlignment = Alignment.topCenter;
+            break;
+          case 'bottom':
+          case 'bottomCenter':
+            bgAlignment = Alignment.bottomCenter;
+            break;
+          case 'center':
+          default:
+            bgAlignment = Alignment.center;
+        }
+      }
+    }
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
@@ -3926,11 +4017,12 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image (NOT editable via hover - use corner button instead)
+          // Background image with alignment
           if (hasImage)
             Image.network(
               imageUrl.toString(),
               fit: BoxFit.cover,
+              alignment: bgAlignment,
               width: double.infinity,
               height: double.infinity,
               errorBuilder: (context, error, stackTrace) => Container(

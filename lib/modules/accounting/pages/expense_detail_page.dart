@@ -94,56 +94,6 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     }
   }
 
-  Future<void> _revertExpense() async {
-    if (_expense == null) return;
-    setState(() => _isProcessing = true);
-    try {
-      await _expenseService.revertExpenseToDraft(_expense!.id!);
-      _hasChanges = true;
-      await _loadExpense(refresh: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gasto movido a borrador')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo revertir: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
-    }
-  }
-
-  Future<void> _markPaid() async {
-    if (_expense == null) return;
-    setState(() => _isProcessing = true);
-    try {
-      await _expenseService.markExpensePaid(_expense!.id!);
-      _hasChanges = true;
-      await _loadExpense(refresh: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gasto marcado como pagado')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo marcar como pagado: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -411,19 +361,6 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
   // Helper method for details grid if needed by legacy, but for now mostly cleaned up.
   // Replaced by _buildContent methods.
 
-  Widget _buildInfoItemWidget(_InfoItem item) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(item.label,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(item.value!,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-      ],
-    );
-  }
-
   Widget _buildLinesTable(
       BuildContext context, List<ExpenseLine> lines, bool isMobile) {
     if (lines.isEmpty) return const Text('Sin líneas de detalle.');
@@ -651,12 +588,6 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
   Widget _buildEmptyState(BuildContext context) {
     return const Center(child: Text('Gasto no encontrado'));
   }
-}
-
-class _InfoItem {
-  final String label;
-  final String? value;
-  _InfoItem(this.label, this.value);
 }
 
 class _StatusBadge extends StatelessWidget {

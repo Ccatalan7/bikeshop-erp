@@ -555,7 +555,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // When the editor panel is rendered externally (PersistentEditorShell),
     // reserve horizontal space so the website (including header) is never
     // hidden behind the panel. Keep the top command bar full-width.
-    if (isEditMode && widget.useExternalEditorPanel) {
+    // NOTE: Only apply this padding in DESKTOP preview mode. In mobile/tablet
+    // preview, the content is already inside a constrained frame.
+    if (isEditMode &&
+        widget.useExternalEditorPanel &&
+        devicePreviewMode == DevicePreviewMode.desktop) {
       pageContent = Padding(
         padding: const EdgeInsets.only(right: _externalEditorPanelWidth),
         child: pageContent,
@@ -564,8 +568,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In full edit mode, use Row layout with side panel
     if (isEditMode) {
-      final editorViewport =
-          _buildEditorViewport(context, pageContent, devicePreviewMode);
+      final editorViewport = _buildEditorViewport(
+          context, pageContent, devicePreviewMode,
+          isEditMode: true);
 
       // Build the main content area
       Widget mainBody;
@@ -611,8 +616,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // In preview mode, show top bar with "Editar" button
     if (isPreviewMode) {
-      final editorViewport =
-          _buildEditorViewport(context, pageContent, devicePreviewMode);
+      final editorViewport = _buildEditorViewport(
+          context, pageContent, devicePreviewMode,
+          isEditMode: false);
       return Scaffold(
         backgroundColor: backgroundColor,
         body: Column(
@@ -651,13 +657,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
             // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
             // This is for admin previewing the store from ERP, not for customers
-            if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
+            if (isLoggedIn &&
+                widget.showEditorButton &&
+                !_isPublicStoreDomain())
               Positioned(
                 bottom: 24,
                 right: hasWhatsApp ? 104 : 24,
                 child: Builder(
                   builder: (context) {
-                    final editProvider = context.watch<WebsiteEditModeProvider>();
+                    final editProvider =
+                        context.watch<WebsiteEditModeProvider>();
                     final isInEditorContext = editProvider.isInEditorContext;
                     final websiteService = context.read<WebsiteService>();
 
@@ -1595,7 +1604,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   Widget _buildEditorViewport(
-      BuildContext context, Widget child, DevicePreviewMode mode) {
+      BuildContext context, Widget child, DevicePreviewMode mode,
+      {bool isEditMode = false}) {
     // Desktop mode is the default "no constraint" viewport.
     if (mode == DevicePreviewMode.desktop) return child;
 
@@ -1684,8 +1694,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Or fixed height?
     final targetHeight = screenSize.height;
 
+    // Calculate offset for external editor panel (it overlays on the right)
+    // We need to shift the preview left by half the panel width to appear visually centered
+    // Only apply offset in edit mode when the panel is actually visible
+    final panelOffset = (isEditMode && widget.useExternalEditorPanel)
+        ? _externalEditorPanelWidth / 2
+        : 0.0;
+
     return Container(
       color: const Color(0xFFF3F3F3),
+      // Use Padding to shift content left to account for overlaid panel
+      padding: EdgeInsets.only(right: panelOffset * 2),
       child: Center(
         child: Container(
           width: targetWidth,
@@ -2165,6 +2184,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 child: Row(
                   children: [
                     // Logo - uses URL if set, otherwise falls back to asset, then text
+                    // Logo - Force use of local asset for consistency and to fix "white block" issue
+                    // (Database logo_url might be opaque, causing white tint to fill the box)
                     InkWell(
                       onTap: () {
                         final path = _routeForPublicStore('/tienda');
@@ -2173,31 +2194,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         final target = isEditMode ? '$path?edit=true' : path;
                         context.go(target);
                       },
-                      child: SizedBox(
+                      child: _buildLogo(
+                        context: context,
+                        logoUrl: logoUrl,
+                        storeName: storeName,
+                        textColor: textColor,
+                        isDarkMode: isDarkMode,
                         height: 48,
-                        child: logoUrl.isNotEmpty
-                            ? Image.network(
-                                logoUrl,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
-                                color: isDarkMode ? Colors.white : null,
-                                colorBlendMode:
-                                    isDarkMode ? BlendMode.srcIn : null,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _buildTextLogo(
-                                        context, storeName, textColor),
-                              )
-                            : Image.asset(
-                                'assets/images/vinabike_logo.png',
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
-                                color: isDarkMode ? Colors.white : null,
-                                colorBlendMode:
-                                    isDarkMode ? BlendMode.srcIn : null,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _buildTextLogo(
-                                        context, storeName, textColor),
-                              ),
                       ),
                     ),
                     const SizedBox(width: 24),
@@ -2924,15 +2927,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            storeName.isNotEmpty ? storeName : 'VINABIKE',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          _buildLogo(
+                            context: context,
+                            logoUrl: logoUrl,
+                            storeName: storeName,
+                            textColor: Colors.white,
+                            isDarkMode: true,
+                            height: 60,
+                            alignment: Alignment.centerLeft,
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -3214,6 +3216,54 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     });
   }
 
+  Widget _buildLogo({
+    required BuildContext context,
+    required String logoUrl,
+    required String storeName,
+    required Color textColor,
+    required bool isDarkMode,
+    double height = 48,
+    Alignment alignment = Alignment.center,
+  }) {
+    // 1. Try Network URL if available
+    if (logoUrl.isNotEmpty) {
+      return Container(
+        height: height,
+        alignment: alignment,
+        child: Image.network(
+          logoUrl,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            // 2. Fallback to Local Asset
+            return Image.asset(
+              'assets/images/vinabike_logo.png',
+              fit: BoxFit.contain,
+              height: height,
+              errorBuilder: (context, error, stackTrace) {
+                // 3. Fallback to Text
+                return _buildTextLogo(context, storeName, textColor);
+              },
+            );
+          },
+        ),
+      );
+    }
+
+    // 2. Fallback to Local Asset (if no URL)
+    return Container(
+      height: height,
+      alignment: alignment,
+      child: Image.asset(
+        'assets/images/vinabike_logo.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          // 3. Fallback to Text
+          return _buildTextLogo(context, storeName, textColor);
+        },
+      ),
+    );
+  }
+
   Widget _buildTextLogo(
       BuildContext context, String storeName, Color primaryColor) {
     return Text(
@@ -3323,11 +3373,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             'Conócenos',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.normal,
-                  color: textColor,
+                  color: PublicStoreTheme.textPrimary,
                 ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down, size: 18, color: textColor),
+          Icon(Icons.keyboard_arrow_down,
+              size: 18, color: PublicStoreTheme.textPrimary),
         ],
       ),
     );

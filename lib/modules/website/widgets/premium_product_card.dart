@@ -46,7 +46,8 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
       child: GestureDetector(
         onTap: !_isInteractive
             ? null
-            : () => widget.onNavigate?.call('/tienda/producto/${widget.productId}'),
+            : () =>
+                widget.onNavigate?.call('/tienda/producto/${widget.productId}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: const BoxDecoration(color: Colors.white),
@@ -117,7 +118,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
               ),
               // Product info
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -136,7 +137,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
                           color: Colors.black87,
                           height: 1.3,
                         ),
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
@@ -160,5 +161,3 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
     );
   }
 }
-
-

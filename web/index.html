@@ -62,7 +62,7 @@
       touch-action: pan-y pinch-zoom;
     }
 
-    /* Minimal loading - just white page, Flutter takes over */
+    /* Loading screen with pulsing Vinabike logo */
     #app-shell {
       position: fixed;
       top: 0;
@@ -71,12 +71,34 @@
       height: 100%;
       background: #ffffff;
       z-index: 9999;
-      transition: opacity 0.2s ease-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease-out;
     }
 
     #app-shell.hidden {
       opacity: 0;
       pointer-events: none;
+    }
+
+    /* Pulsing logo animation */
+    #loading-logo {
+      width: 200px;
+      height: 200px;
+      border-radius: 30px;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(0.95);
+        opacity: 0.6;
+      }
+      50% {
+        transform: scale(1.05);
+        opacity: 1.0;
+      }
     }
 
     /* Visually hidden SEO content (for Merchant Center bots) */
@@ -113,8 +135,14 @@
 </head>
 
 <body>
-  <!-- Minimal shell - just white background, hidden SEO content for bots -->
+  <!-- Loading screen with pulsing Vinabike logo -->
   <div id="app-shell">
+    <img 
+      id="loading-logo"
+      src="vinabike-logo.png" 
+      alt="Vinabike"
+    />
+    
     <!-- SEO Content (Visually Hidden for Merchant Center bots) -->
     <div class="sr-only">
       <h1>Vinabike - Tienda de Bicicletas en Viña del Mar</h1>

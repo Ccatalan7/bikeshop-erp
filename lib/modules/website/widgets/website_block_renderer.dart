@@ -580,6 +580,7 @@ class WebsiteBlockRenderer {
     required Map<String, dynamic> data,
     required Color defaultColor,
     String? imageUrl,
+    Alignment? imageAlignmentParam,
   }) {
     final style = Map<String, dynamic>.from(data['style'] ?? {});
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
@@ -602,6 +603,9 @@ class WebsiteBlockRenderer {
     final shadowColor =
         _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
 
+    final imageAlignment =
+        imageAlignmentParam ?? Alignment.center; // Use parameter if provided
+
     // Parse border radius (note: typically handled by ClipRRect parent, but we can set it here too)
     final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
 
@@ -612,6 +616,7 @@ class WebsiteBlockRenderer {
       image = DecorationImage(
         image: NetworkImage(imageUrl),
         fit: BoxFit.cover,
+        alignment: imageAlignment,
       );
     }
 
@@ -779,96 +784,154 @@ class WebsiteBlockRenderer {
         geometryAlign = Alignment.center;
     }
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
+    return LayoutBuilder(builder: (context, constraints) {
+      final screenWidth = constraints.maxWidth;
+      // Use 600 as mobile breakpoint (standard)
+      final isMobile = screenWidth < 600;
 
-    final decoration = _resolveBackgroundDecoration(
-      data: data,
-      defaultColor: defaultBgColor,
-      imageUrl: imageUrl?.toString(),
-    );
+      // Resolve Mobile Background Alignment
+      // Priority: focal point values > legacy preset alignment > center default
+      Alignment? bgAlignment;
+      if (isMobile) {
+        final focalX = (data['mobileFocalPointX'] as num?)?.toDouble();
+        final focalY = (data['mobileFocalPointY'] as num?)?.toDouble();
 
-    return Container(
-      height: isFullScreen
-          ? MediaQuery.of(context).size.height
-          : (isMobile ? 420 : 520),
-      width: double.infinity,
-      decoration: decoration,
-      child: Container(
-        decoration: showOverlay
-            ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.5),
-                    Colors.black.withOpacity(overlayOpacity * 0.8),
+        if (focalX != null && focalY != null) {
+          // Convert from 0-1 range to -1 to 1 range for Alignment
+          bgAlignment = Alignment(
+            (focalX * 2) - 1, // 0→-1, 0.5→0, 1→1
+            (focalY * 2) - 1,
+          );
+        } else if (data['mobileBgAlignment'] != null) {
+          // Legacy fallback: preset alignment strings
+          switch (data['mobileBgAlignment']) {
+            case 'left':
+            case 'centerLeft':
+              bgAlignment = Alignment.centerLeft;
+              break;
+            case 'right':
+            case 'centerRight':
+              bgAlignment = Alignment.centerRight;
+              break;
+            case 'top':
+            case 'topCenter':
+              bgAlignment = Alignment.topCenter;
+              break;
+            case 'bottom':
+            case 'bottomCenter':
+              bgAlignment = Alignment.bottomCenter;
+              break;
+            case 'center':
+            default:
+              bgAlignment = Alignment.center;
+          }
+        }
+      }
+
+      final decoration = _resolveBackgroundDecoration(
+        data: data,
+        defaultColor: defaultBgColor,
+        imageUrl: imageUrl?.toString(),
+        imageAlignmentParam: bgAlignment,
+      );
+
+      // Determine height
+      // For full screen, we want to respect the device height, but in the editor preview (which might be desktop height),
+      // we should cap it to a reasonable mobile height to avoid a "slit" look.
+      final mediaQueryHeight = MediaQuery.of(context).size.height;
+      double height;
+      if (isFullScreen) {
+        if (isMobile && mediaQueryHeight > 900) {
+          // Cap mobile fullscreen height in editor/large screens
+          height = 800;
+        } else {
+          height = mediaQueryHeight;
+        }
+      } else {
+        height = isMobile ? 420 : 520;
+      }
+
+      return Container(
+        height: height,
+        width: double.infinity,
+        decoration: decoration,
+        child: Container(
+          decoration: showOverlay
+              ? BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(overlayOpacity * 0.5),
+                      Colors.black.withOpacity(overlayOpacity * 0.8),
+                    ],
+                  ),
+                )
+              : null,
+          child: Align(
+            alignment: geometryAlign,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: crossAlign,
+                children: [
+                  Text(
+                    (title.isEmpty ? 'Título' : title).toUpperCase(),
+                    style: resolvedHeading.copyWith(
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w900,
+                      fontSize:
+                          isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
+                    ),
+                    textAlign: textAlign,
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Text(subtitle,
+                        style: resolvedSubtitle.copyWith(
+                          fontSize: isMobile ? (bodySize ?? 16) : bodySize,
+                        ),
+                        textAlign: textAlign),
                   ],
-                ),
-              )
-            : null,
-        child: Align(
-          alignment: geometryAlign,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: crossAlign,
-              children: [
-                Text(
-                  (title.isEmpty ? 'Título' : title).toUpperCase(),
-                  style: resolvedHeading.copyWith(
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w900,
-                    fontSize:
-                        isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
-                  ),
-                  textAlign: textAlign,
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Text(subtitle,
-                      style: resolvedSubtitle.copyWith(
-                        fontSize: isMobile ? (bodySize ?? 16) : bodySize,
+                  const SizedBox(height: 40),
+                  OutlinedButton(
+                    onPressed: previewMode
+                        ? () {}
+                        : () {
+                            final route = ctaLink.isNotEmpty
+                                ? ctaLink
+                                : '/tienda/productos';
+                            if (onNavigate != null) {
+                              onNavigate(route);
+                            }
+                          },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 40, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(0),
                       ),
-                      textAlign: textAlign),
+                    ),
+                    child: Text(
+                      (ctaText.isEmpty ? 'CHECK IT OUT' : ctaText)
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 40),
-                OutlinedButton(
-                  onPressed: previewMode
-                      ? () {}
-                      : () {
-                          final route = ctaLink.isNotEmpty
-                              ? ctaLink
-                              : '/tienda/productos';
-                          if (onNavigate != null) {
-                            onNavigate(route);
-                          }
-                        },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(0),
-                    ),
-                  ),
-                  child: Text(
-                    (ctaText.isEmpty ? 'CHECK IT OUT' : ctaText).toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   static Widget _buildCarousel({
@@ -3375,6 +3438,7 @@ class _CategoryGridLayout extends StatelessWidget {
     // Gap between cards (Commencal uses ~4px gaps)
     const double cardGap = 4.0;
     final screenWidth = MediaQuery.of(context).size.width;
+
     final isMobile = screenWidth < 600;
 
     if (isMobile) {
@@ -3743,8 +3807,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: _buildTransition,
-                child:
-                    _buildSlide(context, _slides[_currentIndex], _currentIndex),
+                child: _buildSlide(context, _slides[_currentIndex],
+                    _currentIndex, constraints.maxWidth),
               ),
               if (_showIndicators && _slides.length > 1)
                 Positioned(
@@ -3808,6 +3872,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     BuildContext context,
     Map<String, dynamic> slide,
     int index,
+    double maxWidth,
   ) {
     final theme = Theme.of(context);
     final title = (slide['title'] ?? 'Título').toString().trim();
@@ -3965,10 +4030,52 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       slideWithStyle['style'] = widget.data['style'];
     }
 
+    // Resolve Mobile Background Alignment for Carousel Slide
+    // Priority: focal point values > legacy preset alignment > center default
+    Alignment? slideBgAlignment;
+    final isMobile = maxWidth < 600;
+
+    if (isMobile) {
+      final focalX = (slide['mobileFocalPointX'] as num?)?.toDouble();
+      final focalY = (slide['mobileFocalPointY'] as num?)?.toDouble();
+
+      if (focalX != null && focalY != null) {
+        // Convert from 0-1 range to -1 to 1 range for Alignment
+        slideBgAlignment = Alignment(
+          (focalX * 2) - 1,
+          (focalY * 2) - 1,
+        );
+      } else if (slide['mobileBgAlignment'] != null) {
+        // Legacy fallback
+        switch (slide['mobileBgAlignment'].toString()) {
+          case 'left':
+          case 'centerLeft':
+            slideBgAlignment = Alignment.centerLeft;
+            break;
+          case 'right':
+          case 'centerRight':
+            slideBgAlignment = Alignment.centerRight;
+            break;
+          case 'top':
+          case 'topCenter':
+            slideBgAlignment = Alignment.topCenter;
+            break;
+          case 'bottom':
+          case 'bottomCenter':
+            slideBgAlignment = Alignment.bottomCenter;
+            break;
+          case 'center':
+          default:
+            slideBgAlignment = Alignment.center;
+        }
+      }
+    }
+
     final decoration = WebsiteBlockRenderer._resolveBackgroundDecoration(
       data: slideWithStyle,
       defaultColor: const Color(0xFF1a1a1a),
       imageUrl: hasImage ? imageUrl.toString() : null,
+      imageAlignmentParam: slideBgAlignment,
     );
 
     return Container(
@@ -4825,7 +4932,7 @@ class _MobileProductAutoCarouselState
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(viewportFraction: 0.85);
+    _pageController = PageController(viewportFraction: 1.0);
     _startTimer();
   }
 

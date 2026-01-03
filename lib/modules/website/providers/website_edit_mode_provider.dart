@@ -278,6 +278,38 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update multiple block data keys atomically (single notification)
+  /// Use this when updating related values that should be saved together
+  void updateBlockDataMultiple(String blockId, Map<String, dynamic> updates,
+      {bool saveHistory = true}) {
+    final blockIndex = _blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) {
+      debugPrint(
+          '⚠️ [EditProvider] updateBlockDataMultiple: block $blockId not found');
+      return;
+    }
+
+    final block = _blocks[blockIndex];
+    final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
+
+    // Apply all updates atomically
+    for (final entry in updates.entries) {
+      blockData[entry.key] = entry.value;
+    }
+
+    _blocks[blockIndex] = {
+      ...block,
+      'block_data': blockData,
+    };
+    _hasUnsavedChanges = true;
+    if (saveHistory) {
+      _saveToHistory();
+    }
+    debugPrint(
+        '✅ [EditProvider] updateBlockDataMultiple: blockId=$blockId, keys=${updates.keys.join(", ")}');
+    notifyListeners();
+  }
+
   /// Convenience: add a Canvas element to the currently selected Canvas block.
   /// Returns true if an element was added.
   bool addCanvasElementToSelectedCanvas(String elementType) {

@@ -79,6 +79,8 @@ PODS:
     - Flutter
   - flutter_local_notifications (0.0.1):
     - Flutter
+  - flutter_native_splash (2.4.3):
+    - Flutter
   - google_mlkit_commons (0.11.0):
     - Flutter
     - MLKitVision
@@ -192,6 +194,7 @@ DEPENDENCIES:
   - flutter_blue_plus (from `.symlinks/plugins/flutter_blue_plus/ios`)
   - flutter_keyboard_visibility (from `.symlinks/plugins/flutter_keyboard_visibility/ios`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
+  - flutter_native_splash (from `.symlinks/plugins/flutter_native_splash/ios`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_text_recognition (from `.symlinks/plugins/google_mlkit_text_recognition/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
@@ -250,6 +253,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_keyboard_visibility/ios"
   flutter_local_notifications:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
+  flutter_native_splash:
+    :path: ".symlinks/plugins/flutter_native_splash/ios"
   google_mlkit_commons:
     :path: ".symlinks/plugins/google_mlkit_commons/ios"
   google_mlkit_text_recognition:
@@ -293,6 +298,7 @@ SPEC CHECKSUMS:
   flutter_blue_plus: e5808fc4e5ebc58bb911635f8fdaf5e2b4da2754
   flutter_keyboard_visibility: 4625131e43015dbbe759d9b20daaf77e0e3f6619
   flutter_local_notifications: a5a732f069baa862e728d839dd2ebb904737effb
+  flutter_native_splash: 6cad9122ea0fad137d23137dd14b937f3e90b145
   google_mlkit_commons: 2abe6a70e1824e431d16a51085cb475b672c8aab
   google_mlkit_text_recognition: ec2122ec89bfe0d7200763336a6e4ef44810674c
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
