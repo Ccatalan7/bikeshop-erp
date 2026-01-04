@@ -63,21 +63,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       debugPrint('🏠 [HomePage] Tenant detection complete: ${tenantProvider.tenantId}');
     }
   }
-  
-  Future<void> _loadDataIfReady() async {
-    if (!mounted) return;
-    
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
-    
-    // Wait for tenant to be available (main.dart handles detection)
-    if (tenantProvider.tenantId != null && tenantProvider.tenantId != _lastLoadedTenantId) {
-      _lastLoadedTenantId = tenantProvider.tenantId;
-      await _loadData();
-      _checkAutoEditMode();
-    }
-    // No retry loop - we rely on didChangeDependencies to detect tenant changes
-  }
-  
+
   void _checkAutoEditMode() {
     if (!mounted) return;
     

@@ -55,6 +55,152 @@ class WebsiteBlockRegistry {
       },
       usesCustomEditor: true,
     ),
+
+    // =====================================================================
+    // SIMPLE STRUCTURE / ELEMENT BLOCKS
+    // =====================================================================
+    WebsiteBlockType.canvas: WebsiteBlockDefinition(
+      type: WebsiteBlockType.canvas,
+      title: 'Canvas',
+      description:
+          'Sección de diseño libre con elementos arrastrables (tipo Wix).',
+      defaultData: {
+        'height': 420,
+        'backgroundColor': '#FFFFFF',
+        'elements': <Map<String, dynamic>>[],
+        'activeElementId': null,
+      },
+      usesCustomEditor: true,
+    ),
+    WebsiteBlockType.text: WebsiteBlockDefinition(
+      type: WebsiteBlockType.text,
+      title: 'Texto',
+      description: 'Sección simple de texto con editor inline.',
+      defaultData: {
+        'text': 'Escribe tu texto aquí',
+        'align': 'left',
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'text',
+          label: 'Texto',
+          type: WebsiteBlockFieldType.richtext,
+          group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'align',
+          label: 'Alineación',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'left',
+          options: [
+            WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
+            WebsiteBlockFieldOption(value: 'center', label: 'Centro'),
+            WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
+          ],
+          group: 'layout',
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['text'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'layout',
+          label: 'Diseño',
+          fieldKeys: ['align'],
+        ),
+      ],
+    ),
+    WebsiteBlockType.button: WebsiteBlockDefinition(
+      type: WebsiteBlockType.button,
+      title: 'Botón',
+      description: 'Botón con enlace (CTA).',
+      defaultData: {
+        'text': 'Haz clic aquí',
+        'link': '/tienda/productos',
+        'variant': 'primary',
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'text',
+          label: 'Texto',
+          type: WebsiteBlockFieldType.text,
+          defaultValue: 'Haz clic aquí',
+          group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'link',
+          label: 'Enlace',
+          type: WebsiteBlockFieldType.text,
+          defaultValue: '/tienda/productos',
+          group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'variant',
+          label: 'Estilo',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'primary',
+          options: [
+            WebsiteBlockFieldOption(value: 'primary', label: 'Primario'),
+            WebsiteBlockFieldOption(value: 'secondary', label: 'Secundario'),
+            WebsiteBlockFieldOption(value: 'outline', label: 'Outline'),
+          ],
+          group: 'design',
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['text', 'link'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'design',
+          label: 'Diseño',
+          fieldKeys: ['variant'],
+        ),
+      ],
+    ),
+    WebsiteBlockType.divider: WebsiteBlockDefinition(
+      type: WebsiteBlockType.divider,
+      title: 'Separador',
+      description: 'Línea divisoria para separar secciones.',
+      defaultData: {
+        'style': 'line',
+        'thickness': 1,
+        'color': '#E5E7EB',
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'style',
+          label: 'Estilo',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'line',
+          options: [
+            WebsiteBlockFieldOption(value: 'line', label: 'Línea'),
+            WebsiteBlockFieldOption(value: 'dashed', label: 'Punteado'),
+            WebsiteBlockFieldOption(value: 'space', label: 'Espacio'),
+          ],
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'thickness',
+          label: 'Grosor',
+          type: WebsiteBlockFieldType.number,
+          min: 0,
+          max: 12,
+          step: 1,
+          defaultValue: 1,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'color',
+          label: 'Color',
+          type: WebsiteBlockFieldType.color,
+          defaultValue: '#E5E7EB',
+        ),
+      ],
+    ),
     WebsiteBlockType.products: WebsiteBlockDefinition(
       type: WebsiteBlockType.products,
       title: 'Productos Destacados',
@@ -261,6 +407,7 @@ class WebsiteBlockRegistry {
           'Lista atributos destacados, diferenciales o garantías del negocio.',
       defaultData: {
         'title': 'Por qué elegirnos',
+        'layout': 'grid',
         'features': <Map<String, dynamic>>[],
       },
       fields: const [
@@ -270,6 +417,17 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Por qué elegirnos',
           group: 'content',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'layout',
+          label: 'Diseño',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'grid',
+          options: const [
+            WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
+            WebsiteBlockFieldOption(value: 'list', label: 'Lista'),
+          ],
+          group: 'layout',
         ),
         WebsiteBlockFieldSchema(
           key: 'features',
@@ -317,6 +475,11 @@ class WebsiteBlockRegistry {
           id: 'content',
           label: 'Contenido',
           fieldKeys: ['title', 'features'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'layout',
+          label: 'Diseño',
+          fieldKeys: ['layout'],
         ),
       ],
     ),
@@ -650,6 +813,166 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+
+    // =====================================================================
+    // MODERN BLOCKS
+    // =====================================================================
+    WebsiteBlockType.categoryGrid: WebsiteBlockDefinition(
+      type: WebsiteBlockType.categoryGrid,
+      title: 'Categorías',
+      description:
+          'Cuadrícula de categorías con imagen, título y enlace (ideal para destacar líneas).',
+      defaultData: {
+        'title': 'Explora por categoría',
+        'categories': [
+          {
+            'title': 'MTB',
+            'subtitle': 'Trail, Enduro, Downhill',
+            'imageUrl': null,
+            'link': '/tienda/productos',
+          },
+          {
+            'title': 'Ruta',
+            'subtitle': 'Carretera y endurance',
+            'imageUrl': null,
+            'link': '/tienda/productos',
+          },
+        ],
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'categories',
+          label: 'Categorías',
+          type: WebsiteBlockFieldType.repeater,
+          itemLabel: 'Categoría',
+          minItems: 1,
+          itemFields: [
+            WebsiteBlockFieldSchema(
+              key: 'title',
+              label: 'Título',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: 'Categoría',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'subtitle',
+              label: 'Subtítulo',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: '',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'imageUrl',
+              label: 'Imagen',
+              type: WebsiteBlockFieldType.image,
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'link',
+              label: 'Enlace',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: '/tienda/productos',
+            ),
+          ],
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'categories'],
+        ),
+      ],
+    ),
+    WebsiteBlockType.videoBanner: WebsiteBlockDefinition(
+      type: WebsiteBlockType.videoBanner,
+      title: 'Video Banner',
+      description: 'Banner con video (web) o imagen fallback.',
+      defaultData: {
+        'title': 'Vive la experiencia',
+        'subtitle': 'Equipamiento, servicio y comunidad ciclista',
+        'videoUrl': null,
+        'posterImage': null,
+        'buttonText': 'Ver productos',
+        'buttonLink': '/tienda/productos',
+      },
+      usesCustomEditor: true,
+    ),
+    WebsiteBlockType.partnersBanner: WebsiteBlockDefinition(
+      type: WebsiteBlockType.partnersBanner,
+      title: 'Partners',
+      description: 'Banner de partners/sucursales con texto simple.',
+      defaultData: {
+        'title': 'Partners',
+        'items': [
+          'Envíos a todo Chile',
+          'Marcas líderes',
+          'Servicio técnico certificado',
+        ],
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'items',
+          label: 'Items',
+          type: WebsiteBlockFieldType.chips,
+          defaultValue: <String>[],
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'items'],
+        ),
+      ],
+    ),
+    WebsiteBlockType.brandLogos: WebsiteBlockDefinition(
+      type: WebsiteBlockType.brandLogos,
+      title: 'Logos de Marcas',
+      description: 'Carrusel/cuadrícula de logos de marcas.',
+      defaultData: {
+        'title': 'Marcas',
+        'logos': <String>[],
+      },
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'logos',
+          label: 'Logos (URLs)',
+          type: WebsiteBlockFieldType.chips,
+          defaultValue: <String>[],
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'logos'],
+        ),
+      ],
+    ),
+    WebsiteBlockType.googleReviews: WebsiteBlockDefinition(
+      type: WebsiteBlockType.googleReviews,
+      title: 'Google Reviews',
+      description: 'Carrusel de reseñas desde Google Business Profile.',
+      defaultData: {
+        'title': 'Reseñas',
+        'minRating': 4,
+        'maxItems': 8,
+      },
+      usesCustomEditor: true,
+    ),
     WebsiteBlockType.team: WebsiteBlockDefinition(
       type: WebsiteBlockType.team,
       title: 'Equipo',
@@ -905,7 +1228,8 @@ class WebsiteBlockRegistry {
   static bool _marketplaceLoaded = false;
 
   static Future<void> ensureInitialized({AssetBundle? bundle}) async {
-    debugPrint('[WebsiteBlockRegistry] ensureInitialized called, _marketplaceLoaded=$_marketplaceLoaded');
+    debugPrint(
+        '[WebsiteBlockRegistry] ensureInitialized called, _marketplaceLoaded=$_marketplaceLoaded');
     if (_marketplaceLoaded) {
       debugPrint('[WebsiteBlockRegistry] Already initialized, returning');
       return;
@@ -917,13 +1241,16 @@ class WebsiteBlockRegistry {
 
     try {
       // Add timeout to prevent hanging
-      final definitions = await BlockMarketplaceLoader.loadDefinitions(bundle: bundle)
-          .timeout(const Duration(seconds: 3), onTimeout: () {
-        debugPrint('[WebsiteBlockRegistry] Marketplace load timed out, using fallback');
+      final definitions =
+          await BlockMarketplaceLoader.loadDefinitions(bundle: bundle)
+              .timeout(const Duration(seconds: 3), onTimeout: () {
+        debugPrint(
+            '[WebsiteBlockRegistry] Marketplace load timed out, using fallback');
         return <WebsiteBlockDefinition>[];
       });
-      
-      debugPrint('[WebsiteBlockRegistry] Loaded ${definitions.length} definitions');
+
+      debugPrint(
+          '[WebsiteBlockRegistry] Loaded ${definitions.length} definitions');
       if (definitions.isNotEmpty) {
         _definitions
           ..clear()

@@ -4,7 +4,7 @@
 		{
 			"label": "🚀 Deploy to Firebase (Both Sites)",
 			"type": "shell",
-			"command": "flutter build web --release -t lib/main.dart -o build/web_erp && flutter build web --release -t lib/main_store.dart -o build/web_store && firebase deploy --only hosting",
+			"command": "./scripts/sync_seo_index.sh && flutter build web --release -t lib/main_store.dart -o build/web_store && flutter build web --release -t lib/main.dart -o build/web_erp && firebase deploy --only hosting",
 			"problemMatcher": [],
 			"group": "build"
 		}

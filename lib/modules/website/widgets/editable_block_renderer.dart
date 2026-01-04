@@ -1292,15 +1292,31 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final theme = Theme.of(context);
 
     final title = (widget.data['title'] ?? '').toString();
-    final description = (widget.data['description'] ?? '').toString();
+    final subtitle =
+        (widget.data['subtitle'] ?? widget.data['description'] ?? '')
+            .toString();
     final buttonText = (widget.data['buttonText'] ?? 'Contactar').toString();
     final buttonLink = (widget.data['buttonLink'] ?? '').toString();
 
-    // Get formatting data if saved
+    final backgroundImage = widget.data['backgroundImage']?.toString();
+    final hasBackground =
+        backgroundImage != null && backgroundImage.trim().isNotEmpty;
+
+    final overlayColor =
+        _parseColor(widget.data['overlayColor']?.toString()) ?? Colors.black;
+    final overlayOpacity = ((widget.data['overlayOpacity'] ?? 0.5) as num)
+        .toDouble()
+        .clamp(0.0, 1.0);
+    final blockHeight =
+        (widget.data['blockHeight'] as num?)?.toDouble() ?? 420.0;
+
     final titleFormatting = TextFormatting.fromJson(
-        widget.data['titleFormatting'] as Map<String, dynamic>?);
-    final descriptionFormatting = TextFormatting.fromJson(
-        widget.data['descriptionFormatting'] as Map<String, dynamic>?);
+      widget.data['titleFormatting'] as Map<String, dynamic>?,
+    );
+    final subtitleFormatting = TextFormatting.fromJson(
+      (widget.data['subtitleFormatting'] as Map<String, dynamic>?) ??
+          (widget.data['descriptionFormatting'] as Map<String, dynamic>?),
+    );
 
     final headingStyle =
         (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
@@ -1336,18 +1352,20 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         ),
         const SizedBox(height: 16),
         InlineEditableTextV2(
-          text: description,
+          text: subtitle,
           baseStyle: bodyStyle,
           textAlign: TextAlign.center,
           isEditMode: true,
           placeholder: 'Descripción del llamado a la acción',
-          formatting: descriptionFormatting,
-          fieldKey: '${widget.blockId}_cta_description',
-          onTextChanged: (value) => editProvider.updateBlockData(
-              widget.blockId, 'description', value),
+          formatting: subtitleFormatting,
+          fieldKey: '${widget.blockId}_cta_subtitle',
+          onTextChanged: (value) {
+            editProvider.updateBlockData(widget.blockId, 'subtitle', value);
+            editProvider.updateBlockData(widget.blockId, 'description', value);
+          },
           onFormattingChanged: (formatting) => editProvider.updateBlockData(
             widget.blockId,
-            'descriptionFormatting',
+            'subtitleFormatting',
             formatting.toJson(),
           ),
         ),
@@ -1356,8 +1374,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           text: buttonText.isEmpty ? 'Contactar' : buttonText,
           link: buttonLink,
           backgroundColor: Colors.white,
-          foregroundColor:
-              widget.primaryColor, // Text matches CTA gradient color
+          foregroundColor: widget.primaryColor,
           onTextChanged: (value) =>
               editProvider.updateBlockData(widget.blockId, 'buttonText', value),
           onLinkChanged: (value) =>
@@ -1371,27 +1388,43 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final hasFixedHeight = constraints.maxHeight.isFinite;
-        return Container(
-          width: double.infinity,
-          height: hasFixedHeight ? constraints.maxHeight : null,
-          padding: hasFixedHeight
-              ? const EdgeInsets.symmetric(horizontal: 24)
-              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [widget.primaryColor, widget.accentColor],
+    return SizedBox(
+      height: blockHeight,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasBackground)
+            InlineEditableImage(
+              imageUrl: backgroundImage,
+              isEditMode: true,
+              fit: BoxFit.cover,
+              onChanged: (url) => editProvider.updateBlockData(
+                widget.blockId,
+                'backgroundImage',
+                url,
+              ),
+            )
+          else
+            Container(color: widget.primaryColor),
+          if (hasBackground && overlayOpacity > 0)
+            Container(
+              color: overlayColor.withValues(alpha: overlayOpacity),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: content,
+              ),
             ),
           ),
-          child: Center(child: content),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  /// Editable Features block
   Widget _buildEditableFeatures(BuildContext context) {
     final editProvider = context.read<WebsiteEditModeProvider>();
     final theme = Theme.of(context);
@@ -1413,19 +1446,24 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         {
           'icon': 'check_circle',
           'title': 'Característica 1',
-          'description': 'Descripción de la característica'
+          'description': 'Descripción de la característica',
         },
         {
           'icon': 'check_circle',
           'title': 'Característica 2',
-          'description': 'Descripción de la característica'
+          'description': 'Descripción de la característica',
         },
         {
           'icon': 'check_circle',
           'title': 'Característica 3',
-          'description': 'Descripción de la característica'
+          'description': 'Descripción de la característica',
         },
       ];
+    }
+
+    void updateFeatures(List<Map<String, dynamic>> updated) {
+      editProvider.updateBlockData(widget.blockId, 'features', updated);
+      editProvider.updateBlockData(widget.blockId, 'items', updated);
     }
 
     final headingStyle =
@@ -1488,8 +1526,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               'title': 'Nueva Característica',
               'description': 'Descripción de la característica',
             });
-            editProvider.updateBlockData(
-                widget.blockId, 'features', newFeatures);
+            updateFeatures(newFeatures);
           },
           icon: const Icon(Icons.add),
           label: const Text('Agregar característica'),
@@ -1570,6 +1607,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   updated[index]['title'] = value;
                   editProvider.updateBlockData(
                       widget.blockId, 'features', updated);
+                  editProvider.updateBlockData(
+                      widget.blockId, 'items', updated);
                 },
               ),
               const SizedBox(height: 8),
@@ -1588,6 +1627,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   updated[index]['description'] = value;
                   editProvider.updateBlockData(
                       widget.blockId, 'features', updated);
+                  editProvider.updateBlockData(
+                      widget.blockId, 'items', updated);
                 },
               ),
             ],
@@ -1602,6 +1643,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 updated.removeAt(index);
                 editProvider.updateBlockData(
                     widget.blockId, 'features', updated);
+                editProvider.updateBlockData(widget.blockId, 'items', updated);
               },
               tooltip: 'Eliminar',
             ),

@@ -31,8 +31,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   String _searchQuery = '';
   String? _selectedCategoryId;
-  double _minPrice = 0;
-  double _maxPrice = 1000000;
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
 
@@ -85,8 +83,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
       _allProducts = products;
       debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
-
-      _updatePriceRange();
       _applyFilters();
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
@@ -94,15 +90,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  void _updatePriceRange() {
-    if (_allProducts.isNotEmpty) {
-      _minPrice =
-          _allProducts.map((p) => p.price).reduce((a, b) => a < b ? a : b);
-      _maxPrice =
-          _allProducts.map((p) => p.price).reduce((a, b) => a > b ? a : b);
     }
   }
 

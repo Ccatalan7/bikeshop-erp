@@ -8,7 +8,6 @@ import 'order_confirmation_pdf.dart' deferred as order_pdf;
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
-import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../shared/utils/chilean_utils.dart';
@@ -36,14 +35,6 @@ class _OrderConfirmationCache {
   static final Set<String> currentlyLoading = {};
   static final Map<String, String?> loadErrors = {};
   static final Map<String, String?> paymentMessages = {};
-
-  static void clear(String orderId) {
-    processedOrderIds.remove(orderId);
-    loadedOrders.remove(orderId);
-    currentlyLoading.remove(orderId);
-    loadErrors.remove(orderId);
-    paymentMessages.remove(orderId);
-  }
 }
 
 class _OrderConfirmationPageState extends State<OrderConfirmationPage>
@@ -52,7 +43,6 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   bool _isLoading = true;
   String? _error;
   String? _paymentMessage;
-  bool _callbackProcessed = false;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -71,7 +61,6 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       _paymentMessage = _OrderConfirmationCache.paymentMessages[widget.orderId];
       _error = _OrderConfirmationCache.loadErrors[widget.orderId];
       _isLoading = false;
-      _callbackProcessed = true;
       return;
     }
 
@@ -79,7 +68,6 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     if (_OrderConfirmationCache.processedOrderIds.contains(widget.orderId)) {
       debugPrint(
           '🎉 [OrderConfirmationPage] Order already processed, skipping callback');
-      _callbackProcessed = true;
       // Check if another instance is already loading
       if (!_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
         _loadOrder();
@@ -128,7 +116,6 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
     // Mark as processed to prevent duplicate calls on rebuild
     _OrderConfirmationCache.processedOrderIds.add(widget.orderId);
-    _callbackProcessed = true;
 
     if (!mounted) return;
     setState(() {

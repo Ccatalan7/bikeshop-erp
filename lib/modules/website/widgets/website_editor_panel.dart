@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../models/website_block_definition.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_type.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
@@ -303,7 +305,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       case 'theme':
         return _ThemeTab();
       case 'sync':
-        return _SyncTab();
+        return const _SyncTab();
       default:
         return const SizedBox.shrink();
     }
@@ -442,54 +444,66 @@ class _AddBlocksTab extends StatelessWidget {
           const SizedBox(height: 20),
 
           _buildSection('Estructura', [
-            _BlockOption('hero', 'Hero', Icons.view_carousel_rounded),
-            _BlockOption('carousel', 'Carrusel', Icons.view_array_rounded),
-            _BlockOption('categoryGrid', 'Categorías', Icons.grid_view_rounded),
-            _BlockOption(
-                'canvas', 'Canvas', Icons.dashboard_customize_outlined),
+            const _BlockOption('hero'),
+            const _BlockOption('carousel'),
+            const _BlockOption('categoryGrid'),
+            const _BlockOption('canvas'),
           ]),
           _buildSection('Elementos', [
-            _BlockOption('text', 'Texto', Icons.text_fields_rounded),
-            _BlockOption('button', 'Botón', Icons.smart_button_rounded),
-            _BlockOption('divider', 'Separador', Icons.horizontal_rule_rounded),
+            const _BlockOption('text'),
+            const _BlockOption('button'),
+            const _BlockOption('divider'),
           ]),
           _buildSection('Canvas (arrastrable)', [
-            _BlockOption('canvas_el:text', 'Texto', Icons.text_fields_rounded),
-            _BlockOption(
-                'canvas_el:button', 'Botón', Icons.smart_button_rounded),
-            _BlockOption('canvas_el:image', 'Imagen', Icons.image_outlined),
-            _BlockOption(
-                'canvas_el:product', 'Producto', Icons.inventory_2_outlined),
-            _BlockOption('canvas_el:productsGallery', 'Galería productos',
-                Icons.grid_view_rounded),
+            const _BlockOption(
+              'canvas_el:text',
+              labelOverride: 'Texto',
+              iconOverride: Icons.text_fields_rounded,
+            ),
+            const _BlockOption(
+              'canvas_el:button',
+              labelOverride: 'Botón',
+              iconOverride: Icons.smart_button_rounded,
+            ),
+            const _BlockOption(
+              'canvas_el:image',
+              labelOverride: 'Imagen',
+              iconOverride: Icons.image_outlined,
+            ),
+            const _BlockOption(
+              'canvas_el:product',
+              labelOverride: 'Producto',
+              iconOverride: Icons.inventory_2_outlined,
+            ),
+            const _BlockOption(
+              'canvas_el:productsGallery',
+              labelOverride: 'Galería productos',
+              iconOverride: Icons.grid_view_rounded,
+            ),
           ]),
           _buildSection('Contenido', [
-            _BlockOption('products', 'Productos', Icons.shopping_bag_rounded),
-            _BlockOption('about', 'Nosotros', Icons.info_rounded),
-            _BlockOption('services', 'Servicios', Icons.build_rounded),
-            _BlockOption('features', 'Beneficios', Icons.star_rounded),
+            const _BlockOption('products'),
+            const _BlockOption('about'),
+            const _BlockOption('services'),
+            const _BlockOption('features'),
           ]),
           _buildSection('Media', [
-            _BlockOption('gallery', 'Galería', Icons.photo_library_rounded),
-            _BlockOption('videoBanner', 'Video Banner',
-                Icons.play_circle_outline_rounded),
-            _BlockOption(
-                'brandLogos', 'Logos Marcas', Icons.branding_watermark_rounded),
-            _BlockOption('partnersBanner', 'Partners', Icons.handshake_rounded),
+            const _BlockOption('gallery'),
+            const _BlockOption('videoBanner'),
+            const _BlockOption('brandLogos'),
+            const _BlockOption('partnersBanner'),
           ]),
           _buildSection('Social', [
-            _BlockOption(
-                'testimonials', 'Testimonios', Icons.format_quote_rounded),
-            _BlockOption(
-                'googleReviews', 'Google Reviews', Icons.reviews_rounded),
-            _BlockOption('team', 'Equipo', Icons.groups_rounded),
-            _BlockOption('stats', 'Estadísticas', Icons.analytics_rounded),
+            const _BlockOption('testimonials'),
+            const _BlockOption('googleReviews'),
+            const _BlockOption('team'),
+            const _BlockOption('stats'),
           ]),
           _buildSection('Conversión', [
-            _BlockOption('cta', 'Call to Action', Icons.touch_app_rounded),
-            _BlockOption('pricing', 'Precios', Icons.payments_rounded),
-            _BlockOption('contact', 'Contacto', Icons.contact_mail_rounded),
-            _BlockOption('faq', 'FAQ', Icons.help_outline_rounded),
+            const _BlockOption('cta'),
+            const _BlockOption('pricing'),
+            const _BlockOption('contact'),
+            const _BlockOption('faq'),
           ]),
         ],
       ),
@@ -625,109 +639,35 @@ class _AddBlocksTab extends StatelessWidget {
   }
 
   static IconData _blockIcon(String type) {
-    switch (type) {
-      case 'hero':
-        return Icons.view_carousel_rounded;
-      case 'carousel':
-        return Icons.view_array_rounded;
-      case 'products':
-        return Icons.shopping_bag_rounded;
-      case 'about':
-        return Icons.info_rounded;
-      case 'services':
-        return Icons.build_rounded;
-      case 'features':
-        return Icons.star_rounded;
-      case 'testimonials':
-        return Icons.format_quote_rounded;
-      case 'team':
-        return Icons.groups_rounded;
-      case 'stats':
-        return Icons.analytics_rounded;
-      case 'faq':
-        return Icons.help_outline_rounded;
-      case 'pricing':
-        return Icons.payments_rounded;
-      case 'contact':
-        return Icons.contact_mail_rounded;
-      case 'cta':
-        return Icons.touch_app_rounded;
-      case 'gallery':
-        return Icons.photo_library_rounded;
-      case 'categoryGrid':
-        return Icons.grid_view_rounded;
-      case 'videoBanner':
-        return Icons.play_circle_outline_rounded;
-      case 'partnersBanner':
-        return Icons.handshake_rounded;
-      case 'brandLogos':
-        return Icons.branding_watermark_rounded;
-      case 'googleReviews':
-        return Icons.reviews_rounded;
-      case 'canvas':
-        return Icons.dashboard_customize_outlined;
-      case 'text':
-        return Icons.text_fields_rounded;
-      case 'button':
-        return Icons.smart_button_rounded;
-      case 'divider':
-        return Icons.horizontal_rule_rounded;
-      default:
-        return Icons.widgets_rounded;
-    }
+    final blockType = _tryParseWebsiteBlockType(type);
+    return blockType?.icon ?? Icons.widgets_rounded;
   }
 
   static String _blockLabel(String type) {
-    switch (type) {
-      case 'hero':
-        return 'Hero / Banner';
-      case 'carousel':
-        return 'Carrusel';
-      case 'categoryGrid':
-        return 'Categorías';
-      case 'canvas':
-        return 'Canvas';
-      case 'text':
-        return 'Texto';
-      case 'button':
-        return 'Botón';
-      case 'divider':
-        return 'Separador';
-      case 'products':
-        return 'Productos';
-      case 'about':
-        return 'Nosotros';
-      case 'services':
-        return 'Servicios';
-      case 'features':
-        return 'Beneficios';
-      case 'gallery':
-        return 'Galería';
-      case 'videoBanner':
-        return 'Video Banner';
-      case 'brandLogos':
-        return 'Logos Marcas';
-      case 'googleReviews':
-        return 'Google Reviews';
-      case 'partnersBanner':
-        return 'Partners';
-      case 'testimonials':
-        return 'Testimonios';
-      case 'team':
-        return 'Equipo';
-      case 'stats':
-        return 'Estadísticas';
-      case 'cta':
-        return 'Call to Action';
-      case 'pricing':
-        return 'Precios';
-      case 'contact':
-        return 'Contacto';
-      case 'faq':
-        return 'FAQ';
-      default:
-        return type;
+    final blockType = _tryParseWebsiteBlockType(type);
+    if (blockType == null) return type;
+    return WebsiteBlockRegistry.definitionFor(blockType).title;
+  }
+
+  static WebsiteBlockType? _tryParseWebsiteBlockType(String raw) {
+    final normalised = raw.trim();
+    if (normalised.isEmpty) return null;
+
+    // Parse using the shared helper, but only accept it if it actually matched.
+    final parsed = parseWebsiteBlockType(
+      normalised,
+      fallback: WebsiteBlockType.hero,
+    );
+
+    if (parsed.name.toLowerCase() == normalised.toLowerCase()) {
+      return parsed;
     }
+
+    // If we fell back to hero for a non-hero raw value, treat as unknown.
+    if (parsed == WebsiteBlockType.hero && normalised.toLowerCase() != 'hero') {
+      return null;
+    }
+    return parsed;
   }
 }
 
@@ -770,9 +710,9 @@ class _SyncTabState extends State<_SyncTab> {
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -793,10 +733,11 @@ class _SyncTabState extends State<_SyncTab> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF4285F4).withOpacity(0.1),
+                color: const Color(0xFF4285F4).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: const Color(0xFF4285F4).withOpacity(0.3)),
+                border: Border.all(
+                  color: const Color(0xFF4285F4).withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -817,7 +758,7 @@ class _SyncTabState extends State<_SyncTab> {
                         Text(
                           'Google Business Profile',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 11),
                         ),
                       ],
@@ -926,6 +867,7 @@ class _SyncTabState extends State<_SyncTab> {
                 if (reviews.isNotEmpty) {
                   await websiteService.saveSetting(
                       'google_reviews_data', jsonEncode(reviews));
+                  if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -1025,7 +967,7 @@ class _ActionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Row(
           children: [
@@ -1033,7 +975,7 @@ class _ActionCard extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: (isEnabled ? const Color(0xFF00A09D) : Colors.grey)
-                    .withOpacity(0.2),
+                    .withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(icon,
@@ -1072,10 +1014,38 @@ class _ActionCard extends StatelessWidget {
 
 class _BlockOption {
   final String type;
-  final String label;
-  final IconData icon;
+  final String? labelOverride;
+  final IconData? iconOverride;
 
-  _BlockOption(this.type, this.label, this.icon);
+  const _BlockOption(
+    this.type, {
+    this.labelOverride,
+    this.iconOverride,
+  });
+
+  WebsiteBlockType? get _blockType {
+    if (type.startsWith('canvas_el:')) return null;
+
+    final parsed = parseWebsiteBlockType(type, fallback: WebsiteBlockType.hero);
+    if (parsed.name.toLowerCase() == type.toLowerCase()) return parsed;
+    if (parsed == WebsiteBlockType.hero && type.toLowerCase() != 'hero') {
+      return null;
+    }
+    return parsed;
+  }
+
+  String get label {
+    if (labelOverride != null) return labelOverride!;
+    final blockType = _blockType;
+    if (blockType == null) return type;
+    return WebsiteBlockRegistry.definitionFor(blockType).title;
+  }
+
+  IconData get icon {
+    if (iconOverride != null) return iconOverride!;
+    final blockType = _blockType;
+    return blockType?.icon ?? Icons.widgets_rounded;
+  }
 }
 
 /// Tab for editing selected block - shows controls based on block type
@@ -1179,22 +1149,11 @@ class _EditBlockTab extends StatelessWidget {
   }
 
   Widget _buildBlockHeader(String blockType, bool isVisible, String blockId) {
-    final typeNames = {
-      'hero': 'Hero Banner',
-      'carousel': 'Carrusel',
-      'products': 'Productos',
-      'about': 'Sobre Nosotros',
-      'services': 'Servicios',
-      'features': 'Características',
-      'testimonials': 'Testimonios',
-      'stats': 'Estadísticas',
-      'team': 'Equipo',
-      'faq': 'FAQ',
-      'pricing': 'Precios',
-      'contact': 'Contacto',
-      'cta': 'Call to Action',
-      'gallery': 'Galería',
-    };
+    final parsedType = _tryParseWebsiteBlockType(blockType);
+    final title = parsedType != null
+        ? WebsiteBlockRegistry.definitionFor(parsedType).title
+        : blockType;
+    final icon = parsedType?.icon ?? Icons.widgets_rounded;
 
     return Row(
       children: [
@@ -1205,7 +1164,7 @@ class _EditBlockTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(
-            _getBlockIcon(blockType),
+            icon,
             color: const Color(0xFF00A09D),
             size: 20,
           ),
@@ -1216,7 +1175,7 @@ class _EditBlockTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                typeNames[blockType] ?? blockType,
+                title,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -1254,32 +1213,25 @@ class _EditBlockTab extends StatelessWidget {
     );
   }
 
-  IconData _getBlockIcon(String type) {
-    return switch (type) {
-      'hero' => Icons.view_carousel_rounded,
-      'carousel' => Icons.view_array_rounded,
-      'canvas' => Icons.dashboard_customize_outlined,
-      'text' => Icons.text_fields_rounded,
-      'button' => Icons.smart_button_rounded,
-      'divider' => Icons.horizontal_rule_rounded,
-      'products' => Icons.shopping_bag_rounded,
-      'about' => Icons.info_rounded,
-      'services' => Icons.build_rounded,
-      'features' => Icons.star_rounded,
-      'testimonials' => Icons.format_quote_rounded,
-      'stats' => Icons.analytics_rounded,
-      'team' => Icons.groups_rounded,
-      'faq' => Icons.help_outline_rounded,
-      'pricing' => Icons.payments_rounded,
-      'contact' => Icons.contact_mail_rounded,
-      'cta' => Icons.touch_app_rounded,
-      'gallery' => Icons.photo_library_rounded,
-      'categoryGrid' => Icons.grid_view_rounded,
-      'videoBanner' => Icons.play_circle_outline_rounded,
-      'partnersBanner' => Icons.handshake_rounded,
-      'brandLogos' => Icons.branding_watermark_rounded,
-      _ => Icons.widgets_rounded,
-    };
+  WebsiteBlockType? _tryParseWebsiteBlockType(String raw) {
+    final normalised = raw.trim();
+    if (normalised.isEmpty) return null;
+
+    // Parse using the shared helper, but only accept it if it actually matched.
+    final parsed = parseWebsiteBlockType(
+      normalised,
+      fallback: WebsiteBlockType.hero,
+    );
+
+    if (parsed.name.toLowerCase() == normalised.toLowerCase()) {
+      return parsed;
+    }
+
+    // If we fell back to hero for a non-hero raw value, treat as unknown.
+    if (parsed == WebsiteBlockType.hero && normalised.toLowerCase() != 'hero') {
+      return null;
+    }
+    return parsed;
   }
 
   Widget _buildBlockControls(
@@ -1310,12 +1262,6 @@ class _EditBlockTab extends StatelessWidget {
       case 'about':
         return _AboutBlockControls(
             data: data, blockId: blockId, provider: editProvider);
-      case 'cta':
-        return _CtaBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
-      case 'features':
-        return _FeaturesBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'categoryGrid':
         return _CategoryGridBlockControls(
             data: data, blockId: blockId, provider: editProvider);
@@ -1329,8 +1275,14 @@ class _EditBlockTab extends StatelessWidget {
         return _BrandLogosBlockControls(
             data: data, blockId: blockId, provider: editProvider);
       default:
+        final parsedType = _tryParseWebsiteBlockType(blockType);
         return _GenericBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
+          data: data,
+          blockId: blockId,
+          provider: editProvider,
+          blockType: parsedType,
+          rawBlockType: blockType,
+        );
     }
   }
 }
@@ -1784,7 +1736,7 @@ class _HeroBlockControls extends StatelessWidget {
           onChanged: (v) => provider.updateBlockData(blockId, 'alignment', v),
         ),
         const SizedBox(height: 20),
-        _SectionHeader('Imagen de fondo'),
+        const _SectionHeader('Imagen de fondo'),
         const SizedBox(height: 12),
         _ImagePicker(
           currentUrl: data['backgroundImage']?.toString(),
@@ -1941,7 +1893,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         const SizedBox(height: 20),
 
         // Image section
-        _SectionHeader('IMAGEN DE FONDO'),
+        const _SectionHeader('IMAGEN DE FONDO'),
         const SizedBox(height: 8),
         _ImagePicker(
           currentUrl: slide['imageUrl']?.toString(),
@@ -1966,9 +1918,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         const SizedBox(height: 20),
 
         // Video section
-        _SectionHeader('VIDEO DE FONDO (OPCIONAL)'),
+        const _SectionHeader('VIDEO DE FONDO (OPCIONAL)'),
         const SizedBox(height: 8),
-        Text(
+        const Text(
           'Si se configura un video, se usará en vez de la imagen',
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
@@ -1992,11 +1944,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         const SizedBox(height: 12),
 
         // Divider with "o"
-        Row(
+        const Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text('o',
                   style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
@@ -2027,26 +1979,26 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const Icon(Icons.check_circle, color: Colors.green, size: 16),
                 const SizedBox(width: 8),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Archivo de video cargado',
                     style: TextStyle(color: Colors.green, fontSize: 12),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, size: 16, color: Colors.green),
+                  icon: const Icon(Icons.close, size: 16, color: Colors.green),
                   onPressed: () =>
                       _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
@@ -2056,7 +2008,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         const SizedBox(height: 20),
 
         // Overlay settings
-        _SectionHeader('OVERLAY'),
+        const _SectionHeader('OVERLAY'),
         const SizedBox(height: 8),
         _EditorToggle(
           label: 'Mostrar overlay oscuro',
@@ -2167,7 +2119,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Carousel Settings Section
-        _SectionHeader('Configuración'),
+        const _SectionHeader('Configuración'),
         const SizedBox(height: 12),
         _EditorToggle(
           label: 'Reproducción automática',
@@ -2454,7 +2406,7 @@ class _SlideEditorState extends State<_SlideEditor> {
           maxLines: 2,
         ),
         const SizedBox(height: 16),
-        _SectionHeader('Imagen de fondo'),
+        const _SectionHeader('Imagen de fondo'),
         const SizedBox(height: 8),
         _ImagePicker(
           currentUrl: widget.slide['imageUrl']?.toString(),
@@ -2463,14 +2415,14 @@ class _SlideEditorState extends State<_SlideEditor> {
 
         const SizedBox(height: 20),
         // Video section
-        Text('VIDEO DE FONDO (OPCIONAL)',
-            style: const TextStyle(
+        const Text('VIDEO DE FONDO (OPCIONAL)',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1)),
         const SizedBox(height: 8),
-        Text(
+        const Text(
           'Si se configura un video, se usará en vez de la imagen',
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
@@ -2494,11 +2446,11 @@ class _SlideEditorState extends State<_SlideEditor> {
         const SizedBox(height: 12),
 
         // Divider with "o" (or)
-        Row(
+        const Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text('o',
                   style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
@@ -2514,7 +2466,7 @@ class _SlideEditorState extends State<_SlideEditor> {
           child: ElevatedButton.icon(
             onPressed: _isUploading ? null : _uploadVideoFile,
             icon: _isUploading
-                ? SizedBox(
+                ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
@@ -2536,15 +2488,15 @@ class _SlideEditorState extends State<_SlideEditor> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const Icon(Icons.check_circle, color: Colors.green, size: 16),
                 const SizedBox(width: 8),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Archivo de video cargado',
                     style: TextStyle(color: Colors.green, fontSize: 12),
@@ -2569,13 +2521,14 @@ class _SlideEditorState extends State<_SlideEditor> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.red.withOpacity(0.3)),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.play_circle_filled, color: Colors.red, size: 16),
+                const Icon(Icons.play_circle_filled,
+                    color: Colors.red, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -2614,7 +2567,7 @@ class _SlideEditorState extends State<_SlideEditor> {
           ),
         ],
         const SizedBox(height: 16),
-        _SectionHeader('Botón'),
+        const _SectionHeader('Botón'),
         const SizedBox(height: 8),
         _EditorTextField(
           label: 'Texto del botón',
@@ -2749,7 +2702,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         ),
 
         const SizedBox(height: 20),
-        _SectionHeader('FUENTE DE PRODUCTOS'),
+        const _SectionHeader('FUENTE DE PRODUCTOS'),
         const SizedBox(height: 12),
 
         // Product source selector
@@ -2763,7 +2716,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
 
         const SizedBox(height: 20),
         const SizedBox(height: 20),
-        _SectionHeader('DISEÑO'),
+        const _SectionHeader('DISEÑO'),
         const SizedBox(height: 12),
         _EditorDropdown(
           label: 'Diseño',
@@ -2777,8 +2730,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         const SizedBox(height: 12),
 
         // Items per row
-        Text('Productos por fila',
-            style: const TextStyle(
+        const Text('Productos por fila',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600)),
@@ -2829,7 +2782,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         ),
 
         const SizedBox(height: 20),
-        _SectionHeader('MOSTRAR'),
+        const _SectionHeader('MOSTRAR'),
         const SizedBox(height: 12),
 
         _EditorToggle(
@@ -2932,8 +2885,8 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        Text('Seleccionar categoría',
-            style: const TextStyle(
+        const Text('Seleccionar categoría',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600)),
@@ -3641,6 +3594,10 @@ class _AboutBlockControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final contentValue =
+        (data['content'] ?? data['description'] ?? '').toString();
+    final imageValue = (data['imageUrl'] ?? data['image'] ?? '').toString();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3651,136 +3608,22 @@ class _AboutBlockControls extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _EditorTextField(
-          label: 'Descripción',
-          value: data['description']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'description', v),
+          label: 'Contenido',
+          value: contentValue,
+          onChanged: (v) {
+            provider.updateBlockData(blockId, 'content', v);
+            provider.updateBlockData(blockId, 'description', v);
+          },
           maxLines: 5,
         ),
         const SizedBox(height: 20),
-        _SectionHeader('Imagen'),
+        const _SectionHeader('Imagen'),
         const SizedBox(height: 12),
         _ImagePicker(
-          currentUrl: data['image']?.toString(),
-          onChanged: (url) => provider.updateBlockData(blockId, 'image', url),
-        ),
-      ],
-    );
-  }
-}
-
-/// CTA block controls
-class _CtaBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _CtaBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _EditorTextField(
-          label: 'Título',
-          value: data['title']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorTextField(
-          label: 'Descripción',
-          value: data['description']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'description', v),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 16),
-        _EditorTextField(
-          label: 'Texto del botón',
-          value: data['buttonText']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'buttonText', v),
-        ),
-        const SizedBox(height: 16),
-        _LinkPicker(
-          label: 'Enlace',
-          currentLink: data['buttonLink']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'buttonLink', v),
-        ),
-      ],
-    );
-  }
-}
-
-/// Features block controls
-class _FeaturesBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _FeaturesBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final features =
-        (data['features'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _EditorTextField(
-          label: 'Título',
-          value: data['title']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
-        ),
-        const SizedBox(height: 20),
-        _EditorDropdown(
-          label: 'Diseño',
-          value: data['layout']?.toString() ?? 'grid',
-          options: const [
-            ('grid', 'Cuadrícula'),
-            ('list', 'Lista'),
-          ],
-          onChanged: (v) => provider.updateBlockData(blockId, 'layout', v),
-        ),
-        const SizedBox(height: 20),
-        _SectionHeader('Características (${features.length})'),
-        const SizedBox(height: 12),
-        ...features.asMap().entries.map((entry) {
-          final i = entry.key;
-          final feature = entry.value;
-          return _FeatureItem(
-            index: i,
-            feature: feature,
-            onUpdate: (updated) {
-              final newFeatures = List<Map<String, dynamic>>.from(features);
-              newFeatures[i] = updated;
-              provider.updateBlockData(blockId, 'features', newFeatures);
-            },
-            onDelete: () {
-              final newFeatures = List<Map<String, dynamic>>.from(features);
-              newFeatures.removeAt(i);
-              provider.updateBlockData(blockId, 'features', newFeatures);
-            },
-          );
-        }),
-        const SizedBox(height: 12),
-        _AddItemButton(
-          label: 'Agregar característica',
-          onPressed: () {
-            final newFeatures = List<Map<String, dynamic>>.from(features);
-            newFeatures.add({
-              'icon': 'star',
-              'title': 'Nueva característica',
-              'description': 'Descripción...',
-            });
-            provider.updateBlockData(blockId, 'features', newFeatures);
+          currentUrl: imageValue,
+          onChanged: (url) {
+            provider.updateBlockData(blockId, 'imageUrl', url);
+            provider.updateBlockData(blockId, 'image', url);
           },
         ),
       ],
@@ -3788,78 +3631,473 @@ class _FeaturesBlockControls extends StatelessWidget {
   }
 }
 
-class _FeatureItem extends StatelessWidget {
-  final int index;
-  final Map<String, dynamic> feature;
-  final Function(Map<String, dynamic>) onUpdate;
-  final VoidCallback onDelete;
-
-  const _FeatureItem({
-    required this.index,
-    required this.feature,
-    required this.onUpdate,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                '#${index + 1}',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5), fontSize: 12),
-              ),
-              const Spacer(),
-              InkWell(
-                onTap: onDelete,
-                child: Icon(Icons.close, size: 16, color: Colors.red.shade300),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _MiniTextField(
-            value: feature['title']?.toString() ?? '',
-            hint: 'Título',
-            onChanged: (v) => onUpdate({...feature, 'title': v}),
-          ),
-          const SizedBox(height: 8),
-          _MiniTextField(
-            value: feature['description']?.toString() ?? '',
-            hint: 'Descripción',
-            onChanged: (v) => onUpdate({...feature, 'description': v}),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+/// CTA block controls
 /// Generic block controls for types without specific UI
 class _GenericBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
+  final WebsiteBlockType? blockType;
+  final String? rawBlockType;
 
   const _GenericBlockControls({
     required this.data,
     required this.blockId,
     required this.provider,
+    required this.blockType,
+    required this.rawBlockType,
   });
+
+  Color _tryParseHexColor(String? value) {
+    if (value == null) return Colors.transparent;
+    var hex = value.trim();
+    if (hex.isEmpty) return Colors.transparent;
+    if (hex.startsWith('#')) hex = hex.substring(1);
+    if (hex.length == 6) hex = 'FF$hex';
+    if (hex.length != 8) return Colors.transparent;
+
+    final parsed = int.tryParse(hex, radix: 16);
+    if (parsed == null) return Colors.transparent;
+    return Color(parsed);
+  }
+
+  List<String> _toStringList(dynamic value) {
+    if (value is List) {
+      return value
+          .map((e) => e?.toString() ?? '')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      return value
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _toMapList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    }
+    return const [];
+  }
+
+  Widget _helpText(String? text) {
+    if (text == null || text.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.45),
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSchemaField({
+    required BuildContext context,
+    required WebsiteBlockFieldSchema field,
+    required Map<String, dynamic> currentData,
+    required void Function(dynamic value) setValue,
+  }) {
+    final raw = currentData[field.key];
+    final label = field.label;
+
+    switch (field.type) {
+      case WebsiteBlockFieldType.text:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
+              onChanged: (v) => setValue(v),
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.textarea:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
+              onChanged: (v) => setValue(v),
+              maxLines: 4,
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.richtext:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
+              onChanged: (v) => setValue(v),
+              maxLines: 6,
+              hint: '<p>...</p>',
+            ),
+            _helpText(field.helpText ?? 'Acepta HTML.'),
+          ],
+        );
+      case WebsiteBlockFieldType.color:
+        final current =
+            raw?.toString() ?? (field.defaultValue?.toString() ?? '');
+        final preview = _tryParseHexColor(current);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: preview,
+                    borderRadius: BorderRadius.circular(6),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _EditorTextField(
+                    label: '',
+                    value: current,
+                    hint: '#RRGGBB',
+                    onChanged: (v) => setValue(v),
+                  ),
+                ),
+              ],
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.image:
+        final currentUrl = raw?.toString();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 8),
+            _ImagePicker(
+              currentUrl: currentUrl,
+              onChanged: (url) => setValue(url),
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.number:
+        final min = field.min?.toDouble();
+        final max = field.max?.toDouble();
+        final step = field.step?.toDouble();
+        final currentNum = (raw is num)
+            ? raw.toDouble()
+            : double.tryParse(raw?.toString() ?? '') ??
+                (field.defaultValue is num
+                    ? (field.defaultValue as num).toDouble()
+                    : 0.0);
+
+        if (min != null && max != null) {
+          int? divisions;
+          if (step != null && step > 0) {
+            final rawDiv = ((max - min) / step).round();
+            if (rawDiv > 0 && rawDiv <= 200) divisions = rawDiv;
+          }
+          final clamped = currentNum.clamp(min, max);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _EditorSlider(
+                label: label,
+                value: clamped,
+                min: min,
+                max: max,
+                divisions: divisions,
+                valueLabel: clamped.toStringAsFixed(0),
+                onChanged: (v) => setValue(v),
+              ),
+              _helpText(field.helpText),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
+              hint: '0',
+              onChanged: (v) {
+                final parsed = num.tryParse(v);
+                if (parsed != null) setValue(parsed);
+              },
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.toggle:
+        final currentBool =
+            (raw is bool) ? raw : (raw?.toString().toLowerCase() == 'true');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorToggle(
+              label: label,
+              value: currentBool,
+              onChanged: (v) => setValue(v),
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.select:
+        final options = field.options
+            .map((opt) => (opt.value, opt.label))
+            .toList(growable: false);
+        final current = raw?.toString() ??
+            (field.defaultValue?.toString() ??
+                (options.isNotEmpty ? options.first.$1 : ''));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorDropdown(
+              label: label,
+              value: current,
+              options: options,
+              onChanged: (v) => setValue(v),
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.chips:
+        final chips = _toStringList(raw);
+        final display = chips.join(', ');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: display,
+              hint: 'separado por comas',
+              onChanged: (v) {
+                final parsed = _toStringList(v);
+                setValue(parsed);
+              },
+              maxLines: 2,
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.repeater:
+        final items = _toMapList(raw);
+        final itemLabel = field.itemLabel ?? 'Item';
+
+        Widget buildItemCard(int index) {
+          final itemData = items[index];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '$itemLabel #${index + 1}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () {
+                        final next = List<Map<String, dynamic>>.from(items);
+                        next.removeAt(index);
+                        setValue(next);
+                      },
+                      child: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.red.shade300,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...field.itemFields.map((subField) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildSchemaField(
+                      context: context,
+                      field: subField,
+                      currentData: itemData,
+                      setValue: (v) {
+                        final nextItems =
+                            List<Map<String, dynamic>>.from(items);
+                        final nextItem = Map<String, dynamic>.from(itemData);
+                        nextItem[subField.key] = v;
+                        nextItems[index] = nextItem;
+                        setValue(nextItems);
+                      },
+                    ),
+                  );
+                }),
+              ],
+            ),
+          );
+        }
+
+        final canAdd = field.maxItems == null || items.length < field.maxItems!;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 10),
+            ...List.generate(items.length, buildItemCard),
+            if (canAdd)
+              _AddItemButton(
+                label: 'Agregar $itemLabel',
+                onPressed: () {
+                  final next = List<Map<String, dynamic>>.from(items);
+                  final seed = <String, dynamic>{};
+                  for (final sub in field.itemFields) {
+                    seed[sub.key] = sub.defaultValue;
+                  }
+                  next.add(seed);
+                  setValue(next);
+                },
+              ),
+            _helpText(field.helpText),
+          ],
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Show title and subtitle if they exist
+    final parsed = blockType;
+    final definition =
+        parsed != null ? WebsiteBlockRegistry.definitionFor(parsed) : null;
+    final fields = definition?.fields ?? const <WebsiteBlockFieldSchema>[];
+
+    void setFieldValue(String key, dynamic value) {
+      provider.updateBlockData(blockId, key, value);
+
+      // Backwards compatibility: historically CTA subtitle lived under
+      // 'description'. Keep them in sync so older renderers/data don't drift.
+      if (rawBlockType == 'cta' && key == 'subtitle') {
+        provider.updateBlockData(blockId, 'description', value);
+      }
+    }
+
+    if (definition != null && fields.isNotEmpty) {
+      final sections = definition.controlSections;
+      final fieldByKey = {for (final f in fields) f.key: f};
+      final usedKeys = <String>{};
+
+      final sectionWidgets = <Widget>[];
+      if (sections.isNotEmpty) {
+        for (final section in sections) {
+          final sectionFields = section.fieldKeys
+              .map((k) => fieldByKey[k])
+              .whereType<WebsiteBlockFieldSchema>()
+              .toList();
+
+          if (sectionFields.isEmpty) continue;
+          usedKeys.addAll(sectionFields.map((f) => f.key));
+
+          sectionWidgets.add(
+            _CollapsibleSection(
+              title: section.label,
+              initiallyExpanded: true,
+              children: [
+                if (section.description != null &&
+                    section.description!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      section.description!,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ...sectionFields.expand((f) sync* {
+                  yield _buildSchemaField(
+                    context: context,
+                    field: f,
+                    currentData: data,
+                    setValue: (v) => setFieldValue(f.key, v),
+                  );
+                  yield const SizedBox(height: 16);
+                }),
+              ],
+            ),
+          );
+          sectionWidgets.add(const SizedBox(height: 12));
+        }
+      }
+
+      final remainingFields =
+          fields.where((f) => !usedKeys.contains(f.key)).toList();
+      if (remainingFields.isNotEmpty) {
+        sectionWidgets.add(
+          _CollapsibleSection(
+            title: 'Otros',
+            initiallyExpanded: sections.isEmpty,
+            children: [
+              ...remainingFields.expand((f) sync* {
+                yield _buildSchemaField(
+                  context: context,
+                  field: f,
+                  currentData: data,
+                  setValue: (v) => setFieldValue(f.key, v),
+                );
+                yield const SizedBox(height: 16);
+              }),
+            ],
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...sectionWidgets,
+        ],
+      );
+    }
+
+    // Legacy fallback: show title/subtitle/description if they exist
     final hasTitle = data.containsKey('title');
     final hasSubtitle = data.containsKey('subtitle');
     final hasDescription = data.containsKey('description');
@@ -3871,7 +4109,7 @@ class _GenericBlockControls extends StatelessWidget {
           _EditorTextField(
             label: 'Título',
             value: data['title']?.toString() ?? '',
-            onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
+            onChanged: (v) => setFieldValue('title', v),
           ),
           const SizedBox(height: 16),
         ],
@@ -3879,7 +4117,7 @@ class _GenericBlockControls extends StatelessWidget {
           _EditorTextField(
             label: 'Subtítulo',
             value: data['subtitle']?.toString() ?? '',
-            onChanged: (v) => provider.updateBlockData(blockId, 'subtitle', v),
+            onChanged: (v) => setFieldValue('subtitle', v),
           ),
           const SizedBox(height: 16),
         ],
@@ -4768,7 +5006,8 @@ class _CanvasBlockControls extends StatelessWidget {
                   max: 6,
                   divisions: 12,
                   valueLabel:
-                      '${((active['letterSpacing'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}',
+                      ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
+                          .toStringAsFixed(1),
                   onChanged: (v) =>
                       _updateElement(activeId!, {'letterSpacing': v}),
                 ),
@@ -5570,7 +5809,9 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
         page = await service.getPageBySlug(pageSlug);
       }
 
-      if (mounted && page != null) {
+      if (!mounted) return;
+
+      if (page != null) {
         _currentPage = page;
         _currentRoute = page.slug;
         _metaTitleController.text = page.metaTitle ?? '';
@@ -5689,9 +5930,9 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'SEO de página',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
                           fontWeight: FontWeight.w600),
@@ -6015,12 +6256,12 @@ class _ThemeTabState extends State<_ThemeTab> {
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
+        const Padding(
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'DISEÑO DEL SITIO',
                 style: TextStyle(
                   color: Colors.white54,
@@ -6029,8 +6270,8 @@ class _ThemeTabState extends State<_ThemeTab> {
                   letterSpacing: 1,
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
+              SizedBox(height: 8),
+              Text(
                 'Personaliza la apariencia global de tu sitio web.',
                 style: TextStyle(color: Colors.white38, fontSize: 13),
               ),
@@ -6152,7 +6393,7 @@ class _ThemeTabState extends State<_ThemeTab> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('COLOR PRINCIPAL'),
+            const _SectionHeader('COLOR PRINCIPAL'),
             const SizedBox(height: 12),
             _EditorTextField(
               label: 'Color Hex',
@@ -6175,7 +6416,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               },
             ),
             const SizedBox(height: 24),
-            _SectionHeader('COLOR DE ACENTO'),
+            const _SectionHeader('COLOR DE ACENTO'),
             const SizedBox(height: 12),
             _EditorTextField(
               label: 'Color Hex',
@@ -6204,7 +6445,7 @@ class _ThemeTabState extends State<_ThemeTab> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('TÍTULOS'),
+            const _SectionHeader('TÍTULOS'),
             const SizedBox(height: 12),
             _buildDropdown(
               label: 'Fuente',
@@ -6221,7 +6462,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               onChanged: (v) => setState(() => _headingSize = v!),
             ),
             const SizedBox(height: 24),
-            _SectionHeader('PARRAFOS'),
+            const _SectionHeader('PARRAFOS'),
             const SizedBox(height: 12),
             _buildDropdown(
               label: 'Fuente',
@@ -6244,7 +6485,7 @@ class _ThemeTabState extends State<_ThemeTab> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('FORMA'),
+            const _SectionHeader('FORMA'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -6257,7 +6498,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               ],
             ),
             const SizedBox(height: 24),
-            _SectionHeader('TAMAÑO'),
+            const _SectionHeader('TAMAÑO'),
             const SizedBox(height: 12),
             _buildDropdown(
               label: 'Tamaño predeterminado',
@@ -6273,7 +6514,7 @@ class _ThemeTabState extends State<_ThemeTab> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader('FONDO DEL SITIO'),
+            const _SectionHeader('FONDO DEL SITIO'),
             const SizedBox(height: 8),
             const Text(
               'Este color se aplicará al fondo de todas las páginas.',
@@ -6292,17 +6533,17 @@ class _ThemeTabState extends State<_ThemeTab> {
         );
 
       case 'transitions':
-        return Center(
+        return const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.construction, color: Colors.white24, size: 48),
-              const SizedBox(height: 16),
-              const Text(
+              SizedBox(height: 16),
+              Text(
                 'Próximamente',
                 style: TextStyle(color: Colors.white54),
               ),
-              const Text(
+              Text(
                 'Configuración de transiciones entre páginas',
                 style: TextStyle(color: Colors.white38, fontSize: 12),
                 textAlign: TextAlign.center,
@@ -6543,15 +6784,17 @@ class _LogoUploaderState extends State<_LogoUploader> {
         );
       }
     } catch (e) {
-      setState(() => _isUploading = false);
       debugPrint('Error uploading logo: $e');
       if (mounted) {
+        setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text('❌ Error subiendo logo: $e'),
             backgroundColor: Colors.red,
           ),
         );
+      } else {
+        _isUploading = false;
       }
     }
   }
@@ -6559,17 +6802,17 @@ class _LogoUploaderState extends State<_LogoUploader> {
   String _getContentType(String fileName) {
     final ext = fileName.split('.').last.toLowerCase();
     switch (ext) {
-      case 'png':
-        return 'image/png';
       case 'jpg':
       case 'jpeg':
         return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
       case 'webp':
         return 'image/webp';
-      case 'svg':
-        return 'image/svg+xml';
       default:
-        return 'image/png';
+        return 'image/jpeg';
     }
   }
 
@@ -6577,86 +6820,148 @@ class _LogoUploaderState extends State<_LogoUploader> {
   Widget build(BuildContext context) {
     final hasLogo = widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
 
-    return InkWell(
-      onTap: _isUploading ? null : _pickAndUploadLogo,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        height: 80,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
+    return Column(
+      children: [
+        InkWell(
+          onTap: _isUploading ? null : _pickAndUploadLogo,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _isUploading
-                ? const Color(0xFF00A09D)
-                : Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-        child: _isUploading
-            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-            : hasLogo
-                ? Row(
+          child: Container(
+            height: 110,
+            width: double.infinity,
+            padding: hasLogo && !_isUploading
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isUploading
+                    ? const Color(0xFF00A09D)
+                    : Colors.white.withValues(alpha: 0.1),
+                width: _isUploading ? 2 : 1,
+              ),
+              image: hasLogo && !_isUploading
+                  ? DecorationImage(
+                      image: NetworkImage(widget.currentUrl!),
+                      fit: BoxFit.contain,
+                    )
+                  : null,
+            ),
+            child: _isUploading
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(width: 16),
-                      Container(
-                        height: 50,
-                        constraints: const BoxConstraints(maxWidth: 150),
-                        child: Image.network(
-                          widget.currentUrl!,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.broken_image,
-                            color: Colors.white38,
+                      const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF00A09D),
                           ),
                         ),
                       ),
-                      const Spacer(),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.edit,
-                                color: Colors.white38, size: 18),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Cambiar',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.add_photo_alternate,
-                          color: Colors.white38, size: 28),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                       Text(
-                        'Subir logo',
+                        'Subiendo logo...',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
                         ),
                       ),
                     ],
-                  ),
+                  )
+                : hasLogo
+                    ? Align(
+                        alignment: Alignment.topRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildActionButton(
+                              icon: Icons.edit,
+                              tooltip: 'Cambiar logo',
+                              onTap: _pickAndUploadLogo,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.delete,
+                              tooltip: 'Eliminar',
+                              onTap: () => widget.onChanged(''),
+                              isDestructive: true,
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00A09D)
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            child: const Icon(
+                              Icons.cloud_upload_outlined,
+                              color: Color(0xFF00A09D),
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Haz clic para subir logo',
+                            style: TextStyle(
+                              color: Color(0xFF00A09D),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'JPG, PNG, WebP • Recomendado 500x200',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isDestructive
+                ? Colors.red.shade700.withValues(alpha: 0.9)
+                : Colors.black.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16),
+        ),
       ),
     );
   }
 }
 
-// ============================================
-// REUSABLE EDITOR COMPONENTS
-// ============================================
-
 class _SectionHeader extends StatelessWidget {
   final String title;
+
   const _SectionHeader(this.title);
 
   @override
@@ -6664,10 +6969,10 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title.toUpperCase(),
       style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.5),
-        fontSize: 11,
+        color: Colors.white.withValues(alpha: 0.8),
+        fontSize: 12,
         fontWeight: FontWeight.w600,
-        letterSpacing: 1,
+        letterSpacing: 0.5,
       ),
     );
   }
@@ -7265,39 +7570,6 @@ class _EditorTextFieldState extends State<_EditorTextField> {
   }
 }
 
-class _MiniTextField extends StatelessWidget {
-  final String value;
-  final String hint;
-  final Function(String) onChanged;
-
-  const _MiniTextField({
-    required this.value,
-    required this.hint,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      initialValue: value,
-      style: const TextStyle(color: Colors.white, fontSize: 12),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle:
-            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
-        filled: true,
-        fillColor: const Color(0xFF1E1E1E),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      onChanged: onChanged,
-    );
-  }
-}
-
 class _EditorToggle extends StatelessWidget {
   final String label;
   final bool value;
@@ -7322,7 +7594,7 @@ class _EditorToggle extends StatelessWidget {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeColor: Colors.white,
+          activeThumbColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -7910,8 +8182,8 @@ class _CategoryGridBlockControlsState
           onChanged: (v) => _updateField('subtitle', v),
         ),
         const SizedBox(height: 20),
-        Text('Categorías',
-            style: const TextStyle(
+        const Text('Categorías',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -7976,7 +8248,7 @@ class _CategoryGridBlockControlsState
         if (_categories.isNotEmpty &&
             _selectedCategoryIndex < _categories.length) ...[
           // Image picker for this category
-          _SectionHeader('Imagen de categoría'),
+          const _SectionHeader('Imagen de categoría'),
           const SizedBox(height: 8),
           _ImagePicker(
             currentUrl:
@@ -8019,8 +8291,8 @@ class _CategoryGridBlockControlsState
           ),
           const SizedBox(height: 12),
           // Size selector
-          Text('Tamaño',
-              style: const TextStyle(
+          const Text('Tamaño',
+              style: TextStyle(
                   color: Colors.white54,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -8208,14 +8480,14 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
         const SizedBox(height: 20),
 
         // Video section header
-        Text('VIDEO DE FONDO',
-            style: const TextStyle(
+        const Text('VIDEO DE FONDO',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1)),
         const SizedBox(height: 8),
-        Text(
+        const Text(
           'El video se reproducirá automáticamente, sin sonido, en loop',
           style: TextStyle(color: Colors.white38, fontSize: 11),
         ),
@@ -8238,11 +8510,11 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
         const SizedBox(height: 12),
 
         // Divider with "o" (or)
-        Row(
+        const Row(
           children: [
             Expanded(child: Divider(color: Colors.white24)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text('o',
                   style: TextStyle(color: Colors.white38, fontSize: 12)),
             ),
@@ -8258,7 +8530,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           child: ElevatedButton.icon(
             onPressed: _isUploading ? null : _uploadVideoFile,
             icon: _isUploading
-                ? SizedBox(
+                ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
@@ -8280,15 +8552,15 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const Icon(Icons.check_circle, color: Colors.green, size: 16),
                 const SizedBox(width: 8),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Archivo de video cargado',
                     style: TextStyle(color: Colors.green, fontSize: 12),
@@ -8313,13 +8585,14 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.red.withOpacity(0.3)),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.play_circle_filled, color: Colors.red, size: 16),
+                const Icon(Icons.play_circle_filled,
+                    color: Colors.red, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -8344,7 +8617,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
               value: widget.data['showCta'] != false,
               onChanged: (v) => _updateField('showCta', v),
               // ON state: bright teal color (highlighted)
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               // OFF state: dim/dark (muted)
               inactiveThumbColor: Colors.grey.shade400,
@@ -8367,8 +8640,8 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           ),
         ],
         const SizedBox(height: 16),
-        Text('Opacidad overlay',
-            style: const TextStyle(
+        const Text('Opacidad overlay',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -8458,8 +8731,8 @@ class _PartnersBannerBlockControlsState
           onChanged: (v) => _updateField('imageUrl', v),
         ),
         const SizedBox(height: 20),
-        Text('Elementos de lista',
-            style: const TextStyle(
+        const Text('Elementos de lista',
+            style: TextStyle(
                 color: Colors.white54,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -8811,16 +9084,16 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
-            child: Column(
+            child: const Column(
               children: [
                 Icon(Icons.branding_watermark_outlined,
                     size: 32, color: Colors.white38),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
                   'Sin marcas',
                   style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   'Agrega logos de marcas que trabajas',
                   style: TextStyle(color: Colors.white38, fontSize: 11),
@@ -9550,7 +9823,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const SizedBox(height: 24),
 
           // Logo section
-          _SectionHeader('Logo'),
+          const _SectionHeader('Logo'),
           const SizedBox(height: 12),
           _LogoUploader(
             currentUrl: _logoUrlController.text,
@@ -9586,7 +9859,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const SizedBox(height: 24),
 
           // ========== HEADER STYLE SECTION ==========
-          _SectionHeader('Estilo del header'),
+          const _SectionHeader('Estilo del header'),
           const SizedBox(height: 12),
 
           // Header style dropdown
@@ -9657,7 +9930,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const SizedBox(height: 24),
 
           // ========== NAVIGATION LINKS SECTION ==========
-          _SectionHeader('Links de navegación'),
+          const _SectionHeader('Links de navegación'),
           const SizedBox(height: 12),
 
           Container(
@@ -9865,7 +10138,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeColor: Colors.white,
+          activeThumbColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -10119,7 +10392,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 24),
 
           // Brand section
-          _SectionHeader('Marca'),
+          const _SectionHeader('Marca'),
           const SizedBox(height: 12),
 
           _EditorTextField(
@@ -10133,7 +10406,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 20),
 
           // Contact section
-          _SectionHeader('Contacto'),
+          const _SectionHeader('Contacto'),
           const SizedBox(height: 12),
 
           _EditorTextField(
@@ -10174,7 +10447,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 20),
 
           // Social media section
-          _SectionHeader('Redes sociales'),
+          const _SectionHeader('Redes sociales'),
           const SizedBox(height: 12),
 
           _EditorTextField(
@@ -10224,7 +10497,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 20),
 
           // Info about auto-generated sections
-          _SectionHeader('Columnas del footer'),
+          const _SectionHeader('Columnas del footer'),
           const SizedBox(height: 12),
 
           Container(
@@ -10258,7 +10531,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 20),
 
           // Legal pages section - editable inline
-          _SectionHeader('Páginas legales'),
+          const _SectionHeader('Páginas legales'),
           const SizedBox(height: 8),
           const Text(
             'URLs de las páginas que aparecen en "Información"',
@@ -10600,10 +10873,9 @@ class _BackupsDialogState extends State<_BackupsDialog> {
             // Header
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12)),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
@@ -10648,7 +10920,7 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: 'Nombre (ej: "Antes de rediseño")',
-                      hintStyle: TextStyle(color: Colors.white38),
+                      hintStyle: const TextStyle(color: Colors.white38),
                       filled: true,
                       fillColor: const Color(0xFF1E1E1E),
                       border: OutlineInputBorder(
@@ -10666,7 +10938,7 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                     maxLines: 2,
                     decoration: InputDecoration(
                       hintText: 'Descripción (opcional)',
-                      hintStyle: TextStyle(color: Colors.white38),
+                      hintStyle: const TextStyle(color: Colors.white38),
                       filled: true,
                       fillColor: const Color(0xFF1E1E1E),
                       border: OutlineInputBorder(
@@ -10718,10 +10990,10 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.error_outline,
+                                const Icon(Icons.error_outline,
                                     color: Colors.red, size: 48),
                                 const SizedBox(height: 8),
-                                Text(
+                                const Text(
                                   'Error cargando copias',
                                   style: TextStyle(color: Colors.red),
                                 ),
@@ -10733,14 +11005,14 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                             ),
                           )
                         : _backups.isEmpty
-                            ? Center(
+                            ? const Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(Icons.inventory_2_outlined,
                                         color: Colors.white24, size: 48),
-                                    const SizedBox(height: 8),
-                                    const Text(
+                                    SizedBox(height: 8),
+                                    Text(
                                       'No hay copias de seguridad',
                                       style: TextStyle(color: Colors.white38),
                                     ),
@@ -10924,7 +11196,7 @@ class _BlockStyleControlsState extends State<_BlockStyleControls> {
       initiallyExpanded: false,
       children: [
         // Background
-        _SectionHeader('Fondo del bloque'),
+        const _SectionHeader('Fondo del bloque'),
         const SizedBox(height: 8),
         _BackgroundTypeControl(
           style: _style,
@@ -10933,7 +11205,7 @@ class _BlockStyleControlsState extends State<_BlockStyleControls> {
         const SizedBox(height: 20),
 
         // Padding
-        _SectionHeader('Relleno (Padding)'),
+        const _SectionHeader('Relleno (Padding)'),
         const SizedBox(height: 12),
         _FullPaddingControl(
           paddingTop: (_style['paddingTop'] as num?)?.toDouble() ?? 40.0,
@@ -10954,7 +11226,7 @@ class _BlockStyleControlsState extends State<_BlockStyleControls> {
         const SizedBox(height: 24),
 
         // Border
-        _SectionHeader('Borde'),
+        const _SectionHeader('Borde'),
         const SizedBox(height: 12),
         _BorderControl(
           borderWidth: (_style['borderWidth'] as num?)?.toDouble() ?? 0.0,
@@ -10973,7 +11245,7 @@ class _BlockStyleControlsState extends State<_BlockStyleControls> {
         const SizedBox(height: 24),
 
         // Shadow
-        _SectionHeader('Sombra'),
+        const _SectionHeader('Sombra'),
         const SizedBox(height: 12),
         _BoxShadowControl(
           enabled: _style['shadowEnabled'] == true,
@@ -11198,7 +11470,7 @@ class _FullPaddingControl extends StatelessWidget {
             Switch(
               value: linked,
               onChanged: onLinkedChanged,
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               inactiveThumbColor: Colors.grey.shade400,
               inactiveTrackColor: Colors.grey.shade700,
@@ -11248,12 +11520,12 @@ class _FullPaddingControl extends StatelessWidget {
         ),
         Expanded(
           child: SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: const Color(0xFF00A09D),
+            data: const SliderThemeData(
+              activeTrackColor: Color(0xFF00A09D),
               inactiveTrackColor: Colors.white10,
               thumbColor: Colors.white,
               trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
             ),
             child: Slider(
               value: value.clamp(0.0, 200.0),
@@ -11483,12 +11755,12 @@ class _BorderControl extends StatelessWidget {
         ),
         Expanded(
           child: SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: const Color(0xFF00A09D),
+            data: const SliderThemeData(
+              activeTrackColor: Color(0xFF00A09D),
               inactiveTrackColor: Colors.white10,
               thumbColor: Colors.white,
               trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
             ),
             child: Slider(
               value: value.clamp(min, max),
@@ -11679,12 +11951,12 @@ class _BoxShadowControl extends StatelessWidget {
         ),
         Expanded(
           child: SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: const Color(0xFF00A09D),
+            data: const SliderThemeData(
+              activeTrackColor: Color(0xFF00A09D),
               inactiveTrackColor: Colors.white10,
               thumbColor: Colors.white,
               trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
             ),
             child: Slider(
               value: value.clamp(min, max),

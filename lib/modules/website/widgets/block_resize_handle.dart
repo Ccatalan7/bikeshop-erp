@@ -2,38 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A minimalist resize handle for website blocks in edit mode.
-/// 
+///
 /// Appears as a subtle horizontal line at the top or bottom of the block.
 /// When hovered, shows a small grab indicator. Dragging vertically
 /// resizes the block height.
 class BlockResizeHandle extends StatefulWidget {
   /// Current height of the block (null = auto)
   final double? currentHeight;
-  
+
   /// The actual rendered height of the block (used when currentHeight is null)
   final double? actualHeight;
-  
+
   /// Minimum allowed height
   final double minHeight;
-  
+
   /// Maximum allowed height (null = no limit)
   final double? maxHeight;
-  
+
   /// Callback when height changes during drag
   final ValueChanged<double> onHeightChanged;
-  
+
   /// Callback when drag ends (final value)
   final ValueChanged<double>? onHeightChangeEnd;
-  
+
   /// Callback to reset height to default (null = auto)
   final VoidCallback? onResetHeight;
-  
+
   /// Whether the handle is active (block is selected)
   final bool isActive;
-  
+
   /// Height snap increments (e.g., 10 = snaps to 10px increments)
   final double? snapIncrement;
-  
+
   /// Whether this is the top handle (affects drag direction)
   final bool isTopHandle;
 
@@ -70,9 +70,13 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
     }
 
     // During drag, use local drag height; otherwise use widget's currentHeight
-    final displayHeight = _isDragging ? _currentDragHeight : widget.currentHeight;
+    final displayHeight =
+        _isDragging ? _currentDragHeight : widget.currentHeight;
     final showHeight = (_isHovered || _isDragging) && displayHeight != null;
-    final showResetButton = _isHovered && !_isDragging && widget.currentHeight != null && widget.onResetHeight != null;
+    final showResetButton = _isHovered &&
+        !_isDragging &&
+        widget.currentHeight != null &&
+        widget.onResetHeight != null;
 
     return MouseRegion(
       cursor: SystemMouseCursors.resizeRow,
@@ -90,8 +94,8 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
           duration: const Duration(milliseconds: 150),
           height: 20,
           decoration: BoxDecoration(
-            color: (_isHovered || _isDragging) 
-                ? const Color(0xFF00A09D).withValues(alpha: 0.15) 
+            color: (_isHovered || _isDragging)
+                ? const Color(0xFF00A09D).withValues(alpha: 0.15)
                 : Colors.transparent,
           ),
           child: Stack(
@@ -103,7 +107,7 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                 width: (_isHovered || _isDragging) ? 80 : 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: (_isHovered || _isDragging) 
+                  color: (_isHovered || _isDragging)
                       ? const Color(0xFF00A09D)
                       : const Color(0xFF00A09D).withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
@@ -117,13 +121,14 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                     duration: const Duration(milliseconds: 100),
                     opacity: showHeight ? 1.0 : 0.0,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFF00A09D),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        '${displayHeight!.toStringAsFixed(0)}px',
+                        '${displayHeight.toStringAsFixed(0)}px',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -143,16 +148,20 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                       duration: const Duration(milliseconds: 100),
                       opacity: 1.0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color: const Color(0xFF00A09D)
+                                  .withValues(alpha: 0.3)),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.restart_alt, size: 12, color: Color(0xFF00A09D)),
+                            Icon(Icons.restart_alt,
+                                size: 12, color: Color(0xFF00A09D)),
                             SizedBox(width: 3),
                             Text(
                               'Auto',
@@ -177,7 +186,8 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
 
   void _onDragStart(DragStartDetails details) {
     // Use currentHeight if set, otherwise use actualHeight (measured), otherwise minHeight
-    final startHeight = widget.currentHeight ?? widget.actualHeight ?? widget.minHeight;
+    final startHeight =
+        widget.currentHeight ?? widget.actualHeight ?? widget.minHeight;
     setState(() {
       _isDragging = true;
       _dragStartY = details.globalPosition.dy;
@@ -195,8 +205,8 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
     final delta = details.globalPosition.dy - _dragStartY;
     // For top handle, dragging up (negative delta) should increase height
     // For bottom handle, dragging down (positive delta) should increase height
-    var newHeight = widget.isTopHandle 
-        ? _dragStartHeight - delta 
+    var newHeight = widget.isTopHandle
+        ? _dragStartHeight - delta
         : _dragStartHeight + delta;
 
     // Apply min/max constraints
@@ -207,14 +217,15 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
 
     // Apply snap increment if specified
     if (widget.snapIncrement != null && widget.snapIncrement! > 0) {
-      newHeight = (newHeight / widget.snapIncrement!).round() * widget.snapIncrement!;
+      newHeight =
+          (newHeight / widget.snapIncrement!).round() * widget.snapIncrement!;
     }
 
     // Update local state only (don't trigger Provider rebuild during drag)
     setState(() {
       _currentDragHeight = newHeight;
     });
-    
+
     // Still call the callback to update the actual block height in real-time
     widget.onHeightChanged(newHeight);
   }
@@ -226,7 +237,7 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
       _isHovered = false;
       _currentDragHeight = null;
     });
-    
+
     if (widget.onHeightChangeEnd != null && finalHeight != null) {
       widget.onHeightChangeEnd!(finalHeight);
     }
@@ -234,33 +245,32 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
   }
 }
 
-
 /// A container that wraps block content with resize capability.
-/// 
+///
 /// This is the main widget to use for resizable blocks. It manages
 /// the height state and shows the resize handle when appropriate.
 class ResizableBlockContainer extends StatelessWidget {
   /// The block content
   final Widget child;
-  
+
   /// Current height (null = auto height based on content)
   final double? height;
-  
+
   /// Minimum height when resizing
   final double minHeight;
-  
+
   /// Maximum height when resizing
   final double? maxHeight;
-  
+
   /// Whether resize is enabled (block is selected in edit mode)
   final bool isResizeEnabled;
-  
+
   /// Callback when height changes
   final ValueChanged<double>? onHeightChanged;
-  
+
   /// Callback when resize drag ends
   final ValueChanged<double>? onHeightChangeEnd;
-  
+
   /// Snap to increments (e.g., 10 = snap to 10px)
   final double? snapIncrement;
 
@@ -288,7 +298,7 @@ class ResizableBlockContainer extends StatelessWidget {
                 child: ClipRect(child: child),
               )
             : child,
-        
+
         // Resize handle (only when enabled)
         if (isResizeEnabled && onHeightChanged != null)
           BlockResizeHandle(
@@ -304,7 +314,6 @@ class ResizableBlockContainer extends StatelessWidget {
     );
   }
 }
-
 
 /// Height preset options for quick selection
 enum BlockHeightPreset {
@@ -437,14 +446,12 @@ class BlockHeightPresetSelector extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 2),
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected 
-                    ? const Color(0xFF00A09D) 
+                color: isSelected
+                    ? const Color(0xFF00A09D)
                     : const Color(0xFF2D2D2D),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: isSelected 
-                      ? const Color(0xFF00A09D) 
-                      : Colors.white12,
+                  color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
                 ),
               ),
               child: Text(
@@ -468,7 +475,7 @@ class BlockHeightPresetSelector extends StatelessWidget {
       return currentHeight == null;
     }
     if (presetHeight == null) return false;
-    
+
     // Allow some tolerance for "close enough" matches
     if (currentHeight == null) return false;
     return (currentHeight! - presetHeight).abs() < 20;

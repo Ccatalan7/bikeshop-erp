@@ -1235,6 +1235,8 @@ class WebsiteBlockRenderer {
     void Function(String route)? onNavigate,
   }) {
     final title = (data['title'] ?? 'Visita nuestra tienda').toString().trim();
+    final subtitle =
+        (data['subtitle'] ?? data['description'] ?? '').toString().trim();
     final buttonText =
         (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos')
             .toString()
@@ -1244,55 +1246,111 @@ class WebsiteBlockRenderer {
             .toString()
             .trim();
 
+    final backgroundImage =
+        (data['backgroundImage'] ?? data['imageUrl'])?.toString().trim();
+    final hasBackground =
+        backgroundImage != null && backgroundImage.trim().isNotEmpty;
+
+    final overlayColor =
+        _parseColor(data['overlayColor']?.toString()) ?? Colors.black;
+    final overlayOpacity =
+        ((data['overlayOpacity'] ?? 0.5) as num).toDouble().clamp(0.0, 1.0);
+
+    final blockHeight = (data['blockHeight'] as num?)?.toDouble();
+
+    final decoration = _resolveBackgroundDecoration(
+      data: data,
+      defaultColor: primaryColor,
+      imageUrl: backgroundImage,
+    );
+
+    final titleStyle = const TextStyle(
+      fontSize: 24,
+      fontWeight: FontWeight.w700,
+      color: Colors.white,
+      letterSpacing: 1,
+    ).copyWith(
+      fontFamily: headingFont?.isNotEmpty == true ? headingFont : null,
+    );
+
+    final subtitleStyle =
+        (Theme.of(context).textTheme.bodyLarge ?? const TextStyle(fontSize: 16))
+            .copyWith(
+      fontFamily: bodyFont?.isNotEmpty == true ? bodyFont : null,
+      color: Colors.white70,
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 56),
+      height: blockHeight,
       width: double.infinity,
-      color: primaryColor,
-      child: Center(
-        child: Column(
-          children: [
-            Text(
-              (title.isEmpty ? '¿Necesitas ayuda?' : title).toUpperCase(),
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 1,
-              ),
-              textAlign: TextAlign.center,
+      decoration: decoration,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasBackground && overlayOpacity > 0)
+            Container(
+              color: overlayColor.withValues(alpha: overlayOpacity),
             ),
-            const SizedBox(height: 24),
-            OutlinedButton(
-              onPressed: previewMode
-                  ? () {}
-                  : () {
-                      final route = buttonLink.isNotEmpty
-                          ? buttonLink
-                          : '/tienda/contacto';
-                      if (onNavigate != null) {
-                        onNavigate(route);
-                      }
-                    },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white, width: 1),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(0),
-                ),
-              ),
-              child: Text(
-                (buttonText.isEmpty ? 'Contáctanos' : buttonText).toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1,
-                ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: blockHeight == null ? 56 : 0,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    (title.isEmpty ? '¿Necesitas ayuda?' : title).toUpperCase(),
+                    style: titleStyle,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      subtitle,
+                      style: subtitleStyle,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  OutlinedButton(
+                    onPressed: previewMode
+                        ? () {}
+                        : () {
+                            final route = buttonLink.isNotEmpty
+                                ? buttonLink
+                                : '/tienda/contacto';
+                            if (onNavigate != null) {
+                              onNavigate(route);
+                            }
+                          },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(0),
+                      ),
+                    ),
+                    child: Text(
+                      (buttonText.isEmpty ? 'Contáctanos' : buttonText)
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
