@@ -15,6 +15,7 @@ export '../../modules/accounting/pages/balance_sheet_page.dart';
 export '../../modules/accounting/pages/expense_list_page.dart';
 export '../../modules/accounting/pages/expense_detail_page.dart';
 export '../../modules/accounting/pages/expense_form_page.dart';
+export '../../modules/accounting/pages/expense_categories_page.dart';
 export '../../modules/tax_reports/pages/f29_dashboard_page.dart';
 export '../../modules/crm/pages/customer_list_page.dart';
 export '../../modules/crm/pages/customer_form_page.dart';

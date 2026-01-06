@@ -6546,6 +6546,29 @@ create trigger trg_purchase_payments_change
 
 create sequence if not exists expense_number_seq;
 
+-- Keep sequence in sync with existing data (prevents duplicate expense numbers).
+do $$
+declare
+  v_max bigint;
+begin
+  select coalesce(
+    max(
+      (regexp_replace(expense_number, '^GTO-', ''))::bigint
+    ),
+    0
+  )
+  into v_max
+  from public.expenses
+  where expense_number ~ '^GTO-[0-9]+$';
+
+  perform setval('expense_number_seq', v_max, true);
+exception
+  when undefined_table then null;
+  when undefined_function then null;
+  when others then
+    raise notice '⚠️ expense_number_seq sync failed: %', sqlerrm;
+end $$;
+
 create table if not exists expense_categories (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -6557,6 +6580,134 @@ create table if not exists expense_categories (
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, name) -- Each tenant has their own expense categories
 );
+
+-- Auto-category helpers (based on chart of accounts)
+create or replace function public.get_expense_category_name_for_account(
+  p_account_code text,
+  p_account_name text
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := coalesce(p_account_code, '');
+  v_base_code text;
+  v_name text := lower(coalesce(p_account_name, ''));
+begin
+  -- Support subaccounts like 6101-01
+  v_base_code := regexp_replace(v_code, '-.*$', '');
+
+  -- Prefer mapping by account code (stable)
+  if v_base_code like '51%' then
+    return 'Costo de Ventas';
+  end if;
+
+  if v_base_code like '610%' then
+    return 'Nómina';
+  end if;
+
+  if v_base_code = '6201' then
+    return 'Arriendo';
+  elsif v_base_code = '6202' then
+    return 'Servicios Básicos';
+  elsif v_base_code = '6203' then
+    return 'Telefonía e Internet';
+  elsif v_base_code = '6204' then
+    return 'Mantención y Reparaciones';
+  elsif v_base_code = '6205' then
+    return 'Suministros de Oficina';
+  end if;
+
+  if v_base_code = '6301' then
+    return 'Marketing y Publicidad';
+  elsif v_base_code = '6302' then
+    return 'Comisiones de Venta';
+  end if;
+
+  if v_base_code = '6401' then
+    return 'Gastos de Viaje';
+  end if;
+
+  if v_base_code = '6501' then
+    return 'Seguros';
+  elsif v_base_code = '6502' then
+    return 'Patentes y Contribuciones';
+  end if;
+
+  if v_base_code = '6601' then
+    return 'Gastos Financieros';
+  end if;
+
+  if v_base_code = '6701' then
+    return 'Depreciación';
+  end if;
+
+  if v_base_code = '6801' then
+    return 'Gastos Varios';
+  end if;
+
+  -- Fallback by name keywords (handles custom accounts)
+  if v_name like '%nómina%' or v_name like '%nomina%' or v_name like '%sueldo%' or v_name like '%salario%' then
+    return 'Nómina';
+  end if;
+  if v_name like '%arriendo%' then
+    return 'Arriendo';
+  end if;
+  if v_name like '%internet%' or v_name like '%telefon%' then
+    return 'Telefonía e Internet';
+  end if;
+  if v_name like '%luz%' or v_name like '%agua%' or v_name like '%gas%' or v_name like '%servicio básico%' or v_name like '%servicios básicos%' then
+    return 'Servicios Básicos';
+  end if;
+
+  return 'Otros Gastos';
+end;
+$$;
+
+create or replace function public.ensure_expense_category(
+  p_tenant_id uuid,
+  p_name text,
+  p_description text,
+  p_default_account_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  select id
+    into v_id
+    from public.expense_categories
+   where tenant_id = p_tenant_id
+     and lower(name) = lower(p_name)
+   limit 1;
+
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  insert into public.expense_categories (
+    tenant_id,
+    name,
+    description,
+    default_account_id,
+    default_tax_rate
+  ) values (
+    p_tenant_id,
+    p_name,
+    nullif(p_description, ''),
+    p_default_account_id,
+    0
+  ) returning id into v_id;
+
+  return v_id;
+end;
+$$;
 
 -- Add composite FK for expense_categories.default_account_id (tenant-scoped)
 do $$ begin
@@ -6703,7 +6854,9 @@ begin
       alter column expense_number set not null;
   end if;
 
-  if not exists (
+  -- Ensure tenant-scoped uniqueness (multi-tenant).
+  -- Never re-add a global unique constraint on expense_number.
+  if exists (
     select 1
       from information_schema.table_constraints
      where table_schema = 'public'
@@ -6711,8 +6864,18 @@ begin
        and constraint_type = 'UNIQUE'
        and constraint_name = 'expenses_expense_number_key'
   ) then
+    alter table public.expenses drop constraint expenses_expense_number_key;
+  end if;
+
+  if not exists (
+    select 1
+      from pg_constraint c
+     where c.conrelid = 'public.expenses'::regclass
+       and c.contype = 'u'
+       and pg_get_constraintdef(c.oid) like '%(tenant_id, expense_number)%'
+  ) then
     alter table public.expenses
-      add constraint expenses_expense_number_key unique (expense_number);
+      add constraint expenses_expense_number_tenant_key unique (tenant_id, expense_number);
   end if;
 
   if not exists (
@@ -6977,12 +7140,15 @@ begin
   NEW.subtotal := round(NEW.quantity * NEW.unit_price, 2);
   NEW.tax_rate := coalesce(NEW.tax_rate, 0);
 
-  if NEW.tax_amount is null then
+  -- If the client doesn't provide these fields, they often come in as default 0
+  -- (because the columns are NOT NULL DEFAULT 0). Treat 0 as "unset" when the
+  -- computed subtotal is > 0.
+  if NEW.tax_amount is null or (NEW.tax_amount = 0 and NEW.tax_rate <> 0 and NEW.subtotal <> 0) then
     NEW.tax_amount := round((NEW.subtotal * NEW.tax_rate) / 100, 2);
   end if;
 
-  if NEW.total is null then
-    NEW.total := NEW.subtotal + NEW.tax_amount;
+  if NEW.total is null or (NEW.total = 0 and NEW.subtotal <> 0) then
+    NEW.total := NEW.subtotal + coalesce(NEW.tax_amount, 0);
   end if;
 
   if (NEW.account_code is null or NEW.account_name is null) and NEW.account_id is not null then
@@ -7081,6 +7247,16 @@ declare
   v_tax numeric(14,2) := 0;
   v_total numeric(14,2) := 0;
   v_paid numeric(14,2) := 0;
+  v_payment_method_count integer := 0;
+  v_payment_account_count integer := 0;
+  v_single_payment_method_id uuid;
+  v_single_payment_account_id uuid;
+  v_category_id uuid;
+  v_line_account_id uuid;
+  v_line_account_code text;
+  v_line_account_name text;
+  v_category_name text;
+  v_category_desc text;
   v_prev_payment text;
   v_new_payment text;
 begin
@@ -7088,11 +7264,14 @@ begin
     return;
   end if;
 
-  select e.id,
+    select e.id,
+      e.tenant_id,
+      e.category_id,
          lower(coalesce(e.payment_status, 'pending')) as payment_status,
          lower(coalesce(e.posting_status, 'draft')) as posting_status,
          e.paid_at,
          e.payment_method_id,
+      e.payment_account_id,
          e.amount_paid as current_amount_paid,
          e.balance as current_balance
     into v_expense
@@ -7117,7 +7296,59 @@ begin
     from public.expense_payments
    where expense_id = p_expense_id;
 
+  -- If payments exist, reflect the payment method/account in the header when unambiguous.
+  -- This keeps list views informative (and avoids "Sin medio de pago" for paid expenses).
+  if v_paid > 0 then
+    select
+      count(distinct ep.payment_method_id),
+      (array_agg(distinct ep.payment_method_id))[1]
+      into v_payment_method_count, v_single_payment_method_id
+      from public.expense_payments ep
+     where ep.expense_id = p_expense_id
+       and coalesce(ep.amount, 0) > 0
+       and ep.payment_method_id is not null;
+
+    select
+      count(distinct ep.payment_account_id),
+      (array_agg(distinct ep.payment_account_id))[1]
+      into v_payment_account_count, v_single_payment_account_id
+      from public.expense_payments ep
+     where ep.expense_id = p_expense_id
+       and coalesce(ep.amount, 0) > 0
+       and ep.payment_account_id is not null;
+  end if;
+
   v_prev_payment := v_expense.payment_status;
+
+  -- Auto-assign category from expense line account (never override manual category)
+  v_category_id := v_expense.category_id;
+  if v_category_id is null then
+    select el.account_id,
+           el.account_code,
+           el.account_name
+      into v_line_account_id,
+           v_line_account_code,
+           v_line_account_name
+      from public.expense_lines el
+     where el.expense_id = p_expense_id
+     order by el.line_index asc, el.created_at asc
+     limit 1;
+
+    if v_line_account_id is not null then
+      v_category_name := public.get_expense_category_name_for_account(
+        v_line_account_code,
+        v_line_account_name
+      );
+      v_category_desc := coalesce(v_line_account_name, v_category_name);
+
+      v_category_id := public.ensure_expense_category(
+        v_expense.tenant_id,
+        v_category_name,
+        v_category_desc,
+        v_line_account_id
+      );
+    end if;
+  end if;
 
   -- If already marked as paid with payment_method_id set (immediate payment on creation)
   -- and no separate payment records exist, respect that status
@@ -7147,6 +7378,17 @@ begin
          total_amount = v_total,
          amount_paid = v_paid,
          balance = greatest(v_total - v_paid, 0),
+         category_id = coalesce(category_id, v_category_id),
+         payment_method_id = case
+           when v_payment_method_count = 1 and v_expense.payment_method_id is null
+             then v_single_payment_method_id
+           else payment_method_id
+         end,
+         payment_account_id = case
+           when v_payment_account_count = 1 and v_expense.payment_account_id is null
+             then v_single_payment_account_id
+           else payment_account_id
+         end,
          payment_status = case
            when v_expense.posting_status = 'void' then payment_status
            when v_prev_payment = 'void' then 'void'
@@ -7237,6 +7479,10 @@ begin
       null
     )
   );
+
+  -- Ensure record has a known tuple structure even when no payment account/method is set
+  select null::uuid as id, null::text as code, null::text as name
+    into v_cash_account;
 
   if v_expense.payment_account_id is not null then
     select a.id, a.code, a.name

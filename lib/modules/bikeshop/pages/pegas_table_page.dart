@@ -566,6 +566,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     final hasCustomStatusFilter = _customStatusFilter.isNotEmpty;
 
     var filtered = _jobs.where((job) {
+      final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+      final isInvoicedEffective = job.isInvoiced || job.invoiceId != null;
+      final isPaidEffective =
+          job.isPaid || (invoice?.status == InvoiceStatus.paid);
+
       // Get the job's phase from custom status, or infer from legacy status
       final jobPhase =
           job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
@@ -573,10 +578,16 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
-          // Active = todo + in_progress phases (exclude complete)
-          if (!hasCustomStatusFilter && jobPhase == StatusPhase.complete) {
-            return false;
-          }
+          // Activos: include Terminados/Finalizados.
+          // Filter out only: Cancelados, and Entregados that are already paid.
+          if (job.status == JobStatus.cancelado) return false;
+
+          final isDelivered =
+              job.deliveredAt != null ||
+              job.status == JobStatus.entregado ||
+              (job.customStatus?.code.toLowerCase() == 'entregado');
+
+            if (isDelivered && isInvoicedEffective && isPaidEffective) return false;
           break;
         case 'completed':
           // Completed = only complete phase with finalizado status
@@ -590,7 +601,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           if (job.status != JobStatus.entregado) return false;
           break;
         case 'unpaid':
-          if (job.isPaid || !job.isInvoiced) return false;
+          if (isPaidEffective || !isInvoicedEffective) return false;
           break;
       }
 
@@ -628,7 +639,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       if (_showOnlyOverdue && !job.isOverdue) return false;
 
       // Unpaid filter
-      if (_showOnlyUnpaid && (job.isPaid || !job.isInvoiced)) return false;
+      if (_showOnlyUnpaid && (isPaidEffective || !isInvoicedEffective)) {
+        return false;
+      }
 
       // MOBILE EXCLUSIVE FILTER
       if (_mobileStatusFilter != null) {
@@ -1990,7 +2003,6 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildMobileJobCard(MechanicJob job) {
     // Enhanced mobile card from PegasListPage design
-    final theme = Theme.of(context);
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
 
@@ -2251,6 +2263,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  // ignore: unused_element
   Widget _buildStatusChip(MechanicJob job) {
     final hasCustomStatus = job.statusId != null;
     Color color;
@@ -2289,6 +2302,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  // ignore: unused_element
   Widget _buildPriorityChip(JobPriority priority) {
     Color color;
     String label;
@@ -2328,6 +2342,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  // ignore: unused_element
   Widget _buildInfoChip(IconData icon, String label, ThemeData theme,
       {Color? color}) {
     return Container(

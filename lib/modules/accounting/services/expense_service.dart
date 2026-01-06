@@ -50,6 +50,31 @@ class ExpenseService extends ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchPaymentsForExpenses(
+    List<String> expenseIds,
+  ) async {
+    if (expenseIds.isEmpty) return [];
+
+    // Supabase inFilter has practical limits; chunk to keep queries reliable.
+    const chunkSize = 100;
+    final results = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < expenseIds.length; i += chunkSize) {
+      final chunk = expenseIds.sublist(
+        i,
+        (i + chunkSize) > expenseIds.length ? expenseIds.length : (i + chunkSize),
+      );
+      final rows = await _databaseService.select(
+        'expense_payments',
+        where: 'expense_id',
+        whereIn: chunk,
+      );
+      results.addAll(rows);
+    }
+
+    return results;
+  }
+
   Future<Expense?> getExpense(String id, {bool forceRefresh = false}) async {
     if (!_expensesLoaded || forceRefresh) {
       await fetchExpenses(forceRefresh: forceRefresh);
@@ -101,6 +126,17 @@ class ExpenseService extends ChangeNotifier {
       }
     } catch (e) {
       throw Exception('No se pudo guardar la categoría: $e');
+    }
+  }
+
+  Future<void> deleteCategory(String id) async {
+    if (id.isEmpty) return;
+    try {
+      await _databaseService.delete('expense_categories', id);
+      await fetchCategories(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo eliminar la categoría: $e');
     }
   }
 

@@ -9,6 +9,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/expense.dart';
 import '../models/expense_line.dart';
+import '../models/expense_payment.dart';
 import '../services/expense_service.dart';
 
 class ExpenseDetailPage extends StatefulWidget {
@@ -161,8 +162,7 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
 
   Widget _buildProfessionalHeader(
       BuildContext context, Expense expense, bool isMobile) {
-    final paymentMethodName =
-        _paymentMethods[expense.paymentMethodId] ?? 'Sin medio de pago';
+    final paymentMethodName = _buildPaymentMethodsSummary(expense);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -308,6 +308,35 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
         ],
       ),
     );
+  }
+
+  String _buildPaymentMethodsSummary(Expense expense) {
+    // If there are explicit payments, prefer showing the breakdown.
+    if (expense.payments.isNotEmpty) {
+      final totalsByMethod = <String, double>{};
+      for (final p in expense.payments) {
+        final methodId = p.paymentMethodId;
+        if (methodId == null || methodId.isEmpty) continue;
+        totalsByMethod[methodId] = (totalsByMethod[methodId] ?? 0) + p.amount;
+      }
+
+      if (totalsByMethod.isNotEmpty) {
+        final parts = totalsByMethod.entries
+            .map((e) {
+              final name = _paymentMethods[e.key] ?? 'Método';
+              return '$name ${_currencyFormat.format(e.value)}';
+            })
+            .toList();
+        return parts.join(' · ');
+      }
+    }
+
+    // Fallback to the header-level method (legacy / single method).
+    final methodId = expense.paymentMethodId;
+    if (methodId != null && methodId.isNotEmpty) {
+      return _paymentMethods[methodId] ?? 'Método de pago';
+    }
+    return 'Sin medio de pago';
   }
 
   Widget _buildMetaItem(IconData icon, String text) {
@@ -537,15 +566,16 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     );
   }
 
-  Widget _buildPaymentsList(BuildContext context, List<dynamic> payments) {
-    // Implementation depends on payment model, using generic card for now
+  Widget _buildPaymentsList(BuildContext context, List<ExpensePayment> payments) {
     return Column(
       children: payments
           .map((p) => Card(
                 child: ListTile(
                   leading: const Icon(Icons.payment),
                   title: Text(_currencyFormat.format(p.amount)),
-                  subtitle: Text(ChileanUtils.formatDate(p.paymentDate)),
+                  subtitle: Text(
+                    '${_paymentMethods[p.paymentMethodId] ?? 'Método'} · ${ChileanUtils.formatDate(p.paymentDate)}',
+                  ),
                 ),
               ))
           .toList(),

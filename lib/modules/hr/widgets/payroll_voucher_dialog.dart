@@ -151,16 +151,6 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
     return '$hours:${minutes.toString().padLeft(2, '0')}';
   }
 
-  double _parseHHMMToDecimal(String hhmmText) {
-    if (hhmmText.contains(':')) {
-      final parts = hhmmText.split(':');
-      final hours = int.tryParse(parts[0]) ?? 0;
-      final minutes = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
-      return hours + (minutes / 60);
-    }
-    return double.tryParse(hhmmText) ?? 0;
-  }
-
   void _initializeControllers(PayrollVoucher? voucher) {
     _hoursControllers.clear();
     _rateControllers.clear();
@@ -346,6 +336,38 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
     setState(() {}); // Refresh UI
   }
 
+  double _effectiveHours(PayrollVoucherLine line) {
+    final lineId = line.id;
+    if (lineId == null) return line.workedHours;
+
+    if (_dirtyLines.contains(lineId)) {
+      final hoursText = _hoursControllers[lineId]?.text;
+      return hoursText != null
+          ? (double.tryParse(hoursText) ?? line.workedHours)
+          : line.workedHours;
+    }
+
+    return _originalHours[lineId] ?? line.workedHours;
+  }
+
+  double _effectiveRate(PayrollVoucherLine line) {
+    final lineId = line.id;
+    if (lineId == null) return line.hourlyRate;
+
+    if (_dirtyLines.contains(lineId)) {
+      final rateText = _rateControllers[lineId]?.text;
+      return rateText != null
+          ? (double.tryParse(rateText) ?? line.hourlyRate)
+          : line.hourlyRate;
+    }
+
+    return _originalRates[lineId] ?? line.hourlyRate;
+  }
+
+  double _effectiveLineTotal(PayrollVoucherLine line) {
+    return _effectiveHours(line) * _effectiveRate(line);
+  }
+
   /// Toggles include status locally (preview only, no DB call)
   void _toggleIncludeLocal(PayrollVoucherLine line, bool included) {
     if (_draftVoucher == null) return;
@@ -357,25 +379,11 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
       return l;
     }).toList();
 
-    double totalAmount = 0;
-    double totalHours = 0;
-    int employeeCount = 0;
-
-    for (var l in updatedLines) {
-      if (l.isIncluded) {
-        totalAmount += l.totalAmount;
-        totalHours += l.workedHours;
-        employeeCount++;
-      }
-    }
-
     setState(() {
       _draftVoucher = _draftVoucher!.copyWith(
         lines: updatedLines,
-        totalAmount: totalAmount,
-        totalHours: totalHours,
-        employeeCount: employeeCount,
       );
+      _recalculateTotalsOnly();
     });
   }
 
@@ -655,7 +663,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                           child: Text(line.employeeName,
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16))),
-                      Text(currency.format(line.totalAmount),
+                        Text(currency.format(_effectiveLineTotal(line)),
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 18,
@@ -753,7 +761,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                 _buildEditableCell(line, _rateControllers[line.id]),
                 Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: Text(currency.format(line.totalAmount),
+                    child: Text(currency.format(_effectiveLineTotal(line)),
                         style: const TextStyle(fontWeight: FontWeight.bold))),
               ],
             );

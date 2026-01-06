@@ -6,8 +6,8 @@ import '../../modules/messaging/services/messaging_service.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_chat_view.dart';
-import '../widgets/customer_chat_context_panel.dart';
-import '../widgets/quote_review_panel.dart';
+import '../widgets/deferred_customer_chat_context_panel.dart';
+import '../widgets/deferred_quote_review_panel.dart';
 
 /// Unified customer chat page handling both list and detail views
 /// Uses standard CustomerPortalLayout but animates the right panel content
@@ -107,7 +107,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
         rightContent = Container(
           key: ValueKey('context-$contextId'),
           padding: const EdgeInsets.only(top: 16),
-          child: CustomerChatContextPanel(
+          child: DeferredCustomerChatContextPanel(
             contextType: contextType,
             contextId: contextId,
           ),
@@ -271,7 +271,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
 
     if (isDesktop) {
       setState(() {
-        _customRightPanel = QuoteReviewPanel(
+        _customRightPanel = DeferredQuoteReviewPanel(
           key: ValueKey('quote-$invoiceId'),
           invoiceId: invoiceId,
           messageId: messageId,
@@ -288,7 +288,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
         isScrollControlled: true,
         useSafeArea: true,
         backgroundColor: Colors.white,
-        builder: (context) => QuoteReviewPanel(
+        builder: (context) => DeferredQuoteReviewPanel(
           invoiceId: invoiceId,
           messageId: messageId,
           onClose: () => Navigator.pop(context),

@@ -291,10 +291,28 @@ class PayrollVoucherService extends ChangeNotifier {
         orderBy: 'employee_name',
       );
 
-      final voucher = PayrollVoucher.fromMap({
+      var voucher = PayrollVoucher.fromMap({
         ...voucherData,
         'lines': linesData,
       });
+
+      // Ensure header totals stay consistent with line totals.
+      // This avoids confusing mismatches like a stale voucher.total_amount.
+      final computed = _computeVoucherTotals(voucher.lines);
+      if ((computed.totalAmount - voucher.totalAmount).abs() > 0.01 ||
+          (computed.totalHours - voucher.totalHours).abs() > 0.01 ||
+          computed.employeeCount != voucher.employeeCount) {
+        await _db.update('payroll_vouchers', id, {
+          'total_amount': computed.totalAmount,
+          'total_hours': computed.totalHours,
+          'employee_count': computed.employeeCount,
+        });
+        voucher = voucher.copyWith(
+          totalAmount: computed.totalAmount,
+          totalHours: computed.totalHours,
+          employeeCount: computed.employeeCount,
+        );
+      }
 
       return voucher;
     } catch (e) {
@@ -330,7 +348,24 @@ class PayrollVoucherService extends ChangeNotifier {
         final lines =
             rawLines.map((l) => PayrollVoucherLine.fromMap(l)).toList();
 
-        final voucher = PayrollVoucher.fromMap(v).copyWith(lines: lines);
+        var voucher = PayrollVoucher.fromMap(v).copyWith(lines: lines);
+
+        // Keep header totals aligned with current lines.
+        final computed = _computeVoucherTotals(voucher.lines);
+        if ((computed.totalAmount - voucher.totalAmount).abs() > 0.01 ||
+            (computed.totalHours - voucher.totalHours).abs() > 0.01 ||
+            computed.employeeCount != voucher.employeeCount) {
+          await _db.update('payroll_vouchers', voucherId, {
+            'total_amount': computed.totalAmount,
+            'total_hours': computed.totalHours,
+            'employee_count': computed.employeeCount,
+          });
+          voucher = voucher.copyWith(
+            totalAmount: computed.totalAmount,
+            totalHours: computed.totalHours,
+            employeeCount: computed.employeeCount,
+          );
+        }
         vouchers.add(voucher);
       }
 
@@ -341,6 +376,25 @@ class PayrollVoucherService extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  _VoucherTotals _computeVoucherTotals(List<PayrollVoucherLine> lines) {
+    double totalAmt = 0;
+    double totalHrs = 0;
+    int count = 0;
+
+    for (final line in lines) {
+      if (!line.isIncluded) continue;
+      totalAmt += line.totalAmount;
+      totalHrs += line.workedHours + line.overtimeHours;
+      count++;
+    }
+
+    return _VoucherTotals(
+      totalAmount: totalAmt,
+      totalHours: totalHrs,
+      employeeCount: count,
+    );
   }
 
   /// Fetches available payment methods.
@@ -413,7 +467,13 @@ class PayrollVoucherService extends ChangeNotifier {
   }
 
   /// Pays the voucher, generating expenses.
-  Future<void> payVoucher(String voucherId) async {
+  ///
+  /// If [paymentSplits] is provided, it is forwarded to the RPC so each
+  /// voucher line can be paid with multiple payment methods.
+  Future<void> payVoucher(
+    String voucherId, {
+    Map<String, dynamic>? paymentSplits,
+  }) async {
     try {
       _setLoading(true);
 
@@ -423,9 +483,15 @@ class PayrollVoucherService extends ChangeNotifier {
         await _db.update('payroll_vouchers', voucherId, {'status': 'pending'});
       }
 
-      await _db.rpc('pay_payroll_voucher', params: {
+      final params = <String, dynamic>{
         'p_voucher_id': voucherId,
-      });
+      };
+
+      if (paymentSplits != null) {
+        params['p_payment_splits'] = paymentSplits;
+      }
+
+      await _db.rpc('pay_payroll_voucher', params: params);
     } catch (e) {
       _setError('Error paying voucher: $e');
       rethrow;
@@ -531,4 +597,16 @@ class PayrollVoucherService extends ChangeNotifier {
       _setLoading(false);
     }
   }
+}
+
+class _VoucherTotals {
+  const _VoucherTotals({
+    required this.totalAmount,
+    required this.totalHours,
+    required this.employeeCount,
+  });
+
+  final double totalAmount;
+  final double totalHours;
+  final int employeeCount;
 }

@@ -28,6 +28,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   List<Expense> _allExpenses = const [];
   List<Expense> _filteredExpenses = const [];
   List<ExpenseCategory> _categories = const [];
+  Map<String, String> _categoryNamesById = const {};
 
   ExpensePostingStatus? _postingFilter;
   ExpensePaymentStatus? _paymentFilter;
@@ -54,6 +55,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   // Cache for payment methods
   Map<String, String> _paymentMethodsMap = {};
 
+  // Summary of payments per expense (used to infer payment method when header is null)
+  final Map<String, _ExpensePaymentSummary> _paymentSummaryByExpenseId = {};
+
   Future<void> _loadData({bool refresh = false}) async {
     setState(() {
       _isLoading = true;
@@ -69,10 +73,26 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       // Fetch payment methods
       final methods = await _expenseService.fetchPaymentMethods();
 
+        // Fetch payments for loaded expenses (to correctly label single vs mixed payments)
+        final expenseIds = expenses
+          .map((e) => e.id)
+          .whereType<String>()
+          .toList(growable: false);
+        final paymentRows =
+          await _expenseService.fetchPaymentsForExpenses(expenseIds);
+        final paymentSummary = _buildPaymentSummary(paymentRows);
+
       setState(() {
         _categories = categories;
+        _categoryNamesById = {
+          for (final c in categories)
+            if (c.id.isNotEmpty) c.id: c.name,
+        };
         _allExpenses = expenses;
         _paymentMethodsMap = methods;
+        _paymentSummaryByExpenseId
+          ..clear()
+          ..addAll(paymentSummary);
       });
       _applyFilters();
     } catch (e) {
@@ -86,6 +106,33 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         });
       }
     }
+  }
+
+  Map<String, _ExpensePaymentSummary> _buildPaymentSummary(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final summaries = <String, _ExpensePaymentSummary>{};
+
+    for (final row in rows) {
+      final expenseId = row['expense_id']?.toString();
+      if (expenseId == null || expenseId.isEmpty) continue;
+
+      final amount = (row['amount'] as num?)?.toDouble() ?? 0;
+      if (amount <= 0) continue;
+
+      final methodId = row['payment_method_id']?.toString();
+      final accountId = row['payment_account_id']?.toString();
+
+      final summary = summaries.putIfAbsent(
+        expenseId,
+        () => _ExpensePaymentSummary(),
+      );
+      summary.totalPaid += amount;
+      if (methodId != null && methodId.isNotEmpty) summary.methodIds.add(methodId);
+      if (accountId != null && accountId.isNotEmpty) summary.accountIds.add(accountId);
+    }
+
+    return summaries;
   }
 
   void _applyFilters() {
@@ -315,6 +362,12 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
                 icon: const Icon(Icons.refresh_rounded),
               ),
               const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: 'Categorías',
+                onPressed: () => context.push('/accounting/expense-categories'),
+                icon: const Icon(Icons.sell_outlined),
+              ),
+              const SizedBox(width: 8),
               AppButton(
                 text: isMobile ? 'Nuevo' : 'Nuevo gasto',
                 icon: Icons.add,
@@ -411,6 +464,12 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
             tooltip: 'Actualizar',
             onPressed: _isLoading ? null : () => _loadData(refresh: true),
             icon: const Icon(Icons.refresh_rounded),
+          ),
+          const SizedBox(width: 12),
+          IconButton.filledTonal(
+            tooltip: 'Categorías',
+            onPressed: () => context.push('/accounting/expense-categories'),
+            icon: const Icon(Icons.sell_outlined),
           ),
           const SizedBox(width: 12),
           AppButton(
@@ -577,6 +636,8 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           isMobile: isMobile,
           currencyFormat: _currencyFormat,
           paymentMethodsMap: _paymentMethodsMap,
+          paymentSummary: _paymentSummaryByExpenseId[expense.id],
+          categoryNamesById: _categoryNamesById,
           onTap: () {
             if (expense.id == null) return;
             context
@@ -735,6 +796,8 @@ class _ExpenseCard extends StatelessWidget {
     required this.currencyFormat,
     this.isMobile = false,
     required this.paymentMethodsMap,
+    this.paymentSummary,
+    required this.categoryNamesById,
     required this.onTap,
   });
 
@@ -742,12 +805,34 @@ class _ExpenseCard extends StatelessWidget {
   final NumberFormat currencyFormat;
   final bool isMobile;
   final Map<String, String> paymentMethodsMap;
+  final _ExpensePaymentSummary? paymentSummary;
+  final Map<String, String> categoryNamesById;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final paymentMethodName =
-        paymentMethodsMap[expense.paymentMethodId] ?? 'Sin medio de pago';
+    final paymentMethodName = () {
+      final headerMethodId = expense.paymentMethodId;
+      if (headerMethodId != null && headerMethodId.isNotEmpty) {
+        return paymentMethodsMap[headerMethodId] ?? 'Sin medio de pago';
+      }
+
+      // If header is empty, infer from payments.
+      // - 1 distinct method -> show that method name
+      // - >1 distinct methods -> "Pago mixto"
+      final summary = paymentSummary;
+      if (summary != null && expense.paymentStatus == ExpensePaymentStatus.paid) {
+        if (summary.methodIds.length == 1) {
+          final onlyMethodId = summary.methodIds.first;
+          return paymentMethodsMap[onlyMethodId] ?? 'Medio de pago';
+        }
+        if (summary.methodIds.length > 1) {
+          return 'Pago mixto';
+        }
+      }
+
+      return 'Sin medio de pago';
+    }();
 
     return InkWell(
       onTap: onTap,
@@ -801,7 +886,9 @@ class _ExpenseCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              expense.category?.name ?? 'Sin categoría',
+                              expense.category?.name ??
+                                  categoryNamesById[expense.categoryId] ??
+                                  'Sin categoría',
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13),
                               maxLines: 1,
@@ -929,4 +1016,10 @@ class _StatusBadge extends StatelessWidget {
               color: color, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
+}
+
+class _ExpensePaymentSummary {
+  double totalPaid = 0;
+  final Set<String> methodIds = {};
+  final Set<String> accountIds = {};
 }

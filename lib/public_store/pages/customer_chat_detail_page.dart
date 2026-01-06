@@ -4,7 +4,7 @@ import '../../modules/messaging/services/messaging_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_inbox_list.dart';
 import '../widgets/customer_chat_view.dart';
-import '../widgets/customer_chat_context_panel.dart';
+import '../widgets/deferred_customer_chat_context_panel.dart';
 
 class CustomerChatDetailPage extends StatefulWidget {
   final String conversationId;
@@ -129,7 +129,7 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
         if (hasContext)
           SizedBox(
             width: 350,
-            child: CustomerChatContextPanel(
+            child: DeferredCustomerChatContextPanel(
               contextType: contextType!,
               contextId: contextId!,
             ),
@@ -179,7 +179,7 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
                 ),
               ),
               Expanded(
-                child: CustomerChatContextPanel(
+                child: DeferredCustomerChatContextPanel(
                   contextType: contextType,
                   contextId: contextId,
                 ),

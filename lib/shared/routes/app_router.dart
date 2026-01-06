@@ -1124,6 +1124,15 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/accounting/expense-categories',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.ExpenseCategoriesPage(),
+          ),
+        ),
+        GoRoute(
           path: '/accounting/expenses/new',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
