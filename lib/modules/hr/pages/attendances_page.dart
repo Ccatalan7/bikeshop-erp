@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -13,6 +15,8 @@ import '../widgets/payroll_voucher_dialog.dart';
 import '../pages/payroll_list_page.dart';
 
 enum TimeView { day, week, month, quarter, year }
+
+enum AttendanceDisplayTimeZone { local, chile, utc }
 
 // Color palette for attendance blocks (Odoo-style)
 const List<Color> _employeeColors = [
@@ -45,6 +49,135 @@ class _AttendancesPageState extends State<AttendancesPage> {
   bool _isLoading = true;
   Timer? _refreshTimer;
   bool _showPayrollHistory = false; // Toggle to show payroll list inline
+
+  AttendanceDisplayTimeZone _displayTimeZone = AttendanceDisplayTimeZone.chile;
+
+  static bool _tzInitialized = false;
+  static tz.Location? _chileLocation;
+
+  void _setDisplayTimeZone(AttendanceDisplayTimeZone value) {
+    setState(() => _displayTimeZone = value);
+  }
+
+  String _displayTimeZoneLabel() {
+    switch (_displayTimeZone) {
+      case AttendanceDisplayTimeZone.local:
+        return 'Local';
+      case AttendanceDisplayTimeZone.chile:
+        return 'Chile';
+      case AttendanceDisplayTimeZone.utc:
+        return 'UTC';
+    }
+  }
+
+  String _displayTimeZoneFlag() {
+    switch (_displayTimeZone) {
+      case AttendanceDisplayTimeZone.local:
+        return '📍';
+      case AttendanceDisplayTimeZone.chile:
+        return '🇨🇱';
+      case AttendanceDisplayTimeZone.utc:
+        return '🌐';
+    }
+  }
+
+  IconData _displayTimeZoneIcon() {
+    switch (_displayTimeZone) {
+      case AttendanceDisplayTimeZone.local:
+        return Icons.location_on;
+      case AttendanceDisplayTimeZone.chile:
+        return Icons.flag;
+      case AttendanceDisplayTimeZone.utc:
+        return Icons.public;
+    }
+  }
+
+  Widget _buildTimeZoneSelector({required bool compact}) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+    final label = '${_displayTimeZoneFlag()} ${_displayTimeZoneLabel()}';
+
+    return PopupMenuButton<AttendanceDisplayTimeZone>(
+      tooltip: 'Zona horaria',
+      onSelected: _setDisplayTimeZone,
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: AttendanceDisplayTimeZone.chile,
+          child: Row(
+            children: [
+              Icon(Icons.flag, size: 18),
+              SizedBox(width: 8),
+              Text('🇨🇱 Chile (America/Santiago)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: AttendanceDisplayTimeZone.local,
+          child: Row(
+            children: [
+              Icon(Icons.location_on, size: 18),
+              SizedBox(width: 8),
+              Text('📍 Local del dispositivo'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: AttendanceDisplayTimeZone.utc,
+          child: Row(
+            children: [
+              Icon(Icons.public, size: 18),
+              SizedBox(width: 8),
+              Text('🌐 UTC'),
+            ],
+          ),
+        ),
+      ],
+      icon: compact ? Icon(_displayTimeZoneIcon(), color: accent) : null,
+      child: compact
+          ? null
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                border: Border.all(color: accent),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_displayTimeZoneIcon(), size: 18, color: accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    'TZ: $label',
+                    style: theme.textTheme.labelLarge?.copyWith(color: accent),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.arrow_drop_down, color: accent),
+                ],
+              ),
+            ),
+    );
+  }
+
+  DateTime _toDisplayTimeZone(DateTime dateTime) {
+    switch (_displayTimeZone) {
+      case AttendanceDisplayTimeZone.local:
+        return dateTime;
+      case AttendanceDisplayTimeZone.utc:
+        return dateTime.toUtc();
+      case AttendanceDisplayTimeZone.chile:
+        if (!_tzInitialized) {
+          tzdata.initializeTimeZones();
+          _chileLocation = tz.getLocation('America/Santiago');
+          _tzInitialized = true;
+        }
+        return tz.TZDateTime.from(dateTime.toUtc(), _chileLocation!);
+    }
+  }
+
+  String _formatTime(DateTime dateTime, {required bool withSeconds}) {
+    final dt = _toDisplayTimeZone(dateTime);
+    return DateFormat(withSeconds ? 'HH:mm:ss' : 'HH:mm').format(dt);
+  }
 
   @override
   void initState() {
@@ -497,6 +630,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    _buildTimeZoneSelector(compact: true),
                     // Payroll History (toggle inline view)
                     IconButton(
                       icon: const Icon(Icons.history_edu),
@@ -569,6 +703,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
                     isSelected: _currentView == TimeView.year,
                     onTap: () => _changeView(TimeView.year),
                   ),
+                  const SizedBox(width: 12),
+                  _buildTimeZoneSelector(compact: false),
                   const Spacer(),
                   // Payroll Actions
                   OutlinedButton.icon(
@@ -1029,14 +1165,15 @@ class _AttendancesPageState extends State<AttendancesPage> {
           }
 
           // Time range (this goes INSIDE parentheses)
-          final checkIn = DateFormat('HH:mm').format(attendance.checkIn);
-          final checkInWithSeconds =
-              DateFormat('HH:mm:ss').format(attendance.checkIn);
+            final checkIn =
+              _formatTime(attendance.checkIn, withSeconds: false);
+            final checkInWithSeconds =
+              _formatTime(attendance.checkIn, withSeconds: true);
           final checkOut = attendance.checkOut != null
-              ? DateFormat('HH:mm').format(attendance.checkOut!)
+              ? _formatTime(attendance.checkOut!, withSeconds: false)
               : '...';
           final checkOutWithSeconds = attendance.checkOut != null
-              ? DateFormat('HH:mm:ss').format(attendance.checkOut!)
+              ? _formatTime(attendance.checkOut!, withSeconds: true)
               : '...';
 
           // Color coding based on status

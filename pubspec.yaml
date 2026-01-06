@@ -46,6 +46,9 @@ dependencies:
   
   # Localization
   intl: ^0.20.0
+
+  # Time zone conversions (for showing attendances in Chile vs local)
+  timezone: ^0.10.0
   
   # UI Components
   cupertino_icons: ^1.0.6
