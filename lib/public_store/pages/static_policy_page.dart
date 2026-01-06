@@ -37,6 +37,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   List<Map<String, dynamic>> _blocks = [];
   String? _pageId;
   bool _editModeChecked = false;
+  bool _syncedEditorContextForThisPage = false;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -62,6 +63,55 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     }
 
     _loadPage();
+  }
+
+  @override
+  void didUpdateWidget(covariant StaticPolicyPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.slug != widget.slug) {
+      _editModeChecked = false;
+      _syncedEditorContextForThisPage = false;
+      _loadPage();
+    }
+  }
+
+  void _updateEditProviderIfNeeded() {
+    if (!mounted) return;
+    if (_loading || _pageId == null) return;
+
+    final editProvider = context.read<WebsiteEditModeProvider>();
+
+    // Only sync when we are already in editor context and the provider is
+    // pointing at a different page.
+    if (!editProvider.isInEditorContext) return;
+    if (editProvider.currentPageSlug == widget.slug) return;
+    if (_syncedEditorContextForThisPage) return;
+
+    final websiteService = context.read<WebsiteService>();
+    final blocks = List<Map<String, dynamic>>.from(_blocks);
+    final settings = Map<String, dynamic>.from(websiteService.settings);
+
+    debugPrint(
+        '🔄 [StaticPolicyPage] Sync editor context: ${editProvider.currentPageSlug} → ${widget.slug} (${blocks.length} blocks)');
+
+    // This resets selection/history for the new page (same as DynamicWebsitePage).
+    if (editProvider.isEditMode) {
+      editProvider.enterEditMode(
+        blocks,
+        settings,
+        pageId: _pageId,
+        pageSlug: widget.slug,
+      );
+    } else {
+      editProvider.enterPreviewMode(
+        blocks,
+        settings,
+        pageId: _pageId,
+        pageSlug: widget.slug,
+      );
+    }
+
+    _syncedEditorContextForThisPage = true;
   }
 
   Future<void> _loadPage() async {
@@ -121,6 +171,12 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       } else {
         _loading = false;
       }
+
+      // If the user navigated here while already in edit/preview mode,
+      // update the provider so the right panel can edit selected blocks.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateEditProviderIfNeeded();
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -149,17 +205,26 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     if (_loading || _pageId == null) return;
     if (_editModeChecked) return;
 
+    // URL params should only be used to ENTER editor context.
+    // Once already inside the editor shell, ignore URL forcing to prevent
+    // preview/edit bouncing on persistent shell routes.
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    if (editProvider.isInEditorContext) {
+      _editModeChecked = true;
+      return;
+    }
+
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
-    final shouldEdit = queryParams['edit'] == 'true';
     final shouldPreview = queryParams['preview'] == 'true';
+    // If both are present, preview wins (prevents mode bouncing).
+    final shouldEdit = !shouldPreview && queryParams['edit'] == 'true';
 
     if (!shouldEdit && !shouldPreview) return;
     _editModeChecked = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final editProvider = context.read<WebsiteEditModeProvider>();
       final websiteService = context.read<WebsiteService>();
       final blocks = List<Map<String, dynamic>>.from(_blocks);
       final settings = Map<String, dynamic>.from(websiteService.settings);
@@ -187,6 +252,12 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     _checkEditModeFromRouter(context);
 
+    // If already in editor context and the user navigated without ?edit=true,
+    // keep provider synced to this page so the editor panel can render fields.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateEditProviderIfNeeded();
+    });
+
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final websiteService = context.watch<WebsiteService>();
     final isEditMode = editProvider.isEditMode;
@@ -204,31 +275,49 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     // entering edit mode when navigating to a page with ?edit=true.
     // For context switching between already-cached pages, use block selection.
 
-    final blocksToRender =
-        (isEditMode && matchesPage) ? editProvider.blocks : _blocks;
+    // In editor context (preview or edit), render the provider blocks for THIS page.
+    // This ensures switching to preview after saving shows the updated content.
+    final blocksToRender = (editProvider.isInEditorContext && matchesPage)
+      ? editProvider.blocks
+      : _blocks;
 
-    // Get theme from WebsiteService (already cached)
+    String _eff(String key, String fallback) {
+      if (editProvider.isInEditorContext) {
+      return editProvider.getEffectiveThemeSetting(key, fallback);
+      }
+      return fallback;
+    }
+
+    // Get theme from WebsiteService (already cached), with live-preview overrides
     final primaryColor =
-        _parseColor(websiteService.getSetting('theme_primary_color', '')) ??
-            const Color(0xFF2E7D32);
+      _parseColor(_eff('theme_primary_color', websiteService.getSetting('theme_primary_color', ''))) ??
+        const Color(0xFF2E7D32);
     final accentColor =
-        _parseColor(websiteService.getSetting('theme_accent_color', '')) ??
-            const Color(0xFFFF6F00);
-    final headingFont =
-        websiteService.getSetting('theme_heading_font', 'Roboto');
-    final bodyFont = websiteService.getSetting('theme_body_font', 'Roboto');
+      _parseColor(_eff('theme_accent_color', websiteService.getSetting('theme_accent_color', ''))) ??
+        const Color(0xFFFF6F00);
+    final headingFont = _eff(
+      'theme_heading_font',
+      websiteService.getSetting('theme_heading_font', 'Roboto'),
+    );
+    final bodyFont = _eff(
+      'theme_body_font',
+      websiteService.getSetting('theme_body_font', 'Roboto'),
+    );
     final headingSize = double.tryParse(
-            websiteService.getSetting('theme_heading_size', '48')) ??
-        48.0;
-    final bodySize =
-        double.tryParse(websiteService.getSetting('theme_body_size', '16')) ??
-            16.0;
+        _eff('theme_heading_size', websiteService.getSetting('theme_heading_size', '48')),
+      ) ??
+      48.0;
+    final bodySize = double.tryParse(
+        _eff('theme_body_size', websiteService.getSetting('theme_body_size', '16')),
+      ) ??
+      16.0;
     final sectionSpacing = double.tryParse(
-            websiteService.getSetting('theme_section_spacing', '64')) ??
-        64.0;
+        _eff('theme_section_spacing', websiteService.getSetting('theme_section_spacing', '64')),
+      ) ??
+      64.0;
     final textColor =
-        _parseColor(websiteService.getSetting('theme_text_color', '')) ??
-            Colors.black87;
+      _parseColor(_eff('theme_text_color', websiteService.getSetting('theme_text_color', ''))) ??
+        Colors.black87;
 
     if (_loading && _blocks.isEmpty) {
       final minHeight = MediaQuery.sizeOf(context).height * 0.55;

@@ -67,23 +67,27 @@ class NotionModulePage extends StatelessWidget {
 class AnalyticsDashboardPage extends StatelessWidget {
   final String dashboardUrl;
   final String dashboardName;
+  final bool embedded;
 
   const AnalyticsDashboardPage({
     super.key,
     required this.dashboardUrl,
     this.dashboardName = 'Analytics',
+    this.embedded = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      child: WebViewModulePage(
-        url: dashboardUrl,
-        title: dashboardName,
-        icon: Icons.analytics,
-        iconColor: Colors.orange,
-      ),
+    final body = WebViewModulePage(
+      url: dashboardUrl,
+      title: dashboardName,
+      icon: Icons.analytics,
+      iconColor: Colors.orange,
     );
+
+    if (embedded) return body;
+
+    return MainLayout(child: body);
   }
 }
 

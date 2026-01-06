@@ -9,7 +9,12 @@ import '../../../shared/models/tenant.dart';
 
 /// Page for configuring website settings
 class WebsiteSettingsPage extends StatefulWidget {
-  const WebsiteSettingsPage({super.key});
+  const WebsiteSettingsPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<WebsiteSettingsPage> createState() => _WebsiteSettingsPageState();
@@ -180,20 +185,21 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 8),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/website'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 const Text('Configuración del Sitio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
@@ -504,9 +510,12 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildSection({

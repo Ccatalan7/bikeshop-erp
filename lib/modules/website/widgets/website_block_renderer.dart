@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
+
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
@@ -24,6 +26,16 @@ import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
 /// editor preview can stay in sync with the live site.
 class WebsiteBlockRenderer {
   const WebsiteBlockRenderer._();
+
+  static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
+    final family = fontFamily?.trim();
+    if (family == null || family.isEmpty) return base;
+    try {
+      return GoogleFonts.getFont(family, textStyle: base);
+    } catch (_) {
+      return base.copyWith(fontFamily: family);
+    }
+  }
 
   static Widget build({
     required BuildContext context,
@@ -581,6 +593,7 @@ class WebsiteBlockRenderer {
     required Color defaultColor,
     String? imageUrl,
     Alignment? imageAlignmentParam,
+    bool skipImage = false,
   }) {
     final style = Map<String, dynamic>.from(data['style'] ?? {});
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
@@ -612,7 +625,7 @@ class WebsiteBlockRenderer {
     // Image background takes precedence for the image property,
     // but we might still want a color/gradient behind it (visible while loading or if transparent)
     DecorationImage? image;
-    if (hasImage) {
+    if (hasImage && !skipImage) {
       image = DecorationImage(
         image: NetworkImage(imageUrl),
         fit: BoxFit.cover,
@@ -735,7 +748,7 @@ class WebsiteBlockRenderer {
         (data['ctaLink'] ?? data['buttonLink'] ?? '/tienda/productos')
             .toString()
             .trim();
-    final imageUrl = data['imageUrl'];
+    final imageUrl = data['imageUrl'] ?? data['backgroundImage'];
     final showOverlay = (data['showOverlay'] ?? true) == true;
     final overlayOpacity =
         ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
@@ -748,18 +761,20 @@ class WebsiteBlockRenderer {
     final alignment =
         data['alignment']?.toString() ?? 'center'; // center, left, right
 
-    final resolvedHeading =
-        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily: headingFont?.isNotEmpty == true ? headingFont : null,
-      fontSize: headingSize,
-      color: Colors.white,
+    final resolvedHeading = _applyThemeFont(
+      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+        fontSize: headingSize,
+        color: Colors.white,
+      ),
+      headingFont,
     );
 
-    final resolvedSubtitle =
-        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont?.isNotEmpty == true ? bodyFont : null,
-      fontSize: bodySize != null ? bodySize * 1.2 : null,
-      color: Colors.white70,
+    final resolvedSubtitle = _applyThemeFont(
+      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+        fontSize: bodySize != null ? bodySize * 1.2 : null,
+        color: Colors.white70,
+      ),
+      bodyFont,
     );
 
     // Resolve alignment logic
@@ -835,6 +850,9 @@ class WebsiteBlockRenderer {
         imageAlignmentParam: bgAlignment,
       );
 
+      final shouldDeferHeroImage =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
       // Determine height
       // For full screen, we want to respect the device height, but in the editor preview (which might be desktop height),
       // we should cap it to a reasonable mobile height to avoid a "slit" look.
@@ -851,85 +869,111 @@ class WebsiteBlockRenderer {
         height = isMobile ? 420 : 520;
       }
 
-      return Container(
-        height: height,
-        width: double.infinity,
-        decoration: decoration,
-        child: Container(
-          decoration: showOverlay
-              ? BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(overlayOpacity * 0.5),
-                      Colors.black.withOpacity(overlayOpacity * 0.8),
-                    ],
+      final heroInner = Container(
+        decoration: showOverlay
+            ? BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(overlayOpacity * 0.5),
+                    Colors.black.withOpacity(overlayOpacity * 0.8),
+                  ],
+                ),
+              )
+            : null,
+        child: Align(
+          alignment: geometryAlign,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: crossAlign,
+              children: [
+                Text(
+                  (title.isEmpty ? 'Título' : title).toUpperCase(),
+                  style: resolvedHeading.copyWith(
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w900,
+                    fontSize:
+                        isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
                   ),
-                )
-              : null,
-          child: Align(
-            alignment: geometryAlign,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: crossAlign,
-                children: [
+                  textAlign: textAlign,
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 20),
                   Text(
-                    (title.isEmpty ? 'Título' : title).toUpperCase(),
-                    style: resolvedHeading.copyWith(
-                      letterSpacing: 3,
-                      fontWeight: FontWeight.w900,
-                      fontSize:
-                          isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
+                    subtitle,
+                    style: resolvedSubtitle.copyWith(
+                      fontSize: isMobile ? (bodySize ?? 16) : bodySize,
                     ),
                     textAlign: textAlign,
                   ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    Text(subtitle,
-                        style: resolvedSubtitle.copyWith(
-                          fontSize: isMobile ? (bodySize ?? 16) : bodySize,
-                        ),
-                        textAlign: textAlign),
-                  ],
-                  const SizedBox(height: 40),
-                  OutlinedButton(
-                    onPressed: previewMode
-                        ? () {}
-                        : () {
-                            final route = ctaLink.isNotEmpty
-                                ? ctaLink
-                                : '/tienda/productos';
-                            if (onNavigate != null) {
-                              onNavigate(route);
-                            }
-                          },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white, width: 1),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 40, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(0),
-                      ),
-                    ),
-                    child: Text(
-                      (ctaText.isEmpty ? 'CHECK IT OUT' : ctaText)
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5,
-                      ),
+                ],
+                const SizedBox(height: 40),
+                OutlinedButton(
+                  onPressed: previewMode
+                      ? () {}
+                      : () {
+                          final route = ctaLink.isNotEmpty
+                              ? ctaLink
+                              : '/tienda/productos';
+                          if (onNavigate != null) {
+                            onNavigate(route);
+                          }
+                        },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white, width: 1),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(0),
                     ),
                   ),
-                ],
-              ),
+                  child: Text(
+                    (ctaText.isEmpty ? 'CHECK IT OUT' : ctaText).toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+      );
+
+      if (!shouldDeferHeroImage || imageUrl == null) {
+        return Container(
+          height: height,
+          width: double.infinity,
+          decoration: decoration,
+          child: heroInner,
+        );
+      }
+
+      // Android first-frame optimization: build the hero WITHOUT the background image
+      // for the first frame, then rebuild with the image.
+      return _DeferredFirstFrame(
+        builder: (showHeavy) {
+          final deferredDecoration = _resolveBackgroundDecoration(
+            data: data,
+            defaultColor: defaultBgColor,
+            imageUrl: imageUrl?.toString(),
+            imageAlignmentParam: bgAlignment,
+            skipImage: !showHeavy,
+          );
+
+          return Container(
+            height: height,
+            width: double.infinity,
+            decoration: deferredDecoration,
+            child: heroInner,
+          );
+        },
       );
     });
   }
@@ -3270,6 +3314,31 @@ class WebsiteBlockRenderer {
   }
 }
 
+class _DeferredFirstFrame extends StatefulWidget {
+  const _DeferredFirstFrame({required this.builder});
+
+  final Widget Function(bool showHeavy) builder;
+
+  @override
+  State<_DeferredFirstFrame> createState() => _DeferredFirstFrameState();
+}
+
+class _DeferredFirstFrameState extends State<_DeferredFirstFrame> {
+  bool _showHeavy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _showHeavy = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_showHeavy);
+}
+
 // ============================================================================
 // BRAND LOGOS CAROUSEL WIDGET
 // Horizontal scrolling row of brand logos with pagination dots
@@ -3961,19 +4030,29 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final hasYoutubeVideo = youtubeId != null;
     final hasVideo = hasVideoFile || hasYoutubeVideo;
 
-    final headingStyle =
-        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily:
-          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
-      fontSize: widget.headingSize,
-      color: Colors.white,
+    final headingStyle = WebsiteBlockRenderer._applyThemeFont(
+      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+        fontSize: widget.headingSize,
+        color: Colors.white,
+      ),
+      widget.headingFont,
     );
 
-    final subtitleStyle =
-        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-      fontFamily: widget.bodyFont?.isNotEmpty == true ? widget.bodyFont : null,
-      fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : null,
-      color: Colors.white70,
+    final subtitleStyle = WebsiteBlockRenderer._applyThemeFont(
+      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+        fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : null,
+        color: Colors.white70,
+      ),
+      widget.bodyFont,
+    );
+
+    final ctaTextStyle = WebsiteBlockRenderer._applyThemeFont(
+      const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.5,
+      ),
+      widget.bodyFont,
     );
 
     // Content widget (text, buttons, overlay)
@@ -4040,11 +4119,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                     ),
                     child: Text(
                       ctaText.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5,
-                      ),
+                      style: ctaTextStyle,
                     ),
                   ),
               ],
@@ -4856,12 +4931,17 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
               // Video background (web only)
               if (canPlayVideo)
                 Positioned.fill(
-                  child:
-                      video_platform.VideoBannerPlatform.buildVideoBackground(
-                    youtubeVideoId: widget.youtubeVideoId,
-                    videoFileUrl: widget.videoFileUrl,
-                    width: screenWidth,
-                    height: height,
+                  child: KeyedSubtree(
+                    key: ValueKey<String>(
+                      'video_bg:${widget.youtubeVideoId ?? widget.videoFileUrl ?? ''}',
+                    ),
+                    child:
+                        video_platform.VideoBannerPlatform.buildVideoBackground(
+                      youtubeVideoId: widget.youtubeVideoId,
+                      videoFileUrl: widget.videoFileUrl,
+                      width: screenWidth,
+                      height: height,
+                    ),
                   ),
                 ),
 

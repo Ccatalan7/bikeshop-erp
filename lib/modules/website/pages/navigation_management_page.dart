@@ -6,7 +6,12 @@ import '../models/website_page_models.dart';
 
 /// Navigation Management Page - Manage website menus (header, footer)
 class NavigationManagementPage extends StatefulWidget {
-  const NavigationManagementPage({super.key});
+  const NavigationManagementPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<NavigationManagementPage> createState() => _NavigationManagementPageState();
@@ -58,9 +63,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return MainLayout(
-      child: Column(
-        children: [
+    final body = Column(
+      children: [
           // Header
           Container(
             padding: const EdgeInsets.all(24),
@@ -72,11 +76,13 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 16),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 Icon(
                   Icons.menu_book,
                   color: Colors.teal,
@@ -142,9 +148,12 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                     ],
                   ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildLinkList(List<WebsiteNavigation> links, MenuLocation location) {

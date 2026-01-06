@@ -97,6 +97,9 @@ class TextFormatting {
 
   static TextAlign _parseTextAlign(String? value) {
     switch (value) {
+      case 'left':
+      case 'start':
+        return TextAlign.start;
       case 'center':
         return TextAlign.center;
       case 'end':
@@ -283,7 +286,10 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                 currentSize: widget.currentFormatting.fontSize ??
                     widget.baseStyle?.fontSize ??
                     16,
-                onSizeSelected: (size) {
+                onSizeChanged: (size) {
+                  _setFontSize(size);
+                },
+                onPresetSelected: (size) {
                   _setFontSize(size);
                   setState(() => _showFontSizePicker = false);
                 },
@@ -353,9 +359,9 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
 
   void _cycleAlignment() {
     final alignments = [
-      TextAlign.left,
+      TextAlign.start,
       TextAlign.center,
-      TextAlign.right,
+      TextAlign.end,
       TextAlign.justify
     ];
     final currentIndex = alignments.indexOf(widget.currentFormatting.textAlign);
@@ -543,11 +549,13 @@ class _FontSizeButton extends StatelessWidget {
 /// Font size picker panel
 class _FontSizePickerPanel extends StatelessWidget {
   final double currentSize;
-  final ValueChanged<double> onSizeSelected;
+  final ValueChanged<double> onSizeChanged;
+  final ValueChanged<double> onPresetSelected;
 
   const _FontSizePickerPanel({
     required this.currentSize,
-    required this.onSizeSelected,
+    required this.onSizeChanged,
+    required this.onPresetSelected,
   });
 
   static const List<double> presetSizes = [
@@ -589,7 +597,7 @@ class _FontSizePickerPanel extends StatelessWidget {
               final isSelected = (currentSize - size).abs() < 0.5;
               return InkWell(
                 canRequestFocus: false,
-                onTap: () => onSizeSelected(size),
+                onTap: () => onPresetSelected(size),
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
                   width: 36,
@@ -633,7 +641,7 @@ class _FontSizePickerPanel extends StatelessWidget {
                     min: 8,
                     max: 120,
                     divisions: 112,
-                    onChanged: onSizeSelected,
+                    onChanged: onSizeChanged,
                   ),
                 ),
               ),

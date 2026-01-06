@@ -7,6 +7,11 @@ import '../models/tenant.dart';
 class TenantDetectionService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // Perf logs are enabled in debug, or in release via:
+  // flutter build web --release --dart-define=STORE_PERF_LOGS=true
+  static bool get _perfLogsEnabled =>
+      kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
+
   /// Main domain patterns for subdomain extraction
   /// Works with ANY hosting provider (Firebase, Vercel, Netlify, custom domains, etc.)
   /// Add your production domain here when deploying
@@ -104,8 +109,10 @@ class TenantDetectionService {
       }
 
       final response = await query.maybeSingle();
-      debugPrint(
-          '⏱️ [TenantDetection] DB query took: ${sw.elapsedMilliseconds}ms');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [TenantDetectionPerf] DB query: ${sw.elapsedMilliseconds}ms');
+      }
 
       if (response == null) {
         return null;
@@ -160,15 +167,47 @@ class TenantDetectionService {
   /// Detect tenant from current URL
   /// Tries subdomain first, then custom domain lookup, then authenticated user's tenant
   Future<Tenant?> detectTenant() async {
+    final swTotal = Stopwatch()..start();
+
+    // Public Store mobile optimization: allow forcing a tenant via dart-define.
+    // This avoids any auth/user_profiles lookup and makes boot deterministic.
+    const forcedStoreTenantId = String.fromEnvironment('PUBLIC_STORE_TENANT_ID');
+    const forcedStoreSubdomain = String.fromEnvironment('PUBLIC_STORE_SUBDOMAIN');
+    const ignoreAuth = bool.fromEnvironment('PUBLIC_STORE_IGNORE_AUTH');
+
     // For non-web platforms (macOS, Windows, iOS, Android)
     if (!kIsWeb) {
+      // Fast path: explicit tenant override for store app.
+      if (forcedStoreTenantId.isNotEmpty) {
+        if (_perfLogsEnabled) {
+          debugPrint(
+              '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (forced_store_tenant)');
+        }
+        return Tenant(
+          id: forcedStoreTenantId,
+          shopName: 'Vinabike',
+          subdomain: forcedStoreSubdomain.isNotEmpty
+              ? forcedStoreSubdomain
+              : 'vinabike',
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+      }
+
       // First try authenticated user's tenant
-      final user = _supabase.auth.currentUser;
-      if (user != null) {
-        final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
-        if (tenantFromAuth != null) {
-          debugPrint('📱 [TenantDetection] Using authenticated user tenant');
-          return tenantFromAuth;
+      if (!ignoreAuth) {
+        final user = _supabase.auth.currentUser;
+        if (user != null) {
+          final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
+          if (tenantFromAuth != null) {
+            debugPrint('📱 [TenantDetection] Using authenticated user tenant');
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (authenticated_user)');
+            }
+            return tenantFromAuth;
+          }
         }
       }
 
@@ -177,6 +216,10 @@ class TenantDetectionService {
       const defaultTenantId =
           '5443b130-cc28-45af-a420-cd500b288890'; // Viñabike
       debugPrint('📱 [TenantDetection] Using default mobile tenant (Viñabike)');
+      if (_perfLogsEnabled) {
+        debugPrint(
+        '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (default_mobile)');
+      }
       return Tenant(
         id: defaultTenantId,
         shopName: 'Vinabike',
@@ -208,6 +251,10 @@ class TenantDetectionService {
     if (knownTenantId != null) {
       debugPrint(
           '⚡ [TenantDetection] Using hardcoded tenant for $normalizedHost');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (hardcoded_domain)');
+      }
       // Return a minimal Tenant object with just the ID - that's all we need
       return Tenant(
         id: knownTenantId,
@@ -225,6 +272,10 @@ class TenantDetectionService {
         normalizedHost.endsWith('.web.app')) {
       debugPrint(
           '⚡ [TenantDetection] Using hardcoded tenant for PREVIEW CHANNEL');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (firebase_preview_channel)');
+      }
       return Tenant(
         id: '5443b130-cc28-45af-a420-cd500b288890',
         shopName: 'Vinabike',
@@ -256,6 +307,10 @@ class TenantDetectionService {
         debugPrint(
             '🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
       }
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (db_detect)');
+      }
       return tenant;
     }
 
@@ -270,11 +325,19 @@ class TenantDetectionService {
       if (user != null) {
         final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
         if (tenantFromAuth != null) {
+          if (_perfLogsEnabled) {
+            debugPrint(
+                '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (local_erp_authenticated_user)');
+          }
           return tenantFromAuth;
         }
       }
     }
 
+    if (_perfLogsEnabled) {
+      debugPrint(
+          '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (not_found)');
+    }
     return null;
   }
 

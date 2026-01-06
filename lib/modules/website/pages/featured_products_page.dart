@@ -12,7 +12,12 @@ import '../../../shared/widgets/main_layout.dart';
 
 /// Page for selecting and managing featured products shown on website homepage
 class FeaturedProductsPage extends StatefulWidget {
-  const FeaturedProductsPage({super.key});
+  const FeaturedProductsPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<FeaturedProductsPage> createState() => _FeaturedProductsPageState();
@@ -96,20 +101,21 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
             ))
         .toList();
 
-    return MainLayout(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 8),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/website'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Text('Productos Destacados', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
@@ -298,9 +304,12 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildFeaturedProductCard(

@@ -101,9 +101,11 @@ class AuthService extends ChangeNotifier {
       String? redirectTo;
 
       if (kIsWeb) {
-        // For web, redirect back to the current origin
+        // For web, redirect back to a stable callback route.
+        // If we redirect to '/', the router might redirect immediately and strip
+        // the OAuth query params before Supabase can exchange them.
         final origin = Uri.base.origin;
-        redirectTo = origin.endsWith('/') ? origin : '$origin/';
+        redirectTo = '$origin/auth/callback';
         if (kDebugMode) {
           print('🔐 Google OAuth redirect URL: $redirectTo');
         }

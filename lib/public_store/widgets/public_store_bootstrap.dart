@@ -6,7 +6,6 @@ import 'dart:async';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
 import '../providers/public_store_tenant_provider.dart';
-import '../services/public_inventory_service.dart';
 
 /// SIMPLE bootstrap widget for public store
 ///
@@ -16,7 +15,7 @@ import '../services/public_inventory_service.dart';
 /// 3. Show child when ready
 ///
 /// NO complex state management. NO multiple loading triggers.
-/// Just a simple FutureBuilder pattern.
+/// Progressive boot: detect tenant first, then render immediately.
 class PublicStoreBootstrap extends StatefulWidget {
   final Widget child;
 
@@ -27,13 +26,25 @@ class PublicStoreBootstrap extends StatefulWidget {
 }
 
 class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
-  late Future<bool> _initFuture;
   bool _splashHidden = false;
+  bool _isBootstrapping = true;
+  bool _hasTenant = false;
+  String? _error;
+  bool _bootstrapStarted = false;
 
   @override
   void initState() {
     super.initState();
-    _initFuture = _initialize();
+
+    // Start tenant detection immediately (do not block first paint).
+    // We still hide the HTML splash after the first Flutter frame.
+    _bootstrap();
+
+    // Let Flutter paint first, then hide the HTML splash.
+    // This makes startup feel much faster than waiting for network.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hideHtmlSplash();
+    });
   }
 
   void _hideHtmlSplash() {
@@ -46,82 +57,112 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
     }
   }
 
-  Future<bool> _initialize() async {
+  Future<void> _bootstrap() async {
+    if (_bootstrapStarted) return;
+    _bootstrapStarted = true;
+
+    setState(() {
+      _isBootstrapping = true;
+      _hasTenant = false;
+      _error = null;
+    });
+
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final websiteService = context.read<WebsiteService>();
 
-    // Step 1: Detect tenant
-    if (!tenantProvider.hasTenant) {
-      await tenantProvider.detectTenant();
-    }
-
-    final tenantId = tenantProvider.tenantId;
-    if (tenantId == null) {
-      _hideHtmlSplash(); // Hide splash even on error
-      return false; // No tenant found
-    }
-
-    // Step 2: Pre-populate settings from sync cache for faster header render
-    // But DON'T hide splash yet - we still need to load blocks
-    websiteService.loadSettingsFromSynchronousCache(tenantId);
-
-    // Step 3: Load ALL data from network (settings + blocks)
-    // Always await this to ensure blocks are loaded before showing content
     try {
-      await websiteService.loadPublicStoreDataUnified(tenantId);
-    } catch (e) {
-      debugPrint('⚠️ [Bootstrap] Network load failed: $e');
-    }
+      // Step 1: Detect tenant
+      if (!tenantProvider.hasTenant) {
+        await tenantProvider.detectTenant();
+      }
 
-    // Step 4: NOW hide the splash - all data is loaded
-    _hideHtmlSplash();
-    return true;
+      final tenantId = tenantProvider.tenantId;
+      if (tenantId == null || tenantId.isEmpty) {
+        setState(() {
+          _isBootstrapping = false;
+          _hasTenant = false;
+          _error = tenantProvider.error ?? 'Tienda no encontrada';
+        });
+        return;
+      }
+
+      // Step 2: Pre-populate settings from sync cache for faster header render.
+        final didPreloadFromCache =
+          websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
+
+      // Step 3: Allow the app to render immediately after tenant detection.
+      setState(() {
+        _isBootstrapping = false;
+        _hasTenant = true;
+        _error = null;
+      });
+
+      // Step 4: Load blocks/settings from network in the background.
+      // Pages can render progressively using defaults/cache until data arrives.
+      unawaited(() async {
+        try {
+          // Give the first frames a chance to render smoothly before doing
+          // DNS/TLS/JSON work on the UI isolate.
+          unawaited(websiteService.warmUpEdgeCacheHost());
+          await Future<void>.delayed(
+            didPreloadFromCache
+                ? const Duration(milliseconds: 800)
+                : const Duration(milliseconds: 150),
+          );
+          await websiteService.loadPublicStoreDataUnified(tenantId);
+        } catch (e) {
+          debugPrint('⚠️ [Bootstrap] Network load failed: $e');
+        }
+      }());
+    } catch (e) {
+      setState(() {
+        _isBootstrapping = false;
+        _hasTenant = false;
+        _error = e.toString();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _initFuture,
-      builder: (context, snapshot) {
-        // Still loading - show NOTHING (HTML splash is still visible behind)
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox.shrink();
-        }
+    // While bootstrapping (tenant detection), render the app shell immediately.
+    // Pages can show their own progressive loading states.
+    if (_isBootstrapping && !_hasTenant) {
+      return widget.child;
+    }
 
-        // Error or no tenant
-        if (snapshot.hasError || snapshot.data != true) {
-          final tenantProvider = context.read<PublicStoreTenantProvider>();
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.store_mall_directory,
-                      size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text(
-                    tenantProvider.error ?? 'Tienda no encontrada',
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _initFuture = _initialize();
-                      });
-                    },
-                    child: const Text('Reintentar'),
-                  ),
-                ],
+    // Error or no tenant
+    if (!_hasTenant) {
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.store_mall_directory, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                _error ?? tenantProvider.error ?? 'Tienda no encontrada',
+                style: const TextStyle(fontSize: 18),
               ),
-            ),
-          );
-        }
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _bootstrapStarted = false;
+                  });
+                  _bootstrap();
+                },
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-        // Success - show the app
-        return widget.child;
-      },
-    );
+    // Success - show the app (data loads progressively).
+    return widget.child;
   }
 }

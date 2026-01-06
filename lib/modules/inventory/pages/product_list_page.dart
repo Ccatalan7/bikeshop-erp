@@ -30,11 +30,14 @@ class ProductListPage extends StatefulWidget {
   final String? initialSupplierId;
   final String? refreshToken; // Add refresh parameter
 
+  final bool embedded;
+
   const ProductListPage({
     super.key,
     this.initialCategoryId,
     this.initialSupplierId,
     this.refreshToken,
+    this.embedded = false,
   });
 
   @override
@@ -427,9 +430,11 @@ class _ProductListPageState extends State<ProductListPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return MainLayout(
-      child: _buildBody(theme),
-    );
+
+    final body = _buildBody(theme);
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildBody(ThemeData theme) {

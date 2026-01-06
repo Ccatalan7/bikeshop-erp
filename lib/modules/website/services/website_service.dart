@@ -4,16 +4,224 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_type.dart';
 import '../models/website_models.dart';
 import '../models/website_page_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/web_data_bridge.dart';
 
+class WebsiteEditorSaveResult {
+  final String? pageId;
+  final String? pageSlug;
+  final List<Map<String, dynamic>> freshBlocks;
+
+  const WebsiteEditorSaveResult({
+    required this.pageId,
+    required this.pageSlug,
+    required this.freshBlocks,
+  });
+}
+
 /// Service for managing website content, banners, featured products, and online orders
 class WebsiteService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   final TenantService _tenantService = TenantService();
+  final http.Client _httpClient = http.Client();
+
+  // Perf logs are enabled in debug, or in release via:
+  // flutter build web --release --dart-define=STORE_PERF_LOGS=true
+  static bool get _perfLogsEnabled =>
+      kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
+
+  // ============================================================
+  // BLOCK NORMALIZATION (Phase 2 - Jan 2026)
+  // ============================================================
+  static const int _currentBlockSchemaVersion = 1;
+
+  Map<String, dynamic> _deepMergeMaps(
+    Map<String, dynamic> base,
+    Map<String, dynamic> override,
+  ) {
+    final result = <String, dynamic>{...base};
+    override.forEach((key, value) {
+      final baseValue = result[key];
+      if (value is Map && baseValue is Map) {
+        result[key] = _deepMergeMaps(
+          Map<String, dynamic>.from(baseValue),
+          Map<String, dynamic>.from(value),
+        );
+      } else {
+        result[key] = value;
+      }
+    });
+    return result;
+  }
+
+  Map<String, dynamic> _normalizeBlockData({
+    required String blockTypeRaw,
+    required Object? rawBlockData,
+  }) {
+    final rawMap = rawBlockData is Map
+        ? Map<String, dynamic>.from(rawBlockData)
+        : <String, dynamic>{};
+
+    final parsedType = parseWebsiteBlockType(
+      blockTypeRaw,
+      fallback: WebsiteBlockType.hero,
+    );
+    final definition = WebsiteBlockRegistry.definitionFor(parsedType);
+
+    final normalized = _deepMergeMaps(
+      Map<String, dynamic>.from(definition.defaultData),
+      rawMap,
+    );
+
+    // Schema version convention (noop-first; enables safe future migrations)
+    normalized['schemaVersion'] =
+        (normalized['schemaVersion'] as int?) ?? _currentBlockSchemaVersion;
+
+    // --- Targeted legacy migrations (keep minimal, safe) ---
+    final rawTypeLower = blockTypeRaw.trim().toLowerCase();
+    if (rawTypeLower == 'about') {
+      final content = (normalized['content'] ?? '').toString().trim();
+      final legacyDescription =
+          (normalized['description'] ?? '').toString().trim();
+      if (content.isEmpty && legacyDescription.isNotEmpty) {
+        normalized['content'] = legacyDescription;
+      }
+
+      if ((normalized['imageUrl'] == null ||
+              normalized['imageUrl'].toString().trim().isEmpty) &&
+          normalized['image'] != null) {
+        normalized['imageUrl'] = normalized['image'];
+      }
+    }
+
+    if (rawTypeLower == 'button') {
+      final label = (normalized['label'] ?? '').toString().trim();
+      final legacyText = (normalized['text'] ?? '').toString().trim();
+      if (label.isEmpty && legacyText.isNotEmpty) {
+        normalized['label'] = legacyText;
+      }
+
+      if (normalized['style'] == null && normalized['variant'] != null) {
+        final variant = normalized['variant'].toString();
+        normalized['style'] = switch (variant) {
+          'outline' => 'outline',
+          'text' => 'text',
+          'secondary' => 'filled',
+          _ => 'filled',
+        };
+      }
+    }
+
+    if (rawTypeLower == 'cta') {
+      final subtitle = (normalized['subtitle'] ?? '').toString().trim();
+      final description = (normalized['description'] ?? '').toString().trim();
+      if (subtitle.isEmpty && description.isNotEmpty) {
+        normalized['subtitle'] = description;
+      }
+
+      // Formatting legacy alias
+      if (normalized['subtitleFormatting'] == null &&
+          normalized['descriptionFormatting'] != null) {
+        normalized['subtitleFormatting'] = normalized['descriptionFormatting'];
+      }
+    }
+
+    if (rawTypeLower == 'videobanner') {
+      if ((normalized['imageUrl'] == null ||
+              normalized['imageUrl'].toString().trim().isEmpty) &&
+          normalized['posterImage'] != null) {
+        normalized['imageUrl'] = normalized['posterImage'];
+      }
+
+      final ctaText = (normalized['ctaText'] ?? '').toString().trim();
+      final legacyButtonText =
+          (normalized['buttonText'] ?? '').toString().trim();
+      if (ctaText.isEmpty && legacyButtonText.isNotEmpty) {
+        normalized['ctaText'] = legacyButtonText;
+      }
+
+      final ctaLink = (normalized['ctaLink'] ?? '').toString().trim();
+      final legacyButtonLink =
+          (normalized['buttonLink'] ?? '').toString().trim();
+      if (ctaLink.isEmpty && legacyButtonLink.isNotEmpty) {
+        normalized['ctaLink'] = legacyButtonLink;
+      }
+
+      if (normalized['showCta'] == null) {
+        normalized['showCta'] = true;
+      }
+    }
+
+    if (rawTypeLower == 'hero') {
+      // Background image: legacy key was backgroundImage.
+      if ((normalized['imageUrl'] == null ||
+              normalized['imageUrl'].toString().trim().isEmpty) &&
+          normalized['backgroundImage'] != null) {
+        normalized['imageUrl'] = normalized['backgroundImage'];
+      }
+      if ((normalized['backgroundImage'] == null ||
+              normalized['backgroundImage'].toString().trim().isEmpty) &&
+          normalized['imageUrl'] != null) {
+        normalized['backgroundImage'] = normalized['imageUrl'];
+      }
+
+      // CTA: legacy keys were buttonText/buttonLink.
+      final ctaText = (normalized['ctaText'] ?? '').toString().trim();
+      final legacyButtonText =
+          (normalized['buttonText'] ?? '').toString().trim();
+      if (ctaText.isEmpty && legacyButtonText.isNotEmpty) {
+        normalized['ctaText'] = legacyButtonText;
+      }
+      if (legacyButtonText.isEmpty && ctaText.isNotEmpty) {
+        normalized['buttonText'] = ctaText;
+      }
+
+      final ctaLink = (normalized['ctaLink'] ?? '').toString().trim();
+      final legacyButtonLink =
+          (normalized['buttonLink'] ?? '').toString().trim();
+      if (ctaLink.isEmpty && legacyButtonLink.isNotEmpty) {
+        normalized['ctaLink'] = legacyButtonLink;
+      }
+      if (legacyButtonLink.isEmpty && ctaLink.isNotEmpty) {
+        normalized['buttonLink'] = ctaLink;
+      }
+    }
+
+    return normalized;
+  }
+
+  List<Map<String, dynamic>> _normalizeBlocksList(
+    List<Map<String, dynamic>> blocks,
+  ) {
+    return blocks.map((block) {
+      final next = Map<String, dynamic>.from(block);
+      final blockType =
+          (next['block_type'] ?? next['type'] ?? '').toString().trim();
+      final rawData = next['block_data'] ?? next['data'];
+
+      if (blockType.isEmpty) return next;
+
+      final normalized = _normalizeBlockData(
+        blockTypeRaw: blockType,
+        rawBlockData: rawData,
+      );
+
+      // Keep both key styles in sync when present.
+      if (next.containsKey('block_data') || !next.containsKey('data')) {
+        next['block_data'] = normalized;
+      }
+      if (next.containsKey('data')) {
+        next['data'] = normalized;
+      }
+
+      return next;
+    }).toList();
+  }
 
   List<WebsiteBanner> _banners = [];
   List<FeaturedProduct> _featuredProducts = [];
@@ -72,19 +280,42 @@ class WebsiteService extends ChangeNotifier {
   static const String _edgeCacheUrl =
       'https://vinabike-edge-cache.vinabike.workers.dev';
 
+  // Local cache refresh TTL for public store bootstrap.
+  // If we have recent cached settings+blocks, skip the immediate network refresh.
+  static const Duration _publicStoreBootstrapRefreshTTL = Duration(minutes: 5);
+
   /// Load ALL public store data - tries edge cache first, falls back to Supabase
   /// Edge cache: ~50ms (cache hit) vs Supabase direct: ~700ms
   Future<void> loadPublicStoreDataUnified(String tenantId) async {
-    final sw = Stopwatch()..start();
+    final swTotal = Stopwatch()..start();
 
     // Prevent duplicate loads
     if (_hasLoadedForTenant) {
-      debugPrint('[WebsiteService] Already loaded unified data for tenant');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (already loaded)');
+      }
+      return;
+    }
+
+    // If we already have recent cached settings+blocks, skip immediate network refresh.
+    // This is especially important on mobile where TLS/DNS can cost ~1s.
+    if (_hasFreshPublicStoreCache(tenantId)) {
+      _hasLoadedForTenant = true;
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (fresh local cache)');
+        debugPrint(
+            '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=LOCAL_CACHE_FRESH)');
+      }
       return;
     }
 
     if (_isLoadingForTenant) {
-      debugPrint('[WebsiteService] Already loading unified data, waiting...');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified waiting (already loading)');
+      }
       while (_isLoadingForTenant && !_hasLoadedForTenant) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
@@ -94,7 +325,10 @@ class WebsiteService extends ChangeNotifier {
     _isLoadingForTenant = true;
 
     try {
-      debugPrint('[WebsiteService] Loading data for tenant: $tenantId');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified start tenant=$tenantId');
+      }
 
       // Try edge cache first (Cloudflare Worker - 5 min TTL)
       // Cache HIT: ~100ms, Cache MISS: ~1000ms
@@ -104,70 +338,151 @@ class WebsiteService extends ChangeNotifier {
       // 1. Try PRE-FETCHED data (injected by index.html)
       // This is the fastest path (0ms wait if download is faster than app load)
       try {
+        final swPrefetch = Stopwatch()..start();
         final preloaded = await WebDataBridge.getPreloadedStoreData();
         if (preloaded != null) {
           response = preloaded;
           source = 'PREFETCH_JS';
-          debugPrint(
-              '🚀 [WebsiteService] Using JS Pre-fetched data! (0ms wait)');
+          if (_perfLogsEnabled) {
+            debugPrint(
+                '⏱️ [PublicStorePerf] Source=$source step=${swPrefetch.elapsedMilliseconds}ms');
+          }
+        } else {
+          if (_perfLogsEnabled) {
+            debugPrint(
+                '⏱️ [PublicStorePerf] Prefetch miss: ${swPrefetch.elapsedMilliseconds}ms');
+          }
         }
       } catch (e) {
-        debugPrint('⚠️ [WebsiteService] Pre-fetch check failed: $e');
+        if (_perfLogsEnabled) {
+          debugPrint('⏱️ [PublicStorePerf] Prefetch error: $e');
+        }
       }
 
       // 2. Try edge cache (if pre-fetch missed)
       if (response == null) {
         try {
+          final swEdge = Stopwatch()..start();
           final cacheResponse = await _tryEdgeCache(tenantId);
           if (cacheResponse != null) {
             response = cacheResponse;
             source = cacheResponse['_cache'] == 'HIT'
                 ? 'EDGE_CACHE_HIT'
                 : 'EDGE_CACHE_MISS';
-            debugPrint('⚡ [WebsiteService] Edge cache $source');
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '⏱️ [PublicStorePerf] Source=$source step=${swEdge.elapsedMilliseconds}ms');
+            }
+          } else {
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '⏱️ [PublicStorePerf] Edge cache miss/null: ${swEdge.elapsedMilliseconds}ms');
+            }
           }
         } catch (e) {
-          debugPrint('⚠️ [WebsiteService] Edge cache failed: $e');
+          if (_perfLogsEnabled) {
+            debugPrint('⏱️ [PublicStorePerf] Edge cache error: $e');
+          }
         }
       }
 
       // Fallback to direct Supabase RPC if edge cache fails
       if (response == null) {
-        debugPrint('[WebsiteService] Falling back to direct Supabase RPC');
+        final swRpc = Stopwatch()..start();
         response = await _supabase
             .rpc('get_public_store_data', params: {'p_tenant_id': tenantId});
         source = 'SUPABASE_DIRECT';
+
+        if (_perfLogsEnabled) {
+          debugPrint(
+              '⏱️ [PublicStorePerf] Source=$source step=${swRpc.elapsedMilliseconds}ms');
+        }
       }
 
       // debugPrint(
       //     '⏱️ [WebsiteService] Data loaded ($source): ${sw.elapsedMilliseconds}ms');
 
       if (response != null) {
-        // Parse settings
+        // Parse settings/blocks.
+        // NOTE: On the public store we don't need theme presets, so avoid
+        // decoding them here (saves work on the UI isolate).
         final settingsData =
             response['settings'] as Map<String, dynamic>? ?? {};
+        final blocksData = response['blocks'] as List? ?? [];
+
+        // If we already rendered from sync cache and the network returns the
+        // exact same payload, avoid triggering a full rebuild.
+        final prefs = _prefs;
+        final cachedSettingsJson = prefs?.getString('website_settings_$tenantId');
+        final cachedBlocksJson = prefs?.getString('website_blocks_$tenantId');
+        final hasExistingData = _settings.isNotEmpty || _blocks.isNotEmpty;
+
+        bool isSameAsCache = false;
+        if (cachedSettingsJson != null && cachedBlocksJson != null) {
+          try {
+            final newSettingsJson = jsonEncode(settingsData);
+            final newBlocksJson = jsonEncode(blocksData);
+            isSameAsCache =
+                hasExistingData &&
+                cachedSettingsJson == newSettingsJson &&
+                cachedBlocksJson == newBlocksJson;
+          } catch (_) {
+            // If encoding fails for any reason, just treat as changed.
+            isSameAsCache = false;
+          }
+        }
+
+        if (isSameAsCache) {
+          await _persistPublicStoreLastRefresh(tenantId);
+          _hasLoadedForTenant = true;
+          _isLoadingForTenant = false;
+
+          if (_perfLogsEnabled) {
+            debugPrint(
+                '⏱️ [PublicStorePerf] Network payload matches cache; skipping notify');
+            debugPrint(
+                '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=$source)');
+          }
+          return;
+        }
+
         _settings =
             settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
-        _themePresets = _parseThemePresets(_settings['theme_presets']);
 
-        // Parse blocks
-        final blocksData = response['blocks'] as List? ?? [];
         _blocks = List<Map<String, dynamic>>.from(blocksData);
 
-        debugPrint('✅ [WebsiteService] Load complete ($source): '
+        if (_perfLogsEnabled) {
+          debugPrint('⏱️ [PublicStorePerf] Parsed data: '
             '${_settings.length} settings, ${_blocks.length} blocks');
+        }
 
-        // Persist settings to local cache for instant next load
-        _persistSettingsToLocalCache(tenantId, settingsData);
+        // Persist caches and refresh time BEFORE we log completion.
+        // This makes the next app launch able to skip the edge-cache call.
+        await _persistSettingsToLocalCache(tenantId, settingsData);
+        await _persistBlocksToLocalCache(tenantId, _blocks);
+        await _persistPublicStoreLastRefresh(tenantId);
+
+        debugPrint('✅ [WebsiteService] Load complete ($source): '
+          '${_settings.length} settings, ${_blocks.length} blocks');
       }
 
       _hasLoadedForTenant = true;
       _isLoadingForTenant = false;
       _safeNotifyListeners();
+
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=$source)');
+      }
     } catch (e) {
       debugPrint(
           '⚠️ [WebsiteService] All methods failed, falling back to separate queries: $e');
       _isLoadingForTenant = false;
+
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [PublicStorePerf] Unified load failed after ${swTotal.elapsedMilliseconds}ms: $e');
+      }
 
       // Fallback to separate queries if RPC doesn't exist yet
       await Future.wait([
@@ -184,9 +499,74 @@ class WebsiteService extends ChangeNotifier {
     _prefs = prefs;
   }
 
+  bool _hasFreshPublicStoreCache(String tenantId) {
+    if (_prefs == null) return false;
+
+    final settingsKey = 'website_settings_$tenantId';
+    final blocksKey = 'website_blocks_$tenantId';
+    final lastRefreshKey = 'website_public_store_last_refresh_$tenantId';
+
+    final hasSettings = _prefs!.getString(settingsKey) != null;
+    final hasBlocks = _prefs!.getString(blocksKey) != null;
+    if (!hasSettings || !hasBlocks) return false;
+
+    final lastRefreshMs = _prefs!.getInt(lastRefreshKey);
+    if (lastRefreshMs == null) return false;
+
+    final lastRefresh = DateTime.fromMillisecondsSinceEpoch(lastRefreshMs);
+    return DateTime.now().difference(lastRefresh) <
+        _publicStoreBootstrapRefreshTTL;
+  }
+
+  Future<void> _persistPublicStoreLastRefresh(String tenantId) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final key = 'website_public_store_last_refresh_$tenantId';
+      await prefs.setInt(key, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {
+      // Ignore cache write errors
+    }
+  }
+
+  /// Loads BOTH settings + blocks from the synchronous cache and notifies once.
+  /// This reduces boot-time rebuild churn (helps avoid skipped frames).
+  bool preloadPublicStoreFromSynchronousCache(String tenantId) {
+    final settingsLoaded = _loadSettingsFromSynchronousCacheInternal(
+      tenantId,
+      notify: false,
+      parseThemePresets: false,
+    );
+    final blocksLoaded = _loadBlocksFromSynchronousCacheInternal(
+      tenantId,
+      notify: false,
+    );
+
+    if (settingsLoaded) {
+      debugPrint('💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
+    }
+    if (blocksLoaded) {
+      debugPrint('💾 [WebsiteService] Loaded blocks from SYNC cache (0ms)');
+    }
+
+    if (settingsLoaded || blocksLoaded) {
+      _safeNotifyListeners();
+    }
+
+    return settingsLoaded || blocksLoaded;
+  }
+
   /// Try to load settings from synchronous cache (0ms wait)
   /// Returns true if settings were successfully loaded
   bool loadSettingsFromSynchronousCache(String tenantId) {
+    return _loadSettingsFromSynchronousCacheInternal(tenantId, notify: true);
+  }
+
+  bool _loadSettingsFromSynchronousCacheInternal(
+    String tenantId, {
+    required bool notify,
+    bool parseThemePresets = true,
+  }) {
     if (_prefs == null) return false;
 
     try {
@@ -197,14 +577,53 @@ class WebsiteService extends ChangeNotifier {
         final settingsData = jsonDecode(cachedJson) as Map<String, dynamic>;
         _settings =
             settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
-        _themePresets = _parseThemePresets(_settings['theme_presets']);
+        if (parseThemePresets) {
+          _themePresets = _parseThemePresets(_settings['theme_presets']);
+        }
 
-        debugPrint('💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
-        _safeNotifyListeners();
+        if (notify) {
+          debugPrint(
+              '💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
+          _safeNotifyListeners();
+        }
         return true;
       }
     } catch (e) {
       debugPrint('⚠️ [WebsiteService] Failed to load sync cache: $e');
+    }
+    return false;
+  }
+
+  /// Try to load blocks from synchronous cache (0ms wait)
+  /// Returns true if blocks were successfully loaded
+  bool loadBlocksFromSynchronousCache(String tenantId) {
+    return _loadBlocksFromSynchronousCacheInternal(tenantId, notify: true);
+  }
+
+  bool _loadBlocksFromSynchronousCacheInternal(
+    String tenantId, {
+    required bool notify,
+  }) {
+    if (_prefs == null) return false;
+
+    try {
+      final cacheKey = 'website_blocks_$tenantId';
+      final cachedJson = _prefs!.getString(cacheKey);
+
+      if (cachedJson != null) {
+        final blocksData = jsonDecode(cachedJson) as List<dynamic>;
+        _blocks = List<Map<String, dynamic>>.from(
+          blocksData.map((e) => Map<String, dynamic>.from(e as Map)),
+        );
+
+        if (notify) {
+          debugPrint('💾 [WebsiteService] Loaded blocks from SYNC cache (0ms)');
+          _safeNotifyListeners();
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Failed to load blocks sync cache: $e');
     }
     return false;
   }
@@ -239,13 +658,25 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<void> _persistBlocksToLocalCache(
+      String tenantId, List<Map<String, dynamic>> blocks) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final cacheKey = 'website_blocks_$tenantId';
+      await prefs.setString(cacheKey, jsonEncode(blocks));
+    } catch (e) {
+      // Ignore cache write errors
+    }
+  }
+
   /// Try to fetch data from Cloudflare edge cache
   /// Returns null if cache is unavailable, otherwise returns the cached data
   Future<Map<String, dynamic>?> _tryEdgeCache(String tenantId) async {
     try {
       final uri = Uri.parse('$_edgeCacheUrl/cache/public-store-data');
 
-      final response = await http
+      final response = await _httpClient
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
@@ -254,7 +685,9 @@ class WebsiteService extends ChangeNotifier {
           .timeout(const Duration(seconds: 5)); // Don't wait too long
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        // Avoid blocking the UI isolate on mobile.
+        // compute() uses a background isolate on native platforms.
+        return await compute(_decodeJsonMap, response.body);
       }
       debugPrint(
           '⚠️ [WebsiteService] Edge cache returned status: ${response.statusCode}');
@@ -262,6 +695,24 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       debugPrint('⚠️ [WebsiteService] Edge cache request failed: $e');
       return null;
+    }
+  }
+
+  static Map<String, dynamic> _decodeJsonMap(String body) {
+    return jsonDecode(body) as Map<String, dynamic>;
+  }
+
+  /// Opens a quick connection to the edge-cache host to warm up DNS/TLS.
+  /// This can shave noticeable time off the first real request on mobile.
+  Future<void> warmUpEdgeCacheHost() async {
+    if (kIsWeb) return; // Web uses preconnect/prefetch in index.html.
+    try {
+      final uri = Uri.parse(_edgeCacheUrl);
+      await _httpClient
+          .get(uri)
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Ignore warmup errors
     }
   }
 
@@ -401,7 +852,7 @@ class WebsiteService extends ChangeNotifier {
         (a, b) => (a['order_index'] ?? 0).compareTo(b['order_index'] ?? 0),
       );
 
-      _blocks = data;
+      _blocks = _normalizeBlocksList(data);
       _hasLoadedForTenant = true; // Also mark as loaded for ERP preview mode
       _error = null;
     } catch (e) {
@@ -501,12 +952,13 @@ class WebsiteService extends ChangeNotifier {
       debugPrint(
           '⏱️ [WebsiteService] Total loadBlocksForTenant: ${sw.elapsedMilliseconds}ms (${data.length} blocks)');
 
-      // Cache the blocks for reuse
-      _blocks = data;
+      // Cache the blocks for reuse (normalized)
+      final normalizedBlocks = _normalizeBlocksList(data);
+      _blocks = normalizedBlocks;
       _hasLoadedForTenant = true;
       _safeNotifyListeners();
 
-      return data;
+      return normalizedBlocks;
     } catch (e) {
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
       _hasLoadedForTenant = true; // Mark as loaded even on error
@@ -515,11 +967,11 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> saveBlocks(List<Map<String, dynamic>> blocks) async {
+  Future<void> saveBlocks(List<Map<String, dynamic>> blocks, {String? tenantId}) async {
     try {
       // Get tenant_id for multi-tenant isolation
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
+      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+      if (effectiveTenantId == null) {
         throw Exception('No tenant ID found');
       }
 
@@ -528,7 +980,7 @@ class WebsiteService extends ChangeNotifier {
       final pagesResponse = await _supabase
           .from('website_pages')
           .select('id')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .eq('is_home', true)
           .limit(1);
 
@@ -542,7 +994,7 @@ class WebsiteService extends ChangeNotifier {
         final newPageResponse = await _supabase
             .from('website_pages')
             .insert({
-              'tenant_id': tenantId,
+              'tenant_id': effectiveTenantId,
               'slug': 'home',
               'title': 'Inicio',
               'is_home': true,
@@ -559,7 +1011,7 @@ class WebsiteService extends ChangeNotifier {
       await _supabase
           .from('website_blocks')
           .delete()
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .eq('page_id', homePageId!);
 
       // Insert new blocks
@@ -577,7 +1029,7 @@ class WebsiteService extends ChangeNotifier {
 
           return {
             'id': block['id'],
-            'tenant_id': tenantId, // ✅ Add tenant_id for RLS
+            'tenant_id': effectiveTenantId, // ✅ Add tenant_id for RLS
             'page_id': homePageId, // ✅ Add page_id for proper loading
             'block_type': blockType,
             'block_data': blockData,
@@ -589,6 +1041,9 @@ class WebsiteService extends ChangeNotifier {
 
         await _supabase.from('website_blocks').insert(blocksToInsert);
       }
+
+      // Content changed; invalidate any cached page snapshots.
+      WebsiteService.clearPageCache();
 
       await loadBlocks();
     } catch (e) {
@@ -1542,7 +1997,8 @@ class WebsiteService extends ChangeNotifier {
           .eq('page_id', pageId)
           .order('order_index', ascending: true);
 
-      return List<Map<String, dynamic>>.from(response as List);
+      final data = List<Map<String, dynamic>>.from(response as List);
+      return _normalizeBlocksList(data);
     } catch (e) {
       _error = 'Error al cargar bloques de página: $e';
       debugPrint(_error);
@@ -1552,10 +2008,10 @@ class WebsiteService extends ChangeNotifier {
 
   /// Save blocks for a specific page
   Future<void> saveBlocksForPage(
-      String pageId, List<Map<String, dynamic>> blocks) async {
+      String pageId, List<Map<String, dynamic>> blocks, {String? tenantId}) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
+      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+      if (effectiveTenantId == null) {
         throw Exception('No tenant ID found');
       }
 
@@ -1563,7 +2019,7 @@ class WebsiteService extends ChangeNotifier {
       await _supabase
           .from('website_blocks')
           .delete()
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .eq('page_id', pageId);
 
       // Insert new blocks
@@ -1574,7 +2030,7 @@ class WebsiteService extends ChangeNotifier {
 
           return {
             'id': block['id'],
-            'tenant_id': tenantId,
+            'tenant_id': effectiveTenantId,
             'page_id': pageId,
             'block_type': block['type'] ?? block['block_type'],
             'block_data': block['data'] ?? block['block_data'],
@@ -1587,6 +2043,9 @@ class WebsiteService extends ChangeNotifier {
         await _supabase.from('website_blocks').insert(blocksToInsert);
       }
 
+      // Content changed; invalidate any cached page snapshots.
+      WebsiteService.clearPageCache();
+
       _safeNotifyListeners();
     } catch (e) {
       _error = 'Error al guardar bloques de página: $e';
@@ -1595,6 +2054,89 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  // ==========================================================================
+  // EDITOR SAVE PIPELINE (Shared by PublicStoreLayout + PersistentEditorShell)
+  // ==========================================================================
+
+  Future<WebsiteEditorSaveResult> saveEditorChanges({
+    required String tenantId,
+    required List<Map<String, dynamic>> editorBlocks,
+    required Map<String, String> pendingHeaderSettings,
+    required Map<String, String> pendingThemeSettings,
+    String? pageId,
+    String? pageSlug,
+  }) async {
+    // Save header/theme settings first (if any)
+    if (pendingHeaderSettings.isNotEmpty) {
+      await saveSettings(pendingHeaderSettings);
+    }
+    if (pendingThemeSettings.isNotEmpty) {
+      await saveSettings(pendingThemeSettings);
+    }
+
+    // Map provider/editor blocks to the canonical save format
+    final blocksForSave = editorBlocks.asMap().entries.map((entry) {
+      final index = entry.key;
+      final block = entry.value;
+      final blockType = block['block_type'] ?? block['type'];
+      final blockData = block['block_data'] ?? block['data'] ?? {};
+      final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
+      final orderIndex = block['order_index'] ?? index;
+      return {
+        'id': block['id'],
+        'type': blockType,
+        'data': blockData,
+        'isVisible': isVisible,
+        'order_index': orderIndex,
+      };
+    }).toList();
+
+    // Resolve/create page by slug if needed (prevents accidentally overwriting home)
+    var resolvedPageId = pageId;
+    final normalizedSlug = (pageSlug ?? '').trim();
+    if (resolvedPageId == null && normalizedSlug.isNotEmpty && normalizedSlug.toLowerCase() != 'home') {
+      final existingPage = await getPageBySlug(normalizedSlug, tenantId: tenantId);
+      if (existingPage != null) {
+        resolvedPageId = existingPage.id;
+      } else {
+        final created = await createPage(
+          WebsitePage(
+            id: '',
+            tenantId: tenantId,
+            slug: normalizedSlug,
+            title: normalizedSlug,
+            isPublished: true,
+            isHome: false,
+            isSystem: false,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        resolvedPageId = created.id;
+      }
+    }
+
+    // Persist blocks
+    if (resolvedPageId != null) {
+      await saveBlocksForPage(resolvedPageId, blocksForSave, tenantId: tenantId);
+    } else {
+      await saveBlocks(blocksForSave, tenantId: tenantId);
+    }
+
+    // Reload fresh blocks from DB
+    final List<Map<String, dynamic>> freshBlocks;
+    if (resolvedPageId != null) {
+      freshBlocks = await loadBlocksForPage(resolvedPageId, tenantId: tenantId);
+    } else {
+      freshBlocks = await loadBlocksForTenant(tenantId);
+    }
+
+    return WebsiteEditorSaveResult(
+      pageId: resolvedPageId,
+      pageSlug: normalizedSlug.isNotEmpty ? normalizedSlug : pageSlug,
+      freshBlocks: freshBlocks,
+    );
+  }
   // ============================================================================
   // WEBSITE NAVIGATION (Menu Management - Dec 2025)
   // ============================================================================
@@ -1901,6 +2443,7 @@ class WebsiteService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ordersChannel?.unsubscribe();
+    _httpClient.close();
     super.dispose();
   }
 }

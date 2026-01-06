@@ -18,10 +18,12 @@ enum CategoryViewMode { list, cards }
 /// Navigate through categories like a file explorer with breadcrumbs
 class HierarchicalCategoryPage extends StatefulWidget {
   final String? categoryId; // Current category being viewed (null = root)
+  final bool embedded;
 
   const HierarchicalCategoryPage({
     super.key,
     this.categoryId,
+    this.embedded = false,
   });
 
   @override
@@ -217,10 +219,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MainLayout(
-      title: 'Categorías',
-      child: Column(
-        children: [
+    final body = Column(
+      children: [
           // Header with breadcrumbs and actions
           Container(
             padding: const EdgeInsets.all(16),
@@ -329,8 +329,14 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                 ? const Center(child: BrandedLoading())
                 : _buildContent(),
           ),
-        ],
-      ),
+      ],
+    );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(
+      title: 'Categorías',
+      child: body,
     );
   }
 

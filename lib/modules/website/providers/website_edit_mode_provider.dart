@@ -74,6 +74,19 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   String? get currentPageSlug => _currentPageSlug;
   bool get isEditingHomePage => _currentPageId == null;
 
+  /// Update the current page context without resetting blocks/settings.
+  ///
+  /// Useful when the page row is created/resolved at save-time and we want
+  /// subsequent saves to target the correct page.
+  void updateCurrentPageContext({
+    String? pageId,
+    String? pageSlug,
+  }) {
+    _currentPageId = pageId;
+    _currentPageSlug = pageSlug;
+    notifyListeners();
+  }
+
   /// Mark header as having unsaved changes
   void markHeaderChanged() {
     _hasHeaderChanges = true;

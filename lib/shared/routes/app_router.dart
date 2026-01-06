@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import '../widgets/main_layout.dart';
+import '../pages/auth_callback_page.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
@@ -253,6 +254,7 @@ class AppRouter {
 
           // Common public prefixes (clean + legacy)
           const publicPrefixes = [
+            '/auth/callback',
             '/productos',
             '/producto',
             '/carrito',
@@ -413,6 +415,15 @@ class AppRouter {
         return null;
       },
       routes: [
+        // ========================================
+        // AUTH CALLBACK ROUTE (Public)
+        // Prevents router redirects from stripping OAuth query params.
+        // ========================================
+        GoRoute(
+          path: '/auth/callback',
+          builder: (context, state) => const AuthCallbackPage(),
+        ),
+
         // ========================================
         // PUBLIC STORE ROUTES (Clean URLs)
         // Each route wraps its page with PublicStoreWrapper

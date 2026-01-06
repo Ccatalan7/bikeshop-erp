@@ -18,6 +18,11 @@ class TenantService extends ChangeNotifier {
 
   final _supabase = Supabase.instance.client;
 
+  // Public Store mobile optimization: when enabled (via dart-define), skip any
+  // auth-based tenant lookup. Store mode should use TenantDetectionService.
+  static const bool _ignoreAuthForPublicStore =
+      bool.fromEnvironment('PUBLIC_STORE_IGNORE_AUTH');
+
   // Cache for tenant_id to avoid repeated database queries
   String? _cachedTenantId;
   String? _cachedUserId;
@@ -33,6 +38,14 @@ class TenantService extends ChangeNotifier {
   ///
   /// OPTIMIZED: Uses caching to prevent multiple database queries
   Future<String?> getTenantId() async {
+    if (_ignoreAuthForPublicStore) {
+      if (!kReleaseMode) {
+        debugPrint(
+            '🏪 [TenantService] PUBLIC_STORE_IGNORE_AUTH enabled; skipping user_profiles lookup');
+      }
+      return null;
+    }
+
     final user = _supabase.auth.currentUser;
     if (user == null) {
       return null;
@@ -248,6 +261,7 @@ class TenantService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

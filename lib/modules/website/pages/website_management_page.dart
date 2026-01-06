@@ -11,7 +11,12 @@ import '../services/website_service.dart';
 
 /// Main hub for website content management
 class WebsiteManagementPage extends StatefulWidget {
-  const WebsiteManagementPage({super.key});
+  const WebsiteManagementPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<WebsiteManagementPage> createState() => _WebsiteManagementPageState();
@@ -44,17 +49,16 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     final theme = Theme.of(context);
 
     if (_isInitializing) {
-      return const MainLayout(
-        child: Center(child: BrandedLoading()),
-      );
+      final loading = const Center(child: BrandedLoading());
+      if (widget.embedded) return loading;
+      return const MainLayout(child: Center(child: BrandedLoading()));
     }
 
-    return MainLayout(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final body = SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             // Clean Professional Header
             Row(
               children: [
@@ -95,43 +99,45 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Open in New Tab - Only for web platform
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    debugPrint(
-                        '🌐 [WebsiteManagementPage] Nueva Pestaña button clicked - launching external URL');
-                    final uri = Uri.parse('${Uri.base.origin}/tienda');
-                    try {
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
+                if (!widget.embedded) ...[
+                  const SizedBox(width: 12),
+                  // Open in New Tab - Only for web platform
+                  OutlinedButton.icon(
+                    onPressed: () async {
                       debugPrint(
-                          '✅ [WebsiteManagementPage] External URL launched successfully');
-                    } catch (e) {
-                      debugPrint(
-                          '❌ [WebsiteManagementPage] Failed to launch external URL: $e');
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'No se pudo abrir en nueva pestaña. Usa Vista Previa.',
-                            ),
-                          ),
+                          '🌐 [WebsiteManagementPage] Nueva Pestaña button clicked - launching external URL');
+                      final uri = Uri.parse('${Uri.base.origin}/tienda');
+                      try {
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
                         );
+                        debugPrint(
+                            '✅ [WebsiteManagementPage] External URL launched successfully');
+                      } catch (e) {
+                        debugPrint(
+                            '❌ [WebsiteManagementPage] Failed to launch external URL: $e');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No se pudo abrir en nueva pestaña. Usa Vista Previa.',
+                              ),
+                            ),
+                          );
+                        }
                       }
-                    }
-                  },
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Nueva Pestaña'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Nueva Pestaña'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
 
@@ -385,10 +391,13 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 );
               },
             ),
-          ],
-        ),
+        ],
       ),
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildManagementCard({

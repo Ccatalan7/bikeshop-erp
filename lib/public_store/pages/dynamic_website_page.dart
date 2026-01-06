@@ -137,12 +137,22 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     // Don't check edit mode until blocks are loaded
     if (_isLoading || _pageId == null) return;
 
+    // URL params should only be used to ENTER editor context.
+    // Once already inside the editor shell, ignore URL forcing to prevent
+    // preview/edit bouncing on persistent shell routes.
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    if (editProvider.isInEditorContext) {
+      _editModeChecked = true;
+      return;
+    }
+
     // Get query parameters from GoRouter
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
 
-    final shouldEdit = queryParams['edit'] == 'true';
     final shouldPreview = queryParams['preview'] == 'true';
+    // If both are present, preview wins (prevents mode bouncing).
+    final shouldEdit = !shouldPreview && queryParams['edit'] == 'true';
 
     // Only process once per navigation (avoid infinite rebuilds)
     if (_editModeChecked) return;
@@ -321,7 +331,14 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       if (websiteService.settings.isEmpty) {
         await websiteService.loadSettingsForTenant(tenantId);
       }
-      _loadThemeFromSettings(websiteService);
+      WebsiteEditModeProvider? editProvider;
+      try {
+        editProvider = context.read<WebsiteEditModeProvider>();
+      } catch (_) {
+        editProvider = null;
+      }
+
+      _loadThemeFromSettings(websiteService, editProvider: editProvider);
 
       // Load pages using public method (no auth required)
       await websiteService.loadPagesForTenant(tenantId);
@@ -389,16 +406,26 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     }
   }
 
-  void _loadThemeFromSettings(WebsiteService service) {
-    final primary = service.getSetting('theme_primary_color');
-    final accent = service.getSetting('theme_accent_color');
-    final text = service.getSetting('theme_text_color');
-    final headingFont = service.getSetting('theme_heading_font');
-    final bodyFont = service.getSetting('theme_body_font');
-    final headingSize = service.getSetting('theme_heading_size');
-    final bodySize = service.getSetting('theme_body_size');
-    final sectionSpacing = service.getSetting('theme_section_spacing');
-    final containerPadding = service.getSetting('theme_container_padding');
+  void _loadThemeFromSettings(
+    WebsiteService service, {
+    WebsiteEditModeProvider? editProvider,
+  }) {
+    String eff(String key, String fallback) {
+      if (editProvider != null && editProvider.isInEditorContext) {
+        return editProvider.getEffectiveThemeSetting(key, fallback);
+      }
+      return fallback;
+    }
+
+    final primary = eff('theme_primary_color', service.getSetting('theme_primary_color'));
+    final accent = eff('theme_accent_color', service.getSetting('theme_accent_color'));
+    final text = eff('theme_text_color', service.getSetting('theme_text_color'));
+    final headingFont = eff('theme_heading_font', service.getSetting('theme_heading_font'));
+    final bodyFont = eff('theme_body_font', service.getSetting('theme_body_font'));
+    final headingSize = eff('theme_heading_size', service.getSetting('theme_heading_size'));
+    final bodySize = eff('theme_body_size', service.getSetting('theme_body_size'));
+    final sectionSpacing = eff('theme_section_spacing', service.getSetting('theme_section_spacing'));
+    final containerPadding = eff('theme_container_padding', service.getSetting('theme_container_padding'));
 
     final parsedPrimary = _tryParseColor(primary);
     final parsedAccent = _tryParseColor(accent);
@@ -434,6 +461,11 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     // Watch edit mode provider for changes
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
+    final isInEditorContext = editProvider.isInEditorContext;
+
+    // Watch website service so theme changes can apply without full reload
+    final websiteService = context.watch<WebsiteService>();
+    _loadThemeFromSettings(websiteService, editProvider: editProvider);
 
     // Get tenant ID for product loading (try public store provider or use cached)
     String? tenantId;
@@ -445,8 +477,16 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       // tenantId will be fetched in _loadPageData
     }
 
-    // If in edit mode, use blocks from provider (which tracks changes)
-    final blocksToRender = isEditMode ? editProvider.blocks : _blocks;
+    // In editor context (preview or edit), render the provider blocks for THIS page.
+    // This ensures switching to preview after saving shows the updated content.
+    final matchesPage = (editProvider.currentPageId != null &&
+        editProvider.currentPageId == _pageId) ||
+      (editProvider.currentPageSlug != null &&
+        editProvider.currentPageSlug == widget.slug);
+
+    final blocksToRender = (isInEditorContext && matchesPage)
+      ? editProvider.blocks
+      : _blocks;
 
     if (_isLoading) {
       return const FullPageLoading();

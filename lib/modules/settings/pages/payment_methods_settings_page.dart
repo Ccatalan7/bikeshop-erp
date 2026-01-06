@@ -9,7 +9,9 @@ import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
 
 class PaymentMethodsSettingsPage extends StatefulWidget {
-  const PaymentMethodsSettingsPage({super.key});
+  final bool embedded;
+
+  const PaymentMethodsSettingsPage({super.key, this.embedded = false});
 
   @override
   State<PaymentMethodsSettingsPage> createState() =>
@@ -31,18 +33,7 @@ class _PaymentMethodsSettingsPageState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Métodos de Pago'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showPaymentMethodDialog(context),
-            tooltip: 'Agregar método de pago',
-          ),
-        ],
-      ),
-      body: Consumer<PaymentMethodService>(
+    final body = Consumer<PaymentMethodService>(
         builder: (context, service, child) {
           if (service.isLoading) {
             return const Center(child: BrandedLoading());
@@ -91,16 +82,49 @@ class _PaymentMethodsSettingsPageState
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: service.paymentMethods.length,
-            itemBuilder: (context, index) {
-              final method = service.paymentMethods[index];
-              return _buildPaymentMethodCard(context, method);
-            },
+          return Column(
+            children: [
+              // In embedded mode, keep an obvious "Add" action since the AppBar is provided by the overlay.
+              if (widget.embedded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showPaymentMethodDialog(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar'),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: service.paymentMethods.length,
+                  itemBuilder: (context, index) {
+                    final method = service.paymentMethods[index];
+                    return _buildPaymentMethodCard(context, method);
+                  },
+                ),
+              ),
+            ],
           );
         },
+      );
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Métodos de Pago'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _showPaymentMethodDialog(context),
+            tooltip: 'Agregar método de pago',
+          ),
+        ],
       ),
+      body: body,
     );
   }
 

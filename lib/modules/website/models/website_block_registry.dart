@@ -24,13 +24,101 @@ class WebsiteBlockRegistry {
       defaultData: {
         'title': 'Tu tienda de bicicletas favorita',
         'subtitle': 'Reparamos, equipamos y acompañamos tu próxima aventura',
-        'buttonText': 'Ver Catálogo',
-        'backgroundImage': null,
-        'overlayColor': '#000000',
-        'overlayOpacity': 0.35,
+        // Prefer the newer keys used by the public renderer, while keeping
+        // legacy keys compatible via normalization.
+        'ctaText': 'Ver Catálogo',
+        'ctaLink': '/tienda/productos',
+        'imageUrl': null,
+        'showOverlay': true,
+        'overlayOpacity': 0.5,
+        'isFullScreen': false,
         'alignment': 'center',
+        // Mobile background focal point (0..1). Edited via a special control.
+        'mobileFocalPointX': 0.5,
+        'mobileFocalPointY': 0.5,
       },
-      usesCustomEditor: true,
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'subtitle',
+          label: 'Subtítulo',
+          type: WebsiteBlockFieldType.textarea,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'ctaText',
+          label: 'Texto del botón',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'ctaLink',
+          label: 'Enlace del botón',
+          type: WebsiteBlockFieldType.link,
+          defaultValue: '/tienda/productos',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'isFullScreen',
+          label: 'Pantalla completa',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: false,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'alignment',
+          label: 'Alineación',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'center',
+          options: [
+            WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
+            WebsiteBlockFieldOption(value: 'center', label: 'Centro'),
+            WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
+          ],
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'imageUrl',
+          label: 'Imagen de fondo',
+          type: WebsiteBlockFieldType.image,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showOverlay',
+          label: 'Mostrar overlay',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: true,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'overlayOpacity',
+          label: 'Opacidad overlay',
+          type: WebsiteBlockFieldType.number,
+          min: 0,
+          max: 1,
+          step: 0.1,
+          defaultValue: 0.5,
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'subtitle'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'cta',
+          label: 'Botón',
+          fieldKeys: ['ctaText', 'ctaLink'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'layout',
+          label: 'Layout',
+          fieldKeys: ['isFullScreen', 'alignment', 'imageUrl'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'style',
+          label: 'Estilo',
+          fieldKeys: ['showOverlay', 'overlayOpacity'],
+        ),
+      ],
     ),
     WebsiteBlockType.carousel: WebsiteBlockDefinition(
       type: WebsiteBlockType.carousel,
@@ -78,25 +166,37 @@ class WebsiteBlockRegistry {
       description: 'Sección simple de texto con editor inline.',
       defaultData: {
         'text': 'Escribe tu texto aquí',
-        'align': 'left',
+        'preset': 'paragraph',
+        'maxWidth': 800,
       },
       fields: const [
         WebsiteBlockFieldSchema(
           key: 'text',
           label: 'Texto',
-          type: WebsiteBlockFieldType.richtext,
+          type: WebsiteBlockFieldType.textarea,
           group: 'content',
         ),
         WebsiteBlockFieldSchema(
-          key: 'align',
-          label: 'Alineación',
+          key: 'preset',
+          label: 'Preset',
           type: WebsiteBlockFieldType.select,
-          defaultValue: 'left',
+          defaultValue: 'paragraph',
           options: [
-            WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
-            WebsiteBlockFieldOption(value: 'center', label: 'Centro'),
-            WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
+            WebsiteBlockFieldOption(value: 'heading', label: 'Título'),
+            WebsiteBlockFieldOption(value: 'subheading', label: 'Subtítulo'),
+            WebsiteBlockFieldOption(value: 'paragraph', label: 'Párrafo'),
+            WebsiteBlockFieldOption(value: 'caption', label: 'Texto pequeño'),
           ],
+          group: 'layout',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'maxWidth',
+          label: 'Ancho máximo (px)',
+          type: WebsiteBlockFieldType.number,
+          min: 200,
+          max: 1200,
+          step: 10,
+          defaultValue: 800,
           group: 'layout',
         ),
       ],
@@ -109,7 +209,7 @@ class WebsiteBlockRegistry {
         WebsiteBlockControlSection(
           id: 'layout',
           label: 'Diseño',
-          fieldKeys: ['align'],
+          fieldKeys: ['preset', 'maxWidth'],
         ),
       ],
     ),
@@ -118,13 +218,13 @@ class WebsiteBlockRegistry {
       title: 'Botón',
       description: 'Botón con enlace (CTA).',
       defaultData: {
-        'text': 'Haz clic aquí',
+        'label': 'Haz clic aquí',
         'link': '/tienda/productos',
-        'variant': 'primary',
+        'style': 'filled',
       },
       fields: const [
         WebsiteBlockFieldSchema(
-          key: 'text',
+          key: 'label',
           label: 'Texto',
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Haz clic aquí',
@@ -133,19 +233,19 @@ class WebsiteBlockRegistry {
         WebsiteBlockFieldSchema(
           key: 'link',
           label: 'Enlace',
-          type: WebsiteBlockFieldType.text,
+          type: WebsiteBlockFieldType.link,
           defaultValue: '/tienda/productos',
           group: 'content',
         ),
         WebsiteBlockFieldSchema(
-          key: 'variant',
+          key: 'style',
           label: 'Estilo',
           type: WebsiteBlockFieldType.select,
-          defaultValue: 'primary',
+          defaultValue: 'filled',
           options: [
-            WebsiteBlockFieldOption(value: 'primary', label: 'Primario'),
-            WebsiteBlockFieldOption(value: 'secondary', label: 'Secundario'),
-            WebsiteBlockFieldOption(value: 'outline', label: 'Outline'),
+            WebsiteBlockFieldOption(value: 'filled', label: 'Relleno'),
+            WebsiteBlockFieldOption(value: 'outline', label: 'Borde'),
+            WebsiteBlockFieldOption(value: 'text', label: 'Texto'),
           ],
           group: 'design',
         ),
@@ -154,12 +254,12 @@ class WebsiteBlockRegistry {
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
-          fieldKeys: ['text', 'link'],
+          fieldKeys: ['label', 'link'],
         ),
         WebsiteBlockControlSection(
           id: 'design',
           label: 'Diseño',
-          fieldKeys: ['variant'],
+          fieldKeys: ['style'],
         ),
       ],
     ),
@@ -168,22 +268,11 @@ class WebsiteBlockRegistry {
       title: 'Separador',
       description: 'Línea divisoria para separar secciones.',
       defaultData: {
-        'style': 'line',
+        'widthPct': 1.0,
         'thickness': 1,
         'color': '#E5E7EB',
       },
       fields: const [
-        WebsiteBlockFieldSchema(
-          key: 'style',
-          label: 'Estilo',
-          type: WebsiteBlockFieldType.select,
-          defaultValue: 'line',
-          options: [
-            WebsiteBlockFieldOption(value: 'line', label: 'Línea'),
-            WebsiteBlockFieldOption(value: 'dashed', label: 'Punteado'),
-            WebsiteBlockFieldOption(value: 'space', label: 'Espacio'),
-          ],
-        ),
         WebsiteBlockFieldSchema(
           key: 'thickness',
           label: 'Grosor',
@@ -194,10 +283,26 @@ class WebsiteBlockRegistry {
           defaultValue: 1,
         ),
         WebsiteBlockFieldSchema(
+          key: 'widthPct',
+          label: 'Ancho (%)',
+          type: WebsiteBlockFieldType.number,
+          min: 0.1,
+          max: 1.0,
+          step: 0.05,
+          defaultValue: 1.0,
+        ),
+        WebsiteBlockFieldSchema(
           key: 'color',
           label: 'Color',
           type: WebsiteBlockFieldType.color,
           defaultValue: '#E5E7EB',
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'appearance',
+          label: 'Apariencia',
+          fieldKeys: ['thickness', 'widthPct', 'color'],
         ),
       ],
     ),
@@ -518,7 +623,7 @@ class WebsiteBlockRegistry {
         WebsiteBlockFieldSchema(
           key: 'buttonLink',
           label: 'Enlace del botón',
-          type: WebsiteBlockFieldType.text,
+          type: WebsiteBlockFieldType.link,
           defaultValue: '/contacto',
         ),
         WebsiteBlockFieldSchema(
@@ -872,7 +977,7 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldSchema(
               key: 'link',
               label: 'Enlace',
-              type: WebsiteBlockFieldType.text,
+              type: WebsiteBlockFieldType.link,
               defaultValue: '/tienda/productos',
             ),
           ],
@@ -893,12 +998,94 @@ class WebsiteBlockRegistry {
       defaultData: {
         'title': 'Vive la experiencia',
         'subtitle': 'Equipamiento, servicio y comunidad ciclista',
-        'videoUrl': null,
-        'posterImage': null,
-        'buttonText': 'Ver productos',
-        'buttonLink': '/tienda/productos',
+        'imageUrl': null,
+        'videoUrl': '',
+        'videoFileUrl': '',
+        'showCta': true,
+        'ctaText': 'Ver productos',
+        'ctaLink': '/tienda/productos',
+        'overlayOpacity': 0.5,
       },
-      usesCustomEditor: true,
+      fields: const [
+        WebsiteBlockFieldSchema(
+          key: 'title',
+          label: 'Título',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'subtitle',
+          label: 'Subtítulo',
+          type: WebsiteBlockFieldType.textarea,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'imageUrl',
+          label: 'Imagen de fondo',
+          type: WebsiteBlockFieldType.image,
+          helpText: 'Se usa como fallback en móvil o si el video no carga.',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'videoUrl',
+          label: 'URL de YouTube',
+          type: WebsiteBlockFieldType.text,
+          helpText:
+              'Si ingresas un YouTube URL, se limpiará el archivo de video.',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'videoFileUrl',
+          label: 'Archivo de video',
+          type: WebsiteBlockFieldType.video,
+          helpText:
+              'Sube un MP4/WebM. Al subir un archivo, se limpiará el YouTube URL.',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showCta',
+          label: 'Mostrar botón',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: true,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'ctaText',
+          label: 'Texto del botón',
+          type: WebsiteBlockFieldType.text,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'ctaLink',
+          label: 'Enlace del botón',
+          type: WebsiteBlockFieldType.link,
+          defaultValue: '/tienda/productos',
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'overlayOpacity',
+          label: 'Opacidad overlay',
+          type: WebsiteBlockFieldType.number,
+          min: 0,
+          max: 1,
+          step: 0.1,
+          defaultValue: 0.5,
+        ),
+      ],
+      controlSections: const [
+        WebsiteBlockControlSection(
+          id: 'content',
+          label: 'Contenido',
+          fieldKeys: ['title', 'subtitle', 'imageUrl'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'video',
+          label: 'Video',
+          fieldKeys: ['videoUrl', 'videoFileUrl'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'cta',
+          label: 'Botón',
+          fieldKeys: ['showCta', 'ctaText', 'ctaLink'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'style',
+          label: 'Estilo',
+          fieldKeys: ['overlayOpacity'],
+        ),
+      ],
     ),
     WebsiteBlockType.partnersBanner: WebsiteBlockDefinition(
       type: WebsiteBlockType.partnersBanner,

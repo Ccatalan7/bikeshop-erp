@@ -9,7 +9,12 @@ import '../../../shared/widgets/main_layout.dart';
 
 /// Page for managing website content (text blocks, pages, etc.)
 class ContentManagementPage extends StatefulWidget {
-  const ContentManagementPage({super.key});
+  const ContentManagementPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<ContentManagementPage> createState() => _ContentManagementPageState();
@@ -238,20 +243,21 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();
 
-    return MainLayout(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 8),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/website'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Text('Contenido del Sitio', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
@@ -340,9 +346,12 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildSectionCard(

@@ -45,7 +45,10 @@
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
+  <link rel="dns-prefetch" href="//vinabike-edge-cache.vinabike.workers.dev">
   <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preload" href="main.dart.js" as="script">
   
   <style>
     html,
@@ -131,6 +134,47 @@
       "addressCountry": "Chile"
     }
   }
+  </script>
+
+  <!-- Pre-fetch public store data ASAP (overlaps Flutter engine startup) -->
+  <script>
+    (function () {
+      try {
+        // Only prefetch for Vinabike domains (avoid leaking wrong-tenant data on future multi-tenant hosts)
+        var host = (window.location.host || '').toLowerCase();
+        if (host.startsWith('www.')) host = host.substring(4);
+
+        var isVinabikeHost = host === 'vinabike.cl' || host === 'vinabike-store.web.app';
+        if (!isVinabikeHost) return;
+
+        var tenantId = '5443b130-cc28-45af-a420-cd500b288890';
+        var edgeUrl = 'https://vinabike-edge-cache.vinabike.workers.dev/cache/public-store-data';
+
+        // Exposed as a Promise so Flutter can await it via WebDataBridge
+        window.flutter_injected_preloaded_data = (async function () {
+          var controller = new AbortController();
+          var timeout = setTimeout(function () { controller.abort(); }, 4500);
+          try {
+            var res = await fetch(edgeUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ p_tenant_id: tenantId }),
+              signal: controller.signal,
+              credentials: 'omit',
+            });
+
+            if (!res.ok) return null;
+            return await res.json();
+          } catch (e) {
+            return null;
+          } finally {
+            clearTimeout(timeout);
+          }
+        })();
+      } catch (e) {
+        // Ignore prefetch failures
+      }
+    })();
   </script>
 </head>
 

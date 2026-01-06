@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'text_formatting_toolbar.dart';
 
@@ -55,6 +56,29 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   late TextFormatting _currentFormatting;
   final Object _editingGroupId = Object(); // Unique group ID for this editor
 
+  void _requestToolbarRebuild() {
+    // OverlayEntry is not part of this widget's build tree.
+    // setState() will NOT rebuild the overlay while it's open.
+    // Also: markNeedsBuild cannot be called during the framework build phase.
+    final entry = _toolbarEntry;
+    if (entry == null) return;
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final canRebuildNow =
+        phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks;
+
+    if (canRebuildNow) {
+      entry.markNeedsBuild();
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_toolbarEntry != entry) return;
+      entry.markNeedsBuild();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +98,11 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     if (oldWidget.formatting != widget.formatting &&
         widget.formatting != null) {
       _currentFormatting = widget.formatting!;
+
+      // If the toolbar is open, it must be rebuilt explicitly.
+      if (_isEditing && _toolbarEntry != null) {
+        _requestToolbarRebuild();
+      }
     }
     if (oldWidget.maxWidth != widget.maxWidth && _currentWidth == null) {
       _currentWidth = widget.maxWidth;
@@ -169,6 +198,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                             setState(() => _currentFormatting = formatting);
                             widget.onFormattingChanged?.call(formatting);
 
+                            // Force overlay repaint so controls reflect changes immediately.
+                            _requestToolbarRebuild();
+
                             // Keep toolbar position reasonable after style changes.
                             _scheduleToolbarReposition();
 
@@ -226,6 +258,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
           _toolbarPreferBelow = preferBelow;
           _toolbarDx = dx;
         });
+
+        // Repaint the overlay; its builder reads _toolbarPreferBelow/_toolbarDx.
+        _requestToolbarRebuild();
       }
     });
   }
@@ -240,6 +275,13 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   TextStyle get _effectiveStyle {
     final baseStyle = widget.baseStyle ?? const TextStyle(fontSize: 16);
     return _currentFormatting.applyTo(baseStyle);
+  }
+
+  TextAlign get _effectiveTextAlign {
+    // Treat TextAlign.start as "unset" so blocks can provide their own default
+    // alignment (e.g. centered hero headings) until the user explicitly changes it.
+    final formattedAlign = _currentFormatting.textAlign;
+    return formattedAlign == TextAlign.start ? widget.textAlign : formattedAlign;
   }
 
   @override
@@ -260,7 +302,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                 fontStyle: FontStyle.italic,
               )
             : _effectiveStyle,
-        textAlign: widget.textAlign,
+        textAlign: _effectiveTextAlign,
         maxLines: widget.maxLines,
         overflow: widget.maxLines != null ? TextOverflow.ellipsis : null,
       );
@@ -498,7 +540,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
         controller: _controller,
         focusNode: _focusNode,
         style: _effectiveStyle, // Keep original style including color!
-        textAlign: widget.textAlign, // Keep original alignment!
+        textAlign: _effectiveTextAlign,
         maxLines: widget.maxLines,
         cursorColor: const Color(0xFF00A09D),
         backgroundCursorColor: Colors.grey,
@@ -525,7 +567,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                   fontStyle: FontStyle.italic,
                 )
               : _effectiveStyle,
-          textAlign: widget.textAlign, // Keep original alignment!
+          textAlign: _effectiveTextAlign,
           maxLines: widget.maxLines,
           overflow: widget.maxLines != null ? TextOverflow.ellipsis : null,
         ),

@@ -9,7 +9,12 @@ import '../models/website_models.dart';
 
 /// Page for managing online orders from the website
 class OnlineOrdersPage extends StatefulWidget {
-  const OnlineOrdersPage({super.key});
+  const OnlineOrdersPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<OnlineOrdersPage> createState() => _OnlineOrdersPageState();
@@ -44,20 +49,21 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       return true;
     }).toList();
 
-    return MainLayout(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 8),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/website'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Text('Pedidos Online',
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
@@ -228,9 +234,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         },
                       ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildOrderCard(BuildContext context, OnlineOrder order) {

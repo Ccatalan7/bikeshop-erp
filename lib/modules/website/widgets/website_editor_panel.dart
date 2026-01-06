@@ -704,6 +704,32 @@ class _SyncTabState extends State<_SyncTab> {
             'Sincroniza tu información de negocio directamente desde Google para mejorar tu SEO y mostrar reseñas.',
             style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Colors.white54, size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Si al conectar ves “Acceso bloqueado (403)”, no es un bug del editor: Google bloquea el acceso porque este sync usa el scope restringido business.manage.\n\nSolución rápida: en el proyecto de Google Cloud del OAuth configurado en Supabase → OAuth consent screen → Test users, agrega tu correo (ej: vinabikechile@gmail.com).\n\nPara uso público: debes completar la verificación de Google para ese scope.',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
           if (googleService.error != null)
             Container(
@@ -769,6 +795,59 @@ class _SyncTabState extends State<_SyncTab> {
                         color: Colors.white54, size: 18),
                     tooltip: 'Reconectar',
                     onPressed: () => googleService.connect(),
+                  ),
+                ],
+              ),
+            )
+          else if (googleService.isLinked)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.orange.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.orange, size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Falta un paso más',
+                          style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Tu cuenta Google está vinculada, pero necesitamos renovar el permiso para acceder a los datos del negocio.',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: googleService.isLoading
+                          ? null
+                          : () => googleService.connect(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.black,
+                      ),
+                      child: Text(googleService.isLoading
+                          ? 'Conectando...'
+                          : 'Autorizar Acceso Google'),
+                    ),
                   ),
                 ],
               ),
@@ -1239,41 +1318,28 @@ class _EditBlockTab extends StatelessWidget {
     // Build controls based on block type
     switch (blockType) {
       case 'hero':
-        return _HeroBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'carousel':
         return _CarouselBlockControls(
             data: data, blockId: blockId, provider: editProvider);
       case 'canvas':
         return _CanvasBlockControls(
             data: data, blockId: blockId, provider: editProvider);
-      case 'text':
-        return _TextBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
-      case 'button':
-        return _ButtonBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
-      case 'divider':
-        return _DividerBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'products':
         return _ProductsBlockControls(
             data: data, blockId: blockId, provider: editProvider);
       case 'about':
-        return _AboutBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'categoryGrid':
-        return _CategoryGridBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
-      case 'videoBanner':
-        return _VideoBannerBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'partnersBanner':
-        return _PartnersBannerBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
       case 'brandLogos':
-        return _BrandLogosBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
+      case 'videoBanner':
+        final parsedType = _tryParseWebsiteBlockType(blockType);
+        return _GenericBlockControls(
+          data: data,
+          blockId: blockId,
+          provider: editProvider,
+          blockType: parsedType,
+          rawBlockType: blockType,
+        );
       default:
         final parsedType = _tryParseWebsiteBlockType(blockType);
         return _GenericBlockControls(
@@ -1672,96 +1738,6 @@ class _QuickActionButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Hero block controls
-class _HeroBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _HeroBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _EditorTextField(
-          label: 'Título',
-          value: data['title']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorTextField(
-          label: 'Subtítulo',
-          value: data['subtitle']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'subtitle', v),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 16),
-        _EditorTextField(
-          label: 'Texto del botón',
-          value: data['buttonText']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'buttonText', v),
-        ),
-        const SizedBox(height: 16),
-        _LinkPicker(
-          label: 'Enlace del botón',
-          currentLink: data['buttonLink']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'buttonLink', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorToggle(
-          label: 'Pantalla Completa',
-          value: data['isFullScreen'] == true,
-          onChanged: (v) =>
-              provider.updateBlockData(blockId, 'isFullScreen', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorDropdown(
-          label: 'Alineación',
-          value: data['alignment']?.toString() ?? 'center',
-          options: const [
-            ('left', 'Izquierda'),
-            ('center', 'Centro'),
-            ('right', 'Derecha'),
-          ],
-          onChanged: (v) => provider.updateBlockData(blockId, 'alignment', v),
-        ),
-        const SizedBox(height: 20),
-        const _SectionHeader('Imagen de fondo'),
-        const SizedBox(height: 12),
-        _ImagePicker(
-          currentUrl: data['backgroundImage']?.toString(),
-          onChanged: (url) =>
-              provider.updateBlockData(blockId, 'backgroundImage', url),
-        ),
-        const SizedBox(height: 16),
-        // Focal point picker for mobile background alignment
-        FocalPointPicker(
-          imageUrl: data['backgroundImage']?.toString(),
-          focalX: (data['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
-          focalY: (data['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
-          onChanged: (x, y) {
-            // Update both values atomically, don't save history for each drag
-            // (history will be saved when user releases or clicks elsewhere)
-            provider.updateBlockDataMultiple(
-                blockId,
-                {
-                  'mobileFocalPointX': x,
-                  'mobileFocalPointY': y,
-                },
-                saveHistory: false);
-          },
-        ),
-      ],
     );
   }
 }
@@ -3580,57 +3556,6 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
   }
 }
 
-/// About block controls
-class _AboutBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _AboutBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final contentValue =
-        (data['content'] ?? data['description'] ?? '').toString();
-    final imageValue = (data['imageUrl'] ?? data['image'] ?? '').toString();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _EditorTextField(
-          label: 'Título',
-          value: data['title']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'title', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorTextField(
-          label: 'Contenido',
-          value: contentValue,
-          onChanged: (v) {
-            provider.updateBlockData(blockId, 'content', v);
-            provider.updateBlockData(blockId, 'description', v);
-          },
-          maxLines: 5,
-        ),
-        const SizedBox(height: 20),
-        const _SectionHeader('Imagen'),
-        const SizedBox(height: 12),
-        _ImagePicker(
-          currentUrl: imageValue,
-          onChanged: (url) {
-            provider.updateBlockData(blockId, 'imageUrl', url);
-            provider.updateBlockData(blockId, 'image', url);
-          },
-        ),
-      ],
-    );
-  }
-}
-
 /// CTA block controls
 /// Generic block controls for types without specific UI
 class _GenericBlockControls extends StatelessWidget {
@@ -3720,7 +3645,15 @@ class _GenericBlockControls extends StatelessWidget {
             _EditorTextField(
               label: label,
               value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
-              onChanged: (v) => setValue(v),
+              onChanged: (v) {
+                setValue(v);
+                if (field.key == 'videoUrl' && v.trim().isNotEmpty) {
+                  // If entering a YouTube URL, clear any uploaded file.
+                  if (currentData.containsKey('videoFileUrl')) {
+                    provider.updateBlockData(blockId, 'videoFileUrl', '');
+                  }
+                }
+              },
             ),
             _helpText(field.helpText),
           ],
@@ -3750,6 +3683,60 @@ class _GenericBlockControls extends StatelessWidget {
               hint: '<p>...</p>',
             ),
             _helpText(field.helpText ?? 'Acepta HTML.'),
+          ],
+        );
+      case WebsiteBlockFieldType.link:
+        final current =
+            raw?.toString() ?? (field.defaultValue?.toString() ?? '');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EditorTextField(
+              label: label,
+              value: current,
+              onChanged: (v) => setValue(v),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final next = await _pickPageLink(context);
+                      if (next != null && next.isNotEmpty) setValue(next);
+                    },
+                    icon: const Icon(Icons.article_outlined, size: 16),
+                    label: const Text('Elegir pgina'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.15)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final next = await _pickCommonLink(context);
+                      if (next != null && next.isNotEmpty) setValue(next);
+                    },
+                    icon: const Icon(Icons.link, size: 16),
+                    label: const Text('Enlaces rpidos'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.15)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            _helpText(field.helpText),
           ],
         );
       case WebsiteBlockFieldType.color:
@@ -3801,6 +3788,27 @@ class _GenericBlockControls extends StatelessWidget {
             _ImagePicker(
               currentUrl: currentUrl,
               onChanged: (url) => setValue(url),
+            ),
+            _helpText(field.helpText),
+          ],
+        );
+      case WebsiteBlockFieldType.video:
+        final currentUrl = raw?.toString();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 8),
+            _VideoPicker(
+              currentUrl: currentUrl,
+              onChanged: (url) {
+                setValue(url);
+                if (field.key == 'videoFileUrl' && url.trim().isNotEmpty) {
+                  // If uploading a file, clear any YouTube URL.
+                  provider.updateBlockData(blockId, 'videoUrl', '');
+                }
+              },
             ),
             _helpText(field.helpText),
           ],
@@ -3935,6 +3943,38 @@ class _GenericBlockControls extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    if (index > 0)
+                      InkWell(
+                        onTap: () {
+                          final next = List<Map<String, dynamic>>.from(items);
+                          final tmp = next[index - 1];
+                          next[index - 1] = next[index];
+                          next[index] = tmp;
+                          setValue(next);
+                        },
+                        child: Icon(
+                          Icons.arrow_upward,
+                          size: 16,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    if (index > 0) const SizedBox(width: 10),
+                    if (index < items.length - 1)
+                      InkWell(
+                        onTap: () {
+                          final next = List<Map<String, dynamic>>.from(items);
+                          final tmp = next[index + 1];
+                          next[index + 1] = next[index];
+                          next[index] = tmp;
+                          setValue(next);
+                        },
+                        child: Icon(
+                          Icons.arrow_downward,
+                          size: 16,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    if (index < items.length - 1) const SizedBox(width: 10),
                     InkWell(
                       onTap: () {
                         final next = List<Map<String, dynamic>>.from(items);
@@ -4093,6 +4133,35 @@ class _GenericBlockControls extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...sectionWidgets,
+          if (parsed == WebsiteBlockType.hero) ...[
+            const SizedBox(height: 12),
+            _CollapsibleSection(
+              title: 'Foco móvil',
+              initiallyExpanded: true,
+              children: [
+                const _SectionHeader('Imagen de fondo (móvil)'),
+                const SizedBox(height: 12),
+                FocalPointPicker(
+                  imageUrl:
+                      (data['imageUrl'] ?? data['backgroundImage'])?.toString(),
+                  focalX:
+                      (data['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
+                  focalY:
+                      (data['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
+                  onChanged: (x, y) {
+                    provider.updateBlockDataMultiple(
+                      blockId,
+                      {
+                        'mobileFocalPointX': x,
+                        'mobileFocalPointY': y,
+                      },
+                      saveHistory: false,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
         ],
       );
     }
@@ -4143,161 +4212,19 @@ class _GenericBlockControls extends StatelessWidget {
       ],
     );
   }
-}
 
-/// Controls for simple Text block (inline-edit on canvas + fallback editing here).
-class _TextBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _TextBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final preset = (data['preset'] ?? 'paragraph').toString();
-    final maxWidth = (data['maxWidth'] as num?)?.toDouble() ?? 800.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader('Texto'),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Texto (también se edita haciendo clic en la página)',
-          value: data['text']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'text', v),
-          maxLines: 4,
-        ),
-        const SizedBox(height: 16),
-        _EditorDropdown(
-          label: 'Preset',
-          value: preset,
-          options: const [
-            ('heading', 'Título'),
-            ('subheading', 'Subtítulo'),
-            ('paragraph', 'Párrafo'),
-            ('caption', 'Texto pequeño'),
-          ],
-          onChanged: (v) => provider.updateBlockData(blockId, 'preset', v),
-        ),
-        const SizedBox(height: 16),
-        _EditorSlider(
-          label: 'Ancho máximo',
-          value: maxWidth.clamp(200, 1200),
-          min: 200,
-          max: 1200,
-          divisions: 50,
-          valueLabel: '${maxWidth.toStringAsFixed(0)}px',
-          onChanged: (v) => provider.updateBlockData(blockId, 'maxWidth', v),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Tip: usa la barra flotante de formato (negrita, color, alineación) sobre el texto.',
-          style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
-        ),
-      ],
-    );
-  }
-}
-
-/// Controls for Button block (inline label + link picker).
-class _ButtonBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _ButtonBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final style = (data['style'] ?? 'filled').toString();
-    final link = (data['link'] ?? '').toString();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader('Botón'),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Texto del botón',
-          value: data['label']?.toString() ?? '',
-          onChanged: (v) => provider.updateBlockData(blockId, 'label', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Enlace',
-          value: link,
-          onChanged: (v) => provider.updateBlockData(blockId, 'link', v),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _pickPage(context),
-                icon: const Icon(Icons.article_outlined, size: 16),
-                label: const Text('Elegir página'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _pickCommonLink(context),
-                icon: const Icon(Icons.link, size: 16),
-                label: const Text('Enlaces rápidos'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _EditorDropdown(
-          label: 'Estilo',
-          value: style,
-          options: const [
-            ('filled', 'Relleno'),
-            ('outline', 'Borde'),
-            ('text', 'Texto'),
-          ],
-          onChanged: (v) => provider.updateBlockData(blockId, 'style', v),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _pickPage(BuildContext context) async {
+  Future<String?> _pickPageLink(BuildContext context) async {
     final websiteService = context.read<WebsiteService>();
     try {
       if (websiteService.pages.isEmpty) {
         await websiteService.loadPages();
       }
     } catch (_) {
-      // If load fails (e.g., in public store without ERP auth), we'll still show whatever we have.
+      // If load fails (e.g., public store), still show whatever we have.
     }
 
     final pages = websiteService.pages;
-    if (!context.mounted) return;
+    if (!context.mounted) return null;
 
     final selected = await showDialog<WebsitePage>(
       context: context,
@@ -4347,13 +4274,12 @@ class _ButtonBlockControls extends StatelessWidget {
       ),
     );
 
-    if (selected == null) return;
-    final nextLink = selected.isHome ? '/' : '/pagina/${selected.slug}';
-    provider.updateBlockData(blockId, 'link', nextLink);
+    if (selected == null) return null;
+    return selected.isHome ? '/' : '/pagina/${selected.slug}';
   }
 
-  Future<void> _pickCommonLink(BuildContext context) async {
-    final selected = await showDialog<String>(
+  Future<String?> _pickCommonLink(BuildContext context) async {
+    return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Enlaces rápidos'),
@@ -4369,22 +4295,16 @@ class _ButtonBlockControls extends StatelessWidget {
                 onTap: () => Navigator.pop(context, '/productos'),
               ),
               ListTile(
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Inicio'),
+                subtitle: const Text('/'),
+                onTap: () => Navigator.pop(context, '/'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.contact_mail_outlined),
                 title: const Text('Contacto'),
                 subtitle: const Text('/contacto'),
                 onTap: () => Navigator.pop(context, '/contacto'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.shopping_cart_outlined),
-                title: const Text('Carrito'),
-                subtitle: const Text('/carrito'),
-                onTap: () => Navigator.pop(context, '/carrito'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.payment_outlined),
-                title: const Text('Checkout'),
-                subtitle: const Text('/checkout'),
-                onTap: () => Navigator.pop(context, '/checkout'),
               ),
             ],
           ),
@@ -4396,61 +4316,6 @@ class _ButtonBlockControls extends StatelessWidget {
           ),
         ],
       ),
-    );
-    if (selected == null) return;
-    provider.updateBlockData(blockId, 'link', selected);
-  }
-}
-
-/// Controls for Divider / Separator block.
-class _DividerBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String blockId;
-  final WebsiteEditModeProvider provider;
-
-  const _DividerBlockControls({
-    required this.data,
-    required this.blockId,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final thickness = (data['thickness'] as num?)?.toDouble() ?? 1.0;
-    final color = (data['color'] ?? '#E0E0E0').toString();
-    final widthPct = (data['widthPct'] as num?)?.toDouble() ?? 1.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader('Separador'),
-        const SizedBox(height: 12),
-        _EditorSlider(
-          label: 'Grosor',
-          value: thickness.clamp(1, 12),
-          min: 1,
-          max: 12,
-          divisions: 11,
-          valueLabel: '${thickness.toStringAsFixed(0)}px',
-          onChanged: (v) => provider.updateBlockData(blockId, 'thickness', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Color (hex)',
-          value: color,
-          onChanged: (v) => provider.updateBlockData(blockId, 'color', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorSlider(
-          label: 'Ancho',
-          value: widthPct.clamp(0.1, 1.0),
-          min: 0.1,
-          max: 1.0,
-          divisions: 9,
-          valueLabel: '${(widthPct * 100).toStringAsFixed(0)}%',
-          onChanged: (v) => provider.updateBlockData(blockId, 'widthPct', v),
-        ),
-      ],
     );
   }
 }
@@ -6160,6 +6025,51 @@ class _ThemeTabState extends State<_ThemeTab> {
     'large': 'Grande',
   };
 
+  String _sizeKeyFromStoredValue({required bool isHeading, required String raw}) {
+    final parsed = double.tryParse(raw.trim());
+    if (parsed == null) return 'normal';
+
+    if (isHeading) {
+      if (parsed <= 40) return 'small';
+      if (parsed <= 48) return 'normal';
+      if (parsed <= 56) return 'large';
+      return 'xlarge';
+    }
+
+    if (parsed <= 14) return 'small';
+    if (parsed <= 16) return 'normal';
+    if (parsed <= 18) return 'large';
+    return 'xlarge';
+  }
+
+  String _storedValueFromSizeKey({required bool isHeading, required String key}) {
+    if (isHeading) {
+      switch (key) {
+        case 'small':
+          return '40';
+        case 'large':
+          return '56';
+        case 'xlarge':
+          return '64';
+        case 'normal':
+        default:
+          return '48';
+      }
+    }
+
+    switch (key) {
+      case 'small':
+        return '14';
+      case 'large':
+        return '18';
+      case 'xlarge':
+        return '20';
+      case 'normal':
+      default:
+        return '16';
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -6182,13 +6092,20 @@ class _ThemeTabState extends State<_ThemeTab> {
               service.getSetting('theme_primary_color', '#00A09D');
           _accentColorController.text =
               service.getSetting('theme_accent_color', '#FF6D00');
-          _headingFont = service.getSetting('heading_font', 'Inter');
-          _bodyFont = service.getSetting('body_font', 'Inter');
-          _headingSize = service.getSetting('heading_size', 'normal');
-          _bodySize = service.getSetting('body_size', 'normal');
+          _headingFont = service.getSetting('theme_heading_font', 'Inter');
+          _bodyFont = service.getSetting('theme_body_font', 'Inter');
+          _headingSize = _sizeKeyFromStoredValue(
+            isHeading: true,
+            raw: service.getSetting('theme_heading_size', '48'),
+          );
+          _bodySize = _sizeKeyFromStoredValue(
+            isHeading: false,
+            raw: service.getSetting('theme_body_size', '16'),
+          );
           _buttonStyle = service.getSetting('button_style', 'rounded');
           _buttonSize = service.getSetting('button_size', 'medium');
-          _pageBackground = service.getSetting('page_background', '#FFFFFF');
+          _pageBackground =
+              service.getSetting('theme_background_color', '#FFFFFF');
         });
       }
     } catch (e) {
@@ -6199,16 +6116,21 @@ class _ThemeTabState extends State<_ThemeTab> {
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
     try {
+      final headingSizeValue =
+          _storedValueFromSizeKey(isHeading: true, key: _headingSize);
+      final bodySizeValue =
+          _storedValueFromSizeKey(isHeading: false, key: _bodySize);
+
       await context.read<WebsiteService>().saveSettings({
         'theme_primary_color': _primaryColorController.text,
         'theme_accent_color': _accentColorController.text,
-        'heading_font': _headingFont,
-        'body_font': _bodyFont,
-        'heading_size': _headingSize,
-        'body_size': _bodySize,
+        'theme_heading_font': _headingFont,
+        'theme_body_font': _bodyFont,
+        'theme_heading_size': headingSizeValue,
+        'theme_body_size': bodySizeValue,
+        'theme_background_color': _pageBackground,
         'button_style': _buttonStyle,
         'button_size': _buttonSize,
-        'page_background': _pageBackground,
       });
 
       if (mounted) {
@@ -6398,7 +6320,12 @@ class _ThemeTabState extends State<_ThemeTab> {
             _EditorTextField(
               label: 'Color Hex',
               controller: _primaryColorController,
-              onChanged: (val) => _primaryColorController.text = val,
+              onChanged: (val) {
+                _primaryColorController.text = val;
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_primary_color', val);
+              },
               value: _primaryColorController.text,
               hint: '#00A09D',
             ),
@@ -6421,7 +6348,12 @@ class _ThemeTabState extends State<_ThemeTab> {
             _EditorTextField(
               label: 'Color Hex',
               controller: _accentColorController,
-              onChanged: (val) => _accentColorController.text = val,
+              onChanged: (val) {
+                _accentColorController.text = val;
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_accent_color', val);
+              },
               value: _accentColorController.text,
               hint: '#FF6D00',
             ),
@@ -6451,7 +6383,13 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Fuente',
               value: _headingFont,
               items: _fonts,
-              onChanged: (v) => setState(() => _headingFont = v!),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _headingFont = v);
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_heading_font', v);
+              },
             ),
             const SizedBox(height: 12),
             _buildDropdown(
@@ -6459,7 +6397,14 @@ class _ThemeTabState extends State<_ThemeTab> {
               value: _headingSize,
               items: _sizes.keys.toList(),
               labels: _sizes,
-              onChanged: (v) => setState(() => _headingSize = v!),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _headingSize = v);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_heading_size',
+                      _storedValueFromSizeKey(isHeading: true, key: v),
+                    );
+              },
             ),
             const SizedBox(height: 24),
             const _SectionHeader('PARRAFOS'),
@@ -6468,7 +6413,13 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Fuente',
               value: _bodyFont,
               items: _fonts,
-              onChanged: (v) => setState(() => _bodyFont = v!),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _bodyFont = v);
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_body_font', v);
+              },
             ),
             const SizedBox(height: 12),
             _buildDropdown(
@@ -6476,7 +6427,14 @@ class _ThemeTabState extends State<_ThemeTab> {
               value: _bodySize,
               items: _sizes.keys.toList(),
               labels: _sizes,
-              onChanged: (v) => setState(() => _bodySize = v!),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _bodySize = v);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_body_size',
+                      _storedValueFromSizeKey(isHeading: false, key: v),
+                    );
+              },
             ),
           ],
         );
@@ -6526,6 +6484,9 @@ class _ThemeTabState extends State<_ThemeTab> {
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _pageBackground = val);
+                  context
+                      .read<WebsiteEditModeProvider>()
+                      .updateThemeSetting('theme_background_color', val);
                 }
               },
             ),
@@ -6625,7 +6586,7 @@ class _ThemeTabState extends State<_ThemeTab> {
     required String value,
     required List<String> items,
     Map<String, String>? labels,
-    required Function(String?) onChanged,
+    required ValueChanged<String?> onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -6654,7 +6615,15 @@ class _ThemeTabState extends State<_ThemeTab> {
                   child: Text(labels?[item] ?? item),
                 );
               }).toList(),
-              onChanged: onChanged,
+              onChanged: (newValue) {
+                debugPrint(
+                    '🎛️ [ThemeTab] Dropdown "$label" changed: "$value" -> "${newValue ?? 'null'}"');
+                final editProvider =
+                    context.read<WebsiteEditModeProvider>();
+                debugPrint(
+                    '🎨 [ThemeTab] isInEditorContext=${editProvider.isInEditorContext} isEditMode=${editProvider.isEditMode} pendingThemeKeys=${editProvider.pendingThemeSettings.keys.join(', ')}');
+                onChanged(newValue);
+              },
             ),
           ),
         ),
@@ -7785,6 +7754,176 @@ class _ImagePicker extends StatefulWidget {
 
   @override
   State<_ImagePicker> createState() => _ImagePickerState();
+}
+
+class _VideoPicker extends StatefulWidget {
+  final String? currentUrl;
+  final Function(String) onChanged;
+
+  const _VideoPicker({
+    this.currentUrl,
+    required this.onChanged,
+  });
+
+  @override
+  State<_VideoPicker> createState() => _VideoPickerState();
+}
+
+class _VideoPickerState extends State<_VideoPicker> {
+  bool _isUploading = false;
+
+  bool get _hasVideo =>
+      widget.currentUrl != null && widget.currentUrl!.isNotEmpty;
+
+  Future<String> _getTenantId() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception('Usuario no autenticado');
+
+    final profileResponse = await Supabase.instance.client
+        .from('user_profiles')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .single();
+
+    return profileResponse['tenant_id'] as String;
+  }
+
+  String _videoContentType(PlatformFile file) {
+    final ext = (file.extension ?? '').toLowerCase();
+    if (ext == 'mp4') return 'video/mp4';
+    if (ext.isNotEmpty) return 'video/$ext';
+    return 'video/mp4';
+  }
+
+  Future<void> _uploadVideoFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: No se pudo leer el archivo')),
+          );
+        }
+        return;
+      }
+
+      setState(() => _isUploading = true);
+
+      final tenantId = await _getTenantId();
+
+      final fileName =
+          'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final storagePath = '$tenantId/videos/$fileName';
+
+      await Supabase.instance.client.storage
+          .from('website-assets')
+          .uploadBinary(
+            storagePath,
+            file.bytes!,
+            fileOptions: FileOptions(contentType: _videoContentType(file)),
+          );
+
+      final publicUrl = Supabase.instance.client.storage
+          .from('website-assets')
+          .getPublicUrl(storagePath);
+
+      widget.onChanged(publicUrl);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Video subido correctamente'),
+            backgroundColor: Color(0xFF00A09D),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[VideoPicker] Error uploading video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir video: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isUploading ? null : _uploadVideoFile,
+            icon: _isUploading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.upload_file, size: 18),
+            label:
+                Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A09D),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        if (_hasVideo) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Archivo de video cargado',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade300, size: 18),
+                  onPressed: () => widget.onChanged(''),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Eliminar video',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _ImagePickerState extends State<_ImagePicker> {

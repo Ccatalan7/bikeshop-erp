@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../widgets/inline_edit_toolbar.dart';
@@ -135,6 +136,16 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
 
+  static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
+    final family = fontFamily?.trim();
+    if (family == null || family.isEmpty) return base;
+    try {
+      return GoogleFonts.getFont(family, textStyle: base);
+    } catch (_) {
+      return base.copyWith(fontFamily: family);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -249,27 +260,36 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // The block content with visibility opacity and height constraint
+          // The block content with visibility and height constraint
           // Fixed-height blocks (hero, carousel, canvas) use both min and max height
           // Dynamic content blocks (products, services, etc.) only use minHeight so content can grow
-          Opacity(
-            opacity: widget.isVisible ? 1.0 : 0.5,
-            child: KeyedSubtree(
-              key: _contentKey,
-              child: displayHeight != null
-                  ? ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: displayHeight,
-                        // Only apply maxHeight for fixed-height blocks, not dynamic content
-                        maxHeight:
-                            isDynamicContent ? double.infinity : displayHeight,
-                        minWidth: double.infinity,
-                      ),
-                      child: blockContent,
-                    )
-                  : blockContent,
-            ),
+          // NOTE: Avoid wrapping platform views (HtmlElementView) in Opacity/Clip whenever possible
+          // to keep web video previews reliable.
+          KeyedSubtree(
+            key: _contentKey,
+            child: displayHeight != null
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: displayHeight,
+                      // Only apply maxHeight for fixed-height blocks, not dynamic content
+                      maxHeight:
+                          isDynamicContent ? double.infinity : displayHeight,
+                      minWidth: double.infinity,
+                    ),
+                    child: blockContent,
+                  )
+                : blockContent,
           ),
+
+          // Hidden overlay (instead of Opacity around the whole subtree)
+          if (!widget.isVisible)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withOpacity(0.35),
+                ),
+              ),
+            ),
 
           // Selection border
           Positioned.fill(
@@ -506,6 +526,17 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       );
     }
 
+    final typeLower = widget.blockType.trim().toLowerCase();
+    final hasVideoFileUrl =
+        (widget.data['videoFileUrl']?.toString() ?? '').trim().isNotEmpty;
+    final hasVideoUrl =
+        (widget.data['videoUrl']?.toString() ?? '').trim().isNotEmpty;
+
+    // Platform views (HtmlElementView) are fragile under clipping on Flutter Web.
+    // If this block contains an embedded video, prefer not to clip.
+    final avoidClipForPlatformView =
+        typeLower == 'videobanner' && (hasVideoFileUrl || hasVideoUrl);
+
     // Apply ClipRRect for border radius to clip child content
     Widget result = Container(
       decoration: decoration,
@@ -517,7 +548,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               left: paddingLeft,
             )
           : null,
-      child: hasBorderRadius
+      child: hasBorderRadius && !avoidClipForPlatformView
           ? ClipRRect(
               borderRadius: BorderRadius.circular(borderRadius),
               child: child,
@@ -687,6 +718,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         return _buildEditableStats(context);
       case 'team':
         return _buildEditableTeam(context);
+      case 'gallery':
+        return _buildEditableGallery(context);
       default:
         // Fall back to standard renderer for other types
         return WebsiteBlockRenderer.build(
@@ -983,11 +1016,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final title = (widget.data['title'] ?? '').toString();
     final subtitle = (widget.data['subtitle'] ?? '').toString();
     final ctaText =
-        (widget.data['buttonText'] ?? widget.data['ctaText'] ?? 'Ver más')
+        (widget.data['ctaText'] ?? widget.data['buttonText'] ?? 'Ver más')
             .toString();
     final ctaLink =
-        (widget.data['buttonLink'] ?? widget.data['ctaLink'] ?? '').toString();
-    final imageUrl = widget.data['backgroundImage']?.toString();
+        (widget.data['ctaLink'] ?? widget.data['buttonLink'] ?? '').toString();
+    final imageUrl =
+        (widget.data['imageUrl'] ?? widget.data['backgroundImage'])?.toString();
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
@@ -995,19 +1029,20 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final subtitleFormatting = TextFormatting.fromJson(
         widget.data['subtitleFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle =
-        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily:
-          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
-      fontSize: widget.headingSize ?? 48,
-      color: Colors.white,
+    final headingStyle = _applyThemeFont(
+      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+        fontSize: widget.headingSize ?? 48,
+        color: Colors.white,
+      ),
+      widget.headingFont,
     );
 
-    final subtitleStyle =
-        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-      fontFamily: widget.bodyFont?.isNotEmpty == true ? widget.bodyFont : null,
-      fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
-      color: Colors.white70,
+    final subtitleStyle = _applyThemeFont(
+      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+        fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
+        color: Colors.white70,
+      ),
+      widget.bodyFont,
     );
 
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
@@ -1073,8 +1108,13 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 fit: BoxFit.cover,
                 alignment: bgAlignment,
                 isEditMode: true,
-                onChanged: (url) => editProvider.updateBlockData(
-                    widget.blockId, 'backgroundImage', url),
+                onChanged: (url) => editProvider.updateBlockDataMultiple(
+                  widget.blockId,
+                  {
+                    'imageUrl': url,
+                    'backgroundImage': url,
+                  },
+                ),
                 placeholder: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -2898,6 +2938,233 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     );
   }
 
+  Widget _buildEditableGallery(BuildContext context) {
+    final theme = Theme.of(context);
+    final editProvider = context.read<WebsiteEditModeProvider>();
+
+    final title = (widget.data['title'] ?? 'Galería').toString();
+    final layout = (widget.data['layout'] ?? 'grid').toString();
+
+    final imagesRaw = widget.data['images'];
+    final images = (imagesRaw is List)
+        ? imagesRaw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    void updateImages(List<Map<String, dynamic>> next) {
+      editProvider.updateBlockData(widget.blockId, 'images', next);
+    }
+
+    Widget buildImageTile({
+      required int index,
+      required Map<String, dynamic> img,
+      required double tileWidth,
+    }) {
+      final imageUrl = (img['imageUrl'] ?? '').toString();
+      final caption = (img['caption'] ?? '').toString();
+
+      return SizedBox(
+        width: tileWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: InlineEditableImage(
+                      imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
+                      isEditMode: true,
+                      tenantId: widget.tenantId,
+                      fit: BoxFit.cover,
+                      placeholder: Container(
+                        color: theme.dividerColor.withValues(alpha: 0.2),
+                        child: Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: theme.iconTheme.color
+                                ?.withValues(alpha: 0.5),
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                      onChanged: (url) {
+                        final next = images
+                            .map((e) => Map<String, dynamic>.from(e))
+                            .toList();
+                        if (index >= 0 && index < next.length) {
+                          next[index]['imageUrl'] = url;
+                          updateImages(next);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        iconSize: 16,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(6),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Eliminar imagen',
+                        onPressed: images.length <= 1
+                            ? null
+                            : () {
+                                final next = images
+                                    .map((e) => Map<String, dynamic>.from(e))
+                                    .toList();
+                                if (index >= 0 && index < next.length) {
+                                  next.removeAt(index);
+                                  updateImages(next);
+                                }
+                              },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            InlineEditableTextV2(
+              text: caption,
+              baseStyle: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.left,
+              isEditMode: true,
+              placeholder: 'Leyenda',
+              fieldKey: '${widget.blockId}_gallery_${index}_caption',
+              onTextChanged: (value) {
+                final next =
+                    images.map((e) => Map<String, dynamic>.from(e)).toList();
+                if (index >= 0 && index < next.length) {
+                  next[index]['caption'] = value;
+                  updateImages(next);
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InlineEditableTextV2(
+          text: title,
+          baseStyle: theme.textTheme.headlineMedium,
+          textAlign: TextAlign.center,
+          isEditMode: true,
+          placeholder: 'Galería',
+          fieldKey: '${widget.blockId}_title',
+          onTextChanged: (value) =>
+              editProvider.updateBlockData(widget.blockId, 'title', value),
+        ),
+        const SizedBox(height: 24),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            final cols = maxWidth >= 1100
+                ? 4
+                : maxWidth >= 800
+                    ? 3
+                    : maxWidth >= 520
+                        ? 2
+                        : 1;
+            final gap = 16.0;
+            final tileWidth =
+                cols == 1 ? maxWidth : (maxWidth - (gap * (cols - 1))) / cols;
+
+            if (images.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.4),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.image_outlined,
+                      color: theme.iconTheme.color?.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Agrega imágenes a tu galería',
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final tiles = <Widget>[];
+            for (var i = 0; i < images.length; i++) {
+              tiles.add(
+                buildImageTile(index: i, img: images[i], tileWidth: tileWidth),
+              );
+            }
+
+            // "masonry" currently falls back to a responsive wrap; keep layout simple.
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              alignment: WrapAlignment.center,
+              children: tiles,
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        Align(
+          alignment: Alignment.center,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              final next = images
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+              next.add({'imageUrl': '', 'caption': ''});
+              updateImages(next);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Agregar imagen'),
+          ),
+        ),
+        if (layout.isNotEmpty) const SizedBox(height: 0),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFixedHeight = constraints.maxHeight.isFinite;
+        return Container(
+          width: double.infinity,
+          height: hasFixedHeight ? constraints.maxHeight : null,
+          padding: hasFixedHeight
+              ? const EdgeInsets.symmetric(horizontal: 24)
+              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildEditableTeamCard(
     BuildContext context,
     Map<String, dynamic> member,
@@ -3843,6 +4110,16 @@ class _EditableCarouselWidget extends StatefulWidget {
 class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
   int _currentIndex = 0;
 
+  static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
+    final family = fontFamily?.trim();
+    if (family == null || family.isEmpty) return base;
+    try {
+      return GoogleFonts.getFont(family, textStyle: base);
+    } catch (_) {
+      return base.copyWith(fontFamily: family);
+    }
+  }
+
   void _nextSlide() {
     setState(() {
       _currentIndex = (_currentIndex + 1) % widget.slides.length;
@@ -4037,21 +4314,22 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     final subtitleFormatting = TextFormatting.fromJson(
         slide['subtitleFormatting'] as Map<String, dynamic>?);
 
-    final headingStyle =
-        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-      fontFamily:
-          widget.headingFont?.isNotEmpty == true ? widget.headingFont : null,
-      fontSize: widget.headingSize ?? 48,
-      color: Colors.white,
-      letterSpacing: 3,
-      fontWeight: FontWeight.w900,
+    final headingStyle = _applyThemeFont(
+      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+        fontSize: widget.headingSize ?? 48,
+        color: Colors.white,
+        letterSpacing: 3,
+        fontWeight: FontWeight.w900,
+      ),
+      widget.headingFont,
     );
 
-    final subtitleStyle =
-        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-      fontFamily: widget.bodyFont?.isNotEmpty == true ? widget.bodyFont : null,
-      fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
-      color: Colors.white70,
+    final subtitleStyle = _applyThemeFont(
+      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+        fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : 20,
+        color: Colors.white70,
+      ),
+      widget.bodyFont,
     );
 
     return Container(
@@ -4059,7 +4337,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image with alignment
+          // Background image with alignment (NOT inline-editable; keep selection UX clean)
           if (hasImage)
             Image.network(
               imageUrl.toString(),

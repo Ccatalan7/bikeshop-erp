@@ -11,6 +11,11 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html'
+    if (dart.library.io) '../../modules/website/services/google_business_service_stub.dart'
+    as html;
+
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_store_scroll_state.dart';
@@ -19,8 +24,10 @@ import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../../shared/routes/erp_routes_barrel.dart' deferred as erp;
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
@@ -77,7 +84,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   static const String _actionPageCopyLink = 'page_copy_link';
   static const String _actionPageOpenNewTab = 'page_open_new_tab';
+
+  bool _isConfigHubOpen = false;
+  _EditorConfigHubTab _configHubTab = _EditorConfigHubTab.siteHub;
   static const String _actionPageManagePages = 'page_manage_pages';
+
+  Future<void>? _erpLibraryFuture;
+
+  Future<void> _ensureErpLibraryLoaded() {
+    return _erpLibraryFuture ??= erp.loadLibrary();
+  }
 
   // Screenshot capture state
   bool _isCapturingScreenshot = false;
@@ -87,6 +103,38 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     super.initState();
     // Settings are loaded in main.dart after tenant detection
     // No need to load here - just watch the service
+
+    // Check if we're returning from Google OAuth and need to restore edit mode
+    if (kIsWeb) {
+      _checkGoogleOAuthReturn();
+    }
+  }
+
+  /// Check localStorage for Google OAuth return flag and restore edit mode
+  void _checkGoogleOAuthReturn() {
+    try {
+      final flag = html.window.localStorage['google_oauth_return_to_editor'];
+      if (flag == 'true') {
+        debugPrint(
+            '🔄 [PublicStoreLayout] Detected OAuth return - restoring edit mode');
+        // Clear the flag
+        html.window.localStorage.remove('google_oauth_return_to_editor');
+
+        // Schedule edit mode activation after the widget tree is built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            final editProvider = context.read<WebsiteEditModeProvider>();
+            if (!editProvider.isEditMode) {
+              editProvider.switchToEditMode();
+              debugPrint(
+                  '✅ [PublicStoreLayout] Edit mode restored after OAuth');
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [PublicStoreLayout] Error checking OAuth return: $e');
+    }
   }
 
   /// Capture the full page as a screenshot
@@ -194,24 +242,120 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final sitePublished =
         websiteService.getSetting('site_published', 'true') == 'true';
 
-    // Theme colors - use provider for live preview if in edit mode
+    // Check if in edit/preview mode. Also respect URL query params so the UI
+    // can enter editor context before provider updates.
+    final routerState = GoRouterState.of(context);
+    final currentUri = routerState.uri;
+    final qp = currentUri.queryParameters;
+    // IMPORTANT:
+    // - URL params are only used to ENTER editor context (first time).
+    // - Once the provider is already in editor context, ignore URL flags.
+    //   Otherwise stale params (common with persistent shell pages) can cause
+    //   preview/edit to "bounce" back and forth.
+    final allowUrlForce = !editProvider.isInEditorContext;
+    final forceEditMode = allowUrlForce && qp['edit'] == 'true';
+    final forcePreviewMode = allowUrlForce && qp['preview'] == 'true';
+
+    final isEditMode = editProvider.isEditMode || forceEditMode;
+    final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
+
+    final devicePreviewMode = editProvider.devicePreviewMode;
+    final isInEditorContext =
+      editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
+
+    // While in editor context, keep the URL mode flag consistent with provider
+    // state. This prevents stale query params (common with shell routes) from
+    // lingering like ?preview=true while actually in edit mode.
+    if (kIsWeb && editProvider.isInEditorContext) {
+      final desiredModeKey = editProvider.isEditMode
+          ? 'edit'
+          : (editProvider.isPreviewMode ? 'preview' : null);
+
+      final nextQp = Map<String, String>.from(currentUri.queryParameters);
+      nextQp.remove('edit');
+      nextQp.remove('preview');
+      if (desiredModeKey != null) nextQp[desiredModeKey] = 'true';
+
+      final currentQp = currentUri.queryParameters;
+      final qpMatches = nextQp.length == currentQp.length &&
+          nextQp.entries.every((e) => currentQp[e.key] == e.value);
+
+      if (!qpMatches) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          final nextUri = currentUri.replace(
+            queryParameters: nextQp.isEmpty ? null : nextQp,
+          );
+          context.go(_routeForPublicStore(nextUri.toString()));
+        });
+      }
+    }
+
+    // Theme colors - use provider for live preview when in editor context
     final primaryColor = _resolveColor(
-      editProvider.isEditMode
+      isInEditorContext
           ? editProvider.getEffectiveThemeSetting('theme_primary_color',
               websiteService.getSetting('theme_primary_color', ''))
           : websiteService.getSetting('theme_primary_color', ''),
       PublicStoreTheme.primaryBlue,
     );
     final accentColor = _resolveColor(
-      editProvider.isEditMode
+      isInEditorContext
           ? editProvider.getEffectiveThemeSetting('theme_accent_color',
               websiteService.getSetting('theme_accent_color', ''))
           : websiteService.getSetting('theme_accent_color', ''),
       PublicStoreTheme.accentGreen,
     );
     final backgroundColor = _resolveColor(
-      websiteService.getSetting('theme_background_color', ''),
+      isInEditorContext
+          ? editProvider.getEffectiveThemeSetting(
+              'theme_background_color',
+              websiteService.getSetting('theme_background_color', ''),
+            )
+          : websiteService.getSetting('theme_background_color', ''),
       Colors.white,
+    );
+
+    // Global typography (fonts + base sizes)
+    final headingFont = isInEditorContext
+        ? editProvider.getEffectiveThemeSetting(
+            'theme_heading_font',
+            websiteService.getSetting('theme_heading_font', ''),
+          )
+        : websiteService.getSetting('theme_heading_font', '');
+    final bodyFont = isInEditorContext
+        ? editProvider.getEffectiveThemeSetting(
+            'theme_body_font',
+            websiteService.getSetting('theme_body_font', ''),
+          )
+        : websiteService.getSetting('theme_body_font', '');
+
+    final headingSize = double.tryParse(
+      isInEditorContext
+          ? editProvider.getEffectiveThemeSetting(
+              'theme_heading_size',
+              websiteService.getSetting('theme_heading_size', ''),
+            )
+          : websiteService.getSetting('theme_heading_size', ''),
+    );
+    final bodySize = double.tryParse(
+      isInEditorContext
+          ? editProvider.getEffectiveThemeSetting(
+              'theme_body_size',
+              websiteService.getSetting('theme_body_size', ''),
+            )
+          : websiteService.getSetting('theme_body_size', ''),
+    );
+
+    final websiteTheme = WebsiteThemeBuilder.build(
+      base: Theme.of(context),
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      backgroundColor: backgroundColor,
+      headingFont: headingFont,
+      bodyFont: bodyFont,
+      headingSize: headingSize,
+      bodySize: bodySize,
     );
 
     // Header settings (DJI-style customization)
@@ -270,31 +414,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       }).toList();
     }
 
-    // Check if in edit mode - use different layout structure
-    // Check URL query params to force edit/preview mode visually before provider updates
-    // This prevents the "Edit Site" FAB from flashing before the editor panel loads
-    final qp = GoRouterState.of(context).uri.queryParameters;
-    final forceEditMode = qp['edit'] == 'true';
-    final forcePreviewMode = qp['preview'] == 'true';
-
-    // If provider is explicitly in Preview Mode, don't let forceEditMode override
-    final isProviderInPreviewMode = editProvider.isPreviewMode;
-    final effectiveForceEdit = forceEditMode && !isProviderInPreviewMode;
-
-    final isEditMode = editProvider.isEditMode || effectiveForceEdit;
-    final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
-
-    final devicePreviewMode = editProvider.devicePreviewMode;
-    final isInEditorContext = editProvider.isInEditorContext ||
-        effectiveForceEdit ||
-        forcePreviewMode;
-
     // If the site is unpublished, show a holding page to visitors.
     // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
     final bypassUnpublished =
         isInEditorContext || qp['preview'] == 'true' || qp['edit'] == 'true';
     if (!sitePublished && !bypassUnpublished) {
-      return _buildUnpublishedSiteScaffold(context, storeName);
+      return Theme(
+        data: websiteTheme,
+        child: _buildUnpublishedSiteScaffold(context, storeName),
+      );
     }
 
     // Build footer (reused in all layouts)
@@ -572,19 +700,50 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           context, pageContent, devicePreviewMode,
           isEditMode: true);
 
-      // Build the main content area
-      Widget mainBody;
+      final shouldReserveRightSpaceForExternalPanel =
+          widget.useExternalEditorPanel &&
+              devicePreviewMode == DevicePreviewMode.desktop;
 
+      Widget overlayLayer = _buildConfigHubOverlay();
+      if (shouldReserveRightSpaceForExternalPanel) {
+        overlayLayer = Padding(
+          padding: const EdgeInsets.only(right: _externalEditorPanelWidth),
+          child: overlayLayer,
+        );
+      }
+
+      final Widget mainBody;
       if (widget.useExternalEditorPanel) {
-        // Editor panel is rendered externally by PersistentEditorShell
-        // Just show the top bar + content (no side panel)
-        mainBody = Expanded(child: editorViewport);
+        // Editor panel is rendered externally by PersistentEditorShell.
+        // Overlay can cover the full viewport, but must avoid the reserved panel width.
+        mainBody = Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: editorViewport),
+              if (_isConfigHubOpen)
+                Positioned.fill(
+                  child: overlayLayer,
+                ),
+            ],
+          ),
+        );
       } else {
-        // Legacy: render editor panel inline
+        // Legacy: render editor panel inline. Ensure overlay only covers the viewport
+        // (left) and never sits behind the right editor panel.
         mainBody = Expanded(
           child: Row(
             children: [
-              Expanded(child: editorViewport),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: editorViewport),
+                    if (_isConfigHubOpen)
+                      Positioned.fill(
+                        child: overlayLayer,
+                      ),
+                  ],
+                ),
+              ),
               DeferredWebsiteEditorPanel(
                 onSave: () async {
                   await _saveChanges(context, editProvider, websiteService);
@@ -601,15 +760,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         );
       }
 
-      return Scaffold(
-        backgroundColor: backgroundColor,
-        body: Column(
-          children: [
-            // Keep the same "command center" top bar visible while editing.
-            _buildPreviewTopBar(
-                context, editProvider, websiteService, storeName),
-            mainBody,
-          ],
+      return Theme(
+        data: websiteTheme,
+        child: Scaffold(
+          backgroundColor: backgroundColor,
+          body: Column(
+            children: [
+              // Keep the same "command center" top bar visible while editing.
+              _buildPreviewTopBar(
+                  context, editProvider, websiteService, storeName),
+              mainBody,
+            ],
+          ),
         ),
       );
     }
@@ -619,16 +781,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       final editorViewport = _buildEditorViewport(
           context, pageContent, devicePreviewMode,
           isEditMode: false);
-      return Scaffold(
-        backgroundColor: backgroundColor,
-        body: Column(
-          children: [
-            // Preview top bar (Live Editor)
-            _buildPreviewTopBar(
-                context, editProvider, websiteService, storeName),
-            // Page content
-            Expanded(child: editorViewport),
-          ],
+      return Theme(
+        data: websiteTheme,
+        child: Scaffold(
+          backgroundColor: backgroundColor,
+          body: Column(
+            children: [
+              // Preview top bar (Live Editor)
+              _buildPreviewTopBar(
+                  context, editProvider, websiteService, storeName),
+              // Page content
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: editorViewport),
+                    if (_isConfigHubOpen)
+                      Positioned.fill(
+                        child: _buildConfigHubOverlay(),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -706,7 +881,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       ),
     );
 
-    return mainContent;
+    return Theme(
+      data: websiteTheme,
+      child: mainContent,
+    );
   }
 
   /// Build the preview top bar (Odoo-style) with "Editar" button
@@ -1004,11 +1182,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // Main mode button (Preview -> Edit, Edit -> Preview)
           ElevatedButton(
             onPressed: () {
+              // IMPORTANT: Mode is controlled by BOTH provider state and URL query params.
+              // If we only flip provider state while the URL still has ?edit=true,
+              // the page will immediately force edit mode again (bounce).
+              final state = GoRouterState.of(context);
+              final currentUri = state.uri;
+
+              final qp = Map<String, String>.from(currentUri.queryParameters);
+              qp.remove('edit');
+              qp.remove('preview');
+
               if (isEditMode) {
+                // Go to preview mode (remove edit=true)
+                qp['preview'] = 'true';
                 editProvider.switchToPreviewMode();
               } else {
+                // Go to edit mode (remove preview=true)
+                qp['edit'] = 'true';
                 editProvider.switchToEditMode();
               }
+
+              final nextUri = Uri(
+                path: currentUri.path,
+                queryParameters: qp.isEmpty ? null : qp,
+              );
+              context.go(_routeForPublicStore(nextUri.toString()));
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade600,
@@ -1259,63 +1457,131 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     switch (actionId) {
       // Site
       case _actionSitePages:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.sitePages);
+          return;
+        }
         goAdmin('/website/pages');
         return;
       case _actionSiteNavigation:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.siteNavigation);
+          return;
+        }
         goAdmin('/website/navigation');
         return;
       case _actionSiteContent:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.siteContent);
+          return;
+        }
         goAdmin('/website/content');
         return;
       case _actionSiteSettings:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.siteSettings);
+          return;
+        }
         goAdmin('/website/settings');
         return;
       case _actionSiteOpenWebsiteHub:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.siteHub);
+          return;
+        }
         goAdmin('/website');
         return;
 
       // E-commerce
       case _actionEcomProducts:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomProducts);
+          return;
+        }
         goAdmin('/inventory/products');
         return;
       case _actionEcomCategories:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomCategories);
+          return;
+        }
         goAdmin('/inventory/categories');
         return;
       case _actionEcomFeatured:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomFeatured);
+          return;
+        }
         goAdmin('/website/featured');
         return;
       case _actionEcomOrders:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomOrders);
+          return;
+        }
         goAdmin('/website/orders');
         return;
       case _actionEcomGoogle:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.integrations);
+          return;
+        }
         goAdmin('/website/integrations');
         return;
 
       // Reports
       case _actionReportsAnalytics:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.reportsAnalytics);
+          return;
+        }
         goAdmin('/tools/analytics');
         return;
       case _actionReportsOrders:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomOrders);
+          return;
+        }
         goAdmin('/website/orders');
         return;
 
       // Config
       case _actionConfigWebsiteSettings:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.seo);
+          return;
+        }
         goAdmin('/website/settings');
         return;
       case _actionConfigIntegrations:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.integrations);
+          return;
+        }
         goAdmin('/website/integrations');
         return;
       case _actionConfigPaymentMethods:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.paymentMethods);
+          return;
+        }
         goAdmin('/settings/payment-methods');
         return;
       case _actionConfigDomain:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.domain);
+          return;
+        }
         await _showDomainAndUrlDialog(context);
         return;
 
       // Page actions
       case _actionPageManagePages:
-        goAdmin('/website/pages');
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.sitePages);
+          return;
+        }
+        await _showManagePagesOverlay(context);
         return;
       case _actionPageCopyLink:
         await _copyCurrentPageUrl(context, editProvider, websiteService);
@@ -1335,6 +1601,33 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         await _openPublicStoreUrl(context, websiteService);
         return;
     }
+  }
+
+  Future<void> _showManagePagesOverlay(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
+      builder: (context) {
+        return Dialog.fullscreen(
+          child: FutureBuilder(
+            future: _ensureErpLibraryLoaded(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              return erp.PageManagementPage();
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openPublicStoreUrl(
@@ -1444,6 +1737,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         const SnackBar(content: Text('URL copiada al portapapeles')),
       );
     }
+  }
+
+  Future<void> _copyToClipboard(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
   }
 
   String? _resolvePublicStoreUrl(WebsiteService websiteService) {
@@ -1927,76 +2224,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         );
       }
 
-      // Save header settings if there are pending changes
-      debugPrint(
-          '🔄 [SaveChanges] hasHeaderChanges=${editProvider.hasHeaderChanges}, pendingSettings=${editProvider.pendingHeaderSettings.keys.join(', ')}');
-      if (editProvider.hasHeaderChanges &&
-          editProvider.pendingHeaderSettings.isNotEmpty) {
-        debugPrint(
-            '🔄 [SaveChanges] Saving header settings: ${editProvider.pendingHeaderSettings}');
-        await websiteService.saveSettings(editProvider.pendingHeaderSettings);
-        debugPrint('✅ [SaveChanges] Header settings saved');
-      } else {
-        debugPrint(
-            '⚠️ [SaveChanges] Skipping header save: hasHeaderChanges=${editProvider.hasHeaderChanges}, isEmpty=${editProvider.pendingHeaderSettings.isEmpty}');
+      final result = await websiteService.saveEditorChanges(
+        tenantId: tenantId,
+        editorBlocks: editProvider.blocks,
+        pendingHeaderSettings: editProvider.pendingHeaderSettings,
+        pendingThemeSettings: editProvider.pendingThemeSettings,
+        pageId: editProvider.currentPageId,
+        pageSlug: editProvider.currentPageSlug,
+      );
+
+      // Keep provider context in sync for subsequent saves
+      if (result.pageId != null || (result.pageSlug?.isNotEmpty ?? false)) {
+        editProvider.updateCurrentPageContext(
+          pageId: result.pageId,
+          pageSlug: result.pageSlug,
+        );
       }
 
-      // Convert blocks to the format expected by saveBlocks
-      final blocks = editProvider.blocks;
-      final pageId = editProvider.currentPageId; // Multi-page editing support
-      final pageSlug = editProvider.currentPageSlug;
-      debugPrint(
-          '🔄 [SaveChanges] Saving ${blocks.length} blocks for page: ${pageSlug ?? "home"} (id: $pageId)');
-
-      final blocksForSave = blocks.asMap().entries.map((entry) {
-        final index = entry.key;
-        final block = entry.value;
-        debugPrint(
-            '  Block ${index}: id=${block['id']}, type=${block['block_type']}');
-        final blockType = block['block_type'] ?? block['type'];
-        final blockData = block['block_data'] ?? block['data'] ?? {};
-        final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
-        final orderIndex = block['order_index'] ?? index;
-        return {
-          'id': block['id'],
-          'type': blockType,
-          'data': blockData,
-          'isVisible': isVisible,
-          'order_index': orderIndex,
-        };
-      }).toList();
-
-      // Save blocks - use page-specific save if editing a non-home page
-      if (pageId != null) {
-        await websiteService.saveBlocksForPage(pageId, blocksForSave);
-        debugPrint(
-            '✅ [SaveChanges] Blocks saved to page: $pageSlug (id: $pageId)');
-      } else {
-        await websiteService.saveBlocks(blocksForSave);
-        debugPrint('✅ [SaveChanges] Blocks saved to home page');
-      }
-
-      // Mark as saved and clear header changes
+      editProvider.updateBlocksAfterSave(result.freshBlocks);
       editProvider.markAsSaved();
       editProvider.clearHeaderChanged();
-
-      // Reload blocks to get fresh data and update provider
-      List<Map<String, dynamic>> freshBlocks;
-      if (pageId != null) {
-        freshBlocks = await websiteService.loadBlocksForPage(
-          pageId,
-          tenantId: tenantId,
-        );
-        debugPrint(
-            '✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for page: $pageSlug');
-      } else {
-        freshBlocks = await websiteService.loadBlocksForTenant(tenantId);
-        debugPrint(
-            '✅ [SaveChanges] Reloaded ${freshBlocks.length} blocks for home page');
-      }
-
-      // Update the edit provider with fresh blocks from database
-      editProvider.updateBlocksAfterSave(freshBlocks);
+      editProvider.clearThemeChanges();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2082,232 +2330,241 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       final screenWidth = constraints.maxWidth;
       final useMobileGradient = screenWidth < 900 && isOverlay;
 
-      final headerContent = Container(
-        decoration: BoxDecoration(
-          color: useMobileGradient ? null : bgColor,
-          gradient: useMobileGradient
-              ? LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.6),
-                    Colors.black.withValues(alpha: 0.3),
-                    Colors.transparent,
-                  ],
+      final headerContent = Material(
+        elevation: headerShadow && !isOverlay ? 2 : 0,
+        color: bgColor,
+        child: Container(
+          decoration: useMobileGradient
+              ? BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.55),
+                      Colors.black.withValues(alpha: 0.15),
+                    ],
+                  ),
                 )
               : null,
-          boxShadow: headerShadow && !isOverlay
-              ? [
-                  BoxShadow(
-                    color: PublicStoreTheme.shadow,
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            // Top banner - customizable (only show if enabled and not in overlay mode)
-            if (showTopBanner && !isOverlay)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                color: primaryColor,
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 24,
-                  runSpacing: 8,
-                  children: [
-                    if (topBannerText.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.local_shipping_outlined,
-                              color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            topBannerText,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                          ),
-                        ],
-                      ),
-                    if (contactPhone.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.support_agent_outlined,
-                              color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Contáctanos: $contactPhone',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                          ),
-                        ],
-                      ),
-                    if (contactEmail.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.mail_outline,
-                              color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            contactEmail,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            // Main header with logo
-            Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Row(
-                  children: [
-                    // Logo - uses URL if set, otherwise falls back to asset, then text
-                    // Logo - Force use of local asset for consistency and to fix "white block" issue
-                    // (Database logo_url might be opaque, causing white tint to fill the box)
-                    InkWell(
-                      onTap: () {
-                        final path = _routeForPublicStore('/tienda');
-                        final isEditMode =
-                            context.read<WebsiteEditModeProvider>().isEditMode;
-                        final target = isEditMode ? '$path?edit=true' : path;
-                        context.go(target);
-                      },
-                      child: _buildLogo(
-                        context: context,
-                        logoUrl: logoUrl,
-                        storeName: storeName,
-                        textColor: textColor,
-                        isDarkMode: isDarkMode,
-                        height: 48,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    // Only show nav links on desktop, use Spacer on mobile
-                    if (screenWidth >= 900)
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showTopBanner && topBannerText.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  color: isDarkMode
+                      ? Colors.black.withValues(alpha: 0.3)
+                      : primaryColor,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.local_shipping_outlined,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Row(
-                          children: navLinks.isEmpty
-                              ? [
-                                  _buildNavLink(
-                                    context,
-                                    'Inicio',
-                                    _routeForPublicStore('/tienda'),
-                                    textColor,
-                                  ),
-                                  const SizedBox(width: 24),
-                                  _buildNavLink(
+                        child: Text(
+                          topBannerText,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (screenWidth >= 900) ...[
+                        if (contactPhone.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.phone_outlined,
+                                    color: Colors.white, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  contactPhone,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (contactEmail.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.mail_outline,
+                                    color: Colors.white, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  contactEmail,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+
+              // Main header with logo
+              Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Row(
+                    children: [
+                      // Logo - uses URL if set, otherwise falls back to asset, then text
+                      // Logo - Force use of local asset for consistency and to fix "white block" issue
+                      // (Database logo_url might be opaque, causing white tint to fill the box)
+                      InkWell(
+                        onTap: () {
+                          final path = _routeForPublicStore('/tienda');
+                          final isEditMode = context
+                              .read<WebsiteEditModeProvider>()
+                              .isEditMode;
+                          final target = isEditMode ? '$path?edit=true' : path;
+                          context.go(target);
+                        },
+                        child: _buildLogo(
+                          context: context,
+                          logoUrl: logoUrl,
+                          storeName: storeName,
+                          textColor: textColor,
+                          isDarkMode: isDarkMode,
+                          height: 48,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Only show nav links on desktop, use Spacer on mobile
+                      if (screenWidth >= 900)
+                        Expanded(
+                          child: Row(
+                            children: navLinks.isEmpty
+                                ? [
+                                    _buildNavLink(
+                                      context,
+                                      'Inicio',
+                                      _routeForPublicStore('/tienda'),
+                                      textColor,
+                                    ),
+                                    const SizedBox(width: 24),
+                                    _buildNavLink(
                                       context,
                                       'Productos',
                                       _routeForPublicStore('/tienda/productos'),
-                                      textColor),
-                                  const SizedBox(width: 24),
-                                  _buildInfoDropdown(context, textColor),
-                                ]
-                              : [
-                                  ...navLinks.map((link) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(right: 24),
-                                      child: _buildNavLink(
+                                      textColor,
+                                    ),
+                                    const SizedBox(width: 24),
+                                    _buildInfoDropdown(context, textColor),
+                                  ]
+                                : [
+                                    ...navLinks.map((link) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 24),
+                                        child: _buildNavLink(
                                           context,
                                           link['label'] ?? '',
                                           link['url'] ?? '/',
-                                          textColor),
-                                    );
-                                  }),
-                                  _buildInfoDropdown(context, textColor),
-                                ],
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.search),
-                          color: iconColor,
-                          onPressed: () => context
-                              .go(_routeForPublicStore('/tienda/productos')),
-                          tooltip: 'Buscar',
-                        ),
-                        const SizedBox(width: 8),
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.shopping_cart_outlined),
-                              color: iconColor,
-                              onPressed: () => context
-                                  .go(_routeForPublicStore('/tienda/carrito')),
-                              tooltip: 'Carrito',
-                            ),
-                            if (cart.itemCount > 0)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: IgnorePointer(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: accentColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    constraints: const BoxConstraints(
-                                        minWidth: 18, minHeight: 18),
-                                    child: Text(
-                                      '${cart.itemCount}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
+                                          textColor,
+                                        ),
+                                      );
+                                    }),
+                                    _buildInfoDropdown(context, textColor),
+                                  ],
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.search),
+                            color: iconColor,
+                            onPressed: () => context
+                                .go(_routeForPublicStore('/tienda/productos')),
+                            tooltip: 'Buscar',
+                          ),
+                          const SizedBox(width: 8),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.shopping_cart_outlined),
+                                color: iconColor,
+                                onPressed: () => context.go(
+                                  _routeForPublicStore('/tienda/carrito'),
+                                ),
+                                tooltip: 'Carrito',
+                              ),
+                              if (cart.itemCount > 0)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: IgnorePointer(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: accentColor,
+                                        shape: BoxShape.circle,
                                       ),
-                                      textAlign: TextAlign.center,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 18,
+                                        minHeight: 18,
+                                      ),
+                                      child: Text(
+                                        '${cart.itemCount}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                        if (screenWidth >= 900) ...[
-                          const SizedBox(width: 16),
-                          CustomerAccountMenu(textColor: textColor),
-                        ] else ...[
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.menu),
-                            color: iconColor,
-                            onPressed: () => _showMobileMenu(context, navLinks),
-                            tooltip: 'Menú',
+                            ],
                           ),
-                        ]
-                      ],
-                    ),
-                  ],
+                          if (screenWidth >= 900) ...[
+                            const SizedBox(width: 16),
+                            CustomerAccountMenu(textColor: textColor),
+                          ] else ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.menu),
+                              color: iconColor,
+                              onPressed: () =>
+                                  _showMobileMenu(context, navLinks),
+                              tooltip: 'Menú',
+                            ),
+                          ]
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 
@@ -3560,6 +3817,259 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
       ),
     );
+  }
+
+  void _openConfigHub(_EditorConfigHubTab tab) {
+    setState(() {
+      _configHubTab = tab;
+      _isConfigHubOpen = true;
+    });
+  }
+
+  void _closeConfigHub() {
+    setState(() => _isConfigHubOpen = false);
+  }
+
+  Widget _buildConfigHubOverlay() {
+    final theme = Theme.of(context);
+
+    Widget buildBody() {
+      if (_configHubTab == _EditorConfigHubTab.domain) {
+        return _buildDomainAndUrlPanel();
+      }
+
+      return FutureBuilder(
+        future: _ensureErpLibraryLoaded(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          switch (_configHubTab) {
+            // Site
+            case _EditorConfigHubTab.siteHub:
+              return erp.WebsiteManagementPage(embedded: true);
+            case _EditorConfigHubTab.sitePages:
+              return erp.PageManagementPage(embedded: true);
+            case _EditorConfigHubTab.siteNavigation:
+              return erp.NavigationManagementPage(embedded: true);
+            case _EditorConfigHubTab.siteContent:
+              return erp.ContentManagementPage(embedded: true);
+            case _EditorConfigHubTab.siteSettings:
+              return erp.WebsiteSettingsPage(embedded: true);
+
+            // E-commerce
+            case _EditorConfigHubTab.ecomProducts:
+              return erp.ProductListPage(embedded: true);
+            case _EditorConfigHubTab.ecomCategories:
+              return erp.HierarchicalCategoryPage(embedded: true);
+            case _EditorConfigHubTab.ecomFeatured:
+              return erp.FeaturedProductsPage(embedded: true);
+            case _EditorConfigHubTab.ecomOrders:
+              return erp.OnlineOrdersPage(embedded: true);
+
+            // Reports
+            case _EditorConfigHubTab.reportsAnalytics:
+              return erp.AnalyticsDashboardPage(
+                dashboardUrl: 'https://analytics.google.com',
+                embedded: true,
+              );
+
+            // Config
+            case _EditorConfigHubTab.seo:
+              return erp.SeoSettingsPage(embedded: true);
+            case _EditorConfigHubTab.integrations:
+              return erp.IntegrationsPage(embedded: true);
+            case _EditorConfigHubTab.paymentMethods:
+              return erp.PaymentMethodsSettingsPage(embedded: true);
+            case _EditorConfigHubTab.domain:
+              // Handled above.
+              return const SizedBox.shrink();
+          }
+        },
+      );
+    }
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Column(
+        children: [
+          Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: theme.dividerColor),
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Cerrar',
+                  icon: const Icon(Icons.close),
+                  onPressed: _closeConfigHub,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _configHubTab.title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: buildBody(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDomainAndUrlPanel() {
+    // Reuse the same data shown in the dialog, but as an inline panel.
+    final websiteService = context.read<WebsiteService>();
+    final url = _resolvePublicStoreUrl(websiteService);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dominio y URL',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Administra tu URL pública. (La configuración de dominio se gestiona en Firebase Hosting / DNS).',
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          url ?? 'No se pudo determinar la URL pública',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: url == null
+                            ? null
+                            : () async {
+                                await launchUrl(
+                                  Uri.parse(url),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Abrir'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: url == null
+                        ? null
+                        : () async {
+                            await _copyToClipboard(url);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('URL copiada'),
+                                ),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copiar URL'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _EditorConfigHubTab {
+  // Site
+  siteHub,
+  sitePages,
+  siteNavigation,
+  siteContent,
+  siteSettings,
+
+  // E-commerce
+  ecomProducts,
+  ecomCategories,
+  ecomFeatured,
+  ecomOrders,
+
+  // Reports
+  reportsAnalytics,
+
+  // Config
+  domain,
+  seo,
+  integrations,
+  paymentMethods,
+}
+
+extension on _EditorConfigHubTab {
+  String get title {
+    switch (this) {
+      case _EditorConfigHubTab.siteHub:
+        return 'Sitio web';
+      case _EditorConfigHubTab.sitePages:
+        return 'Páginas';
+      case _EditorConfigHubTab.siteNavigation:
+        return 'Navegación';
+      case _EditorConfigHubTab.siteContent:
+        return 'Contenido';
+      case _EditorConfigHubTab.siteSettings:
+        return 'Ajustes del sitio';
+      case _EditorConfigHubTab.ecomProducts:
+        return 'Productos (publicar en web)';
+      case _EditorConfigHubTab.ecomCategories:
+        return 'Categorías';
+      case _EditorConfigHubTab.ecomFeatured:
+        return 'Productos destacados (home)';
+      case _EditorConfigHubTab.ecomOrders:
+        return 'Pedidos online';
+      case _EditorConfigHubTab.reportsAnalytics:
+        return 'Analytics (Google)';
+      case _EditorConfigHubTab.domain:
+        return 'Dominio y URL';
+      case _EditorConfigHubTab.seo:
+        return 'Ajustes del sitio (SEO / contacto)';
+      case _EditorConfigHubTab.integrations:
+        return 'Integraciones (Google Merchant)';
+      case _EditorConfigHubTab.paymentMethods:
+        return 'Métodos de pago';
+    }
   }
 }
 

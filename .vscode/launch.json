@@ -18,22 +18,68 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "--web-renderer=html",
         "-d",
         "chrome"
       ]
     },
     {
-      "name": "🏪 Public Store (localhost:8080)",
+      "name": "🏪 Public Store (Web • localhost:8080)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
+      "program": "lib/main_store.dart",
       "args": [
         "-d",
         "chrome",
         "--web-port=8080",
-        "--dart-define=FORCE_SUBDOMAIN=vinabike"
+        "--dart-define=FORCE_SUBDOMAIN=vinabike",
+        "--dart-define=STORE_PERF_LOGS=true"
       ]
+    },
+    {
+      "name": "📱 Public Store (Android • Debug • Skia)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_store.dart",
+      "args": [
+        "--no-enable-impeller",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike"
+      ],
+      "deviceId": "R28M2189XQF"
+    },
+    {
+      "name": "📱 Public Store (Android • Profile • Skia)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "lib/main_store.dart",
+      "args": [
+        "--no-enable-impeller",
+        "--verbose-system-logs",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike"
+      ],
+      "deviceId": "R28M2189XQF"
+    },
+    {
+      "name": "📱 Public Store (Android • Profile • Impeller)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "lib/main_store.dart",
+      "args": [
+        "--enable-impeller",
+        "--verbose-system-logs",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike"
+      ],
+      "deviceId": "R28M2189XQF"
     },
     {
       "name": "🪟 Flutter: Run (Windows)",

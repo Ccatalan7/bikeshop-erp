@@ -94,46 +94,28 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         return;
       }
 
-      // Show saving indicator
       _showMessage('Guardando cambios...');
 
-      // Save header settings if pending
-      if (editProvider.hasHeaderChanges &&
-          editProvider.pendingHeaderSettings.isNotEmpty) {
-        debugPrint('🔄 [PersistentEditor] Saving header settings');
-        await websiteService.saveSettings(editProvider.pendingHeaderSettings);
+      final result = await websiteService.saveEditorChanges(
+        tenantId: tenantId,
+        editorBlocks: editProvider.blocks,
+        pendingHeaderSettings: editProvider.pendingHeaderSettings,
+        pendingThemeSettings: editProvider.pendingThemeSettings,
+        pageId: editProvider.currentPageId,
+        pageSlug: editProvider.currentPageSlug,
+      );
+
+      if (result.pageId != null || (result.pageSlug?.isNotEmpty ?? false)) {
+        editProvider.updateCurrentPageContext(
+          pageId: result.pageId,
+          pageSlug: result.pageSlug,
+        );
       }
 
-      // Convert blocks to save format
-      final blocks = editProvider.blocks;
-      final pageId = editProvider.currentPageId;
-      final pageSlug = editProvider.currentPageSlug;
-
-      debugPrint(
-          '🔄 [PersistentEditor] Saving ${blocks.length} blocks for page: ${pageSlug ?? "home"}');
-
-      final blocksForSave = blocks.asMap().entries.map((entry) {
-        final index = entry.key;
-        final block = entry.value;
-        return {
-          'id': block['id'],
-          'type': block['block_type'] ?? block['type'],
-          'data': block['block_data'] ?? block['data'] ?? {},
-          'isVisible': block['is_visible'] ?? block['isVisible'] ?? true,
-          'order_index': block['order_index'] ?? index,
-        };
-      }).toList();
-
-      // Save blocks
-      if (pageId != null) {
-        await websiteService.saveBlocksForPage(pageId, blocksForSave);
-      } else {
-        await websiteService.saveBlocks(blocksForSave);
-      }
-
-      // Mark as saved
+      editProvider.updateBlocksAfterSave(result.freshBlocks);
       editProvider.markAsSaved();
       editProvider.clearHeaderChanged();
+      editProvider.clearThemeChanges();
 
       _showSuccess('✅ Cambios guardados');
 

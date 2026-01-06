@@ -11,7 +11,9 @@ import '../models/website_page_models.dart';
 /// Comprehensive SEO Settings Page
 /// Manages all SEO-related settings for Google Merchant Center compliance
 class SeoSettingsPage extends StatefulWidget {
-  const SeoSettingsPage({super.key});
+  final bool embedded;
+
+  const SeoSettingsPage({super.key, this.embedded = false});
 
   @override
   State<SeoSettingsPage> createState() => _SeoSettingsPageState();
@@ -358,10 +360,9 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return MainLayout(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Header
           Container(
             padding: const EdgeInsets.all(24),
@@ -374,11 +375,13 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 12),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/website'),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -554,9 +557,11 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                     ],
                   ),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return content;
+    return MainLayout(child: content);
   }
 
   /// Build the Verification/Audit tab content

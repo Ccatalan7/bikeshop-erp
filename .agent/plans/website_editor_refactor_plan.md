@@ -2,7 +2,7 @@
 
 Goal: evolve the current website builder into a scalable “Wix/WordPress-level” editor **without breaking existing tenants/pages**, keeping the current architecture (blocks + inline editor + Supabase) and respecting the project design system.
 
-## Status Update (as of 2026-01-03)
+## Status Update (as of 2026-01-04)
 
 ### ✅ Already Implemented
 - **Phase 1 foundation is effectively done**:
@@ -15,14 +15,15 @@ Goal: evolve the current website builder into a scalable “Wix/WordPress-level�
 - **CTA banner parity improved in renderers** (inline + public):
   - CTA now supports banner-style background image + overlay fields.
   - Formatting + legacy key fallback behavior preserved.
+- **Phase 2 started: centralized normalization on load**:
+  - `WebsiteService` now normalizes block payloads when loading blocks (defaults + `schemaVersion` + minimal legacy migrations).
 
 ### 🔧 Current “Custom Editor” (Bespoke) Routing
 These block types still go through a dedicated editor widget in `WebsiteEditorPanel`:
 - `hero`, `carousel`, `canvas`
-- `text`, `button`, `divider`
+- `button`
 - `products`
-- `about`
-- `categoryGrid`, `videoBanner`, `partnersBanner`, `brandLogos`
+- `videoBanner`
 
 Everything else is currently expected to flow through the schema-driven generic controls (when a definition exists).
 

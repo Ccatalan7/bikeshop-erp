@@ -9,7 +9,12 @@ import '../models/website_page_models.dart';
 /// Page Management UI - Manage website pages (Odoo-style multi-page support)
 /// Allows creating, editing, and organizing pages for the public store
 class PageManagementPage extends StatefulWidget {
-  const PageManagementPage({super.key});
+  const PageManagementPage({
+    super.key,
+    this.embedded = false,
+  });
+
+  final bool embedded;
 
   @override
   State<PageManagementPage> createState() => _PageManagementPageState();
@@ -49,9 +54,8 @@ class _PageManagementPageState extends State<PageManagementPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return MainLayout(
-      child: Column(
-        children: [
+    final body = Column(
+      children: [
           // Header
           Container(
             padding: const EdgeInsets.all(24),
@@ -64,12 +68,14 @@ class _PageManagementPageState extends State<PageManagementPage> {
             child: Row(
               children: [
                 // Back button
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
-                  tooltip: 'Volver',
-                ),
-                const SizedBox(width: 16),
+                if (!widget.embedded) ...[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Volver',
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 // Title
                 Expanded(
                   child: Column(
@@ -108,9 +114,12 @@ class _PageManagementPageState extends State<PageManagementPage> {
                     ? _buildEmptyState(theme)
                     : _buildPagesList(theme),
           ),
-        ],
-      ),
+      ],
     );
+
+    if (widget.embedded) return body;
+
+    return MainLayout(child: body);
   }
 
   Widget _buildEmptyState(ThemeData theme) {
