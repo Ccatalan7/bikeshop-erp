@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../widgets/inline_edit_toolbar.dart';
@@ -136,14 +135,13 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
 
+  /// Apply font family via CSS font-family instead of GoogleFonts package
+  /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
   static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
     final family = fontFamily?.trim();
     if (family == null || family.isEmpty) return base;
-    try {
-      return GoogleFonts.getFont(family, textStyle: base);
-    } catch (_) {
-      return base.copyWith(fontFamily: family);
-    }
+    // Apply font family directly - browser loads via CSS @font-face or system fonts
+    return base.copyWith(fontFamily: family);
   }
 
   @override
@@ -4110,14 +4108,13 @@ class _EditableCarouselWidget extends StatefulWidget {
 class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
   int _currentIndex = 0;
 
+  /// Apply font family via CSS font-family instead of GoogleFonts package
+  /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
   static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
     final family = fontFamily?.trim();
     if (family == null || family.isEmpty) return base;
-    try {
-      return GoogleFonts.getFont(family, textStyle: base);
-    } catch (_) {
-      return base.copyWith(fontFamily: family);
-    }
+    // Apply font family directly - browser loads via CSS @font-face or system fonts
+    return base.copyWith(fontFamily: family);
   }
 
   void _nextSlide() {

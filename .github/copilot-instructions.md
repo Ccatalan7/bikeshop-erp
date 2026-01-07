@@ -867,6 +867,174 @@ See `.agent/workflows/deploy_to_firebase.md` for the complete deployment steps i
 
 ---
 
+# 📦 BUNDLE SIZE OPTIMIZATION (CRITICAL - PREVENTS 6MB+ BLOAT!)
+
+**⚠️ ADDING THE WRONG PACKAGE OR IMPORT CAN INSTANTLY DOUBLE YOUR BUNDLE SIZE!**
+
+## Target Bundle Sizes
+
+| Build | Expected Size | Bloated Size | Status |
+|-------|---------------|--------------|--------|
+| **Store** (`main_store.dart`) | **~4.1 MB** | 10-11 MB | ❌ BROKEN if > 5MB |
+| **ERP** (`main.dart`) | **~5.2 MB** | 9+ MB | ⚠️ Check if > 6MB |
+
+## 🚨 BANNED PACKAGES (DO NOT IMPORT IN STORE-REACHABLE CODE!)
+
+These packages add MEGABYTES to the bundle even if you only use one function:
+
+| Package | Bundle Bloat | Why It's Heavy | Alternative |
+|---------|--------------|----------------|-------------|
+| `google_fonts` | **+6.5 MB** | Contains metadata for ALL 1000+ Google Fonts | Use CSS `font-family` directly |
+| `firebase_analytics` | +2-3 MB | Full Firebase SDK | Use web analytics via JS |
+| `flutter_map` | +2 MB | Mapping libraries | Use static map images or WebView |
+
+## The `google_fonts` Disaster (Real Incident - Jan 2025)
+
+**What happened:** Added `google_fonts` package to apply custom fonts in website builder.
+
+**Result:** Store bundle jumped from 4.1MB → 11MB (170% increase!)
+
+**Root cause:** `google_fonts` package includes metadata for ALL 1000+ Google Fonts, even if you only use one font. The metadata alone is ~6.5MB.
+
+**The fix:** Use CSS `font-family` directly instead of `GoogleFonts.getFont()`:
+
+```dart
+// ❌ WRONG - Adds 6.5MB to bundle!
+import 'package:google_fonts/google_fonts.dart';
+
+TextStyle getStyle(String fontFamily) {
+  return GoogleFonts.getFont(fontFamily);  // Pulls in ALL font metadata
+}
+
+// ✅ CORRECT - Zero bundle impact!
+TextStyle getStyle(String fontFamily, TextStyle base) {
+  return base.copyWith(fontFamily: fontFamily);  // CSS font-family applied
+}
+
+// ✅ CORRECT for TextTheme
+TextTheme getTextTheme(String fontFamily, TextTheme base) {
+  return base.apply(fontFamily: fontFamily);  // CSS font-family applied
+}
+```
+
+**How fonts still work:** Browser loads fonts from Google Fonts CDN via `<link>` tags in `index.html` or `@font-face` CSS rules. The font NAME is applied via CSS `font-family`, not the Dart package.
+
+## Files That MUST NOT Import Heavy Packages
+
+These files are in the store's dependency tree. Heavy imports here bloat the store:
+
+```
+lib/modules/website/widgets/website_block_renderer.dart     ← Renders store blocks
+lib/modules/website/widgets/editable_block_renderer.dart    ← Edit mode blocks
+lib/modules/website/theme/website_theme_builder.dart        ← Theme application
+lib/public_store/widgets/public_store_layout.dart           ← Store layout wrapper
+lib/public_store/pages/*.dart                               ← All store pages
+```
+
+## Before Adding ANY New Package
+
+**MANDATORY CHECKLIST:**
+
+1. ✅ **Check package size:** Look at pub.dev for package size indicators
+2. ✅ **Check if store needs it:** If only ERP uses it, import ONLY in ERP files
+3. ✅ **Test bundle size BEFORE committing:**
+   ```bash
+   flutter build web --release -t lib/main_store.dart -o build/web_test
+   ls -lh build/web_test/main.dart.js
+   # Must be ~4.1MB, not higher!
+   ```
+4. ✅ **Consider alternatives:**
+   - Can you use a web-only solution (CSS, JS)?
+   - Can you use a lighter package?
+   - Can you implement it yourself in <100 lines?
+
+## Import Hygiene Rules
+
+### Rule 1: Never import ERP modules in store code
+
+```dart
+// ❌ WRONG - Pulls ALL ERP modules into store bundle!
+import '../../shared/routes/erp_routes_barrel.dart';
+
+// ✅ CORRECT - Navigate to ERP via URL, don't import
+context.go('/erp/some-page');
+```
+
+### Rule 2: Use conditional/deferred imports for heavy features
+
+```dart
+// ✅ Deferred import - only loads when actually used
+import 'heavy_feature.dart' deferred as heavy;
+
+Future<void> useHeavyFeature() async {
+  await heavy.loadLibrary();
+  heavy.doSomething();
+}
+```
+
+### Rule 3: Check what your imports import
+
+A single import can cascade into hundreds of files. Before adding an import:
+```bash
+# Check what a file imports
+grep -r "^import" lib/path/to/file.dart
+
+# Check if a package is used in store-reachable code
+grep -r "package:heavy_package" lib/public_store/ lib/modules/website/
+```
+
+## Bundle Size Regression Testing
+
+**After ANY change to website or public_store modules:**
+
+```bash
+# Quick bundle size check
+flutter build web --release -t lib/main_store.dart -o build/web_check
+ls -lh build/web_check/main.dart.js
+
+# Expected output:
+# -rw-r--r--  4.1M  main.dart.js  ✅ GOOD
+# -rw-r--r--  10.8M main.dart.js  ❌ REGRESSION! Find and remove heavy import
+```
+
+## Debugging Bundle Size Increases
+
+If bundle size suddenly increases:
+
+1. **Find the commit that broke it:**
+   ```bash
+   git log --oneline -20
+   # Binary search through commits, building and checking size
+   ```
+
+2. **Check for new imports:**
+   ```bash
+   git diff HEAD~5 --stat | grep -E "\.dart$"
+   # Look at changed files for new imports
+   ```
+
+3. **Check for new packages:**
+   ```bash
+   git diff HEAD~5 pubspec.yaml
+   # Look for added dependencies
+   ```
+
+4. **Use bundle analyzer (advanced):**
+   ```bash
+   flutter build web --release -t lib/main_store.dart --source-maps
+   # Analyze with source-map-explorer or similar tool
+   ```
+
+## Summary: The Golden Rules
+
+1. ⛔ **NEVER** use `google_fonts` package - use CSS `font-family` instead
+2. ⛔ **NEVER** import ERP barrels in store code
+3. ✅ **ALWAYS** check bundle size after modifying website/store code
+4. ✅ **ALWAYS** verify store is ~4.1MB before deploying
+5. 🔍 **INVESTIGATE** immediately if bundle exceeds 5MB
+
+---
+
 
 # 🔍 SEO & WEBSITE ARCHITECTURE (CRITICAL FOR GOOGLE MERCHANT CENTER)
 

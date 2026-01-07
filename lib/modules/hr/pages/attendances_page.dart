@@ -59,17 +59,6 @@ class _AttendancesPageState extends State<AttendancesPage> {
     setState(() => _displayTimeZone = value);
   }
 
-  String _displayTimeZoneLabel() {
-    switch (_displayTimeZone) {
-      case AttendanceDisplayTimeZone.local:
-        return 'Local';
-      case AttendanceDisplayTimeZone.chile:
-        return 'Chile';
-      case AttendanceDisplayTimeZone.utc:
-        return 'UTC';
-    }
-  }
-
   String _displayTimeZoneFlag() {
     switch (_displayTimeZone) {
       case AttendanceDisplayTimeZone.local:
@@ -95,7 +84,6 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Widget _buildTimeZoneSelector({required bool compact}) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
-    final label = '${_displayTimeZoneFlag()} ${_displayTimeZoneLabel()}';
 
     return PopupMenuButton<AttendanceDisplayTimeZone>(
       tooltip: 'Zona horaria',
@@ -147,11 +135,20 @@ class _AttendancesPageState extends State<AttendancesPage> {
                   Icon(_displayTimeZoneIcon(), size: 18, color: accent),
                   const SizedBox(width: 8),
                   Text(
-                    'TZ: $label',
-                    style: theme.textTheme.labelLarge?.copyWith(color: accent),
+                    _currentTimeInSelectedZone(),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.bold,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Icon(Icons.arrow_drop_down, color: accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    _displayTimeZoneFlag(),
+                    style: theme.textTheme.labelMedium?.copyWith(color: accent),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, size: 20, color: accent),
                 ],
               ),
             ),
@@ -179,16 +176,23 @@ class _AttendancesPageState extends State<AttendancesPage> {
     return DateFormat(withSeconds ? 'HH:mm:ss' : 'HH:mm').format(dt);
   }
 
+  /// Returns the current time formatted for the selected timezone
+  String _currentTimeInSelectedZone() {
+    final now = DateTime.now();
+    final dt = _toDisplayTimeZone(now);
+    return DateFormat('HH:mm:ss').format(dt);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
-    // Refresh every minute to update ongoing attendance times
-    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    // Refresh every second to update clock and ongoing attendance times
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() {}); // Trigger rebuild to update elapsed times
+        setState(() {}); // Trigger rebuild to update clock and elapsed times
       }
     });
   }

@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class WebsiteThemeBuilder {
   const WebsiteThemeBuilder._();
 
+  /// Apply font family via CSS font-family instead of GoogleFonts package
+  /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
   static TextTheme _safeGetTextTheme(String? fontFamily, TextTheme base) {
     final family = fontFamily?.trim();
     if (family == null || family.isEmpty) return base;
-    try {
-      return GoogleFonts.getTextTheme(family, base);
-    } catch (_) {
-      return base;
-    }
+    // Apply font family directly - browser loads via CSS @font-face or system fonts
+    return base.apply(fontFamily: family);
   }
 
   static TextStyle? _withFontSize(TextStyle? style, double? fontSize) {

@@ -4,8 +4,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
-
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
@@ -27,14 +25,13 @@ import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
 class WebsiteBlockRenderer {
   const WebsiteBlockRenderer._();
 
+  /// Apply font family via CSS font-family instead of GoogleFonts package
+  /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
   static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
     final family = fontFamily?.trim();
     if (family == null || family.isEmpty) return base;
-    try {
-      return GoogleFonts.getFont(family, textStyle: base);
-    } catch (_) {
-      return base.copyWith(fontFamily: family);
-    }
+    // Apply font family directly - browser loads via CSS @font-face or system fonts
+    return base.copyWith(fontFamily: family);
   }
 
   static Widget build({
