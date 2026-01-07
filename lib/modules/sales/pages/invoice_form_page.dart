@@ -595,6 +595,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       return;
     }
 
+    // Ensure payments are loaded before checking
+    await _salesService.loadPayments(invoiceId: invoiceId, forceRefresh: true);
+
     // Get all payments for this invoice
     final payments = _salesService.getPaymentsForInvoice(invoiceId);
     if (payments.isEmpty) {
@@ -1240,18 +1243,29 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               );
             }
           } else if (_status == InvoiceStatus.confirmed) {
+            final hasPartialPayments = (_loadedInvoice?.paidAmount ?? 0) > 0;
             // Mobile handling for CONFIRMED status
             if (isMobile) {
-              actionButtons.add(PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (val) {
-                  if (val == 'undo') _updateStatus(InvoiceStatus.sent);
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                      value: 'undo', child: Text('Volver a enviado')),
-                ],
-              ));
+              // Show "Deshacer pago" if there are partial payments
+              if (hasPartialPayments) {
+                actionButtons.add(IconButton.outlined(
+                  onPressed: _undoLastPayment,
+                  icon: const Icon(Icons.undo_outlined, color: Colors.red),
+                  tooltip: 'Deshacer pago',
+                ));
+              } else {
+                // Only show "Volver a enviado" if NO payments have been made
+                actionButtons.add(PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (val) {
+                    if (val == 'undo') _updateStatus(InvoiceStatus.sent);
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                        value: 'undo', child: Text('Volver a enviado')),
+                  ],
+                ));
+              }
               if (_canRegisterPayment) {
                 actionButtons.add(IconButton.filled(
                   onPressed: _openPaymentForm,
@@ -1260,15 +1274,27 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 ));
               }
             } else {
-              actionButtons.add(
-                OutlinedButton.icon(
-                  onPressed: _isUpdatingStatus
-                      ? null
-                      : () => _updateStatus(InvoiceStatus.sent),
-                  icon: const Icon(Icons.undo_outlined),
-                  label: const Text('Volver a enviado'),
-                ),
-              );
+              // Desktop: Show "Deshacer pago" if partial payments, else "Volver a enviado"
+              if (hasPartialPayments) {
+                actionButtons.add(
+                  OutlinedButton.icon(
+                    onPressed: _undoLastPayment,
+                    icon: const Icon(Icons.undo_outlined, color: Colors.red),
+                    label: const Text('Deshacer pago',
+                        style: TextStyle(color: Colors.red)),
+                  ),
+                );
+              } else {
+                actionButtons.add(
+                  OutlinedButton.icon(
+                    onPressed: _isUpdatingStatus
+                        ? null
+                        : () => _updateStatus(InvoiceStatus.sent),
+                    icon: const Icon(Icons.undo_outlined),
+                    label: const Text('Volver a enviado'),
+                  ),
+                );
+              }
               actionButtons.add(const SizedBox(width: 8));
               if (_canRegisterPayment) {
                 actionButtons.add(
@@ -2352,69 +2378,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 )
               : null,
         ),
-        const Divider(),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.receipt_long_outlined),
-          title: const Text('Tratamiento de IVA'),
-          subtitle: DropdownButtonFormField<TaxTreatment>(
-            value: _taxTreatment,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: TaxTreatment.noTax,
-                child: Text('Sin IVA'),
-              ),
-              DropdownMenuItem(
-                value: TaxTreatment.taxIncluded,
-                child: Text('IVA Incluido (19%)'),
-              ),
-            ],
-            onChanged: _canEditFields
-                ? (value) {
-                    if (value != null) {
-                      setState(() => _taxTreatment = value);
-                    }
-                  }
-                : null,
-          ),
-        ),
-        // 💳 Payment method hint (only show when ready to confirm)
-        if (_status == InvoiceStatus.sent)
-          ListTile(
-            leading: const Icon(Icons.payment),
-            title: const Text('Método de pago esperado'),
-            subtitle: DropdownButtonFormField<String>(
-              value: _paymentMethodHint,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                hintText: 'Selecciona para validación automática',
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'card',
-                  child: Text('💳 Tarjeta (se agregará IVA si falta)'),
-                ),
-                DropdownMenuItem(
-                  value: 'other',
-                  child: Text('💵 Efectivo/Transferencia'),
-                ),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _paymentMethodHint = value;
-                  // Auto-add tax if selecting card
-                  if (value == 'card' && _taxTreatment == TaxTreatment.noTax) {
-                    _taxTreatment = TaxTreatment.taxIncluded;
-                  }
-                });
-              },
-            ),
-          ),
       ],
     );
   }
@@ -2422,18 +2385,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget _buildSummary(ThemeData theme) {
     final textStyle =
         theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+
+    // Get paid amount and balance from loaded invoice
+    final paidAmount = _loadedInvoice?.paidAmount ?? 0;
+    final balance = _loadedInvoice?.balance ?? _total;
+    final hasPayments = paidAmount > 0;
+
     return Column(
       children: [
         _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
             textStyle, theme),
-        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
-          const SizedBox(height: 8),
-          _buildSummaryRow('Neto', ChileanUtils.formatCurrency(_netAmount),
-              textStyle, theme),
-          const SizedBox(height: 8),
-          _buildSummaryRow(
-              'IVA (19%)', ChileanUtils.formatCurrency(_iva), textStyle, theme),
-        ],
         const Divider(height: 24),
         _buildSummaryRow(
           'Total',
@@ -2444,6 +2405,26 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           ),
           theme,
         ),
+        // Show payment info when there are payments
+        if (hasPayments) ...[
+          const Divider(height: 24),
+          _buildSummaryRow(
+            'Pagado',
+            ChileanUtils.formatCurrency(paidAmount),
+            TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600),
+            theme,
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Saldo',
+            ChileanUtils.formatCurrency(balance),
+            theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: balance <= 0 ? Colors.green : Colors.orange[800],
+            ),
+            theme,
+          ),
+        ],
       ],
     );
   }

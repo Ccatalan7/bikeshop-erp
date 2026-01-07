@@ -49,7 +49,7 @@ class _AccountingDashboardSectionState
   // UI State
   _AccountingBasis _basis = _AccountingBasis.cash;
   String _selectedPeriod = 'Últimos 12 meses';
-  _ExpenseBreakdownRange _breakdownRange = _ExpenseBreakdownRange.last12Months;
+  _ExpenseBreakdownRange _breakdownRange = _ExpenseBreakdownRange.currentMonth;
 
   // Data State
   _DashboardPayload? _data;

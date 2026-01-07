@@ -42,11 +42,12 @@ class Invoice {
   final double paidAmount;
   final double balance;
   final TaxTreatment taxTreatment; // actual tax choice for this invoice
-  final double netAmount; // net amount before IVA (total÷1.19 when tax_included)
+  final double
+      netAmount; // net amount before IVA (total÷1.19 when tax_included)
   final List<InvoiceItem> items;
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Pega-specific fields
   final String invoiceType; // 'sale', 'pega', 'service'
   final String? bikeId; // For pegas: the bike being serviced
@@ -190,8 +191,11 @@ class Invoice {
       bikeId: json['bike_id']?.toString(),
       mechanicId: json['mechanic_id']?.toString(),
       jobNumber: json['job_number']?.toString(),
-      entryDate: json['entry_date'] != null ? _parseDate(json['entry_date']) : null,
-      deliveryDate: json['delivery_date'] != null ? _parseDate(json['delivery_date']) : null,
+      entryDate:
+          json['entry_date'] != null ? _parseDate(json['entry_date']) : null,
+      deliveryDate: json['delivery_date'] != null
+          ? _parseDate(json['delivery_date'])
+          : null,
       requiresApproval: json['requires_approval'] as bool? ?? false,
       isWarranty: json['is_warranty'] as bool? ?? false,
       workDescription: json['work_description']?.toString(),
@@ -207,8 +211,11 @@ class Invoice {
       'invoice_number': invoiceNumber,
       'customer_name': customerName,
       'customer_rut': customerRut,
-      'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC before sending
-      'due_date': dueDate?.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
+      'date': date
+          .toUtc()
+          .toIso8601String(), // CRITICAL: Convert to UTC before sending
+      'due_date':
+          dueDate?.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'status': status.name,
       'subtotal': subtotal,
@@ -224,7 +231,8 @@ class Invoice {
       if (mechanicId != null) 'mechanic_id': mechanicId,
       if (jobNumber != null) 'job_number': jobNumber,
       if (entryDate != null) 'entry_date': entryDate!.toUtc().toIso8601String(),
-      if (deliveryDate != null) 'delivery_date': deliveryDate!.toUtc().toIso8601String(),
+      if (deliveryDate != null)
+        'delivery_date': deliveryDate!.toUtc().toIso8601String(),
       'requires_approval': requiresApproval,
       'is_warranty': isWarranty,
       if (workDescription != null) 'work_description': workDescription,
@@ -276,7 +284,7 @@ class InvoiceItem {
   final double discount;
   final double lineTotal;
   final double cost;
-  
+
   // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Service/Labor fields
   final bool isService; // true = labor/service, false = product
   final double? hours; // For services: hours worked
@@ -338,12 +346,13 @@ class InvoiceItem {
 
   factory InvoiceItem.fromJson(Map<String, dynamic> json) {
     // Handle both 'price' (from process_online_order) and 'unit_price' (from manual invoices)
-    final price = (json['unit_price'] as num?)?.toDouble() ?? 
-                  (json['price'] as num?)?.toDouble() ?? 0;
+    final price = (json['unit_price'] as num?)?.toDouble() ??
+        (json['price'] as num?)?.toDouble() ??
+        0;
     // Handle both 'line_total' and 'subtotal' (from process_online_order)
-    final lineTotal = (json['line_total'] as num?)?.toDouble() ?? 
-                      (json['subtotal'] as num?)?.toDouble();
-    
+    final lineTotal = (json['line_total'] as num?)?.toDouble() ??
+        (json['subtotal'] as num?)?.toDouble();
+
     return InvoiceItem(
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString(),
@@ -399,6 +408,11 @@ class Payment {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Payment-level tax handling (multi-payment with split tax)
+  final String taxTreatment; // 'no_tax', 'tax_included', 'tax_excluded'
+  final double netAmount; // Amount excluding IVA
+  final double ivaAmount; // IVA amount (0 if no_tax)
+
   Payment({
     this.id,
     required this.tenantId,
@@ -411,8 +425,19 @@ class Payment {
     this.notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.taxTreatment = 'no_tax',
+    double? netAmount,
+    double? ivaAmount,
   })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+        updatedAt = updatedAt ?? DateTime.now(),
+        netAmount = netAmount ??
+            (taxTreatment == 'tax_included'
+                ? (amount / 1.19).roundToDouble()
+                : amount),
+        ivaAmount = ivaAmount ??
+            (taxTreatment == 'tax_included'
+                ? (amount - (amount / 1.19).roundToDouble())
+                : 0);
 
   Payment copyWith({
     String? id,
@@ -426,6 +451,9 @@ class Payment {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? taxTreatment,
+    double? netAmount,
+    double? ivaAmount,
   }) {
     return Payment(
       id: id ?? this.id,
@@ -439,22 +467,31 @@ class Payment {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      taxTreatment: taxTreatment ?? this.taxTreatment,
+      netAmount: netAmount ?? this.netAmount,
+      ivaAmount: ivaAmount ?? this.ivaAmount,
     );
   }
 
   factory Payment.fromJson(Map<String, dynamic> json) {
+    final amount = (json['amount'] as num?)?.toDouble() ?? 0;
+    final taxTreatment = json['tax_treatment']?.toString() ?? 'no_tax';
+
     return Payment(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceReference: json['invoice_reference'] as String?,
       paymentMethodId: json['payment_method_id']?.toString() ?? '',
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      amount: amount,
       date: _parseDate(json['date']),
       reference: json['reference'] as String?,
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      taxTreatment: taxTreatment,
+      netAmount: (json['net_amount'] as num?)?.toDouble(),
+      ivaAmount: (json['iva_amount'] as num?)?.toDouble(),
     );
   }
 
@@ -469,6 +506,12 @@ class Payment {
       'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'notes': notes,
+      'tax_treatment': taxTreatment,
+      'net_amount': netAmount,
+      'iva_amount': ivaAmount,
     };
   }
+
+  /// True if this payment includes IVA
+  bool get hasIva => taxTreatment == 'tax_included' && ivaAmount > 0;
 }

@@ -1681,7 +1681,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   }
 
   Widget _buildSummary(ThemeData theme) {
-    // ...
+    // Get paid amount and balance from invoice if available
+    final paidAmount = _loadedInvoice?.paidAmount ?? 0;
+    final balance = _loadedInvoice?.balance ?? _total;
+    final hasPayments = paidAmount > 0;
+
     return Column(
       children: [
         _buildSummaryRow(
@@ -1696,6 +1700,26 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
           ),
           theme,
         ),
+        // Show payment info when there are payments
+        if (hasPayments) ...[
+          const Divider(),
+          _buildSummaryRow(
+            'Pagado',
+            ChileanUtils.formatCurrency(paidAmount),
+            TextStyle(color: Colors.green[700]),
+            theme,
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Saldo',
+            ChileanUtils.formatCurrency(balance),
+            theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: balance <= 0 ? Colors.green : Colors.orange[800],
+            ),
+            theme,
+          ),
+        ],
       ],
     );
   }

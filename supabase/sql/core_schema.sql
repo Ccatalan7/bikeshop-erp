@@ -4774,6 +4774,12 @@ begin
     return;
   end if;
 
+  -- Skip if payment is soft deleted
+  if p_payment.deleted_at is not null then
+    raise notice 'create_sales_payment_journal_entry: Payment % is deleted, skipping', p_payment.id;
+    return;
+  end if;
+
   v_tenant_id := p_payment.tenant_id;
 
   -- CRITICAL: Validate tenant_id for service role context (webhooks)
@@ -5897,6 +5903,13 @@ begin
       delete from public.journal_entries
       where source_module = 'sales_invoices'
         and source_reference = OLD.invoice_number;
+        
+      -- Soft-delete associated payments
+      raise notice 'handle_sales_invoice_change: reverting to non-posted, soft-deleting payments';
+      update public.sales_payments 
+      set deleted_at = now() 
+      where invoice_id = OLD.id
+        and deleted_at is null;
         
     elsif not v_old_posted and v_new_posted then
       -- Draft/Sent → Confirmed: CREATE journal entry

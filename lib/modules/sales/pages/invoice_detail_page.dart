@@ -597,15 +597,16 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ),
             ),
           ],
-          // Confirmed → Sent
-          if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0)
+          // Confirmed → Sent (only if no payments have been made yet)
+          if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0 && invoice.paidAmount == 0)
             OutlinedButton.icon(
               onPressed: _revertToSent,
               icon: const Icon(Icons.undo),
               label: const Text('Volver a enviada'),
             ),
-          // Paid → Undo payment
-          if (invoice.status == InvoiceStatus.paid)
+          // Paid → Undo payment OR Confirmed with partial payments → Undo payment
+          if (invoice.status == InvoiceStatus.paid || 
+              (invoice.status == InvoiceStatus.confirmed && invoice.paidAmount > 0))
             OutlinedButton.icon(
               onPressed: _undoLastPayment,
               icon: const Icon(Icons.undo),
@@ -847,7 +848,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            color: Colors.red[400],
+                            tooltip: 'Eliminar pago',
+                            onPressed: () => _confirmDeletePayment(payment),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
                         ],
                       ),
                     ),
