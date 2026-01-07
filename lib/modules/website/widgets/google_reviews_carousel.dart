@@ -61,7 +61,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '4.9',
+                      _calculateAverageRating(reviews).toStringAsFixed(1),
                       style: TextStyle(
                         fontFamily: bodyFont,
                         fontSize: 18,
@@ -71,10 +71,16 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Row(
-                      children: List.generate(
-                          5,
-                          (index) => const Icon(Icons.star,
-                              color: Color(0xFFFBBC04), size: 20)),
+                      children: List.generate(5, (index) {
+                        final avgRating = _calculateAverageRating(reviews);
+                        return Icon(
+                          index < avgRating.round()
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: const Color(0xFFFBBC04),
+                          size: 20,
+                        );
+                      }),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -158,6 +164,42 @@ class GoogleReviewsCarousel extends StatelessWidget {
     ];
   }
 
+  /// Calculate average rating from reviews list
+  double _calculateAverageRating(List<Map<String, dynamic>> reviews) {
+    if (reviews.isEmpty) return 0.0;
+
+    double total = 0;
+    for (final review in reviews) {
+      final ratingValue = review['rating'] ?? review['starRating'];
+      if (ratingValue is int) {
+        total += ratingValue;
+      } else if (ratingValue is String) {
+        switch (ratingValue.toUpperCase()) {
+          case 'FIVE':
+            total += 5;
+            break;
+          case 'FOUR':
+            total += 4;
+            break;
+          case 'THREE':
+            total += 3;
+            break;
+          case 'TWO':
+            total += 2;
+            break;
+          case 'ONE':
+            total += 1;
+            break;
+          default:
+            total += 5; // Assume 5 if unknown
+        }
+      } else {
+        total += 5; // Default to 5 if no rating
+      }
+    }
+    return total / reviews.length;
+  }
+
   static Color? _parseColor(dynamic value) {
     if (value == null) return null;
     final hex = value.toString();
@@ -184,6 +226,68 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Handle both mock format and real Google API format
+    // Mock: author_name, photo_url, relative_time, rating, text
+    // Google API: reviewer.displayName, reviewer.profilePhotoUrl, createTime, starRating (FIVE/FOUR/etc), comment
+
+    // Extract author name
+    final String authorName = review['author_name'] ??
+        (review['reviewer'] as Map<String, dynamic>?)?['displayName'] ??
+        'Usuario';
+
+    // Extract photo URL (with fallback for missing photos)
+    final String? photoUrl = review['photo_url'] ??
+        (review['reviewer'] as Map<String, dynamic>?)?['profilePhotoUrl'];
+
+    // Extract relative time or format create time
+    String relativeTime = review['relative_time'] ?? '';
+    if (relativeTime.isEmpty) {
+      final createTime = review['createTime'] ?? review['updateTime'];
+      if (createTime != null) {
+        try {
+          final date = DateTime.parse(createTime);
+          final diff = DateTime.now().difference(date);
+          if (diff.inDays > 30) {
+            relativeTime = 'hace ${diff.inDays ~/ 30} meses';
+          } else if (diff.inDays > 0) {
+            relativeTime = 'hace ${diff.inDays} días';
+          } else {
+            relativeTime = 'hace ${diff.inHours} horas';
+          }
+        } catch (_) {
+          relativeTime = '';
+        }
+      }
+    }
+
+    // Extract rating (mock: int, Google API: string like "FIVE", "FOUR", etc)
+    int rating = 5;
+    final ratingValue = review['rating'] ?? review['starRating'];
+    if (ratingValue is int) {
+      rating = ratingValue;
+    } else if (ratingValue is String) {
+      switch (ratingValue.toUpperCase()) {
+        case 'FIVE':
+          rating = 5;
+          break;
+        case 'FOUR':
+          rating = 4;
+          break;
+        case 'THREE':
+          rating = 3;
+          break;
+        case 'TWO':
+          rating = 2;
+          break;
+        case 'ONE':
+          rating = 1;
+          break;
+      }
+    }
+
+    // Extract review text
+    final String reviewText = review['text'] ?? review['comment'] ?? '';
+
     return Container(
       width: 320,
       padding: const EdgeInsets.all(24),
@@ -207,8 +311,18 @@ class _ReviewCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage(review['photo_url']),
+                backgroundImage:
+                    photoUrl != null ? NetworkImage(photoUrl) : null,
                 backgroundColor: Colors.grey.shade200,
+                child: photoUrl == null
+                    ? Text(
+                        authorName.isNotEmpty
+                            ? authorName[0].toUpperCase()
+                            : 'U',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, color: Colors.white),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -216,7 +330,7 @@ class _ReviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      review['author_name'],
+                      authorName,
                       style: TextStyle(
                         fontFamily: bodyFont,
                         fontWeight: FontWeight.w700,
@@ -226,23 +340,23 @@ class _ReviewCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      review['relative_time'],
-                      style: TextStyle(
-                        fontFamily: bodyFont,
-                        fontSize: 12,
-                        color: Colors.grey,
+                    if (relativeTime.isNotEmpty)
+                      Text(
+                        relativeTime,
+                        style: TextStyle(
+                          fontFamily: bodyFont,
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
-              // Google G Logo (small svg or text or icon)
+              // Google G Logo
               Container(
                 width: 24,
                 height: 24,
                 alignment: Alignment.center,
-                // Using a text G with Google colors for simplicity without assets
                 child: const Text(
                   'G',
                   style: TextStyle(
@@ -262,7 +376,7 @@ class _ReviewCard extends StatelessWidget {
               5,
               (index) => Icon(
                 Icons.star,
-                color: index < (review['rating'] ?? 5)
+                color: index < rating
                     ? const Color(0xFFFBBC04)
                     : Colors.grey.shade300,
                 size: 16,
@@ -273,7 +387,7 @@ class _ReviewCard extends StatelessWidget {
           // Text
           Expanded(
             child: Text(
-              review['text'],
+              reviewText,
               style: TextStyle(
                 fontFamily: bodyFont,
                 fontSize: 14,

@@ -14,6 +14,10 @@ class GoogleBusinessService with ChangeNotifier {
 
   static const _kWebReturnToEditorKey = 'google_oauth_return_to_editor';
 
+  // Edge Function URL for proxying Google Business API calls (bypasses CORS on web)
+  static const String _edgeFunctionUrl =
+      'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-business-reviews';
+
   void _debugSessionSnapshot(String context) {
     final session = _supabase.auth.currentSession;
     final user = _supabase.auth.currentUser;
@@ -303,24 +307,43 @@ class GoogleBusinessService with ChangeNotifier {
         );
       }
 
-      // 1. Get Accounts
-      // https://mybusinessaccountmanagement.googleapis.com/v1/accounts
-      final accountsResp = await http.get(
-        Uri.parse(
-            'https://mybusinessaccountmanagement.googleapis.com/v1/accounts'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      Map<String, dynamic> accountsData;
 
-      if (accountsResp.statusCode != 200) {
-        throw Exception(
-          _toFriendlyGoogleApiError(
-            action: 'obtener cuentas (accounts)',
-            response: accountsResp,
-          ),
+      if (kIsWeb) {
+        // On web, use Edge Function to bypass CORS
+        final resp = await http.post(
+          Uri.parse(_edgeFunctionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${session.accessToken}',
+          },
+          body: jsonEncode({
+            'action': 'fetchAccounts',
+            'accessToken': token,
+          }),
         );
+        if (resp.statusCode != 200) {
+          throw Exception('Edge Function error: ${resp.body}');
+        }
+        accountsData = jsonDecode(resp.body);
+      } else {
+        // On native, call Google API directly
+        final accountsResp = await http.get(
+          Uri.parse(
+              'https://mybusinessaccountmanagement.googleapis.com/v1/accounts'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (accountsResp.statusCode != 200) {
+          throw Exception(
+            _toFriendlyGoogleApiError(
+              action: 'obtener cuentas (accounts)',
+              response: accountsResp,
+            ),
+          );
+        }
+        accountsData = jsonDecode(accountsResp.body);
       }
 
-      final accountsData = jsonDecode(accountsResp.body);
       final accounts = (accountsData['accounts'] as List?) ?? [];
 
       if (accounts.isEmpty) {
@@ -334,26 +357,48 @@ class GoogleBusinessService with ChangeNotifier {
       for (final account in accounts) {
         final accountName = account['name']; // e.g., "accounts/123456"
 
-        // https://mybusinessbusinessinformation.googleapis.com/v1/{parent}/locations
-        final locationsResp = await http.get(
-          Uri.parse(
-              'https://mybusinessbusinessinformation.googleapis.com/v1/$accountName/locations?readMask=name,title,storeCode,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
+        Map<String, dynamic> locData;
 
-        if (locationsResp.statusCode == 200) {
-          final locData = jsonDecode(locationsResp.body);
-          final locations = (locData['locations'] as List?) ?? [];
-
-          allLocations.addAll(locations.map((l) => GoogleLocation.fromJson(l)));
-        } else {
-          throw Exception(
-            _toFriendlyGoogleApiError(
-              action: 'obtener ubicaciones (locations) para $accountName',
-              response: locationsResp,
-            ),
+        if (kIsWeb) {
+          // On web, use Edge Function
+          final resp = await http.post(
+            Uri.parse(_edgeFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${session.accessToken}',
+            },
+            body: jsonEncode({
+              'action': 'fetchLocations',
+              'accessToken': token,
+              'accountName': accountName,
+            }),
           );
+          if (resp.statusCode != 200) {
+            throw Exception('Edge Function error: ${resp.body}');
+          }
+          locData = jsonDecode(resp.body);
+        } else {
+          // On native, call Google API directly
+          final locationsResp = await http.get(
+            Uri.parse(
+                'https://mybusinessbusinessinformation.googleapis.com/v1/$accountName/locations?readMask=name,title,storeCode,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea'),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (locationsResp.statusCode != 200) {
+            throw Exception(
+              _toFriendlyGoogleApiError(
+                action: 'obtener ubicaciones (locations) para $accountName',
+                response: locationsResp,
+              ),
+            );
+          }
+          locData = jsonDecode(locationsResp.body);
         }
+
+        final locations = (locData['locations'] as List?) ?? [];
+        // Prepend accountName to each location's name for the Reviews API v4
+        allLocations.addAll(locations
+            .map((l) => GoogleLocation.fromJson(l, accountName: accountName)));
       }
 
       return allLocations;
@@ -381,27 +426,48 @@ class GoogleBusinessService with ChangeNotifier {
       final token = session.providerToken;
       if (token == null) throw Exception('No token');
 
-      // Note: locationName is like "accounts/X/locations/Y"
-      // Endpoint: https://mybusiness.googleapis.com/v4/{name}/reviews
-      final url = 'https://mybusiness.googleapis.com/v4/$locationName/reviews';
+      Map<String, dynamic> data;
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception(
-          _toFriendlyGoogleApiError(
-            action: 'obtener reseñas (reviews)',
-            response: response,
-          ),
+      if (kIsWeb) {
+        // On web, use Edge Function to bypass CORS
+        debugPrint(
+            '🌐 [GoogleBusinessService] Fetching reviews via Edge Function');
+        final resp = await http.post(
+          Uri.parse(_edgeFunctionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${session.accessToken}',
+          },
+          body: jsonEncode({
+            'action': 'fetchReviews',
+            'accessToken': token,
+            'locationName': locationName,
+          }),
         );
+        if (resp.statusCode != 200) {
+          throw Exception('Edge Function error: ${resp.body}');
+        }
+        data = jsonDecode(resp.body);
+      } else {
+        // On native, call Google API directly
+        final url =
+            'https://mybusiness.googleapis.com/v4/$locationName/reviews';
+        final response = await http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode != 200) {
+          throw Exception(
+            _toFriendlyGoogleApiError(
+              action: 'obtener reseñas (reviews)',
+              response: response,
+            ),
+          );
+        }
+        data = jsonDecode(response.body);
       }
 
-      final data = jsonDecode(response.body);
       final reviews = (data['reviews'] as List?) ?? [];
-
       return reviews.map((r) => r as Map<String, dynamic>).toList();
     } catch (e) {
       _error = 'Error fetching reviews: $e';
@@ -434,7 +500,8 @@ class GoogleLocation {
     this.hours,
   });
 
-  factory GoogleLocation.fromJson(Map<String, dynamic> json) {
+  factory GoogleLocation.fromJson(Map<String, dynamic> json,
+      {String? accountName}) {
     // Helper to extract phone
     String? phone;
     if (json['phoneNumbers'] != null) {
@@ -448,8 +515,15 @@ class GoogleLocation {
       lng = (json['latlng']['longitude'] as num?)?.toDouble();
     }
 
+    // Build the full resource name for Reviews API v4
+    // Google's v1 API returns "locations/XXX" but v4 reviews needs "accounts/YYY/locations/XXX"
+    String name = json['name'] ?? '';
+    if (accountName != null && name.startsWith('locations/')) {
+      name = '$accountName/$name';
+    }
+
     return GoogleLocation(
-      name: json['name'] ?? '',
+      name: name,
       title: json['title'] ?? 'Sin título',
       phone: phone,
       lat: lat,

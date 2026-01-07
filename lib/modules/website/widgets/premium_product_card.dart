@@ -88,7 +88,10 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
                               ),
                             ),
                     ),
-                    if (_isInteractive && _isHovered)
+                    // Only show hover button on desktop (not mobile/touch)
+                    if (_isInteractive &&
+                        _isHovered &&
+                        MediaQuery.of(context).size.width >= 600)
                       Positioned(
                         bottom: 12,
                         left: 0,
