@@ -96,6 +96,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   String _statusFilter = 'active';
   final Set<String> _customStatusFilter =
       {}; // Uses status IDs (UUIDs) not legacy enum
+  bool _statusFilterExcludeMode =
+      false; // false = "is" (include), true = "is not" (exclude)
   final Set<JobPriority> _priorityFilter = {};
   bool _showOnlyOverdue = false;
   bool _showOnlyUnpaid = false;
@@ -582,12 +584,12 @@ class _PegasTablePageState extends State<PegasTablePage>
           // Filter out only: Cancelados, and Entregados that are already paid.
           if (job.status == JobStatus.cancelado) return false;
 
-          final isDelivered =
-              job.deliveredAt != null ||
+          final isDelivered = job.deliveredAt != null ||
               job.status == JobStatus.entregado ||
               (job.customStatus?.code.toLowerCase() == 'entregado');
 
-            if (isDelivered && isInvoicedEffective && isPaidEffective) return false;
+          if (isDelivered && isInvoicedEffective && isPaidEffective)
+            return false;
           break;
         case 'completed':
           // Completed = only complete phase with finalizado status
@@ -622,10 +624,18 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
 
       // Custom status filter - now uses status IDs
+      // Supports both "is" (include) and "is not" (exclude) modes
       if (hasCustomStatusFilter) {
         final jobStatusId = job.statusId;
-        if (jobStatusId == null || !_customStatusFilter.contains(jobStatusId)) {
-          return false;
+        final isInFilter =
+            jobStatusId != null && _customStatusFilter.contains(jobStatusId);
+
+        if (_statusFilterExcludeMode) {
+          // Exclude mode: hide jobs that ARE in the filter
+          if (isInFilter) return false;
+        } else {
+          // Include mode: only show jobs that ARE in the filter
+          if (!isInFilter) return false;
         }
       }
 
@@ -3865,7 +3875,11 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             const SizedBox(width: 6),
             Text(
-              hasFilter ? 'Estado (${_customStatusFilter.length})' : 'Estado',
+              hasFilter
+                  ? (_statusFilterExcludeMode
+                      ? 'Estado ≠ ${_customStatusFilter.length}'
+                      : 'Estado (${_customStatusFilter.length})')
+                  : 'Estado',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: hasFilter ? FontWeight.w600 : FontWeight.normal,
@@ -3948,6 +3962,40 @@ class _PegasTablePageState extends State<PegasTablePage>
                                         style: TextStyle(fontSize: 12)),
                                   ),
                               ],
+                            ),
+                          ),
+                          // Is / Is Not toggle
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            child: SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text('Es',
+                                      style: TextStyle(fontSize: 12)),
+                                  icon: Icon(Icons.check_circle_outline,
+                                      size: 16),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text('No es',
+                                      style: TextStyle(fontSize: 12)),
+                                  icon: Icon(Icons.cancel_outlined, size: 16),
+                                ),
+                              ],
+                              selected: {_statusFilterExcludeMode},
+                              onSelectionChanged: (Set<bool> newSelection) {
+                                setState(() {
+                                  _statusFilterExcludeMode = newSelection.first;
+                                });
+                                setDialogState(() {});
+                                _applyFiltersAndSort();
+                              },
+                              style: ButtonStyle(
+                                visualDensity: VisualDensity.compact,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
                             ),
                           ),
                           const Divider(height: 1),
@@ -6321,6 +6369,9 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
   bool _isOpen = false;
   _JobDetailTab _selectedTab = _JobDetailTab.diagnostico;
 
+  // Display page index for preview navigation (0-3 for solicitud, diagnostico, trabajos, notas)
+  int _displayPageIndex = 0;
+
   // Track original values to detect changes
   late String _originalClientRequest;
   late String _originalDiagnosis;
@@ -6418,10 +6469,45 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
     });
   }
 
+  /// Maps the display page index to the corresponding tab.
+  /// Display pages only include fields with content, so we need to
+  /// figure out which actual tab corresponds to the current display index.
+  _JobDetailTab _getTabFromDisplayPageIndex() {
+    // Build the list of tabs that have content (same order as in build method)
+    final tabsWithContent = <_JobDetailTab>[];
+    if (widget.clientRequest?.isNotEmpty ?? false) {
+      tabsWithContent.add(_JobDetailTab.solicitud);
+    }
+    if (widget.diagnosis?.isNotEmpty ?? false) {
+      tabsWithContent.add(_JobDetailTab.diagnostico);
+    }
+    if (widget.workPerformed?.isNotEmpty ?? false) {
+      tabsWithContent.add(_JobDetailTab.trabajos);
+    }
+    if (widget.notes?.isNotEmpty ?? false) {
+      tabsWithContent.add(_JobDetailTab.notas);
+    }
+
+    // If we have content and valid index, return that tab
+    if (tabsWithContent.isNotEmpty &&
+        _displayPageIndex < tabsWithContent.length) {
+      return tabsWithContent[_displayPageIndex];
+    }
+
+    // Fallback to diagnostico (default)
+    return _JobDetailTab.diagnostico;
+  }
+
   void _showOverlay() {
     if (_isOpen) return;
 
     _initValues();
+
+    // Map the display page index to the corresponding tab
+    // The display pages are based on which fields have content, but we need
+    // to find which tab that corresponds to
+    _selectedTab = _getTabFromDisplayPageIndex();
+
     _textController.text = _getCurrentFieldValue();
     _isOpen = true;
 
@@ -7689,18 +7775,31 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
 
   @override
   Widget build(BuildContext context) {
-    final diagnosis = widget.diagnosis?.trim();
-    final hasAnyContent = (widget.clientRequest?.isNotEmpty ?? false) ||
-        (widget.diagnosis?.isNotEmpty ?? false) ||
-        (widget.workPerformed?.isNotEmpty ?? false) ||
-        (widget.notes?.isNotEmpty ?? false);
+    // Get all pages with content
+    final pages = <({String label, String content})>[];
+    if (widget.clientRequest?.isNotEmpty ?? false) {
+      pages.add((label: 'Solicitud', content: widget.clientRequest!));
+    }
+    if (widget.diagnosis?.isNotEmpty ?? false) {
+      pages.add((label: 'Diagnóstico', content: widget.diagnosis!));
+    }
+    if (widget.workPerformed?.isNotEmpty ?? false) {
+      pages.add((label: 'Trabajos', content: widget.workPerformed!));
+    }
+    if (widget.notes?.isNotEmpty ?? false) {
+      pages.add((label: 'Notas', content: widget.notes!));
+    }
 
-    // Count filled fields for indicator
-    int filledCount = 0;
-    if (widget.clientRequest?.isNotEmpty ?? false) filledCount++;
-    if (widget.diagnosis?.isNotEmpty ?? false) filledCount++;
-    if (widget.workPerformed?.isNotEmpty ?? false) filledCount++;
-    if (widget.notes?.isNotEmpty ?? false) filledCount++;
+    final hasAnyContent = pages.isNotEmpty;
+    final filledCount = pages.length;
+
+    // Ensure display page index is valid
+    if (_displayPageIndex >= filledCount) {
+      _displayPageIndex = 0;
+    }
+
+    // Current page to display
+    final currentPage = hasAnyContent ? pages[_displayPageIndex] : null;
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -7730,34 +7829,111 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
                             fontStyle: FontStyle.italic,
                           ),
                         )
-                      : Text(
-                          diagnosis ??
-                              widget.clientRequest ??
-                              widget.workPerformed ??
-                              widget.notes ??
-                              '',
-                          style: const TextStyle(fontSize: 13),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Labeled content: "Solicitud: texto..."
+                            RichText(
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '${currentPage!.label}: ',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: currentPage.content,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color
+                                          ?.withOpacity(0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                 ),
                 const SizedBox(width: 4),
+                // Right side: counter + navigation arrows
                 if (filledCount > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '$filledCount/4',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue[700],
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Counter badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${_displayPageIndex + 1}/$filledCount',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[700],
+                          ),
+                        ),
                       ),
-                    ),
+                      // Navigation arrows (only if more than 1 page)
+                      if (filledCount > 1)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _displayPageIndex =
+                                      (_displayPageIndex - 1 + filledCount) %
+                                          filledCount;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Icon(
+                                  Icons.chevron_left,
+                                  size: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _displayPageIndex =
+                                      (_displayPageIndex + 1) % filledCount;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Icon(
+                                  Icons.chevron_right,
+                                  size: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   )
                 else
                   Icon(

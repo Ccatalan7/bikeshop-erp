@@ -180,7 +180,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   String _currentTimeInSelectedZone() {
     final now = DateTime.now();
     final dt = _toDisplayTimeZone(now);
-    return DateFormat('HH:mm:ss').format(dt);
+    return DateFormat('HH:mm').format(dt);
   }
 
   @override

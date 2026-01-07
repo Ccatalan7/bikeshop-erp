@@ -4183,6 +4183,13 @@ begin
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2105');
   v_count := v_count + (case when found then 1 else 0 end);
   
+  -- SUELDOS POR PAGAR (Salaries Payable - for payroll)
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '2106', 'Sueldos por Pagar', 'liability', 'currentLiability',
+    'Obligaciones pendientes de pago por remuneraciones al personal', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2106');
+  v_count := v_count + (case when found then 1 else 0 end);
+  
   -- EQUITY
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '3101', 'Capital Social', 'equity', 'capital',
