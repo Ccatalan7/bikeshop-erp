@@ -43,7 +43,11 @@ class PegasTablePage extends StatefulWidget {
 }
 
 class _PegasTablePageState extends State<PegasTablePage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  // Keep this page alive to preserve state when navigating away
+  @override
+  bool get wantKeepAlive => true;
+
   late BikeshopService _bikeshopService;
   late CustomerService _customerService;
   late DatabaseService _databaseService;
@@ -165,10 +169,50 @@ class _PegasTablePageState extends State<PegasTablePage>
     _initializeColumns();
     _loadColumnOrder(); // Load saved column order
     _loadListPaneWidth();
+    _restoreTableState(); // Restore filters, pagination, sort from service
     _loadData();
   }
 
+  /// Restore table state from BikeshopService (persists across navigation)
+  void _restoreTableState() {
+    _currentPage = _bikeshopService.pegasCurrentPage;
+    _rowsPerPage = _bikeshopService.pegasRowsPerPage;
+    _sortColumn = _bikeshopService.pegasSortColumn;
+    _sortAscending = _bikeshopService.pegasSortAscending;
+    _statusFilter = _bikeshopService.pegasStatusFilter;
+    _customStatusFilter.clear();
+    _customStatusFilter.addAll(_bikeshopService.pegasCustomStatusFilter);
+    _statusFilterExcludeMode = _bikeshopService.pegasStatusFilterExcludeMode;
+    _priorityFilter.clear();
+    _priorityFilter.addAll(_bikeshopService.pegasPriorityFilter.map((s) =>
+        JobPriority.values
+            .firstWhere((p) => p.name == s, orElse: () => JobPriority.normal)));
+    _showOnlyOverdue = _bikeshopService.pegasShowOnlyOverdue;
+    _showOnlyUnpaid = _bikeshopService.pegasShowOnlyUnpaid;
+    _searchTerm = _bikeshopService.pegasSearchTerm;
+    _viewMode = _bikeshopService.pegasViewMode;
+  }
+
+  /// Save table state to BikeshopService for persistence
+  void _saveTableState() {
+    _bikeshopService.pegasCurrentPage = _currentPage;
+    _bikeshopService.pegasRowsPerPage = _rowsPerPage;
+    _bikeshopService.pegasSortColumn = _sortColumn;
+    _bikeshopService.pegasSortAscending = _sortAscending;
+    _bikeshopService.pegasStatusFilter = _statusFilter;
+    _bikeshopService.pegasCustomStatusFilter = Set.from(_customStatusFilter);
+    _bikeshopService.pegasStatusFilterExcludeMode = _statusFilterExcludeMode;
+    _bikeshopService.pegasPriorityFilter =
+        _priorityFilter.map((p) => p.name).toSet();
+    _bikeshopService.pegasShowOnlyOverdue = _showOnlyOverdue;
+    _bikeshopService.pegasShowOnlyUnpaid = _showOnlyUnpaid;
+    _bikeshopService.pegasSearchTerm = _searchTerm;
+    _bikeshopService.pegasViewMode = _viewMode;
+  }
+
   /// Called when BikeshopService notifies (e.g., realtime update from another client)
+  /// Now uses SURGICAL UPDATE mode: the cache is already updated from realtime payload,
+  /// so we just refresh the UI with cached data instead of doing a full database fetch.
   void _onBikeshopServiceChanged() {
     // Skip reload if we have active local operations in progress
     if (_activeLocalOperations > 0) {
@@ -185,16 +229,30 @@ class _PegasTablePageState extends State<PegasTablePage>
             '🔇 [PegasTablePage] Skipping reload - local update ${elapsed.inMilliseconds}ms ago (grace: ${_localUpdateGracePeriod.inMilliseconds}ms)');
         return;
       }
-      debugPrint(
-          '🔔 [PegasTablePage] Grace period expired (${elapsed.inMilliseconds}ms), reloading...');
-    } else {
-      debugPrint(
-          '🔔 [PegasTablePage] BikeshopService notified (external change), reloading data...');
     }
 
-    // Invalidate cache to force fresh data fetch
-    _bikeshopService.invalidateJobsCache();
+    // SURGICAL UPDATE MODE: Use cached data directly (already updated from realtime payload)
+    // This avoids full database refetch and is much lighter weight
+    if (_bikeshopService.hasJobsCache) {
+      debugPrint(
+          '🔧 [PegasTablePage] Surgical update: using cached data (no DB fetch)');
+      _refreshFromCache();
+      return;
+    }
+
+    // Fallback: Full reload only if cache is empty
+    debugPrint('🔔 [PegasTablePage] Cache empty, doing full reload...');
     _loadData();
+  }
+
+  /// Refresh UI from cached data without database fetch
+  void _refreshFromCache() {
+    if (!mounted) return;
+
+    setState(() {
+      _jobs = _bikeshopService.cachedJobs;
+    });
+    _applyFiltersAndSort();
   }
 
   /// Mark that we're starting a local operation (to suppress unnecessary reloads)
@@ -709,6 +767,15 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
 
     setState(() => _filteredJobs = filtered);
+
+    // Validate current page (in case filtered results changed)
+    final maxPage = (filtered.length / _rowsPerPage).ceil() - 1;
+    if (_currentPage > maxPage.clamp(0, 999999)) {
+      _currentPage = maxPage.clamp(0, 999999);
+    }
+
+    // Persist state for navigation
+    _saveTableState();
   }
 
   void _sortByColumn(String column) {
@@ -725,6 +792,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 1100 ||
@@ -2412,6 +2480,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 _rowsPerPage = value!;
                 _currentPage = 0;
               });
+              _saveTableState();
             },
             underline: const SizedBox(),
           ),
@@ -2425,6 +2494,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             onPressed: _currentPage > 0
                 ? () {
                     setState(() => _currentPage--);
+                    _saveTableState();
                   }
                 : null,
           ),
@@ -2437,6 +2507,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             onPressed: endIndex < _filteredJobs.length
                 ? () {
                     setState(() => _currentPage++);
+                    _saveTableState();
                   }
                 : null,
           ),

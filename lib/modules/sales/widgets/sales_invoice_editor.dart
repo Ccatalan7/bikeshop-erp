@@ -68,6 +68,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   bool _isSaving = false;
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
+  bool _isDirty = false; // Tracks unsaved changes to protect from rebuilds
 
   // Key to reset autocomplete field after adding product
   int _autocompleteKey = 0;
@@ -424,8 +425,23 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
 
   void _handleLinesChanged() {
     if (mounted) {
+      _markDirty(); // Track that changes have been made
       setState(() {});
     }
+  }
+
+  /// Mark that the editor has unsaved changes
+  void _markDirty() {
+    if (!_isDirty && _isEditing) {
+      _isDirty = true;
+      debugPrint('🟡 [InvoiceEditor] Marked as dirty (unsaved changes)');
+    }
+  }
+
+  /// Clear dirty state (after save or discard)
+  void _clearDirty() {
+    _isDirty = false;
+    debugPrint('✅ [InvoiceEditor] Dirty state cleared');
   }
 
   void _startEditing() {
@@ -435,6 +451,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
 
   void _cancelEditing() {
     if (!_isEditing) return;
+    _clearDirty(); // Discard changes - no longer dirty
     if (_loadedInvoice != null) {
       _applyInvoice(_loadedInvoice!);
     } else if (mounted) {
@@ -825,6 +842,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
       } else {
         _applyInvoice(saved);
       }
+      _clearDirty(); // Save successful - clear dirty state
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

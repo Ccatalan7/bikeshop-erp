@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -12,7 +13,8 @@ class SalesService extends ChangeNotifier {
   static const _invoicesCollection = 'sales_invoices';
   static const _paymentsCollection = 'sales_payments';
 
-  SalesService(this._databaseService, this._accountingService, this._tenantService);
+  SalesService(
+      this._databaseService, this._accountingService, this._tenantService);
 
   DatabaseService _databaseService;
   AccountingService _accountingService;
@@ -28,6 +30,7 @@ class SalesService extends ChangeNotifier {
   bool _isLoadingPayments = false;
   String? _invoiceError;
   String? _paymentError;
+  Timer? _realtimeNotifyDebounce; // Debounce realtime notifications
 
   // ============================================================
   // CACHING - Avoid refetching on every page navigation
@@ -35,25 +38,27 @@ class SalesService extends ChangeNotifier {
   DateTime? _invoicesCacheTime;
   DateTime? _paymentsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-  
+
   // Public getters for cached data (instant UI access)
   List<Invoice> get cachedInvoices => List.unmodifiable(_invoices);
   List<Payment> get cachedPayments => List.unmodifiable(_payments);
-  bool get hasInvoicesCache => _invoices.isNotEmpty && _invoicesCacheTime != null;
-  bool get hasPaymentsCache => _payments.isNotEmpty && _paymentsCacheTime != null;
-  
+  bool get hasInvoicesCache =>
+      _invoices.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasPaymentsCache =>
+      _payments.isNotEmpty && _paymentsCacheTime != null;
+
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   /// Invalidate invoice cache (call after create/update/delete)
   void invalidateInvoicesCache() {
     _invoicesCacheTime = null;
     debugPrint('🗑️ [SalesService] Invoices cache invalidated');
   }
-  
+
   /// Invalidate payment cache (call after create/update/delete)
   void invalidatePaymentsCache() {
     _paymentsCacheTime = null;
@@ -78,11 +83,14 @@ class SalesService extends ChangeNotifier {
 
   Future<void> loadInvoices({bool forceRefresh = false}) async {
     // Return cached data if valid
-    if (!forceRefresh && _isCacheValid(_invoicesCacheTime) && _invoices.isNotEmpty) {
-      debugPrint('📦 [SalesService] Using cached invoices (${_invoices.length} items)');
+    if (!forceRefresh &&
+        _isCacheValid(_invoicesCacheTime) &&
+        _invoices.isNotEmpty) {
+      debugPrint(
+          '📦 [SalesService] Using cached invoices (${_invoices.length} items)');
       return;
     }
-    
+
     if (_isLoadingInvoices) return;
 
     _isLoadingInvoices = true;
@@ -143,12 +151,13 @@ class SalesService extends ChangeNotifier {
           _invoicesCollection,
           where: 'invoice_number=${invoice.invoiceNumber}',
         );
-        
+
         // If we found an invoice with the same number that's NOT this invoice, throw error
         if (existingInvoices.isNotEmpty) {
           final existingId = existingInvoices.first['id'] as String?;
           if (isNew || existingId != invoice.id) {
-            throw Exception('Ya existe una factura con el número ${invoice.invoiceNumber}');
+            throw Exception(
+                'Ya existe una factura con el número ${invoice.invoiceNumber}');
           }
         }
       }
@@ -157,7 +166,8 @@ class SalesService extends ChangeNotifier {
       if (isNew) {
         // Add tenant_id for new invoices
         final invoiceData = _tenantService.addTenantId(payload);
-        result = await _databaseService.insert(_invoicesCollection, invoiceData);
+        result =
+            await _databaseService.insert(_invoicesCollection, invoiceData);
       } else {
         result = await _databaseService.update(
             _invoicesCollection, invoice.id!, payload);
@@ -197,11 +207,15 @@ class SalesService extends ChangeNotifier {
   Future<void> loadPayments(
       {String? invoiceId, bool forceRefresh = false}) async {
     // Return cached data if valid
-    if (!forceRefresh && _isCacheValid(_paymentsCacheTime) && _payments.isNotEmpty && invoiceId == null) {
-      debugPrint('📦 [SalesService] Using cached payments (${_payments.length} items)');
+    if (!forceRefresh &&
+        _isCacheValid(_paymentsCacheTime) &&
+        _payments.isNotEmpty &&
+        invoiceId == null) {
+      debugPrint(
+          '📦 [SalesService] Using cached payments (${_payments.length} items)');
       return;
     }
-    
+
     if (_isLoadingPayments) return;
 
     _isLoadingPayments = true;
@@ -309,7 +323,7 @@ class SalesService extends ChangeNotifier {
         debugPrint('SalesService.getPendingInvoices: No tenant ID available');
         return [];
       }
-      
+
       // Query invoices where:
       // - customer_id = customerId
       // - status IN ('sent', 'confirmed') - unpaid invoices
@@ -434,7 +448,7 @@ class SalesService extends ChangeNotifier {
             final invoice = Invoice.fromJson(
                 Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
             _upsertInvoice(invoice);
-            notifyListeners();
+            _debouncedNotify(); // Debounced to prevent spam
           }
           break;
         case PostgresChangeEvent.delete:
@@ -442,7 +456,7 @@ class SalesService extends ChangeNotifier {
           final id = rawOld is Map ? rawOld['id']?.toString() : null;
           if (id != null) {
             _invoices.removeWhere((element) => element.id == id);
-            notifyListeners();
+            _debouncedNotify(); // Debounced to prevent spam
           }
           break;
         default:
@@ -451,6 +465,14 @@ class SalesService extends ChangeNotifier {
     } catch (e) {
       debugPrint('SalesService._handleInvoiceChange error: $e');
     }
+  }
+
+  /// Debounced notifyListeners - prevents excessive UI rebuilds from realtime
+  void _debouncedNotify() {
+    _realtimeNotifyDebounce?.cancel();
+    _realtimeNotifyDebounce = Timer(const Duration(milliseconds: 500), () {
+      notifyListeners();
+    });
   }
 
   void _handlePaymentChange(PostgresChangePayload payload) {
@@ -463,7 +485,7 @@ class SalesService extends ChangeNotifier {
             final payment = Payment.fromJson(
                 Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
             _upsertPayment(payment);
-            notifyListeners();
+            _debouncedNotify(); // Debounced to prevent spam
           }
           break;
         case PostgresChangeEvent.delete:
@@ -471,7 +493,7 @@ class SalesService extends ChangeNotifier {
           final id = rawOld is Map ? rawOld['id']?.toString() : null;
           if (id != null) {
             _payments.removeWhere((element) => element.id == id);
-            notifyListeners();
+            _debouncedNotify(); // Debounced to prevent spam
           }
           break;
         default:
@@ -484,6 +506,7 @@ class SalesService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _realtimeNotifyDebounce?.cancel();
     _invoiceChannel?.unsubscribe();
     _paymentChannel?.unsubscribe();
     super.dispose();

@@ -26,7 +26,7 @@ class BikeshopService extends ChangeNotifier {
   final TenantService _tenantService = TenantService();
 
   RealtimeChannel? _mechanicJobsChannel;
-  RealtimeChannel? _salesInvoicesChannel;  // For invoice status updates
+  RealtimeChannel? _salesInvoicesChannel; // For invoice status updates
   Timer? _notifyDebounceTimer;
 
   // ============================================================
@@ -37,38 +37,55 @@ class BikeshopService extends ChangeNotifier {
   DateTime? _jobsCacheTime;
   DateTime? _bikesCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-  
+
   // Loading state flags to prevent concurrent fetches
   bool _isLoadingJobs = false;
   bool _isLoadingBikes = false;
-  
+
   // Public getters for cached data (instant access)
   List<MechanicJob> get cachedJobs => _cachedJobs ?? [];
   List<Bike> get cachedBikes => _cachedBikes ?? [];
   bool get hasJobsCache => _cachedJobs != null;
   bool get hasBikesCache => _cachedBikes != null;
-  
+
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   /// Invalidate caches (call after create/update/delete)
   void invalidateJobsCache() {
     _cachedJobs = null;
     _jobsCacheTime = null;
   }
-  
+
   void invalidateBikesCache() {
     _cachedBikes = null;
     _bikesCacheTime = null;
   }
 
+  // ============================================================
+  // PEGAS TABLE STATE PERSISTENCE
+  // Stores filter/pagination state so it persists across navigation
+  // ============================================================
+  int pegasCurrentPage = 0;
+  int pegasRowsPerPage = 25;
+  String? pegasSortColumn = 'arrival_date';
+  bool pegasSortAscending = false;
+  String pegasStatusFilter = 'active';
+  Set<String> pegasCustomStatusFilter = {};
+  bool pegasStatusFilterExcludeMode = false;
+  Set<String> pegasPriorityFilter = {};
+  bool pegasShowOnlyOverdue = false;
+  bool pegasShowOnlyUnpaid = false;
+  String pegasSearchTerm = '';
+  String pegasViewMode = 'table';
+
   BikeshopService(this._db) {
     // Fire and forget - with debouncing, realtime is now safe!
     _setupMechanicJobsRealtime();
-    _setupSalesInvoicesRealtime();  // Also listen to invoice changes (for payment status)
+    _setupSalesInvoicesRealtime(); // Also listen to invoice changes (for payment status)
   }
 
   // ============================================================
@@ -77,20 +94,24 @@ class BikeshopService extends ChangeNotifier {
 
   /// Get bikes with caching. Use forceRefresh=true to bypass cache.
   Future<List<Bike>> getBikes({
-    String? customerId, 
+    String? customerId,
     String? searchTerm,
     bool forceRefresh = false,
   }) async {
     // For filtered queries, always fetch fresh (but still cache the full list)
-    final isFilteredQuery = (customerId != null && customerId.isNotEmpty) || 
-                            (searchTerm != null && searchTerm.isNotEmpty);
-    
+    final isFilteredQuery = (customerId != null && customerId.isNotEmpty) ||
+        (searchTerm != null && searchTerm.isNotEmpty);
+
     // Return cached data if valid and not a filtered query
-    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_bikesCacheTime) && _cachedBikes != null) {
-      debugPrint('📦 [BikeshopService] Using cached bikes (${_cachedBikes!.length} items)');
+    if (!forceRefresh &&
+        !isFilteredQuery &&
+        _isCacheValid(_bikesCacheTime) &&
+        _cachedBikes != null) {
+      debugPrint(
+          '📦 [BikeshopService] Using cached bikes (${_cachedBikes!.length} items)');
       return _cachedBikes!;
     }
-    
+
     // Prevent concurrent fetches
     if (_isLoadingBikes && !isFilteredQuery) {
       debugPrint('⏳ [BikeshopService] Already loading bikes, waiting...');
@@ -100,10 +121,10 @@ class BikeshopService extends ChangeNotifier {
       }
       if (_cachedBikes != null) return _cachedBikes!;
     }
-    
+
     try {
       if (!isFilteredQuery) _isLoadingBikes = true;
-      
+
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -132,14 +153,14 @@ class BikeshopService extends ChangeNotifier {
 
       final bikes = data.map((json) => Bike.fromJson(json)).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      
+
       // Cache only unfiltered results
       if (!isFilteredQuery) {
         _cachedBikes = bikes;
         _bikesCacheTime = DateTime.now();
         debugPrint('✅ [BikeshopService] Cached ${bikes.length} bikes');
       }
-      
+
       return bikes;
     } catch (e) {
       if (kDebugMode) print('Error fetching bikes: $e');
@@ -412,18 +433,22 @@ class BikeshopService extends ChangeNotifier {
   }) async {
     // Check if this is a filtered query
     final isFilteredQuery = (customerId != null && customerId.isNotEmpty) ||
-                            (bikeId != null && bikeId.isNotEmpty) ||
-                            status != null ||
-                            (searchTerm != null && searchTerm.isNotEmpty) ||
-                            !includeCompleted ||
-                            includeDeleted;
-    
+        (bikeId != null && bikeId.isNotEmpty) ||
+        status != null ||
+        (searchTerm != null && searchTerm.isNotEmpty) ||
+        !includeCompleted ||
+        includeDeleted;
+
     // Return cached data if valid and not a filtered query
-    if (!forceRefresh && !isFilteredQuery && _isCacheValid(_jobsCacheTime) && _cachedJobs != null) {
-      debugPrint('📦 [BikeshopService] Using cached jobs (${_cachedJobs!.length} items)');
+    if (!forceRefresh &&
+        !isFilteredQuery &&
+        _isCacheValid(_jobsCacheTime) &&
+        _cachedJobs != null) {
+      debugPrint(
+          '📦 [BikeshopService] Using cached jobs (${_cachedJobs!.length} items)');
       return _cachedJobs!;
     }
-    
+
     // Prevent concurrent fetches
     if (_isLoadingJobs && !isFilteredQuery) {
       debugPrint('⏳ [BikeshopService] Already loading jobs, waiting...');
@@ -432,10 +457,10 @@ class BikeshopService extends ChangeNotifier {
       }
       if (_cachedJobs != null && !isFilteredQuery) return _cachedJobs!;
     }
-    
+
     try {
       if (!isFilteredQuery) _isLoadingJobs = true;
-      
+
       // Join with job_statuses to get custom status details
       var query = Supabase.instance.client.from('mechanic_jobs').select('''
         *,
@@ -482,14 +507,14 @@ class BikeshopService extends ChangeNotifier {
       }
 
       jobs.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
-      
+
       // Cache only unfiltered results
       if (!isFilteredQuery) {
         _cachedJobs = jobs;
         _jobsCacheTime = DateTime.now();
         debugPrint('✅ [BikeshopService] Cached ${jobs.length} jobs');
       }
-      
+
       return jobs;
     } catch (e) {
       if (kDebugMode) print('Error fetching jobs: $e');
@@ -561,7 +586,8 @@ class BikeshopService extends ChangeNotifier {
       }
 
       // Use forUpdate: true to exclude arrival_date and created_at from being overwritten
-      final data = await _db.update('mechanic_jobs', job.id!, job.toJson(forUpdate: true));
+      final data = await _db.update(
+          'mechanic_jobs', job.id!, job.toJson(forUpdate: true));
       invalidateJobsCache();
       notifyListeners();
       return MechanicJob.fromJson(data);
@@ -677,15 +703,12 @@ class BikeshopService extends ChangeNotifier {
   /// Get all bikes for a job (multi-bike support)
   Future<List<MechanicJobBike>> getJobBikes(String jobId) async {
     try {
-      final data = await Supabase.instance.client
-          .from('mechanic_job_bikes')
-          .select('''
+      final data =
+          await Supabase.instance.client.from('mechanic_job_bikes').select('''
             *,
             bike:bikes(*),
             status:job_statuses(*)
-          ''')
-          .eq('job_id', jobId)
-          .order('order_index');
+          ''').eq('job_id', jobId).order('order_index');
 
       return (data as List)
           .map((json) => MechanicJobBike.fromJson(json))
@@ -699,19 +722,16 @@ class BikeshopService extends ChangeNotifier {
   /// Get all job bikes (for list views - single query optimization)
   Future<Map<String, List<MechanicJobBike>>> getAllJobBikes() async {
     try {
-      final data = await Supabase.instance.client
-          .from('mechanic_job_bikes')
-          .select('''
+      final data =
+          await Supabase.instance.client.from('mechanic_job_bikes').select('''
             *,
             bike:bikes(*),
             status:job_statuses(*)
-          ''')
-          .order('order_index');
+          ''').order('order_index');
 
-      final allJobBikes = (data as List)
-          .map((json) => MechanicJobBike.fromJson(json))
-          .toList();
-      
+      final allJobBikes =
+          (data as List).map((json) => MechanicJobBike.fromJson(json)).toList();
+
       // Group by job_id
       final result = <String, List<MechanicJobBike>>{};
       for (final jb in allJobBikes) {
@@ -742,7 +762,8 @@ class BikeshopService extends ChangeNotifier {
       if (jobBike.id == null || jobBike.id!.isEmpty) {
         throw Exception('ID de bicicleta de trabajo inválido');
       }
-      final data = await _db.update('mechanic_job_bikes', jobBike.id!, jobBike.toJson());
+      final data =
+          await _db.update('mechanic_job_bikes', jobBike.id!, jobBike.toJson());
       notifyListeners();
       return MechanicJobBike.fromJson(data);
     } catch (e) {
@@ -1087,6 +1108,8 @@ class BikeshopService extends ChangeNotifier {
   }
 
   // Realtime subscription for mechanic jobs
+  // Uses SURGICAL UPDATES - only updates the specific changed record in cache
+  // instead of triggering full page rebuilds
   Future<void> _setupMechanicJobsRealtime() async {
     try {
       final tenantId = await _tenantService.getTenantId();
@@ -1108,14 +1131,13 @@ class BikeshopService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: (payload) {
-              _debouncedNotify(); // Debounced to prevent spam
-            },
+            callback: (payload) => _handleMechanicJobChange(payload),
           )
           .subscribe();
 
       if (!kReleaseMode) {
-        debugPrint('✅ [BikeshopService] Realtime subscription active');
+        debugPrint(
+            '✅ [BikeshopService] Realtime subscription active (surgical mode)');
       }
     } catch (e) {
       if (!kReleaseMode) {
@@ -1124,8 +1146,85 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Handle realtime change for mechanic_jobs with SURGICAL UPDATE
+  /// Fetches the complete record with joins to ensure all data is available
+  void _handleMechanicJobChange(PostgresChangePayload payload) {
+    try {
+      switch (payload.eventType) {
+        case PostgresChangeEvent.insert:
+        case PostgresChangeEvent.update:
+          final rawNew = payload.newRecord;
+          final jobId = rawNew['id']?.toString();
+          if (jobId != null && jobId.isNotEmpty) {
+            // Fetch complete job with joined data (async, non-blocking)
+            _fetchAndUpdateJob(jobId);
+          }
+          break;
+        case PostgresChangeEvent.delete:
+          final rawOld = payload.oldRecord;
+          final id = rawOld['id']?.toString();
+          if (id != null) {
+            _surgicalRemoveJob(id);
+            debugPrint('🔧 [BikeshopService] Surgical remove: $id');
+            if (!mounted) return;
+            notifyListeners();
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [BikeshopService] Error handling realtime change: $e');
+      // Fallback to debounced notify on error
+      _debouncedNotify();
+    }
+  }
+
+  /// Fetch a complete job with joined data and update the cache surgically
+  Future<void> _fetchAndUpdateJob(String jobId) async {
+    try {
+      // Fetch with joins - same query structure as getJobs()
+      final data =
+          await Supabase.instance.client.from('mechanic_jobs').select('''
+            *,
+            job_status:job_statuses(*)
+          ''').eq('id', jobId).isFilter('deleted_at', null).maybeSingle();
+
+      if (data != null) {
+        final job = MechanicJob.fromJson(data);
+        _surgicalUpdateJob(job);
+        debugPrint(
+            '🔧 [BikeshopService] Surgical update (with joins): ${job.jobNumber}');
+
+        if (!mounted) return;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint(
+          '⚠️ [BikeshopService] Error fetching job for surgical update: $e');
+    }
+  }
+
+  /// Surgically update or add a job in the cache without invalidating it
+  void _surgicalUpdateJob(MechanicJob job) {
+    if (_cachedJobs == null) return;
+
+    final index = _cachedJobs!.indexWhere((j) => j.id == job.id);
+    if (index >= 0) {
+      _cachedJobs![index] = job; // Update in-place
+    } else {
+      _cachedJobs!.add(job); // New record
+      _cachedJobs!.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
+    }
+  }
+
+  /// Surgically remove a job from the cache
+  void _surgicalRemoveJob(String jobId) {
+    _cachedJobs?.removeWhere((j) => j.id == jobId);
+  }
+
   /// Setup realtime subscription for sales_invoices (for invoice status updates)
-  /// This ensures the Pegas table updates when invoices are paid
+  /// Uses lighter-weight notification since we don't cache invoices here
   Future<void> _setupSalesInvoicesRealtime() async {
     try {
       final tenantId = await _tenantService.getTenantId();
@@ -1138,7 +1237,8 @@ class BikeshopService extends ChangeNotifier {
       _salesInvoicesChannel = Supabase.instance.client
           .channel('sales_invoices_for_pegas')
           .onPostgresChanges(
-            event: PostgresChangeEvent.update, // Only care about updates (status changes)
+            event: PostgresChangeEvent
+                .update, // Only care about updates (status changes)
             schema: 'public',
             table: 'sales_invoices',
             filter: PostgresChangeFilter(
@@ -1147,19 +1247,36 @@ class BikeshopService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              _debouncedNotify(); // Trigger reload so Pegas table updates
+              // For invoice changes, we use a longer debounce since these are less critical
+              // The Pegas table will still show correct data on next user interaction
+              _debouncedNotifyInvoiceChange();
             },
           )
           .subscribe();
 
       if (!kReleaseMode) {
-        debugPrint('✅ [BikeshopService] Sales invoices realtime subscription active');
+        debugPrint(
+            '✅ [BikeshopService] Sales invoices realtime subscription active');
       }
     } catch (e) {
       if (!kReleaseMode) {
-        debugPrint('❌ [BikeshopService] Failed to setup sales invoices realtime: $e');
+        debugPrint(
+            '❌ [BikeshopService] Failed to setup sales invoices realtime: $e');
       }
     }
+  }
+
+  Timer? _invoiceNotifyDebounceTimer;
+
+  /// Longer debounce for invoice changes (3 seconds) - less disruptive
+  void _debouncedNotifyInvoiceChange() {
+    _invoiceNotifyDebounceTimer?.cancel();
+    _invoiceNotifyDebounceTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      debugPrint(
+          '🔔 [BikeshopService] Invoice change notification (3s debounce)');
+      notifyListeners();
+    });
   }
 
   /// Debounced notifyListeners - prevents excessive reloads
@@ -1184,7 +1301,7 @@ class BikeshopService extends ChangeNotifier {
         'deleted_at': DateTime.now().toIso8601String(),
         'deleted_by': userId,
       }).eq('id', jobId);
-      
+
       invalidateJobsCache();
       _debouncedNotify();
       debugPrint('🗑️ Soft deleted job: $jobId');
@@ -1201,7 +1318,7 @@ class BikeshopService extends ChangeNotifier {
         'deleted_at': null,
         'deleted_by': null,
       }).eq('id', jobId);
-      
+
       invalidateJobsCache();
       _debouncedNotify();
       debugPrint('♻️ Restored job: $jobId');
@@ -1236,7 +1353,7 @@ class BikeshopService extends ChangeNotifier {
           .from('mechanic_jobs')
           .delete()
           .eq('id', jobId);
-      
+
       invalidateJobsCache();
       _debouncedNotify();
       debugPrint('🔥 Permanently deleted job: $jobId');
@@ -1251,7 +1368,8 @@ class BikeshopService extends ChangeNotifier {
     _isDisposed = true;
     _notifyDebounceTimer?.cancel();
     _mechanicJobsChannel?.unsubscribe();
-    _salesInvoicesChannel?.unsubscribe();  // Clean up sales invoices subscription
+    _salesInvoicesChannel
+        ?.unsubscribe(); // Clean up sales invoices subscription
     super.dispose();
   }
 }
