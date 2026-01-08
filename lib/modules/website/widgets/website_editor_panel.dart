@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -314,7 +315,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
 }
 
 /// Tab for adding new blocks - shows available block types in a grid
-class _AddBlocksTab extends StatelessWidget {
+class _AddBlocksTab extends StatefulWidget {
   final WebsiteEditModeProvider editProvider;
   final VoidCallback onBlockAdded;
 
@@ -322,6 +323,17 @@ class _AddBlocksTab extends StatelessWidget {
     required this.editProvider,
     required this.onBlockAdded,
   });
+
+  @override
+  State<_AddBlocksTab> createState() => _AddBlocksTabState();
+}
+
+class _AddBlocksTabState extends State<_AddBlocksTab> {
+  // Drag state for block reordering
+  String? _draggingBlockId;
+  int? _hoveringBlockIndex;
+
+  WebsiteEditModeProvider get editProvider => widget.editProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -358,88 +370,201 @@ class _AddBlocksTab extends StatelessWidget {
                       style: TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   )
-                : ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    itemCount: blocks.length,
-                    onReorder: (oldIndex, newIndex) =>
-                        editProvider.reorderBlocks(oldIndex, newIndex),
-                    itemBuilder: (context, index) {
-                      final block = blocks[index];
+                : Column(
+                    children: List.generate(blocks.length, (index) {
+                      // Apply visual reordering during drag
+                      var displayIndex = index;
+                      if (_draggingBlockId != null &&
+                          _hoveringBlockIndex != null) {
+                        final draggedOriginalIndex = blocks
+                            .indexWhere((b) => b['id'] == _draggingBlockId);
+                        if (draggedOriginalIndex >= 0) {
+                          if (index == _hoveringBlockIndex) {
+                            displayIndex = draggedOriginalIndex;
+                          } else if (draggedOriginalIndex <
+                                  _hoveringBlockIndex! &&
+                              index > draggedOriginalIndex &&
+                              index <= _hoveringBlockIndex!) {
+                            displayIndex = index - 1;
+                          } else if (draggedOriginalIndex >
+                                  _hoveringBlockIndex! &&
+                              index >= _hoveringBlockIndex! &&
+                              index < draggedOriginalIndex) {
+                            displayIndex = index + 1;
+                          }
+                        }
+                      }
+                      displayIndex = displayIndex.clamp(0, blocks.length - 1);
+
+                      final block = blocks[displayIndex];
                       final id = block['id']?.toString() ?? 'block_$index';
                       final type = (block['block_type'] ?? block['type'] ?? '')
                           .toString();
                       final isVisible = block['is_visible'] ?? true;
                       final isSelected = editProvider.selectedBlockId == id;
+                      final isDropTarget = _hoveringBlockIndex == index &&
+                          _draggingBlockId != null;
 
-                      return Container(
-                        key: ValueKey('structure_$id'),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF00A09D).withValues(alpha: 0.12)
-                              : Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.06),
+                      return DragTarget<String>(
+                        key: ValueKey('block_target_$index'),
+                        onWillAcceptWithDetails: (details) => true,
+                        onMove: (details) {
+                          if (_hoveringBlockIndex != index) {
+                            setState(() {
+                              _hoveringBlockIndex = index;
+                            });
+                          }
+                        },
+                        onAcceptWithDetails: (details) {
+                          // Compute reordered list
+                          final draggedIndex = blocks
+                              .indexWhere((b) => b['id'] == _draggingBlockId);
+                          if (draggedIndex >= 0 &&
+                              _hoveringBlockIndex != null &&
+                              draggedIndex != _hoveringBlockIndex) {
+                            var newIndex = _hoveringBlockIndex!;
+                            // Adjust for ReorderableListView's convention
+                            if (newIndex > draggedIndex) newIndex += 1;
+                            editProvider.reorderBlocks(draggedIndex, newIndex);
+                          }
+                          setState(() {
+                            _draggingBlockId = null;
+                            _hoveringBlockIndex = null;
+                          });
+                        },
+                        builder: (context, candidateData, rejectedData) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isDropTarget
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : isSelected
+                                      ? const Color(0xFF00A09D)
+                                          .withValues(alpha: 0.12)
+                                      : Colors.transparent,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        child: InkWell(
-                          onTap: () => editProvider.selectBlock(id),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 10),
-                            child: Row(
-                              children: [
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: const Icon(
-                                    Icons.drag_handle,
-                                    color: Colors.white38,
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  _blockIcon(type),
-                                  color: Colors.white70,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _blockLabel(type),
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 13,
+                            child: InkWell(
+                              onTap: () => editProvider.selectBlock(id),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 10),
+                                child: Row(
+                                  children: [
+                                    Draggable<String>(
+                                      data: id,
+                                      dragAnchorStrategy:
+                                          pointerDragAnchorStrategy,
+                                      onDragStarted: () {
+                                        setState(() {
+                                          _draggingBlockId = id;
+                                        });
+                                      },
+                                      onDraggableCanceled: (_, __) {
+                                        setState(() {
+                                          _draggingBlockId = null;
+                                          _hoveringBlockIndex = null;
+                                        });
+                                      },
+                                      feedback: Material(
+                                        color: Colors.transparent,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2D2D2D),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.4),
+                                                blurRadius: 8,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.drag_handle,
+                                                  color: Colors.white54,
+                                                  size: 18),
+                                              const SizedBox(width: 8),
+                                              Icon(_blockIcon(type),
+                                                  color: Colors.white70,
+                                                  size: 16),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _blockLabel(type),
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      childWhenDragging: const Icon(
+                                        Icons.drag_handle,
+                                        color: Colors.white12,
+                                        size: 18,
+                                      ),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.grab,
+                                        child: const Icon(
+                                          Icons.drag_handle,
+                                          color: Colors.white38,
+                                          size: 18,
+                                        ),
+                                      ),
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      _blockIcon(type),
+                                      color: Colors.white70,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _blockLabel(type),
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => editProvider
+                                          .toggleBlockVisibility(id),
+                                      icon: Icon(
+                                        isVisible
+                                            ? Icons.visibility
+                                            : Icons.visibility_off,
+                                        size: 18,
+                                        color: isVisible
+                                            ? Colors.white54
+                                            : Colors.orange.shade300,
+                                      ),
+                                      tooltip:
+                                          isVisible ? 'Ocultar' : 'Mostrar',
+                                      constraints: const BoxConstraints(
+                                          minWidth: 32, minHeight: 32),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  ],
                                 ),
-                                IconButton(
-                                  onPressed: () =>
-                                      editProvider.toggleBlockVisibility(id),
-                                  icon: Icon(
-                                    isVisible
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                    size: 18,
-                                    color: isVisible
-                                        ? Colors.white54
-                                        : Colors.orange.shade300,
-                                  ),
-                                  tooltip: isVisible ? 'Ocultar' : 'Mostrar',
-                                  constraints: const BoxConstraints(
-                                      minWidth: 32, minHeight: 32),
-                                  padding: EdgeInsets.zero,
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       );
-                    },
+                    }),
                   ),
           ),
           const SizedBox(height: 20),
@@ -596,7 +721,7 @@ class _AddBlocksTab extends StatelessWidget {
               return;
             }
 
-            onBlockAdded();
+            widget.onBlockAdded();
             editProvider.addBlock(option.type);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -6026,7 +6151,8 @@ class _ThemeTabState extends State<_ThemeTab> {
     'large': 'Grande',
   };
 
-  String _sizeKeyFromStoredValue({required bool isHeading, required String raw}) {
+  String _sizeKeyFromStoredValue(
+      {required bool isHeading, required String raw}) {
     final parsed = double.tryParse(raw.trim());
     if (parsed == null) return 'normal';
 
@@ -6043,7 +6169,8 @@ class _ThemeTabState extends State<_ThemeTab> {
     return 'xlarge';
   }
 
-  String _storedValueFromSizeKey({required bool isHeading, required String key}) {
+  String _storedValueFromSizeKey(
+      {required bool isHeading, required String key}) {
     if (isHeading) {
       switch (key) {
         case 'small':
@@ -6619,8 +6746,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               onChanged: (newValue) {
                 debugPrint(
                     '🎛️ [ThemeTab] Dropdown "$label" changed: "$value" -> "${newValue ?? 'null'}"');
-                final editProvider =
-                    context.read<WebsiteEditModeProvider>();
+                final editProvider = context.read<WebsiteEditModeProvider>();
                 debugPrint(
                     '🎨 [ThemeTab] isInEditorContext=${editProvider.isInEditorContext} isEditMode=${editProvider.isEditMode} pendingThemeKeys=${editProvider.pendingThemeSettings.keys.join(', ')}');
                 onChanged(newValue);
@@ -10407,8 +10533,14 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   List<String>? _footerSectionOrderOverride;
   final Map<String, List<String>> _footerLinkOrderOverrideBySection = {};
-  int _footerSectionReorderToken = 0;
-  final Map<String, int> _footerLinkReorderTokenBySection = {};
+
+  // Drag state for visual reordering feedback (sections/tabs)
+  String? _draggingSectionId;
+  int? _hoveringSectionIndex;
+
+  // Drag state for visual reordering feedback (links within a section)
+  String? _draggingLinkId;
+  int? _hoveringLinkIndex;
 
   List<WebsiteNavigation> _applyIdOrder(
     List<WebsiteNavigation> items,
@@ -10433,15 +10565,40 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   }
 
   List<WebsiteNavigation> _getDisplayedFooterSections(WebsiteService service) {
-    final base = List<WebsiteNavigation>.from(service.footerNavigation)
+    var sections = List<WebsiteNavigation>.from(service.footerNavigation)
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    return _applyIdOrder(base, _footerSectionOrderOverride);
+    sections = _applyIdOrder(sections, _footerSectionOrderOverride);
+
+    // Apply visual reordering during drag
+    if (_draggingSectionId != null && _hoveringSectionIndex != null) {
+      final draggedIndex =
+          sections.indexWhere((s) => s.id == _draggingSectionId);
+      if (draggedIndex >= 0 && draggedIndex != _hoveringSectionIndex) {
+        final item = sections.removeAt(draggedIndex);
+        final insertAt = _hoveringSectionIndex!.clamp(0, sections.length);
+        sections.insert(insertAt, item);
+      }
+    }
+
+    return sections;
   }
 
   List<WebsiteNavigation> _getDisplayedFooterLinks(WebsiteNavigation section) {
-    final base = List<WebsiteNavigation>.from(section.children)
+    var links = List<WebsiteNavigation>.from(section.children)
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    return _applyIdOrder(base, _footerLinkOrderOverrideBySection[section.id]);
+    links = _applyIdOrder(links, _footerLinkOrderOverrideBySection[section.id]);
+
+    // Apply visual reordering during drag
+    if (_draggingLinkId != null && _hoveringLinkIndex != null) {
+      final draggedIndex = links.indexWhere((l) => l.id == _draggingLinkId);
+      if (draggedIndex >= 0 && draggedIndex != _hoveringLinkIndex) {
+        final item = links.removeAt(draggedIndex);
+        final insertAt = _hoveringLinkIndex!.clamp(0, links.length);
+        links.insert(insertAt, item);
+      }
+    }
+
+    return links;
   }
 
   Widget _buildCollapsibleSection({
@@ -10608,61 +10765,308 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     );
   }
 
-  Future<void> _reorderFooterSections(int oldIndex, int newIndex) async {
-    final service = context.read<WebsiteService>();
-    final sections = _getDisplayedFooterSections(service);
-
-    if (newIndex > oldIndex) newIndex -= 1;
-    final item = sections.removeAt(oldIndex);
-    sections.insert(newIndex, item);
-
-    final orderedIds = sections.map((s) => s.id).toList();
-    final token = ++_footerSectionReorderToken;
+  void _persistFooterSectionOrder(List<String> orderedIds) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
 
     setState(() {
       _footerSectionOrderOverride = orderedIds;
     });
 
-    // Persist in background; clear override once service cache reflects it.
-    unawaited(
-      service.reorderNavigationIds(orderedIds).then((_) {
-        if (!mounted) return;
-        if (_footerSectionReorderToken != token) return;
-        setState(() {
-          _footerSectionOrderOverride = null;
-        });
-      }),
+    // Update provider - will be saved when user clicks Guardar
+    editProvider.updateFooterSectionOrder(orderedIds);
+  }
+
+  void _persistFooterLinkOrder(String parentId, List<String> orderedIds) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+
+    setState(() {
+      _footerLinkOrderOverrideBySection[parentId] = orderedIds;
+    });
+
+    // Update provider - will be saved when user clicks Guardar
+    editProvider.updateFooterLinkOrder(parentId, orderedIds);
+  }
+
+  /// Renders the visual content of a footer section tab (for feedback widget).
+  /// This does NOT contain a Draggable to avoid infinite recursion.
+  Widget _buildFooterSectionTabContent(
+    WebsiteNavigation section, {
+    required bool isSelected,
+    required Color backgroundColor,
+  }) {
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.drag_handle,
+              color: Colors.white54,
+              size: 18,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              section.label,
+              style: TextStyle(
+                color: section.isVisible ? Colors.white : Colors.orange,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.more_vert, color: Colors.white70, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
-  Future<void> _reorderFooterLinks(
-    WebsiteNavigation parent,
-    int oldIndex,
-    int newIndex,
-  ) async {
-    final service = context.read<WebsiteService>();
-    final siblings = _getDisplayedFooterLinks(parent);
+  /// Renders the visual content of a footer link row (for feedback widget).
+  /// This does NOT contain a Draggable to avoid infinite recursion.
+  Widget _buildFooterLinkRowContent(
+    WebsiteNavigation link, {
+    required double width,
+  }) {
+    return Material(
+      color: const Color(0xFF2D2D2D),
+      elevation: 6,
+      borderRadius: BorderRadius.circular(8),
+      shadowColor: Colors.black54,
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.drag_handle,
+              color: Colors.white54,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                link.label,
+                style: TextStyle(
+                  color: link.isVisible ? Colors.white70 : Colors.orange,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const Icon(Icons.more_vert, color: Colors.white70, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
 
-    if (newIndex > oldIndex) newIndex -= 1;
-    final item = siblings.removeAt(oldIndex);
-    siblings.insert(newIndex, item);
+  /// Builds a footer link row with Draggable + DragTarget for reordering.
+  Widget _buildFooterLinkRow(
+    WebsiteNavigation link, {
+    required int index,
+    required WebsiteNavigation parentSection,
+    required double width,
+  }) {
+    final isDropTarget = _hoveringLinkIndex == index && _draggingLinkId != null;
 
-    final orderedIds = siblings.map((s) => s.id).toList();
-    final token = (_footerLinkReorderTokenBySection[parent.id] ?? 0) + 1;
-    _footerLinkReorderTokenBySection[parent.id] = token;
+    return DragTarget<String>(
+      key: ValueKey('footer_link_target_$index'),
+      onWillAcceptWithDetails: (details) {
+        // Always accept - we'll check for actual reordering in onAccept.
+        // Note: Can't use `details.data != link.id` because visual reordering
+        // moves the dragged item to the hover position, making them equal!
+        return true;
+      },
+      onMove: (details) {
+        // Only update if we're at a different index
+        // Note: Don't check details.data != link.id because visual reordering
+        // makes them equal at the hover position
+        if (_hoveringLinkIndex != index) {
+          setState(() {
+            _hoveringLinkIndex = index;
+          });
+        }
+      },
+      onAcceptWithDetails: (details) {
+        // Get fresh section from service to avoid stale children
+        final service = context.read<WebsiteService>();
+        final freshSection = service.footerNavigation.firstWhere(
+          (s) => s.id == parentSection.id,
+          orElse: () => parentSection,
+        );
 
-    setState(() {
-      _footerLinkOrderOverrideBySection[parent.id] = orderedIds;
-    });
+        // Get base order and apply current drag state
+        var orderedLinks = List<WebsiteNavigation>.from(freshSection.children)
+          ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        orderedLinks = _applyIdOrder(
+          orderedLinks,
+          _footerLinkOrderOverrideBySection[freshSection.id],
+        );
 
-    unawaited(
-      service.reorderNavigationIds(orderedIds).then((_) {
-        if (!mounted) return;
-        if ((_footerLinkReorderTokenBySection[parent.id] ?? 0) != token) return;
+        // Apply the visual reorder from drag state
+        if (_draggingLinkId != null && _hoveringLinkIndex != null) {
+          final draggedIndex =
+              orderedLinks.indexWhere((l) => l.id == _draggingLinkId);
+          if (draggedIndex >= 0 && draggedIndex != _hoveringLinkIndex) {
+            final item = orderedLinks.removeAt(draggedIndex);
+            final insertAt = _hoveringLinkIndex!.clamp(0, orderedLinks.length);
+            orderedLinks.insert(insertAt, item);
+          }
+        }
+
+        final currentOrder = orderedLinks.map((l) => l.id).toList();
+        _persistFooterLinkOrder(freshSection.id, currentOrder);
         setState(() {
-          _footerLinkOrderOverrideBySection.remove(parent.id);
+          _draggingLinkId = null;
+          _hoveringLinkIndex = null;
         });
-      }),
+      },
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDropTarget
+                ? Colors.white.withValues(alpha: 0.12)
+                : const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDropTarget ? Colors.white24 : Colors.white10,
+            ),
+          ),
+          child: Row(
+            children: [
+              Draggable<String>(
+                data: link.id,
+                dragAnchorStrategy: pointerDragAnchorStrategy,
+                onDragStarted: () {
+                  setState(() {
+                    _draggingLinkId = link.id;
+                  });
+                },
+                // Note: Don't clear state in onDragEnd - it races with
+                // onAcceptWithDetails. Let onAcceptWithDetails handle
+                // successful drops, onDraggableCanceled handles failures.
+                onDraggableCanceled: (_, __) {
+                  setState(() {
+                    _draggingLinkId = null;
+                    _hoveringLinkIndex = null;
+                  });
+                },
+                feedback: _buildFooterLinkRowContent(link, width: width),
+                childWhenDragging: const Icon(
+                  Icons.drag_handle,
+                  color: Colors.white24,
+                  size: 18,
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  link.label,
+                  style: TextStyle(
+                    color: link.isVisible ? Colors.white70 : Colors.orange,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              _buildFooterItemActionsMenu(link, parent: parentSection),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFooterSectionTab(
+    WebsiteNavigation section, {
+    required bool isSelected,
+    required bool isDropTarget,
+  }) {
+    final bg = isSelected
+        ? const Color(0xFF00A09D).withValues(alpha: 0.18)
+        : Colors.white.withValues(alpha: 0.06);
+
+    return Material(
+      color: isDropTarget ? Colors.white.withValues(alpha: 0.10) : bg,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() {
+          _selectedFooterSectionId = section.id;
+        }),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle-only drag. Feedback uses non-recursive content builder.
+              Draggable<String>(
+                data: section.id,
+                dragAnchorStrategy: pointerDragAnchorStrategy,
+                onDragStarted: () {
+                  setState(() {
+                    _draggingSectionId = section.id;
+                  });
+                },
+                // Note: Don't clear state in onDragEnd - it races with
+                // onAcceptWithDetails. Let onAcceptWithDetails handle
+                // successful drops, onDraggableCanceled handles failures.
+                onDraggableCanceled: (_, __) {
+                  setState(() {
+                    _draggingSectionId = null;
+                    _hoveringSectionIndex = null;
+                  });
+                },
+                feedback: _buildFooterSectionTabContent(
+                  section,
+                  isSelected: isSelected,
+                  backgroundColor: bg,
+                ),
+                childWhenDragging: const Icon(
+                  Icons.drag_handle,
+                  color: Colors.white24,
+                  size: 18,
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                section.label,
+                style: TextStyle(
+                  color: section.isVisible ? Colors.white : Colors.orange,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 4),
+              _buildFooterItemActionsMenu(section),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -10696,8 +11100,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           if (isSection)
             const PopupMenuItem(
               value: 'add_link',
-              child: Text('Agregar enlace',
-                  style: TextStyle(color: Colors.white)),
+              child:
+                  Text('Agregar enlace', style: TextStyle(color: Colors.white)),
             ),
           PopupMenuItem(
             value: 'toggle_visible',
@@ -10708,14 +11112,12 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           ),
           const PopupMenuItem(
             value: 'edit',
-            child:
-                Text('Editar', style: TextStyle(color: Colors.white)),
+            child: Text('Editar', style: TextStyle(color: Colors.white)),
           ),
           const PopupMenuDivider(),
           const PopupMenuItem(
             value: 'delete',
-            child: Text('Eliminar',
-                style: TextStyle(color: Colors.redAccent)),
+            child: Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
           ),
         ];
       },
@@ -10757,7 +11159,6 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     final service = context.read<WebsiteService>();
     await service.deleteNavigation(nav.id);
   }
-
 
   Future<void> _showFooterNavDialog({
     required String title,
@@ -10879,8 +11280,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           enabledBorder: UnderlineInputBorder(
                               borderSide: BorderSide(color: Colors.white24)),
                           focusedBorder: UnderlineInputBorder(
-                              borderSide:
-                                  BorderSide(color: Color(0xFF00A09D))),
+                              borderSide: BorderSide(color: Color(0xFF00A09D))),
                         ),
                         items: const [
                           DropdownMenuItem(
@@ -10917,8 +11317,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           enabledBorder: const UnderlineInputBorder(
                               borderSide: BorderSide(color: Colors.white24)),
                           focusedBorder: const UnderlineInputBorder(
-                              borderSide:
-                                  BorderSide(color: Color(0xFF00A09D))),
+                              borderSide: BorderSide(color: Color(0xFF00A09D))),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
@@ -10934,8 +11333,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                               style: TextStyle(color: Colors.white)),
                           value: openInNewTab,
                           activeColor: const Color(0xFF00A09D),
-                          onChanged: (v) =>
-                              setState(() => openInNewTab = v),
+                          onChanged: (v) => setState(() => openInNewTab = v),
                         ),
                     ],
                     const SizedBox(height: 8),
@@ -11234,10 +11632,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                 else
                   Builder(
                     builder: (context) {
-                      final sections = _getDisplayedFooterSections(websiteService);
+                      final sections =
+                          _getDisplayedFooterSections(websiteService);
 
-                      final effectiveSelectedId = (_selectedFooterSectionId != null &&
-                              sections.any((s) => s.id == _selectedFooterSectionId))
+                      final effectiveSelectedId = (_selectedFooterSectionId !=
+                                  null &&
+                              sections
+                                  .any((s) => s.id == _selectedFooterSectionId))
                           ? _selectedFooterSectionId!
                           : sections.first.id;
 
@@ -11263,65 +11664,91 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           // "Tabs" (sections) as a horizontal reorderable strip
                           SizedBox(
                             height: 40,
-                            child: ReorderableListView.builder(
+                            child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
-                              buildDefaultDragHandles: false,
-                              onReorder: _reorderFooterSections,
-                              itemCount: sections.length,
-                              itemBuilder: (context, index) {
-                                final section = sections[index];
-                                final isSelected =
-                                    section.id == _selectedFooterSectionId;
-                                return Container(
-                                  key: ValueKey('footer_section_${section.id}'),
-                                  margin: const EdgeInsets.only(right: 8),
-                                  child: Material(
-                                    color: isSelected
-                                        ? const Color(0xFF00A09D)
-                                            .withValues(alpha: 0.18)
-                                        : Colors.white.withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () => setState(() {
-                                        _selectedFooterSectionId = section.id;
-                                      }),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ReorderableDragStartListener(
-                                              index: index,
-                                              child: const Icon(
-                                                Icons.drag_handle,
-                                                color: Colors.white54,
-                                                size: 18,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              section.label,
-                                              style: TextStyle(
-                                                color: section.isVisible
-                                                    ? Colors.white
-                                                    : Colors.orange,
-                                                fontSize: 12,
-                                                fontWeight: isSelected
-                                                    ? FontWeight.w600
-                                                    : FontWeight.w500,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            _buildFooterItemActionsMenu(section),
-                                          ],
+                              child: Row(
+                                children:
+                                    List.generate(sections.length, (index) {
+                                  final section = sections[index];
+                                  final isSelected =
+                                      section.id == effectiveSelectedId;
+
+                                  return DragTarget<String>(
+                                    onWillAcceptWithDetails: (details) {
+                                      return details.data != section.id;
+                                    },
+                                    onMove: (details) {
+                                      if (details.data != section.id &&
+                                          _hoveringSectionIndex != index) {
+                                        setState(() {
+                                          _hoveringSectionIndex = index;
+                                        });
+                                      }
+                                    },
+                                    onLeave: (_) {
+                                      // Don't clear immediately to avoid flicker
+                                    },
+                                    onAcceptWithDetails: (details) {
+                                      // Get base order from service
+                                      var orderedSections =
+                                          List<WebsiteNavigation>.from(
+                                              websiteService.footerNavigation)
+                                            ..sort((a, b) => a.orderIndex
+                                                .compareTo(b.orderIndex));
+                                      orderedSections = _applyIdOrder(
+                                        orderedSections,
+                                        _footerSectionOrderOverride,
+                                      );
+
+                                      // Apply the visual reorder from drag state
+                                      if (_draggingSectionId != null &&
+                                          _hoveringSectionIndex != null) {
+                                        final draggedIndex =
+                                            orderedSections.indexWhere((s) =>
+                                                s.id == _draggingSectionId);
+                                        if (draggedIndex >= 0 &&
+                                            draggedIndex !=
+                                                _hoveringSectionIndex) {
+                                          final item = orderedSections
+                                              .removeAt(draggedIndex);
+                                          final insertAt =
+                                              _hoveringSectionIndex!.clamp(
+                                                  0, orderedSections.length);
+                                          orderedSections.insert(
+                                              insertAt, item);
+                                        }
+                                      }
+
+                                      final currentOrder = orderedSections
+                                          .map((s) => s.id)
+                                          .toList();
+                                      _persistFooterSectionOrder(currentOrder);
+                                      setState(() {
+                                        _draggingSectionId = null;
+                                        _hoveringSectionIndex = null;
+                                      });
+                                    },
+                                    builder:
+                                        (context, candidateData, rejectedData) {
+                                      final isDropTarget =
+                                          candidateData.isNotEmpty;
+                                      return Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        child: ConstrainedBox(
+                                          constraints:
+                                              const BoxConstraints.tightFor(
+                                                  height: 40),
+                                          child: _buildFooterSectionTab(
+                                            section,
+                                            isSelected: isSelected,
+                                            isDropTarget: isDropTarget,
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                                      );
+                                    },
+                                  );
+                                }),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -11367,74 +11794,25 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                               ),
                               child: const Text(
                                 'Esta sección no tiene enlaces todavía.',
-                                style:
-                                    TextStyle(color: Colors.white70, fontSize: 12),
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 12),
                               ),
                             )
                           else
                             LayoutBuilder(
                               builder: (context, constraints) {
                                 final listWidth = constraints.maxWidth;
-
-                                return ReorderableListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  buildDefaultDragHandles: false,
-                                  proxyDecorator: (child, index, animation) {
-                                    return Material(
-                                      color: Colors.transparent,
-                                      elevation: 6,
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: SizedBox(
-                                        width: listWidth,
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  onReorder: (oldIndex, newIndex) =>
-                                      _reorderFooterLinks(
-                                          selectedSection, oldIndex, newIndex),
-                                  itemCount: links.length,
-                                  itemBuilder: (context, index) {
+                                return Column(
+                                  children:
+                                      List.generate(links.length, (index) {
                                     final link = links[index];
-                                    return Container(
-                                      key: ValueKey('footer_link_${link.id}'),
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF2D2D2D),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.white10),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          ReorderableDragStartListener(
-                                            index: index,
-                                            child: const Icon(
-                                              Icons.drag_handle,
-                                              color: Colors.white54,
-                                              size: 18,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              link.label,
-                                              style: TextStyle(
-                                                color: link.isVisible
-                                                    ? Colors.white70
-                                                    : Colors.orange,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ),
-                                          _buildFooterItemActionsMenu(link,
-                                              parent: selectedSection),
-                                        ],
-                                      ),
+                                    return _buildFooterLinkRow(
+                                      link,
+                                      index: index,
+                                      parentSection: selectedSection,
+                                      width: listWidth,
                                     );
-                                  },
+                                  }),
                                 );
                               },
                             ),

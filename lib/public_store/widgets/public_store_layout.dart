@@ -227,7 +227,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     final devicePreviewMode = editProvider.devicePreviewMode;
     final isInEditorContext =
-      editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
+        editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
 
     // Don't block rendering - just use defaults until settings load
     // This makes the site feel faster
@@ -268,37 +268,37 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final facebookHandle = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
             'facebook',
-        websiteService.getSetting('facebook',
-          websiteService.getSetting('facebook_handle', '')),
+            websiteService.getSetting(
+                'facebook', websiteService.getSetting('facebook_handle', '')),
           )
-      : websiteService.getSetting(
-        'facebook', websiteService.getSetting('facebook_handle', ''));
+        : websiteService.getSetting(
+            'facebook', websiteService.getSetting('facebook_handle', ''));
     final instagramHandle = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
             'instagram',
-        websiteService.getSetting(
-          'instagram', websiteService.getSetting('instagram_handle', '')),
+            websiteService.getSetting(
+                'instagram', websiteService.getSetting('instagram_handle', '')),
           )
-      : websiteService.getSetting(
-        'instagram', websiteService.getSetting('instagram_handle', ''));
+        : websiteService.getSetting(
+            'instagram', websiteService.getSetting('instagram_handle', ''));
     final twitterHandle = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
             'twitter',
-        websiteService.getSetting(
-          'twitter', websiteService.getSetting('twitter_handle', '')),
+            websiteService.getSetting(
+                'twitter', websiteService.getSetting('twitter_handle', '')),
           )
-      : websiteService.getSetting(
-        'twitter', websiteService.getSetting('twitter_handle', ''));
+        : websiteService.getSetting(
+            'twitter', websiteService.getSetting('twitter_handle', ''));
     final youtubeHandle = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
             'youtube',
-        websiteService.getSetting(
-          'youtube',
-          websiteService.getSetting('youtube_handle', '@vinabikechannel')),
+            websiteService.getSetting(
+                'youtube',
+                websiteService.getSetting(
+                    'youtube_handle', '@vinabikechannel')),
           )
-      : websiteService.getSetting(
-        'youtube',
-        websiteService.getSetting('youtube_handle', '@vinabikechannel'));
+        : websiteService.getSetting('youtube',
+            websiteService.getSetting('youtube_handle', '@vinabikechannel'));
 
     final whatsappRaw = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
@@ -424,9 +424,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // Navigation (single source of truth): website_navigation table.
     // Public store loads it via WebsiteService.loadNavigationForTenant().
-    final navItems = websiteService.headerNavigation
-        .where((n) => n.isVisible)
-        .toList();
+    final navItems =
+        websiteService.headerNavigation.where((n) => n.isVisible).toList();
 
     // If the site is unpublished, show a holding page to visitors.
     // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
@@ -2244,6 +2243,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
         pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
+        pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
         pageId: editProvider.currentPageId,
         pageSlug: editProvider.currentPageSlug,
       );
@@ -2381,10 +2382,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       Expanded(
                         child: Text(
                           topBannerText,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -2496,8 +2498,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                           .where((c) => c.isVisible)
                                           .where((c) => c.showOnDesktop)
                                           .toList()
-                                        ..sort((a, b) =>
-                                            a.orderIndex.compareTo(b.orderIndex));
+                                        ..sort((a, b) => a.orderIndex
+                                            .compareTo(b.orderIndex));
 
                                       if (children.isNotEmpty) {
                                         return Padding(
@@ -2540,8 +2542,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             clipBehavior: Clip.none,
                             children: [
                               IconButton(
-                                icon:
-                                    const Icon(Icons.shopping_cart_outlined),
+                                icon: const Icon(Icons.shopping_cart_outlined),
                                 color: iconColor,
                                 onPressed: () => context.go(
                                   _routeForPublicStore('/tienda/carrito'),
@@ -3121,7 +3122,52 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }) {
     return LayoutBuilder(builder: (context, constraints) {
       final websiteService = context.watch<WebsiteService>();
-      final footerNavItems = websiteService.footerNavigation;
+      final editProvider = context.watch<WebsiteEditModeProvider>();
+      var footerNavItems =
+          List<WebsiteNavigation>.from(websiteService.footerNavigation);
+
+      // Apply pending section order from provider for live preview
+      final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
+      if (pendingSectionOrder != null && pendingSectionOrder.isNotEmpty) {
+        final orderMap = <String, int>{};
+        for (var i = 0; i < pendingSectionOrder.length; i++) {
+          orderMap[pendingSectionOrder[i]] = i;
+        }
+        footerNavItems.sort((a, b) {
+          final aIdx = orderMap[a.id] ?? a.orderIndex;
+          final bIdx = orderMap[b.id] ?? b.orderIndex;
+          return aIdx.compareTo(bIdx);
+        });
+      }
+
+      // Apply pending link order for each section - create new section objects
+      final pendingLinkOrder = editProvider.pendingFooterLinkOrder;
+      if (pendingLinkOrder.isNotEmpty) {
+        footerNavItems = footerNavItems.map((section) {
+          final linkOrder = pendingLinkOrder[section.id];
+          if (linkOrder != null && linkOrder.isNotEmpty) {
+            final orderMap = <String, int>{};
+            for (var i = 0; i < linkOrder.length; i++) {
+              orderMap[linkOrder[i]] = i;
+            }
+            final sortedChildren =
+                List<WebsiteNavigation>.from(section.children)
+                  ..sort((a, b) {
+                    final aHas = orderMap.containsKey(a.id);
+                    final bHas = orderMap.containsKey(b.id);
+                    if (aHas && bHas) {
+                      return orderMap[a.id]!.compareTo(orderMap[b.id]!);
+                    }
+                    if (aHas) return -1;
+                    if (bHas) return 1;
+                    return a.orderIndex.compareTo(b.orderIndex);
+                  });
+
+            return section.copyWith(children: sortedChildren);
+          }
+          return section;
+        }).toList();
+      }
 
       final screenWidth = MediaQuery.of(context).size.width;
       final isMobile = screenWidth < 800;
@@ -3420,8 +3466,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final desktopItems = footerNavItems
         .where((n) => n.isVisible)
         .where((n) => n.showOnDesktop)
-        .toList()
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        .toList();
 
     if (desktopItems.isEmpty) {
       return [
@@ -3461,10 +3506,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     ),
               ),
               const SizedBox(height: 16),
-              _buildFooterLink(context, 'Sobre Nosotros', '/nosotros',
-                  primaryColor),
-              _buildFooterLink(context, 'Términos y Condiciones', '/terminos',
-                  primaryColor),
+              _buildFooterLink(
+                  context, 'Sobre Nosotros', '/nosotros', primaryColor),
+              _buildFooterLink(
+                  context, 'Términos y Condiciones', '/terminos', primaryColor),
               _buildFooterLink(context, 'Política de Privacidad', '/privacidad',
                   primaryColor),
               _buildFooterLink(context, 'Política de Devoluciones',
@@ -3490,8 +3535,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         final children = parent.children
             .where((c) => c.isVisible)
             .where((c) => c.showOnDesktop)
-            .toList()
-          ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+            .toList();
 
         return SizedBox(
           width: 200,
@@ -3529,7 +3573,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ),
             ),
             const SizedBox(height: 16),
-            for (final nav in desktopItems) _buildFooterNavLinkDesktop(context, nav),
+            for (final nav in desktopItems)
+              _buildFooterNavLinkDesktop(context, nav),
           ],
         ),
       ),
@@ -3571,8 +3616,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final mobileItems = footerNavItems
         .where((n) => n.isVisible)
         .where((n) => n.showOnMobile)
-        .toList()
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        .toList();
 
     if (mobileItems.isEmpty) {
       // Keep the previous UX when navigation isn't configured.
@@ -3632,8 +3676,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         final children = parent.children
             .where((c) => c.isVisible)
             .where((c) => c.showOnMobile)
-            .toList()
-          ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+            .toList();
 
         sections.add(
           Theme(
@@ -3999,8 +4042,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         .where((c) => c.isVisible)
                         .where((c) => c.showOnMobile)
                         .toList()
-                      ..sort((a, b) =>
-                          a.orderIndex.compareTo(b.orderIndex));
+                      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
                     final items = <Widget>[
                       _buildMobileMenuItem(
@@ -4027,7 +4069,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           label: child.label,
                           onTap: () {
                             Navigator.pop(context);
-                            final href = _routeForPublicStore(child.href ?? '/');
+                            final href =
+                                _routeForPublicStore(child.href ?? '/');
                             _navigateToHref(
                               context,
                               href,

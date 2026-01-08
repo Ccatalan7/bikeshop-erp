@@ -45,6 +45,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   Map<String, String> _pendingFooterSettings = {};
   bool _hasFooterChanges = false;
 
+  // Pending footer navigation order changes (saved with Guardar button)
+  List<String>? _pendingFooterSectionOrder;
+  Map<String, List<String>> _pendingFooterLinkOrder = {};
+
   // Pending theme settings for live preview
   // These are applied immediately in the UI but only saved when user clicks "Guardar"
   Map<String, String> _pendingThemeSettings = {};
@@ -70,12 +74,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _hasFooterChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
   bool get hasThemeChanges => _hasThemeChanges;
-    bool get hasFooterChanges => _hasFooterChanges;
+  bool get hasFooterChanges => _hasFooterChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
-    Map<String, String> get pendingFooterSettings => _pendingFooterSettings;
+  Map<String, String> get pendingFooterSettings => _pendingFooterSettings;
   Map<String, String> get pendingThemeSettings => _pendingThemeSettings;
+  Map<String, List<String>> get pendingFooterLinkOrder =>
+      _pendingFooterLinkOrder;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
 
@@ -146,10 +152,36 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     return defaultValue;
   }
 
+  /// Get pending footer section order (for visual display)
+  List<String>? get pendingFooterSectionOrder => _pendingFooterSectionOrder;
+
+  /// Get pending footer link order for a section
+  List<String>? getPendingFooterLinkOrder(String sectionId) =>
+      _pendingFooterLinkOrder[sectionId];
+
+  /// Update pending footer section order (does not save until Guardar)
+  void updateFooterSectionOrder(List<String> orderedIds) {
+    _pendingFooterSectionOrder = orderedIds;
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer section order updated (pending save)');
+    notifyListeners();
+  }
+
+  /// Update pending footer link order for a section (does not save until Guardar)
+  void updateFooterLinkOrder(String sectionId, List<String> orderedIds) {
+    _pendingFooterLinkOrder[sectionId] = orderedIds;
+    _hasFooterChanges = true;
+    debugPrint(
+        '🦶 [EditProvider] Footer link order for $sectionId updated (pending save)');
+    notifyListeners();
+  }
+
   /// Clear footer changed flag (after save)
   void clearFooterChanges() {
     _hasFooterChanges = false;
     _pendingFooterSettings = {};
+    _pendingFooterSectionOrder = null;
+    _pendingFooterLinkOrder = {};
     notifyListeners();
   }
 
@@ -401,15 +433,15 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     required Map<String, dynamic> blockData,
   }) {
     final typeLower = blockType.trim().toLowerCase();
-    final isCtaLike = typeLower == 'hero' || typeLower == 'cta' || typeLower == 'videobanner';
+    final isCtaLike =
+        typeLower == 'hero' || typeLower == 'cta' || typeLower == 'videobanner';
     if (!isCtaLike) return;
 
     // If user edits actions directly in the future, don't fight it.
     if (updatedKey == 'actions') return;
 
-    final showCta = typeLower == 'videobanner'
-        ? (blockData['showCta'] != false)
-        : true;
+    final showCta =
+        typeLower == 'videobanner' ? (blockData['showCta'] != false) : true;
 
     final label = (blockData['ctaText'] ?? blockData['buttonText'] ?? '')
         .toString()

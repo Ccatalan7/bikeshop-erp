@@ -196,14 +196,17 @@ class WebsiteService extends ChangeNotifier {
     // --- Phase 3 groundwork: normalized actions (backwards-compatible) ---
     // Keep legacy keys (buttonText/buttonLink, ctaText/ctaLink) but also
     // provide a unified `actions` array for renderers to optionally use.
-    if (rawTypeLower == 'hero' || rawTypeLower == 'cta' || rawTypeLower == 'videobanner') {
+    if (rawTypeLower == 'hero' ||
+        rawTypeLower == 'cta' ||
+        rawTypeLower == 'videobanner') {
       final showCta = rawTypeLower == 'videobanner'
           ? (normalized['showCta'] != false)
           : true;
 
-      final legacyLabel = (normalized['ctaText'] ?? normalized['buttonText'] ?? '')
-          .toString()
-          .trim();
+      final legacyLabel =
+          (normalized['ctaText'] ?? normalized['buttonText'] ?? '')
+              .toString()
+              .trim();
       final legacyTo = (normalized['ctaLink'] ?? normalized['buttonLink'] ?? '')
           .toString()
           .trim();
@@ -464,7 +467,8 @@ class WebsiteService extends ChangeNotifier {
         // If we already rendered from sync cache and the network returns the
         // exact same payload, avoid triggering a full rebuild.
         final prefs = _prefs;
-        final cachedSettingsJson = prefs?.getString('website_settings_$tenantId');
+        final cachedSettingsJson =
+            prefs?.getString('website_settings_$tenantId');
         final cachedBlocksJson = prefs?.getString('website_blocks_$tenantId');
         final hasExistingData = _settings.isNotEmpty || _blocks.isNotEmpty;
 
@@ -473,8 +477,7 @@ class WebsiteService extends ChangeNotifier {
           try {
             final newSettingsJson = jsonEncode(settingsData);
             final newBlocksJson = jsonEncode(blocksData);
-            isSameAsCache =
-                hasExistingData &&
+            isSameAsCache = hasExistingData &&
                 cachedSettingsJson == newSettingsJson &&
                 cachedBlocksJson == newBlocksJson;
           } catch (_) {
@@ -509,7 +512,7 @@ class WebsiteService extends ChangeNotifier {
 
         if (_perfLogsEnabled) {
           debugPrint('⏱️ [PublicStorePerf] Parsed data: '
-            '${_settings.length} settings, ${_blocks.length} blocks');
+              '${_settings.length} settings, ${_blocks.length} blocks');
         }
 
         // Persist caches and refresh time BEFORE we log completion.
@@ -523,7 +526,7 @@ class WebsiteService extends ChangeNotifier {
         await loadNavigationForTenant(tenantId, notify: false);
 
         debugPrint('✅ [WebsiteService] Load complete ($source): '
-          '${_settings.length} settings, ${_blocks.length} blocks');
+            '${_settings.length} settings, ${_blocks.length} blocks');
       }
 
       _hasLoadedForTenant = true;
@@ -777,9 +780,7 @@ class WebsiteService extends ChangeNotifier {
     if (kIsWeb) return; // Web uses preconnect/prefetch in index.html.
     try {
       final uri = Uri.parse(_edgeCacheUrl);
-      await _httpClient
-          .get(uri)
-          .timeout(const Duration(seconds: 2));
+      await _httpClient.get(uri).timeout(const Duration(seconds: 2));
     } catch (_) {
       // Ignore warmup errors
     }
@@ -1036,7 +1037,8 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> saveBlocks(List<Map<String, dynamic>> blocks, {String? tenantId}) async {
+  Future<void> saveBlocks(List<Map<String, dynamic>> blocks,
+      {String? tenantId}) async {
     try {
       // Get tenant_id for multi-tenant isolation
       final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
@@ -2077,7 +2079,8 @@ class WebsiteService extends ChangeNotifier {
 
   /// Save blocks for a specific page
   Future<void> saveBlocksForPage(
-      String pageId, List<Map<String, dynamic>> blocks, {String? tenantId}) async {
+      String pageId, List<Map<String, dynamic>> blocks,
+      {String? tenantId}) async {
     try {
       final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
       if (effectiveTenantId == null) {
@@ -2133,6 +2136,8 @@ class WebsiteService extends ChangeNotifier {
     required Map<String, String> pendingHeaderSettings,
     required Map<String, String> pendingFooterSettings,
     required Map<String, String> pendingThemeSettings,
+    List<String>? pendingFooterSectionOrder,
+    Map<String, List<String>>? pendingFooterLinkOrder,
     String? pageId,
     String? pageSlug,
   }) async {
@@ -2145,6 +2150,17 @@ class WebsiteService extends ChangeNotifier {
     }
     if (pendingThemeSettings.isNotEmpty) {
       await saveSettings(pendingThemeSettings);
+    }
+
+    // Save pending footer navigation order if present
+    if (pendingFooterSectionOrder != null &&
+        pendingFooterSectionOrder.isNotEmpty) {
+      await reorderNavigationIds(pendingFooterSectionOrder);
+    }
+    if (pendingFooterLinkOrder != null && pendingFooterLinkOrder.isNotEmpty) {
+      for (final entry in pendingFooterLinkOrder.entries) {
+        await reorderNavigationIds(entry.value);
+      }
     }
 
     // Map provider/editor blocks to the canonical save format
@@ -2167,8 +2183,11 @@ class WebsiteService extends ChangeNotifier {
     // Resolve/create page by slug if needed (prevents accidentally overwriting home)
     var resolvedPageId = pageId;
     final normalizedSlug = (pageSlug ?? '').trim();
-    if (resolvedPageId == null && normalizedSlug.isNotEmpty && normalizedSlug.toLowerCase() != 'home') {
-      final existingPage = await getPageBySlug(normalizedSlug, tenantId: tenantId);
+    if (resolvedPageId == null &&
+        normalizedSlug.isNotEmpty &&
+        normalizedSlug.toLowerCase() != 'home') {
+      final existingPage =
+          await getPageBySlug(normalizedSlug, tenantId: tenantId);
       if (existingPage != null) {
         resolvedPageId = existingPage.id;
       } else {
@@ -2191,7 +2210,8 @@ class WebsiteService extends ChangeNotifier {
 
     // Persist blocks
     if (resolvedPageId != null) {
-      await saveBlocksForPage(resolvedPageId, blocksForSave, tenantId: tenantId);
+      await saveBlocksForPage(resolvedPageId, blocksForSave,
+          tenantId: tenantId);
     } else {
       await saveBlocks(blocksForSave, tenantId: tenantId);
     }
@@ -2226,7 +2246,8 @@ class WebsiteService extends ChangeNotifier {
     if (_supabase.auth.currentUser == null) return;
     if (_attemptedDefaultFooterSeedForTenant.contains(tenantId)) return;
 
-    final hasFooter = _navigation.any((n) => n.menuLocation == MenuLocation.footer);
+    final hasFooter =
+        _navigation.any((n) => n.menuLocation == MenuLocation.footer);
     if (hasFooter) return;
 
     _attemptedDefaultFooterSeedForTenant.add(tenantId);
@@ -2420,7 +2441,8 @@ class WebsiteService extends ChangeNotifier {
 
       final navData = jsonDecode(cachedJson) as List<dynamic>;
       _navigation = navData
-          .map((e) => WebsiteNavigation.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map((e) =>
+              WebsiteNavigation.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
       _buildNavigationHierarchy();
 
@@ -2428,12 +2450,14 @@ class WebsiteService extends ChangeNotifier {
       _loadedNavigationTenantId = tenantId;
 
       if (notify) {
-        debugPrint('💾 [WebsiteService] Loaded navigation from SYNC cache (0ms)');
+        debugPrint(
+            '💾 [WebsiteService] Loaded navigation from SYNC cache (0ms)');
         _safeNotifyListeners();
       }
       return true;
     } catch (e) {
-      debugPrint('⚠️ [WebsiteService] Failed to load navigation sync cache: $e');
+      debugPrint(
+          '⚠️ [WebsiteService] Failed to load navigation sync cache: $e');
       return false;
     }
   }
@@ -2475,7 +2499,8 @@ class WebsiteService extends ChangeNotifier {
     try {
       final pagesResp = await _supabase
           .from('website_pages')
-          .select('id,tenant_id,slug,title,is_published,is_home,is_system,template,created_at,updated_at')
+          .select(
+              'id,tenant_id,slug,title,is_published,is_home,is_system,template,created_at,updated_at')
           .eq('tenant_id', tenantId)
           .inFilter('id', legacyIds.toList());
 
@@ -2495,7 +2520,8 @@ class WebsiteService extends ChangeNotifier {
         nav.linkedPage = page;
       }
     } catch (e) {
-      debugPrint('⚠️ [WebsiteService] Failed to resolve legacy nav page IDs: $e');
+      debugPrint(
+          '⚠️ [WebsiteService] Failed to resolve legacy nav page IDs: $e');
     }
   }
   // ============================================================================
@@ -2560,15 +2586,15 @@ class WebsiteService extends ChangeNotifier {
       // If footer navigation isn't configured yet, seed sensible defaults (auth only).
       await _seedDefaultFooterNavigationIfNeeded(tenantId);
       if (_navigation.isEmpty ||
-        !_navigation.any((n) => n.menuLocation == MenuLocation.footer)) {
-      final refreshed = await _supabase
-        .from('website_navigation')
-        .select()
-        .eq('tenant_id', tenantId)
-        .order('order_index', ascending: true);
-      _navigation = (refreshed as List)
-        .map((json) => WebsiteNavigation.fromJson(json))
-        .toList();
+          !_navigation.any((n) => n.menuLocation == MenuLocation.footer)) {
+        final refreshed = await _supabase
+            .from('website_navigation')
+            .select()
+            .eq('tenant_id', tenantId)
+            .order('order_index', ascending: true);
+        _navigation = (refreshed as List)
+            .map((json) => WebsiteNavigation.fromJson(json))
+            .toList();
       }
 
       await _resolveLegacyNavigationPageIds(tenantId);
@@ -2678,7 +2704,8 @@ class WebsiteService extends ChangeNotifier {
     try {
       final updateData = nav.toUpdateJson();
       // Normalize page links to '/slug' style in the payload (do not mutate nav).
-      if (nav.linkType == NavLinkType.page && updateData['link_value'] != null) {
+      if (nav.linkType == NavLinkType.page &&
+          updateData['link_value'] != null) {
         final raw = updateData['link_value'].toString().trim();
         if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
           updateData['link_value'] = '/$raw';

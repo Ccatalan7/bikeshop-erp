@@ -100,8 +100,10 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         tenantId: tenantId,
         editorBlocks: editProvider.blocks,
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
-          pendingFooterSettings: editProvider.pendingFooterSettings,
+        pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
+        pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
         pageId: editProvider.currentPageId,
         pageSlug: editProvider.currentPageSlug,
       );
