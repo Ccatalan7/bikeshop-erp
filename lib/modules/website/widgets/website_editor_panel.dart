@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -10398,13 +10399,120 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   final _twitterController = TextEditingController();
   final _youtubeController = TextEditingController();
   final _tiktokController = TextEditingController();
-  // Legal page URLs
-  final _termsUrlController = TextEditingController();
-  final _privacyUrlController = TextEditingController();
-  final _returnsUrlController = TextEditingController();
-  final _aboutUrlController = TextEditingController();
-  final _shippingUrlController = TextEditingController();
   bool _loaded = false;
+
+  bool _hasLocalChanges = false;
+
+  String? _selectedFooterSectionId;
+
+  List<String>? _footerSectionOrderOverride;
+  final Map<String, List<String>> _footerLinkOrderOverrideBySection = {};
+  int _footerSectionReorderToken = 0;
+  final Map<String, int> _footerLinkReorderTokenBySection = {};
+
+  List<WebsiteNavigation> _applyIdOrder(
+    List<WebsiteNavigation> items,
+    List<String>? orderedIds,
+  ) {
+    if (orderedIds == null || orderedIds.isEmpty) return items;
+
+    final byId = <String, WebsiteNavigation>{
+      for (final i in items) i.id: i,
+    };
+    final ordered = <WebsiteNavigation>[];
+    for (final id in orderedIds) {
+      final item = byId[id];
+      if (item != null) ordered.add(item);
+    }
+    for (final item in items) {
+      if (!orderedIds.contains(item.id)) {
+        ordered.add(item);
+      }
+    }
+    return ordered;
+  }
+
+  List<WebsiteNavigation> _getDisplayedFooterSections(WebsiteService service) {
+    final base = List<WebsiteNavigation>.from(service.footerNavigation)
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    return _applyIdOrder(base, _footerSectionOrderOverride);
+  }
+
+  List<WebsiteNavigation> _getDisplayedFooterLinks(WebsiteNavigation section) {
+    final base = List<WebsiteNavigation>.from(section.children)
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    return _applyIdOrder(base, _footerLinkOrderOverrideBySection[section.id]);
+  }
+
+  Widget _buildCollapsibleSection({
+    required String title,
+    required Widget child,
+    bool initiallyExpanded = false,
+  }) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          iconColor: Colors.white70,
+          collapsedIconColor: Colors.white54,
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          children: [child],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _taglineController.addListener(_onFieldChanged);
+    _emailController.addListener(_onFieldChanged);
+    _phoneController.addListener(_onFieldChanged);
+    _whatsappController.addListener(_onFieldChanged);
+    _addressController.addListener(_onFieldChanged);
+    _facebookController.addListener(_onFieldChanged);
+    _instagramController.addListener(_onFieldChanged);
+    _twitterController.addListener(_onFieldChanged);
+    _youtubeController.addListener(_onFieldChanged);
+    _tiktokController.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (!_loaded) return;
+    if (!_hasLocalChanges) _hasLocalChanges = true;
+    _syncPendingSettingsToProvider();
+  }
+
+  void _syncPendingSettingsToProvider() {
+    widget.provider.updateFooterSettings({
+      'store_tagline': _taglineController.text,
+      'contact_email': _emailController.text,
+      'contact_phone': _phoneController.text,
+      'whatsapp': _whatsappController.text,
+      'contact_address': _addressController.text,
+      // Align with public store keys
+      'facebook': _facebookController.text,
+      'instagram': _instagramController.text,
+      'twitter': _twitterController.text,
+      'youtube': _youtubeController.text,
+      'tiktok': _tiktokController.text,
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -10417,53 +10525,495 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   void _loadSettings() {
     final service = context.read<WebsiteService>();
-    _taglineController.text = service.getSetting('store_tagline', '');
-    _emailController.text = service.getSetting('contact_email', '');
-    _phoneController.text = service.getSetting('contact_phone', '');
-    _whatsappController.text = service.getSetting('whatsapp', '');
-    _addressController.text = service.getSetting('contact_address', '');
-    _facebookController.text = service.getSetting('facebook_handle', '');
-    _instagramController.text = service.getSetting('instagram_handle', '');
-    _twitterController.text = service.getSetting('twitter_handle', '');
-    _youtubeController.text = service.getSetting('youtube_handle', '');
-    _tiktokController.text = service.getSetting('tiktok_handle', '');
-    // Legal page URLs
-    _termsUrlController.text = service.getSetting('legal_terms_url', '');
-    _privacyUrlController.text = service.getSetting('legal_privacy_url', '');
-    _returnsUrlController.text = service.getSetting('legal_returns_url', '');
-    _aboutUrlController.text = service.getSetting('legal_about_url', '');
-    _shippingUrlController.text = service.getSetting('legal_shipping_url', '');
+    _taglineController.text = widget.provider.getEffectiveFooterSetting(
+      'store_tagline',
+      service.getSetting('store_tagline', ''),
+    );
+    _emailController.text = widget.provider.getEffectiveFooterSetting(
+      'contact_email',
+      service.getSetting('contact_email', ''),
+    );
+    _phoneController.text = widget.provider.getEffectiveFooterSetting(
+      'contact_phone',
+      service.getSetting('contact_phone', ''),
+    );
+    _whatsappController.text = widget.provider.getEffectiveFooterSetting(
+      'whatsapp',
+      service.getSetting('whatsapp', ''),
+    );
+    _addressController.text = widget.provider.getEffectiveFooterSetting(
+      'contact_address',
+      service.getSetting('contact_address', ''),
+    );
+
+    // Backward compatible: prefer new keys used by store, fallback to legacy *_handle.
+    _facebookController.text = widget.provider.getEffectiveFooterSetting(
+      'facebook',
+      service.getSetting('facebook', service.getSetting('facebook_handle', '')),
+    );
+    _instagramController.text = widget.provider.getEffectiveFooterSetting(
+      'instagram',
+      service.getSetting(
+          'instagram', service.getSetting('instagram_handle', '')),
+    );
+    _twitterController.text = widget.provider.getEffectiveFooterSetting(
+      'twitter',
+      service.getSetting('twitter', service.getSetting('twitter_handle', '')),
+    );
+    _youtubeController.text = widget.provider.getEffectiveFooterSetting(
+      'youtube',
+      service.getSetting('youtube', service.getSetting('youtube_handle', '')),
+    );
+    _tiktokController.text = widget.provider.getEffectiveFooterSetting(
+      'tiktok',
+      service.getSetting('tiktok', service.getSetting('tiktok_handle', '')),
+    );
   }
 
-  Future<void> _saveSettings() async {
+  Future<void> _addFooterSection() async {
+    await _showFooterNavDialog(
+      title: 'Nueva sección',
+      initialIsSection: true,
+      onSave: (nav) async {
+        final service = context.read<WebsiteService>();
+        await service.createNavigation(nav);
+      },
+    );
+  }
+
+  Future<void> _addFooterLink({String? parentId}) async {
+    await _showFooterNavDialog(
+      title: 'Nuevo enlace',
+      initialParentId: parentId,
+      initialIsSection: false,
+      onSave: (nav) async {
+        final service = context.read<WebsiteService>();
+        await service.createNavigation(nav);
+      },
+    );
+  }
+
+  Future<void> _editFooterNav(WebsiteNavigation nav) async {
+    final isSection = nav.hasChildren && nav.linkType == NavLinkType.action;
+
+    await _showFooterNavDialog(
+      title: isSection ? 'Editar sección' : 'Editar enlace',
+      existing: nav,
+      initialIsSection: isSection,
+      initialParentId: nav.parentId,
+      onSave: (updated) async {
+        final service = context.read<WebsiteService>();
+        await service.updateNavigation(updated);
+      },
+    );
+  }
+
+  Future<void> _reorderFooterSections(int oldIndex, int newIndex) async {
     final service = context.read<WebsiteService>();
-    await service.saveSettings({
-      'store_tagline': _taglineController.text,
-      'contact_email': _emailController.text,
-      'contact_phone': _phoneController.text,
-      'whatsapp': _whatsappController.text,
-      'contact_address': _addressController.text,
-      'facebook_handle': _facebookController.text,
-      'instagram_handle': _instagramController.text,
-      'twitter_handle': _twitterController.text,
-      'youtube_handle': _youtubeController.text,
-      'tiktok_handle': _tiktokController.text,
-      // Legal page URLs
-      'legal_terms_url': _termsUrlController.text,
-      'legal_privacy_url': _privacyUrlController.text,
-      'legal_returns_url': _returnsUrlController.text,
-      'legal_about_url': _aboutUrlController.text,
-      'legal_shipping_url': _shippingUrlController.text,
+    final sections = _getDisplayedFooterSections(service);
+
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = sections.removeAt(oldIndex);
+    sections.insert(newIndex, item);
+
+    final orderedIds = sections.map((s) => s.id).toList();
+    final token = ++_footerSectionReorderToken;
+
+    setState(() {
+      _footerSectionOrderOverride = orderedIds;
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Footer guardado'),
-          backgroundColor: Color(0xFF00A09D),
+    // Persist in background; clear override once service cache reflects it.
+    unawaited(
+      service.reorderNavigationIds(orderedIds).then((_) {
+        if (!mounted) return;
+        if (_footerSectionReorderToken != token) return;
+        setState(() {
+          _footerSectionOrderOverride = null;
+        });
+      }),
+    );
+  }
+
+  Future<void> _reorderFooterLinks(
+    WebsiteNavigation parent,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final service = context.read<WebsiteService>();
+    final siblings = _getDisplayedFooterLinks(parent);
+
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = siblings.removeAt(oldIndex);
+    siblings.insert(newIndex, item);
+
+    final orderedIds = siblings.map((s) => s.id).toList();
+    final token = (_footerLinkReorderTokenBySection[parent.id] ?? 0) + 1;
+    _footerLinkReorderTokenBySection[parent.id] = token;
+
+    setState(() {
+      _footerLinkOrderOverrideBySection[parent.id] = orderedIds;
+    });
+
+    unawaited(
+      service.reorderNavigationIds(orderedIds).then((_) {
+        if (!mounted) return;
+        if ((_footerLinkReorderTokenBySection[parent.id] ?? 0) != token) return;
+        setState(() {
+          _footerLinkOrderOverrideBySection.remove(parent.id);
+        });
+      }),
+    );
+  }
+
+  Widget _buildFooterItemActionsMenu(
+    WebsiteNavigation nav, {
+    WebsiteNavigation? parent,
+  }) {
+    return PopupMenuButton<String>(
+      tooltip: 'Opciones',
+      color: const Color(0xFF2D2D2D),
+      icon: const Icon(Icons.more_vert, color: Colors.white70, size: 18),
+      onSelected: (value) async {
+        switch (value) {
+          case 'add_link':
+            await _addFooterLink(parentId: nav.id);
+            return;
+          case 'toggle_visible':
+            await _toggleFooterNavVisibility(nav);
+            return;
+          case 'edit':
+            await _editFooterNav(nav);
+            return;
+          case 'delete':
+            await _deleteFooterNav(nav);
+            return;
+        }
+      },
+      itemBuilder: (context) {
+        final isSection = nav.parentId == null;
+        return <PopupMenuEntry<String>>[
+          if (isSection)
+            const PopupMenuItem(
+              value: 'add_link',
+              child: Text('Agregar enlace',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          PopupMenuItem(
+            value: 'toggle_visible',
+            child: Text(
+              nav.isVisible ? 'Ocultar' : 'Mostrar',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'edit',
+            child:
+                Text('Editar', style: TextStyle(color: Colors.white)),
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'delete',
+            child: Text('Eliminar',
+                style: TextStyle(color: Colors.redAccent)),
+          ),
+        ];
+      },
+    );
+  }
+
+  Future<void> _toggleFooterNavVisibility(WebsiteNavigation nav) async {
+    final service = context.read<WebsiteService>();
+    await service.updateNavigation(nav.copyWith(isVisible: !nav.isVisible));
+  }
+
+  Future<void> _deleteFooterNav(WebsiteNavigation nav) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+        content: Text(
+          '¿Eliminar "${nav.label}"?${nav.hasChildren ? "\n\nEsto también eliminará sus enlaces hijos." : ""}',
+          style: const TextStyle(color: Colors.white70),
         ),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final service = context.read<WebsiteService>();
+    await service.deleteNavigation(nav.id);
+  }
+
+
+  Future<void> _showFooterNavDialog({
+    required String title,
+    WebsiteNavigation? existing,
+    String? initialParentId,
+    required bool initialIsSection,
+    required Future<void> Function(WebsiteNavigation nav) onSave,
+  }) async {
+    final formKey = GlobalKey<FormState>();
+    final labelController = TextEditingController(text: existing?.label ?? '');
+    final linkValueController =
+        TextEditingController(text: existing?.linkValue ?? '');
+
+    var isSection = initialIsSection;
+    var isVisible = existing?.isVisible ?? true;
+    var showOnDesktop = existing?.showOnDesktop ?? true;
+    var showOnMobile = existing?.showOnMobile ?? true;
+    var openInNewTab = existing?.openInNewTab ?? false;
+    var linkType = existing?.linkType ?? NavLinkType.page;
+    var parentId = initialParentId;
+
+    final service = context.read<WebsiteService>();
+    final footerParents = service.footerNavigation;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final effectiveIsSection = isSection;
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2D2D2D),
+              title: Text(title, style: const TextStyle(color: Colors.white)),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: labelController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Texto',
+                        labelStyle: TextStyle(color: Colors.white60),
+                        enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white24)),
+                        focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF00A09D))),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Requerido';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Parent selection (optional)
+                    DropdownButtonFormField<String?>(
+                      value: parentId,
+                      dropdownColor: const Color(0xFF2D2D2D),
+                      decoration: const InputDecoration(
+                        labelText: 'Sección (opcional)',
+                        labelStyle: TextStyle(color: Colors.white60),
+                        enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white24)),
+                        focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF00A09D))),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Sin sección',
+                              style: TextStyle(color: Colors.white)),
+                        ),
+                        ...footerParents.map(
+                          (p) => DropdownMenuItem<String?>(
+                            value: p.id,
+                            child: Text(p.label,
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() {
+                        parentId = v;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Es sección (título)',
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: const Text(
+                        'Una sección es un encabezado con enlaces dentro',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      value: isSection,
+                      activeColor: const Color(0xFF00A09D),
+                      onChanged: (v) => setState(() {
+                        isSection = v;
+                        if (isSection) {
+                          linkType = NavLinkType.action;
+                          linkValueController.text = '';
+                        }
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (!effectiveIsSection) ...[
+                      DropdownButtonFormField<NavLinkType>(
+                        value: linkType,
+                        dropdownColor: const Color(0xFF2D2D2D),
+                        decoration: const InputDecoration(
+                          labelText: 'Tipo',
+                          labelStyle: TextStyle(color: Colors.white60),
+                          enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white24)),
+                          focusedBorder: UnderlineInputBorder(
+                              borderSide:
+                                  BorderSide(color: Color(0xFF00A09D))),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: NavLinkType.page,
+                              child: Text('Página',
+                                  style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(
+                              value: NavLinkType.external,
+                              child: Text('URL externa',
+                                  style: TextStyle(color: Colors.white))),
+                          DropdownMenuItem(
+                              value: NavLinkType.anchor,
+                              child: Text('Ancla (#)',
+                                  style: TextStyle(color: Colors.white))),
+                        ],
+                        onChanged: (v) => setState(() {
+                          if (v == null) return;
+                          linkType = v;
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: linkValueController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Destino',
+                          labelStyle: const TextStyle(color: Colors.white60),
+                          hintText: linkType == NavLinkType.page
+                              ? '/productos, /nosotros'
+                              : (linkType == NavLinkType.anchor
+                                  ? '#seccion'
+                                  : 'https://...'),
+                          hintStyle: const TextStyle(color: Colors.white38),
+                          enabledBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white24)),
+                          focusedBorder: const UnderlineInputBorder(
+                              borderSide:
+                                  BorderSide(color: Color(0xFF00A09D))),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Requerido';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (linkType == NavLinkType.external)
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Abrir en nueva pestaña',
+                              style: TextStyle(color: Colors.white)),
+                          value: openInNewTab,
+                          activeColor: const Color(0xFF00A09D),
+                          onChanged: (v) =>
+                              setState(() => openInNewTab = v),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Visible',
+                          style: TextStyle(color: Colors.white)),
+                      value: isVisible,
+                      activeColor: const Color(0xFF00A09D),
+                      onChanged: (v) => setState(() => isVisible = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mostrar en escritorio',
+                          style: TextStyle(color: Colors.white)),
+                      value: showOnDesktop,
+                      activeColor: const Color(0xFF00A09D),
+                      onChanged: (v) => setState(() => showOnDesktop = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mostrar en móvil',
+                          style: TextStyle(color: Colors.white)),
+                      value: showOnMobile,
+                      activeColor: const Color(0xFF00A09D),
+                      onChanged: (v) => setState(() => showOnMobile = v),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar',
+                      style: TextStyle(color: Colors.white60)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+
+                    final normalizedLinkValue = effectiveIsSection
+                        ? ''
+                        : linkValueController.text.trim();
+
+                    final nav = WebsiteNavigation(
+                      id: existing?.id ?? '',
+                      tenantId: existing?.tenantId ?? '',
+                      menuLocation: MenuLocation.footer,
+                      label: labelController.text.trim(),
+                      linkType:
+                          effectiveIsSection ? NavLinkType.action : linkType,
+                      linkValue: normalizedLinkValue,
+                      openInNewTab: (!effectiveIsSection &&
+                              linkType == NavLinkType.external)
+                          ? openInNewTab
+                          : false,
+                      parentId: parentId,
+                      orderIndex: existing?.orderIndex ?? 0,
+                      isVisible: isVisible,
+                      showOnDesktop: showOnDesktop,
+                      showOnMobile: showOnMobile,
+                      createdAt: existing?.createdAt ?? DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    );
+
+                    await onSave(nav);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00A09D)),
+                  child: Text(existing != null ? 'Guardar' : 'Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -10478,16 +11028,14 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     _twitterController.dispose();
     _youtubeController.dispose();
     _tiktokController.dispose();
-    _termsUrlController.dispose();
-    _privacyUrlController.dispose();
-    _returnsUrlController.dispose();
-    _aboutUrlController.dispose();
-    _shippingUrlController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final websiteService = context.watch<WebsiteService>();
+    final footerNavItems = websiteService.footerNavigation;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -10530,214 +11078,375 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
           const SizedBox(height: 24),
 
-          // Brand section
-          const _SectionHeader('Marca'),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Eslogan / Tagline',
-            value: _taglineController.text,
-            controller: _taglineController,
-            onChanged: (_) {},
-            hint: 'Todo lo que necesitas para tu bicicleta',
-          ),
-
-          const SizedBox(height: 20),
-
-          // Contact section
-          const _SectionHeader('Contacto'),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Email',
-            value: _emailController.text,
-            controller: _emailController,
-            onChanged: (_) {},
-            hint: 'contacto@mitienda.cl',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Teléfono',
-            value: _phoneController.text,
-            controller: _phoneController,
-            onChanged: (_) {},
-            hint: '+56 2 1234 5678',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'WhatsApp',
-            value: _whatsappController.text,
-            controller: _whatsappController,
-            onChanged: (_) {},
-            hint: '+56912345678',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Dirección',
-            value: _addressController.text,
-            controller: _addressController,
-            onChanged: (_) {},
-            hint: 'Av. Principal 123, Santiago',
-          ),
-
-          const SizedBox(height: 20),
-
-          // Social media section
-          const _SectionHeader('Redes sociales'),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Facebook',
-            value: _facebookController.text,
-            controller: _facebookController,
-            onChanged: (_) {},
-            hint: 'mitienda',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Instagram',
-            value: _instagramController.text,
-            controller: _instagramController,
-            onChanged: (_) {},
-            hint: '@mitienda',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'Twitter/X',
-            value: _twitterController.text,
-            controller: _twitterController,
-            onChanged: (_) {},
-            hint: '@mitienda',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'YouTube',
-            value: _youtubeController.text,
-            controller: _youtubeController,
-            onChanged: (_) {},
-            hint: 'mitienda',
-          ),
-          const SizedBox(height: 12),
-
-          _EditorTextField(
-            label: 'TikTok',
-            value: _tiktokController.text,
-            controller: _tiktokController,
-            onChanged: (_) {},
-            hint: '@mitienda',
-          ),
-
-          const SizedBox(height: 20),
-
-          // Info about auto-generated sections
-          const _SectionHeader('Columnas del footer'),
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          _buildCollapsibleSection(
+            title: 'Marca',
+            initiallyExpanded: false,
+            child: Column(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue, size: 16),
-                    SizedBox(width: 8),
-                    Text('Enlaces',
-                        style: TextStyle(
-                            color: Colors.blue, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Se genera automáticamente desde el menú de navegación.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                _EditorTextField(
+                  label: 'Eslogan / Tagline',
+                  value: _taglineController.text,
+                  controller: _taglineController,
+                  onChanged: (_) {},
+                  hint: 'Todo lo que necesitas para tu bicicleta',
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
-
-          // Legal pages section - editable inline
-          const _SectionHeader('Páginas legales'),
-          const SizedBox(height: 8),
-          const Text(
-            'URLs de las páginas que aparecen en "Información"',
-            style: TextStyle(color: Colors.white54, fontSize: 11),
-          ),
           const SizedBox(height: 12),
 
-          _EditorTextField(
-            label: 'Sobre Nosotros',
-            value: _aboutUrlController.text,
-            controller: _aboutUrlController,
-            onChanged: (_) {},
-            hint: '/nosotros',
+          _buildCollapsibleSection(
+            title: 'Contacto',
+            initiallyExpanded: false,
+            child: Column(
+              children: [
+                _EditorTextField(
+                  label: 'Email',
+                  value: _emailController.text,
+                  controller: _emailController,
+                  onChanged: (_) {},
+                  hint: 'contacto@mitienda.cl',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Teléfono',
+                  value: _phoneController.text,
+                  controller: _phoneController,
+                  onChanged: (_) {},
+                  hint: '+56 2 1234 5678',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'WhatsApp',
+                  value: _whatsappController.text,
+                  controller: _whatsappController,
+                  onChanged: (_) {},
+                  hint: '+56912345678',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Dirección',
+                  value: _addressController.text,
+                  controller: _addressController,
+                  onChanged: (_) {},
+                  hint: 'Av. Principal 123, Santiago',
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
 
-          _EditorTextField(
-            label: 'Términos y Condiciones',
-            value: _termsUrlController.text,
-            controller: _termsUrlController,
-            onChanged: (_) {},
-            hint: '/terminos',
+          const SizedBox(height: 12),
+
+          _buildCollapsibleSection(
+            title: 'Redes sociales',
+            initiallyExpanded: false,
+            child: Column(
+              children: [
+                _EditorTextField(
+                  label: 'Facebook',
+                  value: _facebookController.text,
+                  controller: _facebookController,
+                  onChanged: (_) {},
+                  hint: 'mitienda',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Instagram',
+                  value: _instagramController.text,
+                  controller: _instagramController,
+                  onChanged: (_) {},
+                  hint: '@mitienda',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Twitter/X',
+                  value: _twitterController.text,
+                  controller: _twitterController,
+                  onChanged: (_) {},
+                  hint: '@mitienda',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'YouTube',
+                  value: _youtubeController.text,
+                  controller: _youtubeController,
+                  onChanged: (_) {},
+                  hint: 'mitienda',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'TikTok',
+                  value: _tiktokController.text,
+                  controller: _tiktokController,
+                  onChanged: (_) {},
+                  hint: '@mitienda',
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
 
-          _EditorTextField(
-            label: 'Política de Privacidad',
-            value: _privacyUrlController.text,
-            controller: _privacyUrlController,
-            onChanged: (_) {},
-            hint: '/privacidad',
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          _EditorTextField(
-            label: 'Política de Devoluciones',
-            value: _returnsUrlController.text,
-            controller: _returnsUrlController,
-            onChanged: (_) {},
-            hint: '/devoluciones',
-          ),
-          const SizedBox(height: 10),
+          _buildCollapsibleSection(
+            title: 'Enlaces del footer',
+            initiallyExpanded: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Secciones = títulos (columnas) dentro del footer. Se guarda en Navegación (menu_location=footer) y se refleja de inmediato en el preview.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AddItemButton(
+                        label: 'Agregar sección',
+                        onPressed: _addFooterSection,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _AddItemButton(
+                        label: 'Agregar enlace',
+                        onPressed: () =>
+                            _addFooterLink(parentId: _selectedFooterSectionId),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (footerNavItems.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: const Text(
+                      'Todavía no hay navegación del footer guardada. Abajo del sitio se ven enlaces “por defecto”.\n\nAgrega una sección/enlace para empezar y quedará guardado acá.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final sections = _getDisplayedFooterSections(websiteService);
 
-          _EditorTextField(
-            label: 'Información de Envíos',
-            value: _shippingUrlController.text,
-            controller: _shippingUrlController,
-            onChanged: (_) {},
-            hint: '/envios',
+                      final effectiveSelectedId = (_selectedFooterSectionId != null &&
+                              sections.any((s) => s.id == _selectedFooterSectionId))
+                          ? _selectedFooterSectionId!
+                          : sections.first.id;
+
+                      if (effectiveSelectedId != _selectedFooterSectionId) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          setState(() {
+                            _selectedFooterSectionId = effectiveSelectedId;
+                          });
+                        });
+                      }
+
+                      final selectedSection = sections.firstWhere(
+                        (s) => s.id == effectiveSelectedId,
+                        orElse: () => sections.first,
+                      );
+
+                      final links = _getDisplayedFooterLinks(selectedSection);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // "Tabs" (sections) as a horizontal reorderable strip
+                          SizedBox(
+                            height: 40,
+                            child: ReorderableListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              buildDefaultDragHandles: false,
+                              onReorder: _reorderFooterSections,
+                              itemCount: sections.length,
+                              itemBuilder: (context, index) {
+                                final section = sections[index];
+                                final isSelected =
+                                    section.id == _selectedFooterSectionId;
+                                return Container(
+                                  key: ValueKey('footer_section_${section.id}'),
+                                  margin: const EdgeInsets.only(right: 8),
+                                  child: Material(
+                                    color: isSelected
+                                        ? const Color(0xFF00A09D)
+                                            .withValues(alpha: 0.18)
+                                        : Colors.white.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () => setState(() {
+                                        _selectedFooterSectionId = section.id;
+                                      }),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            ReorderableDragStartListener(
+                                              index: index,
+                                              child: const Icon(
+                                                Icons.drag_handle,
+                                                color: Colors.white54,
+                                                size: 18,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              section.label,
+                                              style: TextStyle(
+                                                color: section.isVisible
+                                                    ? Colors.white
+                                                    : Colors.orange,
+                                                fontSize: 12,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            _buildFooterItemActionsMenu(section),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Selected section header + quick add
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2D2D2D),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    selectedSection.label,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add,
+                                      color: Colors.white70),
+                                  tooltip: 'Agregar enlace',
+                                  onPressed: () => _addFooterLink(
+                                      parentId: selectedSection.id),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+                          if (links.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white10),
+                              ),
+                              child: const Text(
+                                'Esta sección no tiene enlaces todavía.',
+                                style:
+                                    TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            )
+                          else
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final listWidth = constraints.maxWidth;
+
+                                return ReorderableListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  buildDefaultDragHandles: false,
+                                  proxyDecorator: (child, index, animation) {
+                                    return Material(
+                                      color: Colors.transparent,
+                                      elevation: 6,
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: SizedBox(
+                                        width: listWidth,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  onReorder: (oldIndex, newIndex) =>
+                                      _reorderFooterLinks(
+                                          selectedSection, oldIndex, newIndex),
+                                  itemCount: links.length,
+                                  itemBuilder: (context, index) {
+                                    final link = links[index];
+                                    return Container(
+                                      key: ValueKey('footer_link_${link.id}'),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2D2D2D),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          ReorderableDragStartListener(
+                                            index: index,
+                                            child: const Icon(
+                                              Icons.drag_handle,
+                                              color: Colors.white54,
+                                              size: 18,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              link.label,
+                                              style: TextStyle(
+                                                color: link.isVisible
+                                                    ? Colors.white70
+                                                    : Colors.orange,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                          _buildFooterItemActionsMenu(link,
+                                              parent: selectedSection),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 24),
-
-          // Save button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _saveSettings,
-              icon: const Icon(Icons.save, size: 18),
-              label: const Text('Guardar footer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00A09D),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
         ],
       ),
     );

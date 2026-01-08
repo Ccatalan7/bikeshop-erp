@@ -521,7 +521,12 @@ class WebsiteNavigation {
   String? get href {
     switch (linkType) {
       case NavLinkType.page:
-        return linkedPage?.fullPath ?? '/';
+        if (linkedPage != null) return linkedPage!.fullPath;
+        final v = linkValue?.trim();
+        if (v == null || v.isEmpty) return '/';
+        // Newer UI stores '/slug' (or sometimes 'slug') directly.
+        if (v.startsWith('/')) return v;
+        return '/$v';
       case NavLinkType.external:
         return linkValue;
       case NavLinkType.anchor:

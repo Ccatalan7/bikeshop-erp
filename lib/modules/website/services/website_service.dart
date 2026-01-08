@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -192,6 +193,50 @@ class WebsiteService extends ChangeNotifier {
       }
     }
 
+    // --- Phase 3 groundwork: normalized actions (backwards-compatible) ---
+    // Keep legacy keys (buttonText/buttonLink, ctaText/ctaLink) but also
+    // provide a unified `actions` array for renderers to optionally use.
+    if (rawTypeLower == 'hero' || rawTypeLower == 'cta' || rawTypeLower == 'videobanner') {
+      final showCta = rawTypeLower == 'videobanner'
+          ? (normalized['showCta'] != false)
+          : true;
+
+      final legacyLabel = (normalized['ctaText'] ?? normalized['buttonText'] ?? '')
+          .toString()
+          .trim();
+      final legacyTo = (normalized['ctaLink'] ?? normalized['buttonLink'] ?? '')
+          .toString()
+          .trim();
+
+      final existingActionsRaw = normalized['actions'];
+      final existingActions = <Map<String, dynamic>>[];
+      if (existingActionsRaw is List) {
+        for (final item in existingActionsRaw) {
+          if (item is Map) {
+            existingActions.add(Map<String, dynamic>.from(item));
+          }
+        }
+      }
+
+      // Only synthesize if missing/empty to avoid clobbering future editor-driven actions.
+      if (existingActions.isEmpty) {
+        if (showCta && legacyTo.isNotEmpty) {
+          normalized['actions'] = [
+            {
+              'type': 'navigate',
+              'label': legacyLabel.isNotEmpty ? legacyLabel : 'Ver más',
+              'to': legacyTo,
+            },
+          ];
+        } else {
+          normalized['actions'] = const <Map<String, dynamic>>[];
+        }
+      } else {
+        // Keep as-is but ensure it's a List<Map>.
+        normalized['actions'] = existingActions;
+      }
+    }
+
     return normalized;
   }
 
@@ -301,6 +346,12 @@ class WebsiteService extends ChangeNotifier {
     // If we already have recent cached settings+blocks, skip immediate network refresh.
     // This is especially important on mobile where TLS/DNS can cost ~1s.
     if (_hasFreshPublicStoreCache(tenantId)) {
+      // Ensure navigation is available too (sync cache first, then background refresh).
+      _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
+      // Fire-and-forget refresh: navigation changes are rare, but we still want
+      // the header/footer to be correct even when settings+blocks are fresh.
+      unawaited(loadNavigationForTenant(tenantId, notify: true));
+
       _hasLoadedForTenant = true;
       if (_perfLogsEnabled) {
         debugPrint(
@@ -433,6 +484,11 @@ class WebsiteService extends ChangeNotifier {
         }
 
         if (isSameAsCache) {
+          // Even if settings/blocks haven't changed, we still need navigation.
+          // Load from cache instantly and refresh in background.
+          _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
+          unawaited(loadNavigationForTenant(tenantId, notify: false));
+
           await _persistPublicStoreLastRefresh(tenantId);
           _hasLoadedForTenant = true;
           _isLoadingForTenant = false;
@@ -462,6 +518,10 @@ class WebsiteService extends ChangeNotifier {
         await _persistBlocksToLocalCache(tenantId, _blocks);
         await _persistPublicStoreLastRefresh(tenantId);
 
+        // Navigation is NOT included in get_public_store_data yet, so load it
+        // separately (public read is allowed by RLS policy when is_visible=true).
+        await loadNavigationForTenant(tenantId, notify: false);
+
         debugPrint('✅ [WebsiteService] Load complete ($source): '
           '${_settings.length} settings, ${_blocks.length} blocks');
       }
@@ -488,6 +548,7 @@ class WebsiteService extends ChangeNotifier {
       await Future.wait([
         loadSettingsForTenant(tenantId),
         loadBlocksForTenant(tenantId),
+        loadNavigationForTenant(tenantId, notify: false),
       ]);
     }
   }
@@ -542,18 +603,26 @@ class WebsiteService extends ChangeNotifier {
       notify: false,
     );
 
+    final navLoaded = _loadNavigationFromSynchronousCacheInternal(
+      tenantId,
+      notify: false,
+    );
+
     if (settingsLoaded) {
       debugPrint('💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
     }
     if (blocksLoaded) {
       debugPrint('💾 [WebsiteService] Loaded blocks from SYNC cache (0ms)');
     }
+    if (navLoaded) {
+      debugPrint('💾 [WebsiteService] Loaded navigation from SYNC cache (0ms)');
+    }
 
-    if (settingsLoaded || blocksLoaded) {
+    if (settingsLoaded || blocksLoaded || navLoaded) {
       _safeNotifyListeners();
     }
 
-    return settingsLoaded || blocksLoaded;
+    return settingsLoaded || blocksLoaded || navLoaded;
   }
 
   /// Try to load settings from synchronous cache (0ms wait)
@@ -2062,6 +2131,7 @@ class WebsiteService extends ChangeNotifier {
     required String tenantId,
     required List<Map<String, dynamic>> editorBlocks,
     required Map<String, String> pendingHeaderSettings,
+    required Map<String, String> pendingFooterSettings,
     required Map<String, String> pendingThemeSettings,
     String? pageId,
     String? pageSlug,
@@ -2069,6 +2139,9 @@ class WebsiteService extends ChangeNotifier {
     // Save header/theme settings first (if any)
     if (pendingHeaderSettings.isNotEmpty) {
       await saveSettings(pendingHeaderSettings);
+    }
+    if (pendingFooterSettings.isNotEmpty) {
+      await saveSettings(pendingFooterSettings);
     }
     if (pendingThemeSettings.isNotEmpty) {
       await saveSettings(pendingThemeSettings);
@@ -2137,6 +2210,294 @@ class WebsiteService extends ChangeNotifier {
       freshBlocks: freshBlocks,
     );
   }
+
+  // ==========================================================================
+  // PUBLIC-STORE NAVIGATION CACHE (tenantId-scoped)
+  // ==========================================================================
+
+  bool _isLoadingNavigationForTenant = false;
+  bool _hasLoadedNavigationForTenant = false;
+  String? _loadedNavigationTenantId;
+
+  final Set<String> _attemptedDefaultFooterSeedForTenant = {};
+
+  Future<void> _seedDefaultFooterNavigationIfNeeded(String tenantId) async {
+    // Only seed when authenticated (public/anon store must never attempt inserts).
+    if (_supabase.auth.currentUser == null) return;
+    if (_attemptedDefaultFooterSeedForTenant.contains(tenantId)) return;
+
+    final hasFooter = _navigation.any((n) => n.menuLocation == MenuLocation.footer);
+    if (hasFooter) return;
+
+    _attemptedDefaultFooterSeedForTenant.add(tenantId);
+
+    try {
+      // Create section: Enlaces
+      final enlacesParent = await _supabase
+          .from('website_navigation')
+          .insert({
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Enlaces',
+            'link_type': 'action',
+            'link_value': '',
+            'open_in_new_tab': false,
+            'parent_id': null,
+            'order_index': 0,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          })
+          .select('id')
+          .single();
+
+      final enlacesParentId = (enlacesParent['id'] as String?) ?? '';
+
+      if (enlacesParentId.isNotEmpty) {
+        await _supabase.from('website_navigation').insert([
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Inicio',
+            'link_type': 'page',
+            'link_value': '/tienda',
+            'open_in_new_tab': false,
+            'parent_id': enlacesParentId,
+            'order_index': 0,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Productos',
+            'link_type': 'page',
+            'link_value': '/tienda/productos',
+            'open_in_new_tab': false,
+            'parent_id': enlacesParentId,
+            'order_index': 1,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Servicios',
+            'link_type': 'page',
+            'link_value': '/tienda/servicios',
+            'open_in_new_tab': false,
+            'parent_id': enlacesParentId,
+            'order_index': 2,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Contacto',
+            'link_type': 'page',
+            'link_value': '/tienda/contacto',
+            'open_in_new_tab': false,
+            'parent_id': enlacesParentId,
+            'order_index': 3,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+        ]);
+      }
+
+      // Create section: Información
+      final infoParent = await _supabase
+          .from('website_navigation')
+          .insert({
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Información',
+            'link_type': 'action',
+            'link_value': '',
+            'open_in_new_tab': false,
+            'parent_id': null,
+            'order_index': 1,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          })
+          .select('id')
+          .single();
+
+      final infoParentId = (infoParent['id'] as String?) ?? '';
+      if (infoParentId.isNotEmpty) {
+        await _supabase.from('website_navigation').insert([
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Sobre Nosotros',
+            'link_type': 'page',
+            'link_value': '/nosotros',
+            'open_in_new_tab': false,
+            'parent_id': infoParentId,
+            'order_index': 0,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Términos y Condiciones',
+            'link_type': 'page',
+            'link_value': '/terminos',
+            'open_in_new_tab': false,
+            'parent_id': infoParentId,
+            'order_index': 1,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Política de Privacidad',
+            'link_type': 'page',
+            'link_value': '/privacidad',
+            'open_in_new_tab': false,
+            'parent_id': infoParentId,
+            'order_index': 2,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Política de Devoluciones',
+            'link_type': 'page',
+            'link_value': '/devoluciones',
+            'open_in_new_tab': false,
+            'parent_id': infoParentId,
+            'order_index': 3,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+          {
+            'tenant_id': tenantId,
+            'menu_location': 'footer',
+            'label': 'Envíos',
+            'link_type': 'page',
+            'link_value': '/envios',
+            'open_in_new_tab': false,
+            'parent_id': infoParentId,
+            'order_index': 4,
+            'is_visible': true,
+            'show_on_desktop': true,
+            'show_on_mobile': true,
+          },
+        ]);
+      }
+
+      debugPrint('✅ [WebsiteService] Seeded default footer navigation');
+    } catch (e) {
+      // Non-fatal: keep old fallback behavior.
+      debugPrint('⚠️ [WebsiteService] Failed to seed default footer nav: $e');
+    }
+  }
+
+  bool _loadNavigationFromSynchronousCacheInternal(
+    String tenantId, {
+    required bool notify,
+  }) {
+    if (_prefs == null) return false;
+
+    try {
+      final cacheKey = 'website_navigation_$tenantId';
+      final cachedJson = _prefs!.getString(cacheKey);
+      if (cachedJson == null) return false;
+
+      final navData = jsonDecode(cachedJson) as List<dynamic>;
+      _navigation = navData
+          .map((e) => WebsiteNavigation.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      _buildNavigationHierarchy();
+
+      _hasLoadedNavigationForTenant = true;
+      _loadedNavigationTenantId = tenantId;
+
+      if (notify) {
+        debugPrint('💾 [WebsiteService] Loaded navigation from SYNC cache (0ms)');
+        _safeNotifyListeners();
+      }
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Failed to load navigation sync cache: $e');
+      return false;
+    }
+  }
+
+  Future<void> _persistNavigationToLocalCache(String tenantId) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = prefs;
+      final cacheKey = 'website_navigation_$tenantId';
+      await prefs.setString(
+        cacheKey,
+        jsonEncode(_navigation.map((e) => e.toJson()).toList()),
+      );
+    } catch (_) {
+      // Ignore cache write errors
+    }
+  }
+
+  /// Try to load navigation from synchronous cache (0ms wait)
+  bool loadNavigationFromSynchronousCache(String tenantId) {
+    return _loadNavigationFromSynchronousCacheInternal(tenantId, notify: true);
+  }
+
+  Future<void> _resolveLegacyNavigationPageIds(String tenantId) async {
+    final legacyIds = <String>{};
+    for (final nav in _navigation) {
+      if (nav.linkType != NavLinkType.page) continue;
+      final raw = (nav.linkValue ?? '').trim();
+      if (raw.isEmpty) continue;
+
+      // Newer UI stores '/slug'. Older seeds stored UUIDs.
+      if (raw.startsWith('/')) continue;
+      if (raw.length < 20 || !raw.contains('-')) continue;
+      legacyIds.add(raw);
+    }
+
+    if (legacyIds.isEmpty) return;
+
+    try {
+      final pagesResp = await _supabase
+          .from('website_pages')
+          .select('id,tenant_id,slug,title,is_published,is_home,is_system,template,created_at,updated_at')
+          .eq('tenant_id', tenantId)
+          .inFilter('id', legacyIds.toList());
+
+      final pages = (pagesResp as List)
+          .map((e) => WebsitePage.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      final pageMap = <String, WebsitePage>{
+        for (final p in pages) p.id: p,
+      };
+
+      for (final nav in _navigation) {
+        if (nav.linkType != NavLinkType.page) continue;
+        final raw = (nav.linkValue ?? '').trim();
+        final page = pageMap[raw];
+        if (page == null) continue;
+        nav.linkedPage = page;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [WebsiteService] Failed to resolve legacy nav page IDs: $e');
+    }
+  }
   // ============================================================================
   // WEBSITE NAVIGATION (Menu Management - Dec 2025)
   // ============================================================================
@@ -2149,6 +2510,43 @@ class WebsiteService extends ChangeNotifier {
         throw Exception('No tenant_id found');
       }
 
+      await loadNavigationForTenant(tenantId, notify: true);
+    } catch (e) {
+      _error = 'Error al cargar navegación: $e';
+      debugPrint(_error);
+    }
+  }
+
+  /// Load navigation for a specific tenant.
+  ///
+  /// This is required for the public store (anonymous users don't have access
+  /// to `_tenantService.getTenantId()`).
+  Future<void> loadNavigationForTenant(
+    String tenantId, {
+    required bool notify,
+    bool forceRefresh = false,
+  }) async {
+    // Cache hit
+    if (!forceRefresh &&
+        _hasLoadedNavigationForTenant &&
+        _loadedNavigationTenantId == tenantId) {
+      return;
+    }
+
+    // Prevent concurrent loads
+    if (_isLoadingNavigationForTenant) {
+      while (_isLoadingNavigationForTenant) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (!forceRefresh &&
+          _hasLoadedNavigationForTenant &&
+          _loadedNavigationTenantId == tenantId) {
+        return;
+      }
+    }
+
+    _isLoadingNavigationForTenant = true;
+    try {
       final response = await _supabase
           .from('website_navigation')
           .select()
@@ -2159,18 +2557,49 @@ class WebsiteService extends ChangeNotifier {
           .map((json) => WebsiteNavigation.fromJson(json))
           .toList();
 
-      // Build hierarchy (children under parents)
+      // If footer navigation isn't configured yet, seed sensible defaults (auth only).
+      await _seedDefaultFooterNavigationIfNeeded(tenantId);
+      if (_navigation.isEmpty ||
+        !_navigation.any((n) => n.menuLocation == MenuLocation.footer)) {
+      final refreshed = await _supabase
+        .from('website_navigation')
+        .select()
+        .eq('tenant_id', tenantId)
+        .order('order_index', ascending: true);
+      _navigation = (refreshed as List)
+        .map((json) => WebsiteNavigation.fromJson(json))
+        .toList();
+      }
+
+      await _resolveLegacyNavigationPageIds(tenantId);
+
       _buildNavigationHierarchy();
 
-      _safeNotifyListeners();
+      _hasLoadedNavigationForTenant = true;
+      _loadedNavigationTenantId = tenantId;
+
+      await _persistNavigationToLocalCache(tenantId);
+
+      if (notify) {
+        _safeNotifyListeners();
+      }
     } catch (e) {
       _error = 'Error al cargar navegación: $e';
       debugPrint(_error);
+      rethrow;
+    } finally {
+      _isLoadingNavigationForTenant = false;
     }
   }
 
   /// Build parent-child hierarchy for navigation items
   void _buildNavigationHierarchy() {
+    // Clear any previous hierarchy to avoid duplicate children.
+    for (final item in _navigation) {
+      item.children.clear();
+      item.linkedPage = null;
+    }
+
     // Create a map for quick lookup
     final Map<String, WebsiteNavigation> navMap = {};
     for (final item in _navigation) {
@@ -2217,6 +2646,14 @@ class WebsiteService extends ChangeNotifier {
       final data = nav.toInsertJson();
       data['tenant_id'] = tenantId;
 
+      // Normalize page links to '/slug' style in the payload (do not mutate nav).
+      if (nav.linkType == NavLinkType.page && data['link_value'] != null) {
+        final raw = data['link_value'].toString().trim();
+        if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
+          data['link_value'] = '/$raw';
+        }
+      }
+
       final response = await _supabase
           .from('website_navigation')
           .insert(data)
@@ -2239,9 +2676,18 @@ class WebsiteService extends ChangeNotifier {
   /// Update an existing navigation item
   Future<WebsiteNavigation> updateNavigation(WebsiteNavigation nav) async {
     try {
+      final updateData = nav.toUpdateJson();
+      // Normalize page links to '/slug' style in the payload (do not mutate nav).
+      if (nav.linkType == NavLinkType.page && updateData['link_value'] != null) {
+        final raw = updateData['link_value'].toString().trim();
+        if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
+          updateData['link_value'] = '/$raw';
+        }
+      }
+
       final response = await _supabase
           .from('website_navigation')
-          .update(nav.toUpdateJson())
+          .update(updateData)
           .eq('id', nav.id)
           .select()
           .single();
@@ -2291,6 +2737,38 @@ class WebsiteService extends ChangeNotifier {
       }
 
       await loadNavigation();
+    } catch (e) {
+      _error = 'Error al reordenar navegación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Reorder an arbitrary set of navigation items by id.
+  ///
+  /// This is used by editor UIs for drag-and-drop ordering without triggering
+  /// multiple rebuilds/notifications mid-gesture.
+  Future<void> reorderNavigationIds(List<String> orderedIds) async {
+    try {
+      final nowIso = DateTime.now().toIso8601String();
+
+      for (int i = 0; i < orderedIds.length; i++) {
+        await _supabase.from('website_navigation').update({
+          'order_index': i,
+          'updated_at': nowIso,
+        }).eq('id', orderedIds[i]);
+
+        final localIndex = _navigation.indexWhere((n) => n.id == orderedIds[i]);
+        if (localIndex >= 0) {
+          _navigation[localIndex] = _navigation[localIndex].copyWith(
+            orderIndex: i,
+            updatedAt: DateTime.now(),
+          );
+        }
+      }
+
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
     } catch (e) {
       _error = 'Error al reordenar navegación: $e';
       debugPrint(_error);

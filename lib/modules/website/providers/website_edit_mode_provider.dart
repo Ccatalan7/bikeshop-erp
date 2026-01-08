@@ -40,6 +40,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
 
+  // Pending footer settings (to be saved with main save button)
+  // These are applied immediately in the UI but only saved when user clicks "Guardar".
+  Map<String, String> _pendingFooterSettings = {};
+  bool _hasFooterChanges = false;
+
   // Pending theme settings for live preview
   // These are applied immediately in the UI but only saved when user clicks "Guardar"
   Map<String, String> _pendingThemeSettings = {};
@@ -59,12 +64,17 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
   bool get hasUnsavedChanges =>
-      _hasUnsavedChanges || _hasHeaderChanges || _hasThemeChanges;
+      _hasUnsavedChanges ||
+      _hasHeaderChanges ||
+      _hasThemeChanges ||
+      _hasFooterChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
   bool get hasThemeChanges => _hasThemeChanges;
+    bool get hasFooterChanges => _hasFooterChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
+    Map<String, String> get pendingFooterSettings => _pendingFooterSettings;
   Map<String, String> get pendingThemeSettings => _pendingThemeSettings;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
@@ -106,6 +116,40 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void clearHeaderChanged() {
     _hasHeaderChanges = false;
     _pendingHeaderSettings = {};
+    notifyListeners();
+  }
+
+  /// Update a single footer setting for live preview
+  void updateFooterSetting(String key, String value) {
+    _pendingFooterSettings[key] = value;
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer setting updated: $key = $value');
+    notifyListeners();
+  }
+
+  /// Update multiple footer settings at once
+  void updateFooterSettings(Map<String, String> settings) {
+    _pendingFooterSettings.addAll(settings);
+    _hasFooterChanges = true;
+    debugPrint(
+        '🦶 [EditProvider] Footer settings updated: ${settings.keys.join(', ')}');
+    notifyListeners();
+  }
+
+  /// Get effective footer setting (pending value if exists, otherwise from settings)
+  String getEffectiveFooterSetting(String key, String defaultValue) {
+    if (_pendingFooterSettings.containsKey(key)) {
+      return _pendingFooterSettings[key]!;
+    }
+    final saved = _settings[key];
+    if (saved != null) return saved.toString();
+    return defaultValue;
+  }
+
+  /// Clear footer changed flag (after save)
+  void clearFooterChanges() {
+    _hasFooterChanges = false;
+    _pendingFooterSettings = {};
     notifyListeners();
   }
 
@@ -160,6 +204,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
+    _hasFooterChanges = false;
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -181,6 +226,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
+    _hasFooterChanges = false;
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -276,8 +322,15 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     }
 
     final block = _blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
     blockData[key] = value;
+
+    _syncDerivedActions(
+      blockType: blockType,
+      updatedKey: key,
+      blockData: blockData,
+    );
     _blocks[blockIndex] = {
       ...block,
       'block_data': blockData,
@@ -303,11 +356,30 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     }
 
     final block = _blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
 
     // Apply all updates atomically
     for (final entry in updates.entries) {
       blockData[entry.key] = entry.value;
+    }
+
+    // If multiple keys updated, sync derived actions if any CTA-related keys changed.
+    final changedKeys = updates.keys.toSet();
+    const ctaKeys = {
+      'ctaText',
+      'ctaLink',
+      'buttonText',
+      'buttonLink',
+      'showCta',
+      'actions',
+    };
+    if (changedKeys.intersection(ctaKeys).isNotEmpty) {
+      _syncDerivedActions(
+        blockType: blockType,
+        updatedKey: 'multiple',
+        blockData: blockData,
+      );
     }
 
     _blocks[blockIndex] = {
@@ -321,6 +393,66 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     debugPrint(
         '✅ [EditProvider] updateBlockDataMultiple: blockId=$blockId, keys=${updates.keys.join(", ")}');
     notifyListeners();
+  }
+
+  void _syncDerivedActions({
+    required String blockType,
+    required String updatedKey,
+    required Map<String, dynamic> blockData,
+  }) {
+    final typeLower = blockType.trim().toLowerCase();
+    final isCtaLike = typeLower == 'hero' || typeLower == 'cta' || typeLower == 'videobanner';
+    if (!isCtaLike) return;
+
+    // If user edits actions directly in the future, don't fight it.
+    if (updatedKey == 'actions') return;
+
+    final showCta = typeLower == 'videobanner'
+        ? (blockData['showCta'] != false)
+        : true;
+
+    final label = (blockData['ctaText'] ?? blockData['buttonText'] ?? '')
+        .toString()
+        .trim();
+    final to = (blockData['ctaLink'] ?? blockData['buttonLink'] ?? '')
+        .toString()
+        .trim();
+
+    // Normalize existing actions (if any) to a mutable list of maps.
+    final rawActions = blockData['actions'];
+    final actions = <Map<String, dynamic>>[];
+    if (rawActions is List) {
+      for (final item in rawActions) {
+        if (item is Map) {
+          actions.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+
+    if (!showCta || to.isEmpty) {
+      // Hide CTA => clear actions.
+      blockData['actions'] = const <Map<String, dynamic>>[];
+      return;
+    }
+
+    if (actions.isEmpty) {
+      blockData['actions'] = [
+        {
+          'type': 'navigate',
+          'label': label.isNotEmpty ? label : 'Ver más',
+          'to': to,
+        },
+      ];
+      return;
+    }
+
+    // Update first action in-place (leave any additional actions untouched).
+    final first = Map<String, dynamic>.from(actions.first);
+    first['type'] = (first['type'] ?? 'navigate').toString();
+    first['label'] = label.isNotEmpty ? label : (first['label'] ?? 'Ver más');
+    first['to'] = to;
+    actions[0] = first;
+    blockData['actions'] = actions;
   }
 
   /// Convenience: add a Canvas element to the currently selected Canvas block.

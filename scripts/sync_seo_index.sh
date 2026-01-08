@@ -48,6 +48,61 @@ SHIPPING_URL=$(get_setting "seo_shipping_policy_url" "/politica-de-envios")
 PRIVACY_URL=$(get_setting "seo_privacy_policy_url" "/politica-de-privacidad")
 GA_ID=$(get_setting "seo_ga_id" "G-FR5Q37BW43")
 
+# Theme fonts (used by WebsiteThemeBuilder via fontFamily)
+HEADING_FONT=$(get_setting "theme_heading_font" "")
+BODY_FONT=$(get_setting "theme_body_font" "")
+
+# Build Google Fonts link tags for selected fonts (if any).
+# We avoid bundling google_fonts; this just loads fonts via CSS.
+build_google_fonts_links() {
+  local heading="$1"
+  local body="$2"
+
+  # Basic skip list for system/font-stack values
+  is_skippable_font() {
+    local f="$1"
+    if [[ -z "$f" ]]; then return 0; fi
+    # If it's a stack like "Inter, system-ui, sans-serif" skip (can't map cleanly)
+    if [[ "$f" == *","* ]]; then return 0; fi
+    # Generic families
+    local f_lc
+    f_lc=$(echo "$f" | tr '[:upper:]' '[:lower:]')
+    case "$f_lc" in
+      system-ui|sans-serif|serif|monospace|cursive|fantasy|ui-sans-serif|ui-serif|ui-monospace)
+        return 0
+        ;;
+    esac
+    return 1
+  }
+
+  local families=()
+  if ! is_skippable_font "$heading"; then families+=("$heading"); fi
+  if ! is_skippable_font "$body" && [[ "$body" != "$heading" ]]; then families+=("$body"); fi
+
+  if [[ ${#families[@]} -eq 0 ]]; then
+    echo ""
+    return
+  fi
+
+  local q=""
+  for fam in "${families[@]}"; do
+    # Replace spaces with + for URL encoding.
+    local enc="${fam// /+}"
+    # Request a reasonable range of weights; unsupported weights are ignored by Google Fonts.
+    q+="family=${enc}:wght@300;400;500;600;700;800;900&"
+  done
+  q+="display=swap"
+
+  cat << EOF
+  <!-- Theme Fonts (loaded via Google Fonts; keeps Flutter bundle small) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?${q}" rel="stylesheet">
+EOF
+}
+
+GOOGLE_FONTS_LINKS=$(build_google_fonts_links "$HEADING_FONT" "$BODY_FONT")
+
 # Full address
 FULL_ADDRESS="$ADDRESS_STREET, $ADDRESS_CITY, $ADDRESS_COUNTRY"
 
@@ -90,6 +145,8 @@ cat > "$INDEX_FILE" << HEREDOC
   <meta name="twitter:title" content="$META_TITLE">
   <meta name="twitter:description" content="$META_DESCRIPTION">
   ${OG_IMAGE:+<meta name="twitter:image" content="$OG_IMAGE">}
+
+  ${GOOGLE_FONTS_LINKS}
 
   <!-- Google Analytics GA4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=$GA_ID"></script>

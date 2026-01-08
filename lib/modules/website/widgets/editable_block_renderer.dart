@@ -135,6 +135,46 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
 
+  ({String label, String to})? _resolvePrimaryNavigateAction(
+    Map<String, dynamic> data, {
+    required String fallbackLabel,
+    required String fallbackTo,
+    bool enabled = true,
+  }) {
+    if (!enabled) return null;
+
+    final actionsRaw = data['actions'];
+    if (actionsRaw is List) {
+      for (final item in actionsRaw) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final type = (map['type'] ?? '').toString().trim().toLowerCase();
+        if (type.isNotEmpty && type != 'navigate') continue;
+
+        final to = (map['to'] ?? map['href'] ?? '').toString().trim();
+        if (to.isEmpty) continue;
+        final label =
+            (map['label'] ?? map['text'] ?? fallbackLabel).toString().trim();
+
+        return (
+          label: label.isNotEmpty
+              ? label
+              : (fallbackLabel.isNotEmpty ? fallbackLabel : 'Ver más'),
+          to: to,
+        );
+      }
+    }
+
+    final to = fallbackTo.trim();
+    if (to.isEmpty) return null;
+
+    final label = fallbackLabel.trim();
+    return (
+      label: label.isNotEmpty ? label : 'Ver más',
+      to: to,
+    );
+  }
+
   /// Apply font family via CSS font-family instead of GoogleFonts package
   /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
   static TextStyle _applyThemeFont(TextStyle base, String? fontFamily) {
@@ -1336,6 +1376,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final buttonText = (widget.data['buttonText'] ?? 'Contactar').toString();
     final buttonLink = (widget.data['buttonLink'] ?? '').toString();
 
+    final primaryAction = _resolvePrimaryNavigateAction(
+      widget.data,
+      fallbackLabel: buttonText,
+      fallbackTo: buttonLink,
+    );
+
     final backgroundImage = widget.data['backgroundImage']?.toString();
     final hasBackground =
         backgroundImage != null && backgroundImage.trim().isNotEmpty;
@@ -1417,9 +1463,9 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               editProvider.updateBlockData(widget.blockId, 'buttonText', value),
           onLinkChanged: (value) =>
               editProvider.updateBlockData(widget.blockId, 'buttonLink', value),
-          onNavigate: buttonLink.isNotEmpty
+          onNavigate: (primaryAction?.to ?? buttonLink).isNotEmpty
               ? () {
-                  widget.onNavigate?.call(buttonLink);
+                  widget.onNavigate?.call(primaryAction?.to ?? buttonLink);
                 }
               : null,
         ),
@@ -2984,8 +3030,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                         child: Center(
                           child: Icon(
                             Icons.image_outlined,
-                            color: theme.iconTheme.color
-                                ?.withValues(alpha: 0.5),
+                            color:
+                                theme.iconTheme.color?.withValues(alpha: 0.5),
                             size: 32,
                           ),
                         ),
@@ -3129,9 +3175,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           alignment: Alignment.center,
           child: OutlinedButton.icon(
             onPressed: () {
-              final next = images
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList();
+              final next =
+                  images.map((e) => Map<String, dynamic>.from(e)).toList();
               next.add({'imageUrl': '', 'caption': ''});
               updateImages(next);
             },

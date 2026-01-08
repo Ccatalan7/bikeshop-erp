@@ -34,6 +34,46 @@ class WebsiteBlockRenderer {
     return base.copyWith(fontFamily: family);
   }
 
+  static ({String label, String to})? _resolvePrimaryNavigateAction(
+    Map<String, dynamic> data, {
+    required String fallbackLabel,
+    required String fallbackTo,
+    bool enabled = true,
+  }) {
+    if (!enabled) return null;
+
+    final actionsRaw = data['actions'];
+    if (actionsRaw is List) {
+      for (final item in actionsRaw) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final type = (map['type'] ?? '').toString().trim().toLowerCase();
+        // Treat empty type as navigate for forward-compat.
+        if (type.isNotEmpty && type != 'navigate') continue;
+
+        final to = (map['to'] ?? map['href'] ?? '').toString().trim();
+        if (to.isEmpty) continue;
+        final label =
+            (map['label'] ?? map['text'] ?? fallbackLabel).toString().trim();
+        return (
+          label: label.isNotEmpty
+              ? label
+              : (fallbackLabel.isNotEmpty ? fallbackLabel : 'Ver más'),
+          to: to,
+        );
+      }
+    }
+
+    final to = fallbackTo.trim();
+    if (to.isEmpty) return null;
+
+    final label = fallbackLabel.trim();
+    return (
+      label: label.isNotEmpty ? label : 'Ver más',
+      to: to,
+    );
+  }
+
   static Widget build({
     required BuildContext context,
     required String blockType,
@@ -739,12 +779,17 @@ class WebsiteBlockRenderer {
 
     final title = (data['title'] ?? 'Bienvenido').toString().trim();
     final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final ctaText =
+    final legacyCtaText =
         (data['ctaText'] ?? data['buttonText'] ?? 'Ver más').toString().trim();
-    final ctaLink =
+    final legacyCtaLink =
         (data['ctaLink'] ?? data['buttonLink'] ?? '/tienda/productos')
             .toString()
             .trim();
+    final primaryAction = _resolvePrimaryNavigateAction(
+      data,
+      fallbackLabel: legacyCtaText,
+      fallbackTo: legacyCtaLink,
+    );
     final imageUrl = data['imageUrl'] ?? data['backgroundImage'];
     final showOverlay = (data['showOverlay'] ?? true) == true;
     final overlayOpacity =
@@ -912,9 +957,8 @@ class WebsiteBlockRenderer {
                   onPressed: previewMode
                       ? () {}
                       : () {
-                          final route = ctaLink.isNotEmpty
-                              ? ctaLink
-                              : '/tienda/productos';
+                          final route =
+                              (primaryAction?.to ?? '/tienda/productos').trim();
                           if (onNavigate != null) {
                             onNavigate(route);
                           }
@@ -929,7 +973,10 @@ class WebsiteBlockRenderer {
                     ),
                   ),
                   child: Text(
-                    (ctaText.isEmpty ? 'CHECK IT OUT' : ctaText).toUpperCase(),
+                    ((primaryAction?.label ?? legacyCtaText).trim().isEmpty
+                            ? 'CHECK IT OUT'
+                            : (primaryAction?.label ?? legacyCtaText))
+                        .toUpperCase(),
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1278,14 +1325,20 @@ class WebsiteBlockRenderer {
     final title = (data['title'] ?? 'Visita nuestra tienda').toString().trim();
     final subtitle =
         (data['subtitle'] ?? data['description'] ?? '').toString().trim();
-    final buttonText =
+    final legacyButtonText =
         (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos')
             .toString()
             .trim();
-    final buttonLink =
+    final legacyButtonLink =
         (data['buttonLink'] ?? data['ctaLink'] ?? '/tienda/contacto')
             .toString()
             .trim();
+
+    final primaryAction = _resolvePrimaryNavigateAction(
+      data,
+      fallbackLabel: legacyButtonText,
+      fallbackTo: legacyButtonLink,
+    );
 
     final backgroundImage =
         (data['backgroundImage'] ?? data['imageUrl'])?.toString().trim();
@@ -1359,9 +1412,8 @@ class WebsiteBlockRenderer {
                     onPressed: previewMode
                         ? () {}
                         : () {
-                            final route = buttonLink.isNotEmpty
-                                ? buttonLink
-                                : '/tienda/contacto';
+                            final route =
+                                primaryAction?.to ?? '/tienda/contacto';
                             if (onNavigate != null) {
                               onNavigate(route);
                             }
@@ -1378,7 +1430,9 @@ class WebsiteBlockRenderer {
                       ),
                     ),
                     child: Text(
-                      (buttonText.isEmpty ? 'Contáctanos' : buttonText)
+                      ((primaryAction?.label ?? legacyButtonText).isEmpty
+                              ? 'Contáctanos'
+                              : (primaryAction?.label ?? legacyButtonText))
                           .toUpperCase(),
                       style: const TextStyle(
                         fontSize: 13,
@@ -3024,9 +3078,17 @@ class WebsiteBlockRenderer {
     final imageUrl = data['imageUrl']?.toString();
     final videoUrl = data['videoUrl']?.toString();
     final videoFileUrl = data['videoFileUrl']?.toString(); // Direct video file
-    final ctaText = (data['ctaText'] ?? 'Ver más').toString().trim();
-    final ctaLink = (data['ctaLink'] ?? '/tienda/productos').toString().trim();
+    final legacyCtaText = (data['ctaText'] ?? 'Ver más').toString().trim();
+    final legacyCtaLink =
+        (data['ctaLink'] ?? '/tienda/productos').toString().trim();
     final showCta = data['showCta'] != false;
+
+    final primaryAction = _resolvePrimaryNavigateAction(
+      data,
+      fallbackLabel: legacyCtaText,
+      fallbackTo: legacyCtaLink,
+      enabled: showCta,
+    );
 
     double overlayOpacity = 0.5;
     final rawOpacity = data['overlayOpacity'];
@@ -3052,9 +3114,9 @@ class WebsiteBlockRenderer {
       imageUrl: hasImage ? imageUrl : null,
       youtubeVideoId: youtubeVideoId,
       videoFileUrl: hasVideoFile ? videoFileUrl : null,
-      ctaText: ctaText,
-      ctaLink: ctaLink,
-      showCta: showCta,
+      ctaText: primaryAction?.label ?? legacyCtaText,
+      ctaLink: primaryAction?.to ?? legacyCtaLink,
+      showCta: primaryAction != null,
       overlayOpacity: overlayOpacity,
       accentColor: accentColor,
       headingFont: headingFont,

@@ -100,6 +100,7 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         tenantId: tenantId,
         editorBlocks: editProvider.blocks,
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
+          pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
         pageId: editProvider.currentPageId,
         pageSlug: editProvider.currentPageSlug,
@@ -115,6 +116,7 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
       editProvider.updateBlocksAfterSave(result.freshBlocks);
       editProvider.markAsSaved();
       editProvider.clearHeaderChanged();
+      editProvider.clearFooterChanges();
       editProvider.clearThemeChanges();
 
       _showSuccess('✅ Cambios guardados');

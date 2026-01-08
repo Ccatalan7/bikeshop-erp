@@ -14,7 +14,8 @@ class NavigationManagementPage extends StatefulWidget {
   final bool embedded;
 
   @override
-  State<NavigationManagementPage> createState() => _NavigationManagementPageState();
+  State<NavigationManagementPage> createState() =>
+      _NavigationManagementPageState();
 }
 
 class _NavigationManagementPageState extends State<NavigationManagementPage>
@@ -42,7 +43,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
     try {
       final service = context.read<WebsiteService>();
       await service.loadNavigation();
-      
+
       setState(() {
         _headerLinks = service.headerNavigation;
         _footerLinks = service.footerNavigation;
@@ -65,89 +66,89 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
     final body = Column(
       children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-              ),
-            ),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                Icon(
-                  Icons.menu_book,
-                  color: Colors.teal,
-                  size: 32,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Gestión de Navegación',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Configura los menús del header y footer',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () => _showAddLinkDialog(
-                    _tabController.index == 0
-                        ? MenuLocation.header
-                        : MenuLocation.footer,
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Agregar Enlace'),
-                ),
-              ],
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
             ),
           ),
-
-          // Tabs
-          TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(
-                icon: const Icon(Icons.web),
-                text: 'Header (${_headerLinks.length})',
+          child: Row(
+            children: [
+              if (!widget.embedded) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const SizedBox(width: 16),
+              ],
+              Icon(
+                Icons.menu_book,
+                color: Colors.teal,
+                size: 32,
               ),
-              Tab(
-                icon: const Icon(Icons.call_to_action),
-                text: 'Footer (${_footerLinks.length})',
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Gestión de Navegación',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Configura los menús del header y footer',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: () => _showAddLinkDialog(
+                  _tabController.index == 0
+                      ? MenuLocation.header
+                      : MenuLocation.footer,
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar Enlace'),
               ),
             ],
           ),
+        ),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildLinkList(_headerLinks, MenuLocation.header),
-                      _buildLinkList(_footerLinks, MenuLocation.footer),
-                    ],
-                  ),
-          ),
+        // Tabs
+        TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(
+              icon: const Icon(Icons.web),
+              text: 'Header (${_headerLinks.length})',
+            ),
+            Tab(
+              icon: const Icon(Icons.call_to_action),
+              text: 'Footer (${_footerLinks.length})',
+            ),
+          ],
+        ),
+
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildLinkList(_headerLinks, MenuLocation.header),
+                    _buildLinkList(_footerLinks, MenuLocation.footer),
+                  ],
+                ),
+        ),
       ],
     );
 
@@ -158,14 +159,16 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
   Widget _buildLinkList(List<WebsiteNavigation> links, MenuLocation location) {
     final theme = Theme.of(context);
-    
+
     if (links.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              location == MenuLocation.header ? Icons.web : Icons.call_to_action,
+              location == MenuLocation.header
+                  ? Icons.web
+                  : Icons.call_to_action,
               size: 64,
               color: theme.colorScheme.outlineVariant,
             ),
@@ -197,7 +200,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: links.length,
-      onReorder: (oldIndex, newIndex) => _reorderLinks(links, oldIndex, newIndex, location),
+      onReorder: (oldIndex, newIndex) =>
+          _reorderLinks(links, oldIndex, newIndex, location),
       itemBuilder: (context, index) {
         final link = links[index];
         return _buildLinkCard(link, index, key: ValueKey(link.id));
@@ -207,7 +211,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
   Widget _buildLinkCard(WebsiteNavigation link, int index, {required Key key}) {
     final theme = Theme.of(context);
-    
+
     return Card(
       key: key,
       margin: const EdgeInsets.only(bottom: 8),
@@ -297,7 +301,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
               tooltip: link.isVisible ? 'Ocultar' : 'Mostrar',
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+              icon:
+                  const Icon(Icons.delete_outline, size: 20, color: Colors.red),
               onPressed: () => _confirmDeleteLink(link),
               tooltip: 'Eliminar',
             ),
@@ -402,7 +407,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
       final updated = link.copyWith(isVisible: !link.isVisible);
       await service.updateNavigation(updated);
       _loadNavigation();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -446,9 +451,9 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
     if (confirmed == true) {
       try {
         final service = context.read<WebsiteService>();
-        await service.deleteNavigation(link.id!);
+        await service.deleteNavigation(link.id);
         _loadNavigation();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Enlace eliminado')),
@@ -523,20 +528,23 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   List<WebsitePage> _pages = [];
   String? _selectedPageSlug;
 
+  static final RegExp _uuidLike = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   @override
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: widget.link?.label ?? '');
-    _linkValueController = TextEditingController(text: widget.link?.linkValue ?? '');
+    _linkValueController =
+        TextEditingController(text: widget.link?.linkValue ?? '');
     _linkType = widget.link?.linkType ?? NavLinkType.page;
     _isVisible = widget.link?.isVisible ?? true;
     _openInNewTab = widget.link?.openInNewTab ?? false;
-    
-    // If editing a page link, extract the slug from linkValue
-    if (widget.link?.linkType == NavLinkType.page && widget.link?.linkValue != null) {
-      _selectedPageSlug = widget.link!.linkValue!.replaceFirst('/', '');
-    }
-    
+
+    // IMPORTANT:
+    // - linkValue may be legacy UUID (page_id) OR modern path (e.g. '/inicio', '/pagina/terminos')
+    // - We cannot safely set the dropdown value until pages are loaded, otherwise Flutter asserts.
     _loadPages();
   }
 
@@ -551,11 +559,69 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     try {
       final service = context.read<WebsiteService>();
       await service.loadPages();
+
+      final publishedPages = service.pages.where((p) => p.isPublished).toList();
+
+      if (!mounted) return;
       setState(() {
-        _pages = service.pages.where((p) => p.isPublished).toList();
+        _pages = publishedPages;
       });
+
+      // Now that we have pages, we can safely sync the dropdown selection.
+      _syncSelectedPageFromLinkValue();
     } catch (e) {
       debugPrint('Error loading pages: $e');
+    }
+  }
+
+  void _syncSelectedPageFromLinkValue() {
+    if (!mounted) return;
+    if (_linkType != NavLinkType.page) return;
+
+    final raw = _linkValueController.text.trim();
+    if (raw.isEmpty) {
+      setState(() => _selectedPageSlug = null);
+      return;
+    }
+
+    // Build a stable, unique slug map (avoid duplicate dropdown values).
+    final pagesBySlug = <String, WebsitePage>{
+      for (final p in _pages)
+        if (p.slug.trim().isNotEmpty) p.slug.trim(): p,
+    };
+
+    String? resolvedSlug;
+
+    // Legacy UUID case: linkValue stores page.id
+    if (_uuidLike.hasMatch(raw)) {
+      final page = _pages.cast<WebsitePage?>().firstWhere(
+            (p) => p?.id == raw,
+            orElse: () => null,
+          );
+      if (page != null) {
+        resolvedSlug = page.slug.trim();
+        // Normalize to modern path so future saves are consistent.
+        _linkValueController.text = '/$resolvedSlug';
+      }
+    } else {
+      // Modern path case: '/slug' or '/pagina/slug'
+      var normalized = raw;
+      if (normalized.startsWith('/')) {
+        normalized = normalized.substring(1);
+      }
+      final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty) {
+        resolvedSlug = (parts.first == 'pagina' && parts.length >= 2)
+            ? parts[1]
+            : parts.first;
+      }
+    }
+
+    if (resolvedSlug != null && pagesBySlug.containsKey(resolvedSlug)) {
+      setState(() => _selectedPageSlug = resolvedSlug);
+    } else {
+      // Value is not valid for the dropdown -> must be null to avoid assertion.
+      setState(() => _selectedPageSlug = null);
     }
   }
 
@@ -615,25 +681,48 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
 
                 // Link Value - depends on type
                 if (_linkType == NavLinkType.page) ...[
-                  DropdownButtonFormField<String>(
-                    value: _selectedPageSlug,
-                    decoration: const InputDecoration(
-                      labelText: 'Página *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _pages.map((page) {
-                      return DropdownMenuItem(
-                        value: page.slug,
-                        child: Text(page.title),
+                  Builder(
+                    builder: (context) {
+                      final pagesBySlug = <String, WebsitePage>{
+                        for (final p in _pages)
+                          if (p.slug.trim().isNotEmpty) p.slug.trim(): p,
+                      };
+                      final entries = pagesBySlug.entries.toList()
+                        ..sort(
+                            (a, b) => a.value.title.compareTo(b.value.title));
+
+                      final safeValue =
+                          pagesBySlug.containsKey(_selectedPageSlug)
+                              ? _selectedPageSlug
+                              : null;
+
+                      return DropdownButtonFormField<String>(
+                        value: safeValue,
+                        decoration: const InputDecoration(
+                          labelText: 'Página *',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: entries.map((e) {
+                          final page = e.value;
+                          return DropdownMenuItem(
+                            value: page.slug,
+                            child: Text(page.title),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedPageSlug = value;
+                            if (value == null || value.isEmpty) {
+                              _linkValueController.clear();
+                            } else {
+                              _linkValueController.text = '/$value';
+                            }
+                          });
+                        },
+                        validator: (v) =>
+                            v == null ? 'Selecciona una página' : null,
                       );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedPageSlug = value;
-                        _linkValueController.text = '/$value';
-                      });
                     },
-                    validator: (v) => v == null ? 'Selecciona una página' : null,
                   ),
                 ] else if (_linkType == NavLinkType.external) ...[
                   TextFormField(
@@ -646,7 +735,8 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                     ),
                     validator: (v) {
                       if (v?.isEmpty == true) return 'Requerido';
-                      if (!v!.startsWith('http://') && !v.startsWith('https://')) {
+                      if (!v!.startsWith('http://') &&
+                          !v.startsWith('https://')) {
                         return 'Debe empezar con http:// o https://';
                       }
                       return null;
@@ -676,23 +766,30 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                   ),
                 ] else if (_linkType == NavLinkType.action) ...[
                   DropdownButtonFormField<String>(
-                    value: _linkValueController.text.isNotEmpty ? _linkValueController.text : null,
+                    value: _linkValueController.text.isNotEmpty
+                        ? _linkValueController.text
+                        : null,
                     decoration: const InputDecoration(
                       labelText: 'Acción *',
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'open_cart', child: Text('Abrir Carrito')),
-                      DropdownMenuItem(value: 'open_search', child: Text('Abrir Búsqueda')),
-                      DropdownMenuItem(value: 'open_login', child: Text('Abrir Login')),
-                      DropdownMenuItem(value: 'toggle_theme', child: Text('Cambiar Tema')),
+                      DropdownMenuItem(
+                          value: 'open_cart', child: Text('Abrir Carrito')),
+                      DropdownMenuItem(
+                          value: 'open_search', child: Text('Abrir Búsqueda')),
+                      DropdownMenuItem(
+                          value: 'open_login', child: Text('Abrir Login')),
+                      DropdownMenuItem(
+                          value: 'toggle_theme', child: Text('Cambiar Tema')),
                     ],
                     onChanged: (value) {
                       setState(() {
                         _linkValueController.text = value ?? '';
                       });
                     },
-                    validator: (v) => v == null ? 'Selecciona una acción' : null,
+                    validator: (v) =>
+                        v == null ? 'Selecciona una acción' : null,
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -795,9 +892,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.link != null
-                  ? 'Enlace actualizado'
-                  : 'Enlace creado',
+              widget.link != null ? 'Enlace actualizado' : 'Enlace creado',
             ),
           ),
         );

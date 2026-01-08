@@ -597,6 +597,13 @@ class WebsiteBlockRegistry {
         'subtitle': 'Estamos listos para ayudarte con tu bicicleta',
         'buttonText': 'Agendar',
         'buttonLink': '/contacto',
+        'actions': [
+          {
+            'type': 'navigate',
+            'label': 'Agendar',
+            'to': '/contacto',
+          }
+        ],
         'backgroundImage': null,
         'overlayColor': '#000000',
         'overlayOpacity': 0.5,
@@ -1004,6 +1011,13 @@ class WebsiteBlockRegistry {
         'showCta': true,
         'ctaText': 'Ver productos',
         'ctaLink': '/tienda/productos',
+        'actions': [
+          {
+            'type': 'navigate',
+            'label': 'Ver productos',
+            'to': '/tienda/productos',
+          }
+        ],
         'overlayOpacity': 0.5,
       },
       fields: const [
