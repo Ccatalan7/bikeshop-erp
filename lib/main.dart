@@ -118,6 +118,9 @@ Future<void> main() async {
   // Capture browser URL IMMEDIATELY, before anything else
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
+    // Capture OAuth codes if present to prevent router from cleaning them
+    captureZohoOAuthCode();
+    captureGmailOAuthCode();
     // debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
   }
   _logTiming('URL_CAPTURED');

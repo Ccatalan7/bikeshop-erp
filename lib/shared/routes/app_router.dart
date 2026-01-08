@@ -2201,6 +2201,17 @@ class AppRouter {
           ],
         ),
 
+        // Mail Module (Zoho Mail Integration)
+        GoRoute(
+          path: '/mail',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.MailInboxPage(),
+          ),
+        ),
+
         // ========================================
         // TOOLS MODULE (WebView Embedded Websites)
         // ========================================

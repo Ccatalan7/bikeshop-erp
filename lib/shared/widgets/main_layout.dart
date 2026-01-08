@@ -1386,6 +1386,17 @@ class _AppSidebarState extends State<AppSidebar> {
                       enabled: true,
                     ),
 
+                    // Correo (Zoho Mail)
+                    _buildSidebarItem(
+                      context,
+                      icon: Icons.email_outlined,
+                      activeIcon: Icons.email,
+                      title: 'Correo',
+                      route: '/mail',
+                      currentLocation: currentLocation,
+                      enabled: true,
+                    ),
+
                     // Additional Modules (Disabled for now)
                     _buildSidebarItem(
                       context,
@@ -1565,11 +1576,12 @@ class _AppSidebarState extends State<AppSidebar> {
           onTap: enabled
               ? () {
                   if (!isSelected) {
-                    // Dashboard, Website, and Settings navigate directly within current workspace
+                    // Dashboard, Website, Settings, and Mail navigate directly within current workspace
                     // All other modules can open in new workspace tabs if needed
                     if (route == '/dashboard' ||
                         route == '/website' ||
-                        route == '/settings') {
+                        route == '/settings' ||
+                        route == '/mail') {
                       debugPrint(
                           '🔀 [MainLayout] Navigating to $route in current workspace');
                       context.go(route);

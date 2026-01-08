@@ -90,6 +90,9 @@ export '../widgets/workspace_demo_page.dart';
 // Messaging
 export '../../modules/messaging/pages/employee_chat_page.dart';
 
+// Mail (Zoho Integration)
+export '../../modules/mail/pages/mail_inbox_page.dart';
+
 // WebView Modules
 export '../../modules/webview_modules/webview_modules.dart';
 

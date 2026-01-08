@@ -26,3 +26,76 @@ bool shouldSkipFirebase() {
     return false;
   }
 }
+
+// Static storage for OAuth codes (captured before router can strip them)
+String? _capturedZohoCode;
+String? _capturedGmailCode;
+
+/// Check if current URL is a Zoho OAuth callback and capture the code
+String? captureZohoOAuthCode() {
+  try {
+    final href = html.window.location.href;
+    final uri = Uri.parse(href);
+
+    if (uri.queryParameters.containsKey('zoho_code')) {
+      final code = uri.queryParameters['zoho_code'];
+      _capturedZohoCode = code;
+      _cleanOAuthUrl();
+      return code;
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  return null;
+}
+
+/// Check if current URL is a Gmail OAuth callback and capture the code
+String? captureGmailOAuthCode() {
+  try {
+    final href = html.window.location.href;
+    final uri = Uri.parse(href);
+
+    if (uri.queryParameters.containsKey('gmail_code')) {
+      final code = uri.queryParameters['gmail_code'];
+      _capturedGmailCode = code;
+      _cleanOAuthUrl();
+      return code;
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  return null;
+}
+
+/// Clean OAuth query parameters from URL
+void _cleanOAuthUrl() {
+  try {
+    final href = html.window.location.href;
+    final uri = Uri.parse(href);
+    final newUri = uri.replace(queryParameters: {});
+    String newUrl = newUri.toString();
+
+    if (newUrl.endsWith('?')) {
+      newUrl = newUrl.substring(0, newUrl.length - 1);
+    }
+    newUrl = newUrl.replaceAll('?#', '#');
+
+    html.window.history.replaceState(null, '', newUrl);
+  } catch (e) {
+    // Ignore errors
+  }
+}
+
+/// Get the captured Zoho OAuth code (if any) - returns only once
+String? getAndClearZohoOAuthCode() {
+  final code = _capturedZohoCode;
+  _capturedZohoCode = null;
+  return code;
+}
+
+/// Get the captured Gmail OAuth code (if any) - returns only once
+String? getAndClearGmailOAuthCode() {
+  final code = _capturedGmailCode;
+  _capturedGmailCode = null;
+  return code;
+}

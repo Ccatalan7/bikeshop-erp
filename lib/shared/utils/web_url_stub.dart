@@ -15,3 +15,23 @@ void hideHtmlLoadingScreen() {
 bool shouldSkipFirebase() {
   return false;
 }
+
+/// Stub - no Zoho OAuth on non-web platforms
+String? captureZohoOAuthCode() {
+  return null;
+}
+
+/// Stub - no Zoho OAuth on non-web platforms
+String? getAndClearZohoOAuthCode() {
+  return null;
+}
+
+/// Stub - no Gmail OAuth on non-web platforms
+String? captureGmailOAuthCode() {
+  return null;
+}
+
+/// Stub - no Gmail OAuth on non-web platforms
+String? getAndClearGmailOAuthCode() {
+  return null;
+}
