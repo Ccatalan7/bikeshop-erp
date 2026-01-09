@@ -72,6 +72,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const String _actionReportsAnalytics = 'reports_analytics';
   static const String _actionReportsOrders = 'reports_orders';
 
+  static const String _actionGoogleOpenMerchantFeed = 'google_open_feed';
+  static const String _actionGoogleCopyMerchantFeed = 'google_copy_feed';
+
   static const String _actionConfigDomain = 'config_domain';
   static const String _actionConfigPaymentMethods = 'config_payment_methods';
   static const String _actionConfigIntegrations = 'config_integrations';
@@ -86,7 +89,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   bool _isConfigHubOpen = false;
   _EditorConfigHubTab _configHubTab = _EditorConfigHubTab.siteHub;
-  static const String _actionPageManagePages = 'page_manage_pages';
+  
 
   Future<void>? _erpLibraryFuture;
 
@@ -625,6 +628,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // ========================================================================
     // Automatically update browser title and meta tags based on current page
     if (kIsWeb && !isEditMode) {
+      final currentPath = GoRouterState.of(context).uri.path;
+
+      // Product pages manage their own SEO once the product loads.
+      if (currentPath.startsWith('/producto/') ||
+          currentPath.startsWith('/productos/') ||
+          currentPath.startsWith('/shop/')) {
+        // Skip the generic page SEO updater to avoid overwriting product SEO.
+      } else {
       String normalizedSlug = GoRouterState.of(context).uri.path;
       if (normalizedSlug.startsWith('/tienda/')) {
         normalizedSlug = normalizedSlug.substring(8);
@@ -691,6 +702,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           );
         }
       });
+      }
     }
 
     // When the editor panel is rendered externally (PersistentEditorShell),
@@ -908,8 +920,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String storeName,
   ) {
     final isEditMode = editProvider.isEditMode;
-    final sitePublished =
-        websiteService.getSetting('site_published', 'true') == 'true';
+    final sitePublished = websiteService.getSetting('site_published', 'true') ==
+        'true';
     return Container(
       height: 48,
       color: const Color(0xFF1E1E1E),
@@ -943,7 +955,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             actions: const [
               _PreviewNavAction(
                 id: _actionSitePages,
-                label: 'Páginas',
+                label: 'Páginas (administrar)',
                 icon: Icons.description_outlined,
               ),
               _PreviewNavAction(
@@ -958,10 +970,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
               _PreviewNavAction(
                 id: _actionSiteSettings,
-                label: 'Ajustes del sitio (SEO / contacto)',
+                label: 'Ajustes del sitio (tema / header / footer)',
                 icon: Icons.tune,
               ),
-              _PreviewNavAction.divider(),
               _PreviewNavAction(
                 id: _actionSiteOpenWebsiteHub,
                 label: 'Centro del Sitio Web',
@@ -973,7 +984,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             context: context,
             editProvider: editProvider,
             websiteService: websiteService,
-            label: 'Comercio electrónico',
+            label: 'Tienda',
             isActive: false,
             actions: const [
               _PreviewNavAction(
@@ -996,30 +1007,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 label: 'Pedidos online',
                 icon: Icons.shopping_bag_outlined,
               ),
-              _PreviewNavAction.divider(),
-              _PreviewNavAction(
-                id: _actionEcomGoogle,
-                label: 'Google Merchant / Analytics',
-                icon: Icons.public,
-              ),
             ],
           ),
           _buildPreviewNavMenu(
             context: context,
             editProvider: editProvider,
             websiteService: websiteService,
-            label: 'Reportes',
+            label: 'Google',
             isActive: false,
             actions: const [
+              _PreviewNavAction(
+                id: _actionConfigWebsiteSettings,
+                label: 'SEO (Merchant / Search)',
+                icon: Icons.manage_search_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionConfigIntegrations,
+                label: 'Integraciones (Google Merchant)',
+                icon: Icons.extension_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionGoogleOpenMerchantFeed,
+                label: 'Abrir feed de productos',
+                icon: Icons.feed_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionGoogleCopyMerchantFeed,
+                label: 'Copiar feed de productos',
+                icon: Icons.copy,
+              ),
+              _PreviewNavAction.divider(),
               _PreviewNavAction(
                 id: _actionReportsAnalytics,
                 label: 'Analytics (Google)',
                 icon: Icons.analytics_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionReportsOrders,
-                label: 'Pedidos online',
-                icon: Icons.receipt_long_outlined,
               ),
             ],
           ),
@@ -1036,16 +1057,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 icon: Icons.link_outlined,
               ),
               _PreviewNavAction(
-                id: _actionConfigWebsiteSettings,
-                label: 'Ajustes del sitio (SEO / contacto)',
-                icon: Icons.settings_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionConfigIntegrations,
-                label: 'Integraciones (Google Merchant)',
-                icon: Icons.extension_outlined,
-              ),
-              _PreviewNavAction(
                 id: _actionConfigPaymentMethods,
                 label: 'Métodos de pago',
                 icon: Icons.payments_outlined,
@@ -1053,7 +1064,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ],
           ),
 
-          // Current page actions (copy link, open, manage)
+          // Current page actions (copy link, open)
           _buildCurrentPageMenu(
             context: context,
             editProvider: editProvider,
@@ -1083,27 +1094,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               Switch(
                 value: sitePublished,
                 onChanged: (v) async {
-                  try {
-                    await websiteService.saveSetting('site_published', '$v');
-                    WebsiteService.clearPageCache();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            v ? 'Sitio publicado' : 'Sitio despublicado',
-                          ),
+                  final next = v ? 'true' : 'false';
+                  await websiteService.saveSetting('site_published', next);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          v ? 'Sitio publicado' : 'Sitio despublicado',
                         ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error guardando: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
+                      ),
+                    );
                   }
                 },
                 activeColor: Colors.green,
@@ -1268,23 +1268,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       ),
       itemBuilder: (context) => const [
         PopupMenuItem(
-          value: _actionStoreOpenWebsite,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.dashboard_outlined),
-            title: Text('Centro del Sitio Web'),
-          ),
-        ),
-        PopupMenuItem(
-          value: _actionConfigDomain,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.link_outlined),
-            title: Text('Dominio y URL'),
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
           value: _actionStoreOpenPublic,
           child: ListTile(
             dense: true,
@@ -1422,15 +1405,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             title: Text('Abrir en nueva pestaña'),
           ),
         ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: _actionPageManagePages,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.description_outlined),
-            title: Text('Administrar páginas'),
-          ),
-        ),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1558,13 +1532,48 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         goAdmin('/website/orders');
         return;
 
+      // Google quick actions
+      case _actionGoogleOpenMerchantFeed:
+        final url = _resolveGoogleMerchantFeedUrl(websiteService);
+        if (url == null) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No se pudo determinar la URL del feed'),
+              ),
+            );
+          }
+          return;
+        }
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        return;
+      case _actionGoogleCopyMerchantFeed:
+        final url = _resolveGoogleMerchantFeedUrl(websiteService);
+        if (url == null) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No se pudo determinar la URL del feed'),
+              ),
+            );
+          }
+          return;
+        }
+        await _copyToClipboard(url);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Feed copiado al portapapeles')),
+          );
+        }
+        return;
+
       // Config
       case _actionConfigWebsiteSettings:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.seo);
           return;
         }
-        goAdmin('/website/settings');
+        goAdmin('/website/seo');
         return;
       case _actionConfigIntegrations:
         if (editProvider.isInEditorContext) {
@@ -1589,13 +1598,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         return;
 
       // Page actions
-      case _actionPageManagePages:
-        if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.sitePages);
-          return;
-        }
-        await _showManagePagesOverlay(context);
-        return;
       case _actionPageCopyLink:
         await _copyCurrentPageUrl(context, editProvider, websiteService);
         return;
@@ -1614,33 +1616,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         await _openPublicStoreUrl(context, websiteService);
         return;
     }
-  }
-
-  Future<void> _showManagePagesOverlay(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      useRootNavigator: true,
-      barrierDismissible: true,
-      builder: (context) {
-        return Dialog.fullscreen(
-          child: FutureBuilder(
-            future: _ensureErpLibraryLoaded(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
-              return erp.PageManagementPage();
-            },
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _openPublicStoreUrl(
@@ -1767,6 +1742,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final host = Uri.base.host;
     if (host.isEmpty) return null;
     return '${Uri.base.scheme}://$host';
+  }
+
+  String? _resolveGoogleMerchantFeedUrl(WebsiteService websiteService) {
+    const supabaseFunctionsBaseUrl =
+        'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1';
+
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final subdomain = (tenantProvider.subdomain ?? '').trim();
+
+    // Prefer custom domain if we can resolve it (works for vinabike.cl).
+    final publicUrl = _resolvePublicStoreUrl(websiteService);
+    final host = publicUrl == null ? '' : (Uri.tryParse(publicUrl)?.host ?? '');
+
+    if (host.isNotEmpty) {
+      return '$supabaseFunctionsBaseUrl/google-merchant-feed?domain=$host';
+    }
+    if (subdomain.isNotEmpty) {
+      return '$supabaseFunctionsBaseUrl/google-merchant-feed?tenant=$subdomain';
+    }
+    return null;
   }
 
   Future<void> _showDomainAndUrlDialog(BuildContext context) async {
@@ -2240,9 +2235,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       final result = await websiteService.saveEditorChanges(
         tenantId: tenantId,
         editorBlocks: editProvider.blocks,
+        pendingSiteSettings: editProvider.pendingSiteSettings,
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
         pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
         pageId: editProvider.currentPageId,
@@ -2259,9 +2256,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
       editProvider.updateBlocksAfterSave(result.freshBlocks);
       editProvider.markAsSaved();
+      editProvider.clearSiteSettingsChanges();
       editProvider.clearHeaderChanged();
       editProvider.clearFooterChanges();
       editProvider.clearThemeChanges();
+      editProvider.clearSeoChanges();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

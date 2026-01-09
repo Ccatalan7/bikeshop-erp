@@ -8,6 +8,7 @@ import '../services/public_inventory_service.dart';
 import '../widgets/full_page_loading.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/utils/seo_helper.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 
@@ -103,6 +104,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
         // Render immediately, then load related products in background.
         setState(() => _isLoading = false);
+        _updateSeo();
         _updateStructuredData();
         _loadRelatedProducts(
           token: token,
@@ -168,7 +170,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       'https://tienda.vinabike.cl',
     );
 
-    final productUrl = '$storeUrl/producto/${product.id}';
+    final productUrl = '$storeUrl/productos/${product.id}';
     final availability = product.stockQuantity > 0
         ? 'https://schema.org/InStock'
         : 'https://schema.org/OutOfStock';
@@ -224,6 +226,78 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     }
 
     setStructuredDataScript(_structuredDataScriptId, structuredData);
+  }
+
+  void _updateSeo() {
+    final product = _product;
+    if (product == null) return;
+
+    final websiteService = context.read<WebsiteService>();
+    final storeName = websiteService.getSetting('store_name', 'Vinabike');
+
+    // Templates are configurable via website_settings (and later via SEO editor UI).
+    final titleTemplate = websiteService.getSetting(
+      'seo_product_title_template',
+      '{product_name} | {store_name}',
+    );
+    final descriptionTemplate = websiteService.getSetting(
+      'seo_product_description_template',
+      '{product_description}',
+    );
+
+    final resolvedTitle = _applySeoTemplate(
+      template: titleTemplate,
+      storeName: storeName,
+      product: product,
+    ).trim();
+
+    final fallbackDescription = (product.description?.trim().isNotEmpty ?? false)
+        ? product.description!.trim()
+        : 'Compra ${product.name} online en $storeName. Envíos y retiro en tienda.';
+
+    final resolvedDescription = _applySeoTemplate(
+      template: descriptionTemplate,
+      storeName: storeName,
+      product: product,
+      fallbackDescription: fallbackDescription,
+    ).trim();
+
+    final image = (product.imageUrls.isNotEmpty)
+        ? product.imageUrls.first
+        : (product.imageUrl?.isNotEmpty == true ? product.imageUrl : null);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      SeoHelper.updateSeo(
+        title: resolvedTitle.isNotEmpty ? resolvedTitle : '$storeName',
+        description: resolvedDescription.isNotEmpty ? resolvedDescription : null,
+        imageUrl: image,
+      );
+    });
+  }
+
+  String _applySeoTemplate({
+    required String template,
+    required String storeName,
+    required Product product,
+    String? fallbackDescription,
+  }) {
+    final priceText = ChileanUtils.formatCurrency(product.price);
+    final brandText = (product.brand?.trim().isNotEmpty ?? false)
+        ? product.brand!.trim()
+        : storeName;
+
+    final descriptionText = (product.description?.trim().isNotEmpty ?? false)
+        ? product.description!.trim()
+        : (fallbackDescription ?? '');
+
+    return template
+        .replaceAll('{store_name}', storeName)
+        .replaceAll('{product_name}', product.name)
+      .replaceAll('{product_sku}', product.sku.isNotEmpty ? product.sku : '')
+        .replaceAll('{product_price}', priceText)
+        .replaceAll('{product_brand}', brandText)
+        .replaceAll('{product_description}', descriptionText);
   }
 
   void _addToCart() {
@@ -1008,7 +1082,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          context.go('/tienda/producto/${product.id}');
+          context.go('/productos/${product.id}');
           setState(() {
             _selectedImageIndex = 0;
             _quantity = 1;

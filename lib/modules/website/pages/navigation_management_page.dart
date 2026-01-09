@@ -384,13 +384,18 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
       links.insert(newIndex, item);
     });
 
-    // Update order_index in database
+    // Update order_index in database (batch reorder)
     try {
       final service = context.read<WebsiteService>();
-      for (int i = 0; i < links.length; i++) {
-        final updatedLink = links[i].copyWith(orderIndex: i);
-        await service.updateNavigation(updatedLink);
-      }
+
+      final orderedIds = links.map((l) => l.id).toList(growable: false);
+      await service.reorderNavigationIds(orderedIds);
+
+      // Refresh local lists from service cache
+      setState(() {
+        _headerLinks = service.headerNavigation;
+        _footerLinks = service.footerNavigation;
+      });
       debugPrint('✅ Navigation order updated');
     } catch (e) {
       debugPrint('❌ Error updating navigation order: $e');

@@ -181,9 +181,9 @@ class PublicStoreRouter {
         // DETAIL PAGES
         // ====================================================================
 
-        // Product detail
+        // Product detail (canonical: /productos/:id)
         GoRoute(
-          path: '/producto/:id',
+          path: '/productos/:id',
           pageBuilder: (context, state) {
             final productId = state.pathParameters['id']!;
             return _buildPage(
@@ -192,6 +192,12 @@ class PublicStoreRouter {
               ProductDetailPage(productId: productId),
             );
           },
+        ),
+
+        // Legacy product detail (redirect to canonical)
+        GoRoute(
+          path: '/producto/:id',
+          redirect: (context, state) => '/productos/${state.pathParameters['id']}',
         ),
 
         // Checkout
@@ -364,7 +370,7 @@ class PublicStoreRouter {
         GoRoute(
           path: '/tienda/producto/:id',
           redirect: (context, state) =>
-              '/producto/${state.pathParameters['id']}',
+              '/productos/${state.pathParameters['id']}',
         ),
         GoRoute(
           path: '/tienda/carrito',

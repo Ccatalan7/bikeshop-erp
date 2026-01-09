@@ -5736,8 +5736,6 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   final _metaTitleController = TextEditingController();
   final _metaDescriptionController = TextEditingController();
   bool _isLoading = true;
-  bool _isSaving = false;
-  bool _hasChanges = false;
   WebsitePage? _currentPage;
   String _currentRoute = '';
   bool _isSpecialRoute = false;
@@ -5805,8 +5803,12 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
       if (page != null) {
         _currentPage = page;
         _currentRoute = page.slug;
-        _metaTitleController.text = page.metaTitle ?? '';
-        _metaDescriptionController.text = page.metaDescription ?? '';
+        final routeKey = _currentRoute.split('/').first;
+        final pending = widget.editProvider.getPendingPageSeo(routeKey);
+        _metaTitleController.text =
+            pending?['meta_title'] ?? page.metaTitle ?? '';
+        _metaDescriptionController.text =
+            pending?['meta_description'] ?? page.metaDescription ?? '';
         setState(() => _isLoading = false);
       } else {
         // Page not found in DB
@@ -5814,9 +5816,10 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
           // Fallback: Try loading from legacy website_settings
           final service = context.read<WebsiteService>();
           final routeKey = _currentRoute.split('/').first;
-          _metaTitleController.text =
+          final pending = widget.editProvider.getPendingPageSeo(routeKey);
+          _metaTitleController.text = pending?['meta_title'] ??
               service.getSetting('seo_${routeKey}_title', '');
-          _metaDescriptionController.text =
+          _metaDescriptionController.text = pending?['meta_description'] ??
               service.getSetting('seo_${routeKey}_description', '');
         }
         setState(() {
@@ -5835,55 +5838,14 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     }
   }
 
-  Future<void> _saveSeoSettings() async {
-    if (!_hasChanges) return;
-    setState(() => _isSaving = true);
-
-    try {
-      final service = context.read<WebsiteService>();
-
-      if (_currentPage != null) {
-        // DB Page takes precedence (Modern System)
-        final updated = _currentPage!.copyWith(
-          metaTitle: _metaTitleController.text,
-          metaDescription: _metaDescriptionController.text,
-        );
-        await service.updatePage(updated);
-        _currentPage = updated;
-      } else if (_isSpecialRoute) {
-        // Fallback to legacy settings (Old System)
-        final routeKey = _currentRoute.split('/').first;
-        await service.saveSettings({
-          'seo_${routeKey}_title': _metaTitleController.text,
-          'seo_${routeKey}_description': _metaDescriptionController.text,
-        });
-      }
-
-      if (mounted) {
-        setState(() {
-          _hasChanges = false;
-          _isSaving = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('SEO guardado'),
-            backgroundColor: Color(0xFF00A09D),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _markChanged() {
-    if (!_hasChanges) setState(() => _hasChanges = true);
+  void _stageSeoChanges() {
+    final routeKey = _currentRoute.split('/').first;
+    if (routeKey.isEmpty) return;
+    widget.editProvider.updatePageSeo(
+      routeKey: routeKey,
+      metaTitle: _metaTitleController.text,
+      metaDescription: _metaDescriptionController.text,
+    );
   }
 
   @override
@@ -5937,26 +5899,15 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
                   ],
                 ),
               ),
-              if (_hasChanges)
-                ElevatedButton(
-                  onPressed: _isSaving ? null : _saveSeoSettings,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00A09D),
-                    foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    minimumSize: Size.zero,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text('Guardar', style: TextStyle(fontSize: 12)),
-                ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Los cambios se guardarán al presionar "Guardar" en la barra superior.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+            ),
           ),
           const SizedBox(height: 20),
           const Divider(color: Colors.white12),
@@ -5966,8 +5917,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
           _buildField(
             label: 'Meta título',
             controller: _metaTitleController,
-            hint: 'Título para Google (máx. 60 car.)',
-            maxLength: 60,
+            hint: 'Título para Google',
             helperText: 'Lo que aparece en las búsquedas de Google',
           ),
           const SizedBox(height: 16),
@@ -5976,8 +5926,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
           _buildField(
             label: 'Meta descripción',
             controller: _metaDescriptionController,
-            hint: 'Descripción para Google (máx. 160 car.)',
-            maxLength: 160,
+            hint: 'Descripción para Google',
             maxLines: 3,
             helperText: 'Resumen que aparece bajo el título en Google',
           ),
@@ -5994,7 +5943,6 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     required String label,
     required TextEditingController controller,
     required String hint,
-    int? maxLength,
     int maxLines = 1,
     String? helperText,
   }) {
@@ -6018,9 +5966,8 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
-          maxLength: maxLength,
           maxLines: maxLines,
-          onChanged: (_) => _markChanged(),
+          onChanged: (_) => _stageSeoChanges(),
           style: const TextStyle(color: Colors.white, fontSize: 13),
           decoration: InputDecoration(
             hintText: hint,
@@ -6033,7 +5980,6 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            counterStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
           ),
         ),
       ],
@@ -6123,7 +6069,6 @@ class _ThemeTabState extends State<_ThemeTab> {
   String _pageBackground = '#FFFFFF';
 
   bool _loaded = false;
-  bool _isSaving = false;
 
   final _fonts = [
     'Inter',
@@ -6241,45 +6186,6 @@ class _ThemeTabState extends State<_ThemeTab> {
     }
   }
 
-  Future<void> _saveSettings() async {
-    setState(() => _isSaving = true);
-    try {
-      final headingSizeValue =
-          _storedValueFromSizeKey(isHeading: true, key: _headingSize);
-      final bodySizeValue =
-          _storedValueFromSizeKey(isHeading: false, key: _bodySize);
-
-      await context.read<WebsiteService>().saveSettings({
-        'theme_primary_color': _primaryColorController.text,
-        'theme_accent_color': _accentColorController.text,
-        'theme_heading_font': _headingFont,
-        'theme_body_font': _bodyFont,
-        'theme_heading_size': headingSizeValue,
-        'theme_body_size': bodySizeValue,
-        'theme_background_color': _pageBackground,
-        'button_style': _buttonStyle,
-        'button_size': _buttonSize,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tema guardado correctamente'),
-            backgroundColor: Color(0xFF00A09D),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
   @override
   void dispose() {
     _primaryColorController.dispose();
@@ -6299,7 +6205,6 @@ class _ThemeTabState extends State<_ThemeTab> {
               child: _buildCategoryContent(),
             ),
           ),
-          _buildSaveFooter(),
         ],
       );
     }
@@ -6591,7 +6496,13 @@ class _ThemeTabState extends State<_ThemeTab> {
               value: _buttonSize,
               items: _buttonSizes.keys.toList(),
               labels: _buttonSizes,
-              onChanged: (v) => setState(() => _buttonSize = v!),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _buttonSize = v);
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('button_size', v);
+              },
             ),
           ],
         );
@@ -6646,41 +6557,15 @@ class _ThemeTabState extends State<_ThemeTab> {
     }
   }
 
-  Widget _buildSaveFooter() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF2D2D2D),
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: _isSaving ? null : _saveSettings,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF00A09D),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : const Text('Guardar cambios'),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStyleOption(String label, String value, bool isSelected) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _buttonStyle = value),
+        onTap: () {
+          setState(() => _buttonStyle = value);
+          context
+              .read<WebsiteEditModeProvider>()
+              .updateThemeSetting('button_style', value);
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(

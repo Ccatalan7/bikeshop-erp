@@ -99,9 +99,11 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
       final result = await websiteService.saveEditorChanges(
         tenantId: tenantId,
         editorBlocks: editProvider.blocks,
+        pendingSiteSettings: editProvider.pendingSiteSettings,
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
         pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
         pageId: editProvider.currentPageId,
@@ -117,9 +119,11 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
 
       editProvider.updateBlocksAfterSave(result.freshBlocks);
       editProvider.markAsSaved();
+      editProvider.clearSiteSettingsChanges();
       editProvider.clearHeaderChanged();
       editProvider.clearFooterChanges();
       editProvider.clearThemeChanges();
+      editProvider.clearSeoChanges();
 
       _showSuccess('✅ Cambios guardados');
 

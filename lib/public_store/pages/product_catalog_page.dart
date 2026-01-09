@@ -962,7 +962,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => context.push('/producto/${product.id}'),
+        onTap: () => context.push('/productos/${product.id}'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: const BoxDecoration(

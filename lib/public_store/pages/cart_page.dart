@@ -222,7 +222,7 @@ class CartPage extends StatelessWidget {
                           children: [
                             InkWell(
                               onTap: () =>
-                                  context.go('/tienda/producto/${product.id}'),
+                                  context.go('/productos/${product.id}'),
                               child: Text(
                                 product.name,
                                 style: Theme.of(context).textTheme.titleLarge,

@@ -40,6 +40,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
 
+  // Pending site-wide settings (to be saved with main save button)
+  // Example: site_published, store_name, store_description, etc.
+  Map<String, String> _pendingSiteSettings = {};
+  bool _hasSiteSettingsChanges = false;
+
   // Pending footer settings (to be saved with main save button)
   // These are applied immediately in the UI but only saved when user clicks "Guardar".
   Map<String, String> _pendingFooterSettings = {};
@@ -53,6 +58,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // These are applied immediately in the UI but only saved when user clicks "Guardar"
   Map<String, String> _pendingThemeSettings = {};
   bool _hasThemeChanges = false;
+
+  // Pending page-level SEO (saved with Guardar button)
+  // Keyed by route key / slug (e.g. 'inicio', 'productos', 'terminos')
+  // Values: {'meta_title': '...', 'meta_description': '...'}
+  final Map<String, Map<String, String>> _pendingPageSeo = {};
+  bool _hasSeoChanges = false;
 
   // History for undo/redo
   final List<List<Map<String, dynamic>>> _history = [];
@@ -70,16 +81,21 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool get hasUnsavedChanges =>
       _hasUnsavedChanges ||
       _hasHeaderChanges ||
+      _hasSiteSettingsChanges ||
+      _hasSeoChanges ||
       _hasThemeChanges ||
       _hasFooterChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
+  bool get hasSiteSettingsChanges => _hasSiteSettingsChanges;
   bool get hasThemeChanges => _hasThemeChanges;
   bool get hasFooterChanges => _hasFooterChanges;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
+  Map<String, String> get pendingSiteSettings => _pendingSiteSettings;
   Map<String, String> get pendingFooterSettings => _pendingFooterSettings;
   Map<String, String> get pendingThemeSettings => _pendingThemeSettings;
+  Map<String, Map<String, String>> get pendingPageSeo => _pendingPageSeo;
   Map<String, List<String>> get pendingFooterLinkOrder =>
       _pendingFooterLinkOrder;
   bool get canUndo => _historyIndex > 0;
@@ -221,6 +237,68 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update a single site-wide setting for live preview (saved with Guardar)
+  void updateSiteSetting(String key, String value) {
+    _pendingSiteSettings[key] = value;
+    _hasSiteSettingsChanges = true;
+    debugPrint('🏁 [EditProvider] Site setting updated: $key = $value');
+    notifyListeners();
+  }
+
+  /// Update multiple site-wide settings at once (saved with Guardar)
+  void updateSiteSettings(Map<String, String> settings) {
+    _pendingSiteSettings.addAll(settings);
+    _hasSiteSettingsChanges = true;
+    debugPrint(
+        '🏁 [EditProvider] Site settings updated: ${settings.keys.join(', ')}');
+    notifyListeners();
+  }
+
+  /// Get effective site-wide setting (pending value if exists, otherwise from settings)
+  String getEffectiveSiteSetting(String key, String defaultValue) {
+    if (_pendingSiteSettings.containsKey(key)) {
+      return _pendingSiteSettings[key]!;
+    }
+    final saved = _settings[key];
+    if (saved != null) return saved.toString();
+    return defaultValue;
+  }
+
+  /// Clear site-wide settings changed flag (after save)
+  void clearSiteSettingsChanges() {
+    _hasSiteSettingsChanges = false;
+    _pendingSiteSettings = {};
+    notifyListeners();
+  }
+
+  Map<String, String>? getPendingPageSeo(String routeKey) {
+    return _pendingPageSeo[routeKey];
+  }
+
+  /// Stage page-level SEO changes (saved on global Guardar).
+  ///
+  /// We keep this keyed by route key so users can adjust multiple pages
+  /// without losing edits when navigating inside the persistent editor.
+  void updatePageSeo({
+    required String routeKey,
+    required String metaTitle,
+    required String metaDescription,
+  }) {
+    _pendingPageSeo[routeKey] = {
+      'meta_title': metaTitle,
+      'meta_description': metaDescription,
+    };
+    _hasSeoChanges = true;
+    debugPrint('🔎 [EditProvider] Page SEO updated (pending save): $routeKey');
+    notifyListeners();
+  }
+
+  void clearSeoChanges() {
+    _hasSeoChanges = false;
+    _pendingPageSeo.clear();
+    notifyListeners();
+  }
+
   /// Enter preview mode (shows top bar with "Editar" button)
   /// [pageId] - Optional page ID for multi-page editing (null = home page)
   /// [pageSlug] - Optional page slug for navigation
@@ -236,7 +314,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
+    _hasSiteSettingsChanges = false;
+    _hasSeoChanges = false;
     _hasFooterChanges = false;
+    _pendingSiteSettings = {};
+    _pendingPageSeo.clear();
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -258,7 +340,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _settings = Map<String, dynamic>.from(settings);
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
+    _hasSiteSettingsChanges = false;
+    _hasSeoChanges = false;
     _hasFooterChanges = false;
+    _pendingSiteSettings = {};
+    _pendingPageSeo.clear();
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -303,8 +389,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectedBlockId = null;
     _hasUnsavedChanges = false;
     _hasHeaderChanges = false;
+    _hasSiteSettingsChanges = false;
     _blocks = [];
     _settings = {};
+    _pendingSiteSettings = {};
     _currentPageId = null;
     _currentPageSlug = null;
     notifyListeners();
