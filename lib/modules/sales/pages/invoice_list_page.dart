@@ -1986,10 +1986,38 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 ...invoice.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
+                  final hasDescription =
+                      item.description != null && item.description!.isNotEmpty;
                   return pw.TableRow(
                     children: [
                       _buildPdfTableCell('${index + 1}'),
-                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      // Product name + description (Zoho style)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 5),
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              item.productName ?? 'Sin nombre',
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                            if (hasDescription) ...[
+                              pw.SizedBox(height: 3),
+                              pw.Text(
+                                item.description!,
+                                style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.grey700,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                       _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
                       _buildPdfTableCell(
                           ChileanUtils.formatCurrency(item.unitPrice)),

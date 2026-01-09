@@ -4,7 +4,7 @@ import '../models/product.dart';
 import 'product_autocomplete_field.dart';
 
 /// Universal smart product field widget that provides consistent behavior across all modules.
-/// 
+///
 /// Features:
 /// - Shows search field when no product is selected
 /// - Shows Zoho-style product card when product is selected
@@ -13,42 +13,42 @@ import 'product_autocomplete_field.dart';
 /// - Supports both catalog products and ad-hoc/custom items
 /// - Blank description for ad-hoc items (not copied from item name)
 /// - Auto-focus on search field when empty
-/// 
+///
 /// Used in: Sales Invoices, Purchase Invoices, Mechanic Jobs, POS
 class SmartProductField extends StatefulWidget {
   /// Called when a product is selected or cleared
   final Function(ProductFieldSelection?) onProductChanged;
-  
+
   /// Initial product data (if editing existing line)
   final ProductFieldData? initialData;
-  
+
   /// Whether to show cost (purchases) or price (sales)
   final bool showCost;
-  
+
   /// Whether to allow ad-hoc/custom items
   final bool allowCustomItems;
-  
+
   /// Whether the field is editable
   final bool enabled;
-  
+
   /// Callback for when product is selected and new line should be added
   final VoidCallback? onAutoAddLine;
-  
+
   /// Callback for showing product edit dialog
   final Function(Product)? onEditProduct;
-  
+
   /// Callback for showing product details pane
   final Function(Product)? onShowProductDetails;
-  
+
   /// Hint text for the search field
   final String hintText;
-  
+
   /// Whether to auto-focus when the field is empty (should be false for new invoices, true for newly added lines)
   final bool autoFocus;
-  
+
   /// External focus node (optional)
   final FocusNode? focusNode;
-  
+
   /// External controllers (optional - for integration with existing forms)
   final TextEditingController? productNameController;
   final TextEditingController? descriptionController;
@@ -64,7 +64,8 @@ class SmartProductField extends StatefulWidget {
     this.onEditProduct,
     this.onShowProductDetails,
     this.hintText = 'Buscar producto o escribir nombre...',
-    this.autoFocus = false, // Default to false - only auto-focus on newly added lines
+    this.autoFocus =
+        false, // Default to false - only auto-focus on newly added lines
     this.focusNode,
     this.productNameController,
     this.descriptionController,
@@ -81,7 +82,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
   bool _ownsProductNameController = false;
   bool _ownsDescriptionController = false;
   bool _ownsFocusNode = false;
-  
+
   Product? _product;
   String? _productName;
   String? _productSku;
@@ -90,7 +91,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
   @override
   void initState() {
     super.initState();
-    
+
     // Use external controllers if provided, otherwise create our own
     if (widget.productNameController != null) {
       _productNameController = widget.productNameController!;
@@ -98,29 +99,35 @@ class _SmartProductFieldState extends State<SmartProductField> {
       _productNameController = TextEditingController();
       _ownsProductNameController = true;
     }
-    
+
     if (widget.descriptionController != null) {
       _descriptionController = widget.descriptionController!;
     } else {
       _descriptionController = TextEditingController();
       _ownsDescriptionController = true;
     }
-    
+
     if (widget.focusNode != null) {
       _focusNode = widget.focusNode!;
     } else {
       _focusNode = FocusNode();
       _ownsFocusNode = true;
     }
-    
+
     // Initialize from initial data
     if (widget.initialData != null) {
       _product = widget.initialData!.product;
       _productName = widget.initialData!.productName;
       _productSku = widget.initialData!.productSku;
       _isCatalogProduct = widget.initialData!.isCatalogProduct;
-      _productNameController.text = _productName ?? '';
-      _descriptionController.text = widget.initialData!.description ?? '';
+      // Only set controller text if we OWN the controller (created it ourselves)
+      // If using external controller, it already has the correct current value
+      if (_ownsProductNameController) {
+        _productNameController.text = _productName ?? '';
+      }
+      if (_ownsDescriptionController) {
+        _descriptionController.text = widget.initialData!.description ?? '';
+      }
     }
   }
 
@@ -149,9 +156,9 @@ class _SmartProductFieldState extends State<SmartProductField> {
       _productNameController.clear();
       _descriptionController.clear();
     });
-    
+
     widget.onProductChanged(null);
-    
+
     // Auto-focus the search field after clearing
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
@@ -169,29 +176,30 @@ class _SmartProductFieldState extends State<SmartProductField> {
         _productSku = selection.product!.sku;
         _isCatalogProduct = true;
         _productNameController.text = selection.product!.name;
-        
+
         // Auto-fill description from product (if exists)
-        if (selection.product!.description != null && 
+        if (selection.product!.description != null &&
             selection.product!.description!.isNotEmpty) {
           _descriptionController.text = selection.product!.description!;
         }
         // Otherwise leave description BLANK (not copied from product name)
       });
-      
+
       widget.onProductChanged(ProductFieldSelection(
         product: selection.product,
         productName: selection.product!.name,
         productSku: selection.product!.sku,
         isCatalogProduct: true,
         description: _descriptionController.text,
-        price: widget.showCost 
-            ? (selection.product!.cost > 0 ? selection.product!.cost : selection.product!.price)
+        price: widget.showCost
+            ? (selection.product!.cost > 0
+                ? selection.product!.cost
+                : selection.product!.price)
             : selection.product!.price,
       ));
-      
+
       // Auto-add new line if callback provided
       widget.onAutoAddLine?.call();
-      
     } else if (!selection.isCatalogProduct) {
       // Ad-hoc/custom item
       setState(() {
@@ -203,7 +211,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
         // Description stays BLANK for ad-hoc items
         _descriptionController.clear();
       });
-      
+
       widget.onProductChanged(ProductFieldSelection(
         product: null,
         productName: selection.displayText,
@@ -212,7 +220,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
         description: '',
         price: 0,
       ));
-      
+
       // Auto-add new line if callback provided
       widget.onAutoAddLine?.call();
     }
@@ -221,59 +229,101 @@ class _SmartProductFieldState extends State<SmartProductField> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // RepaintBoundary prevents unnecessary repaints from parent hover state changes
     return RepaintBoundary(
       child: _buildContent(theme),
     );
   }
-  
+
   Widget _buildContent(ThemeData theme) {
     // If not editable, show as read-only text
     if (!widget.enabled) {
       return _buildReadOnlyView(theme);
     }
-    
+
     // If product is set, show Zoho-style card
     if (_hasProduct) {
       return _buildProductCard(theme);
     }
-    
+
     // Otherwise show search field
     return _buildSearchField(theme);
   }
 
   Widget _buildReadOnlyView(ThemeData theme) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          _productName ?? 'Producto',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+        // Product image thumbnail (40x40)
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: theme.colorScheme.outline.withOpacity(0.15),
+            ),
           ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+          child: _product?.imageUrl != null && _product!.imageUrl!.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(
+                    _product!.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.inventory_2_outlined,
+                        size: 20,
+                        color:
+                            theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                      );
+                    },
+                  ),
+                )
+              : Icon(
+                  Icons.inventory_2_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                ),
         ),
-        if (_productSku != null && _productSku!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              'SKU: $_productSku',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 11,
+        const SizedBox(width: 10),
+        // Product details
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _productName ?? 'Producto',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
+              if (_productSku != null && _productSku!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'SKU: $_productSku',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              if (_descriptionController.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    _descriptionController.text,
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                  ),
+                ),
+            ],
           ),
-        if (_descriptionController.text.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              _descriptionController.text,
-              style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-            ),
-          ),
+        ),
       ],
     );
   }
@@ -291,13 +341,15 @@ class _SmartProductFieldState extends State<SmartProductField> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                color:
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: theme.colorScheme.outline.withOpacity(0.15),
                 ),
               ),
-              child: _product?.imageUrl != null && _product!.imageUrl!.isNotEmpty
+              child: _product?.imageUrl != null &&
+                      _product!.imageUrl!.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: Image.network(
@@ -307,7 +359,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                           return Icon(
                             Icons.inventory_2_outlined,
                             size: 24,
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withOpacity(0.3),
                           );
                         },
                       ),
@@ -315,7 +368,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                   : Icon(
                       Icons.inventory_2_outlined,
                       size: 24,
-                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                      color:
+                          theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
                     ),
             ),
             const SizedBox(width: 12),
@@ -340,19 +394,24 @@ class _SmartProductFieldState extends State<SmartProductField> {
                       ),
                       const SizedBox(width: 4),
                       // 3-dot menu button (only for catalog products)
-                      if (_product != null && (widget.onEditProduct != null || widget.onShowProductDetails != null))
+                      if (_product != null &&
+                          (widget.onEditProduct != null ||
+                              widget.onShowProductDetails != null))
                         PopupMenuButton<String>(
                           icon: Icon(
                             Icons.more_horiz,
                             size: 20,
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withOpacity(0.6),
                           ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 200),
                           onSelected: (value) {
-                            if (value == 'edit' && widget.onEditProduct != null) {
+                            if (value == 'edit' &&
+                                widget.onEditProduct != null) {
                               widget.onEditProduct!(_product!);
-                            } else if (value == 'details' && widget.onShowProductDetails != null) {
+                            } else if (value == 'details' &&
+                                widget.onShowProductDetails != null) {
                               widget.onShowProductDetails!(_product!);
                             }
                           },
@@ -398,7 +457,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                           child: Icon(
                             Icons.close,
                             size: 16,
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withOpacity(0.6),
                           ),
                         ),
                       ),
@@ -411,7 +471,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                       child: Text(
                         'SKU (Código de artículo): $_productSku',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withOpacity(0.7),
                           fontSize: 12,
                         ),
                       ),
@@ -439,7 +500,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                 fontSize: 13,
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 13,
@@ -456,7 +518,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                 productSku: _productSku,
                 isCatalogProduct: _isCatalogProduct,
                 description: value,
-                price: 0, // Don't send price on description changes - prevents infinite loop!
+                price:
+                    0, // Don't send price on description changes - prevents infinite loop!
               ));
             },
           ),

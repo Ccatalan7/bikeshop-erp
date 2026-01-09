@@ -93,7 +93,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   String? _paymentMethodHint; // 'card' or 'other' - for smart tax validation
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
-  bool get _canEditFields => _status == InvoiceStatus.draft && _isEditing;
+  bool get _canEditFields => _status != InvoiceStatus.paid && _isEditing;
   bool get _canMarkAsSent =>
       _currentInvoiceId != null &&
       _status == InvoiceStatus.draft &&
@@ -113,7 +113,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       (_status == InvoiceStatus.sent || _status == InvoiceStatus.confirmed) &&
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
-      !_canEditFields && _status == InvoiceStatus.draft;
+      !_canEditFields && _status != InvoiceStatus.paid;
 
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
@@ -471,7 +471,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   void _startEditing() {
-    if (_status != InvoiceStatus.draft) return;
+    if (_status == InvoiceStatus.paid) return;
     setState(() => _isEditing = true);
   }
 
@@ -1570,8 +1570,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         leading:
             Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
         title: const Text('Factura en modo lectura'),
-        subtitle: const Text(
-            'Usa “Editar” para habilitar los campos y modificar el borrador.'),
+        subtitle: Text(_status != InvoiceStatus.paid
+            ? 'Usa "Editar" para habilitar los campos y modificar la factura.'
+            : 'Esta factura está pagada y no se puede modificar.'),
+        trailing: _status != InvoiceStatus.paid
+            ? OutlinedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _startEditing,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Editar'),
+              )
+            : null,
       ),
     );
   }
@@ -2719,10 +2727,38 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 ...invoice.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
+                  final hasDescription =
+                      item.description != null && item.description!.isNotEmpty;
                   return pw.TableRow(
                     children: [
                       _buildPdfTableCell('${index + 1}'),
-                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      // Product name + description (Zoho style)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 5),
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              item.productName ?? 'Sin nombre',
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                            if (hasDescription) ...[
+                              pw.SizedBox(height: 3),
+                              pw.Text(
+                                item.description!,
+                                style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.grey700,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                       _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
                       _buildPdfTableCell(
                           ChileanUtils.formatCurrency(item.unitPrice)),

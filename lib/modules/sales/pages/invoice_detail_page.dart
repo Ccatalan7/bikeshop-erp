@@ -598,15 +598,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             ),
           ],
           // Confirmed → Sent (only if no payments have been made yet)
-          if (invoice.status == InvoiceStatus.confirmed && invoice.balance > 0 && invoice.paidAmount == 0)
+          if (invoice.status == InvoiceStatus.confirmed &&
+              invoice.balance > 0 &&
+              invoice.paidAmount == 0)
             OutlinedButton.icon(
               onPressed: _revertToSent,
               icon: const Icon(Icons.undo),
               label: const Text('Volver a enviada'),
             ),
           // Paid → Undo payment OR Confirmed with partial payments → Undo payment
-          if (invoice.status == InvoiceStatus.paid || 
-              (invoice.status == InvoiceStatus.confirmed && invoice.paidAmount > 0))
+          if (invoice.status == InvoiceStatus.paid ||
+              (invoice.status == InvoiceStatus.confirmed &&
+                  invoice.paidAmount > 0))
             OutlinedButton.icon(
               onPressed: _undoLastPayment,
               icon: const Icon(Icons.undo),
@@ -1081,10 +1084,38 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 ...invoice.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
+                  final hasDescription =
+                      item.description != null && item.description!.isNotEmpty;
                   return pw.TableRow(
                     children: [
                       _buildPdfTableCell('${index + 1}'),
-                      _buildPdfTableCell(item.productName ?? 'Sin nombre'),
+                      // Product name + description (Zoho style)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 5),
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              item.productName ?? 'Sin nombre',
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                            if (hasDescription) ...[
+                              pw.SizedBox(height: 3),
+                              pw.Text(
+                                item.description!,
+                                style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.grey700,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                       _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
                       _buildPdfTableCell(
                           ChileanUtils.formatCurrency(item.unitPrice)),
