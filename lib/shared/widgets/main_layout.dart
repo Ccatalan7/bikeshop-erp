@@ -2213,6 +2213,23 @@ class _AppDrawerState extends State<AppDrawer> {
             },
           ),
 
+          // Correo (Mail) module - ADDED for mobile access
+          ExpandableMenuItem(
+            icon: Icons.email_outlined,
+            activeIcon: Icons.email,
+            title: 'Correo',
+            subItems: const [
+              MenuSubItem(icon: Icons.email, title: 'Correo', route: '/mail')
+            ],
+            currentLocation: currentLocation,
+            isSingleItem: true,
+            enabled: true,
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Correo');
+            },
+          ),
+
           const Divider(),
 
           // Mobile Options Panel (Dark Mode, Zoom, Reorder)

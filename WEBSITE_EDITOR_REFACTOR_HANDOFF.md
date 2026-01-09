@@ -52,6 +52,17 @@ Non-negotiables:
   - deploy-time static outputs
 - Reduce SPA crawler mismatch: product landing pages must not rely on client-side JS execution to expose critical facts (title/price/availability/identity/policies).
 
+### 1.4 Desktop-Mobile Consistent UI goal
+
+Ensure complete feature parity between desktop and mobile views in the website editor.
+
+Non-negotiables:
+
+- All dropdowns, controls, and functions available on desktop must also be accessible on mobile.
+- No hidden or missing functionality when switching between breakpoints.
+- Editor panel controls should adapt responsively but never omit features on smaller screens.
+- Any desktop-only UI patterns (e.g., hover dropdowns, context menus) must have equivalent mobile-friendly alternatives (e.g., tap menus, bottom sheets).
+
 ---
 
 ## 2) Current architecture snapshot (what exists today)
@@ -464,6 +475,13 @@ Use this checklist each time you migrate a block from bespoke controls to schema
   - Centralize migrations so they don’t leak into widgets.
 - Standardize navigation reordering everywhere to use the batch reorder API where appropriate.
 - Validate the final drag/drop behavior in the footer editor UI on Web.
+
+### P0 — Desktop-Mobile UI Consistency (must do next)
+
+- Audit all editor panel controls and identify any desktop-only dropdowns, menus, or functions.
+- Ensure all toolbar actions and block editing options are accessible on mobile.
+- Replace desktop-only patterns (hover menus, right-click context menus) with mobile-friendly alternatives.
+- Test editor functionality across breakpoints to confirm no features are missing on mobile.
 
 ### P0 — SEO + Merchant hardening (must do next)
 
