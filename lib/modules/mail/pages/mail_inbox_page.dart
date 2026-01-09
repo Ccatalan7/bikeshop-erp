@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show window;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/web_url.dart';
 import '../providers/mail_account_manager.dart';
@@ -92,19 +91,40 @@ class _MailInboxPageState extends State<MailInboxPage> {
   }
 
   void _cleanUrl() {
-    if (kIsWeb && html.window.location.href.contains('_code')) {
-      html.window.history.replaceState(null, '', '/#/mail');
-    }
+    cleanMailUrl();
   }
 
-  void _connectProvider(String providerId) {
+  void _connectProvider(String providerId) async {
     final redirectUri = providerId == 'zoho'
         ? 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/zoho-oauth'
         : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth';
 
-    final authUrl =
-        _manager.getAuthorizationUrl(providerId, redirectUri: redirectUri);
-    html.window.location.href = authUrl;
+    // On mobile, pass state=mobile so edge function redirects to deep link
+    final state = kIsWeb ? null : 'mobile';
+    final authUrl = _manager.getAuthorizationUrl(
+      providerId,
+      redirectUri: redirectUri,
+      state: state,
+    );
+
+    if (kIsWeb) {
+      // Web: direct navigation
+      navigateToUrl(authUrl);
+    } else {
+      // Mobile: open in external browser, deep link will bring user back
+      final uri = Uri.parse(authUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo abrir el navegador'),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _showComposeDialog(

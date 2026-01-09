@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:app_links/app_links.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -69,6 +68,7 @@ import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
 import 'public_router_app.dart';
+import 'shared/services/deep_link_handler.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -110,6 +110,13 @@ void _hideLoadingScreen() {
   } catch (e) {
     debugPrint('⚠️ [Main] Could not hide loading screen: $e');
   }
+}
+
+/// Initialize the deep link handler for mail OAuth callbacks
+Future<DeepLinkHandler> _initializeDeepLinkHandler() async {
+  final handler = DeepLinkHandler.instance;
+  await handler.initialize();
+  return handler;
 }
 
 Future<void> main() async {
@@ -184,22 +191,12 @@ Future<void> main() async {
       _logTiming('NOTIFICATIONS_INIT_SKIPPED', 'public_store_host');
     }
 
+    // Handle deep links for OAuth callbacks on desktop and mobile
+    // Use our custom DeepLinkHandler for mail OAuth callbacks (vinabike:// scheme)
     if (!kIsWeb) {
-      final appLinks = AppLinks();
-      appLinks.uriLinkStream.listen((uri) {
-        if (kDebugMode) {
-          print('[DeepLink] Received: $uri');
-        }
-        // Supabase automatically handles OAuth callbacks
-        // The auth state listener will trigger navigation
-      });
-
-      // Handle initial link (app opened from a link)
-      appLinks.getInitialLink().then((uri) {
-        if (uri != null && kDebugMode) {
-          print('[DeepLink] Initial link: $uri');
-        }
-      });
+      // Import and initialize the deep link handler for mail OAuth
+      final deepLinkHandler = await _initializeDeepLinkHandler();
+      debugPrint('🔗 [Main] DeepLinkHandler initialized: $deepLinkHandler');
     }
 
     FlutterError.onError = (FlutterErrorDetails details) {

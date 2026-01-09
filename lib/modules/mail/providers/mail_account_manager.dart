@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'email_provider.dart';
 import 'gmail_provider.dart';
 import 'zoho_provider.dart';
+import '../services/email_cache_service.dart';
 
 /// Singleton manager for multiple email providers with unified inbox view.
 /// Persists across navigation to avoid refetching emails.
@@ -28,6 +29,7 @@ class MailAccountManager extends ChangeNotifier {
   String? _error;
   DateTime? _lastFetch;
   Timer? _pollingTimer;
+  final EmailCacheService _cache = EmailCacheService();
 
   /// Filter: null = all, 'gmail' = only gmail, 'zoho' = only zoho
   String? _providerFilter;
@@ -59,6 +61,9 @@ class MailAccountManager extends ChangeNotifier {
 
   /// Initialize manager and all providers
   Future<void> initialize() async {
+    // Initialize SQLite cache
+    await _cache.initialize();
+
     // Ensure providers are registered
     if (_providers.isEmpty) {
       _providers.add(ZohoProvider());
@@ -75,9 +80,9 @@ class MailAccountManager extends ChangeNotifier {
       await provider.initialize();
     }
 
-    // Skip inbox refresh if already done and we have emails
+    // Skip if already initialized with emails
     if (_isInitialized && _unifiedEmails.isNotEmpty) {
-      debugPrint('📧 [MailManager] Already initialized, using cache');
+      debugPrint('📧 [MailManager] Already initialized, using memory cache');
       notifyListeners();
       return;
     }
@@ -86,9 +91,22 @@ class MailAccountManager extends ChangeNotifier {
     _isInitialized = true;
     _startPolling();
 
-    // Load inbox if any are connected
+    // INSTANT LOAD: Load from SQLite cache first (no network wait)
     if (connectedProviders.isNotEmpty) {
-      await refreshInbox();
+      final cached = await _cache.getCachedEmails();
+      if (cached.isNotEmpty) {
+        _unifiedEmails = cached;
+        _lastFetch = DateTime.now();
+        debugPrint(
+            '📧 [MailManager] Loaded ${cached.length} emails from cache');
+        notifyListeners();
+
+        // Then refresh in background
+        refreshInbox(background: true);
+      } else {
+        // No cache, load normally (with loading indicator)
+        await refreshInbox();
+      }
     }
 
     notifyListeners();
@@ -108,10 +126,11 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   /// Start OAuth flow for a provider
-  String getAuthorizationUrl(String providerId, {required String redirectUri}) {
+  String getAuthorizationUrl(String providerId,
+      {required String redirectUri, String? state}) {
     final provider = getProvider(providerId);
     if (provider == null) throw Exception('Provider not found: $providerId');
-    return provider.getAuthorizationUrl(redirectUri: redirectUri);
+    return provider.getAuthorizationUrl(redirectUri: redirectUri, state: state);
   }
 
   /// Complete OAuth for a provider
@@ -171,6 +190,9 @@ class MailAccountManager extends ChangeNotifier {
       allEmails.sort((a, b) => b.receivedTime.compareTo(a.receivedTime));
       _unifiedEmails = allEmails;
       _lastFetch = DateTime.now();
+
+      // Save to SQLite cache for next app launch
+      await _cache.cacheEmails(allEmails);
     } catch (e) {
       _error = e.toString();
     } finally {

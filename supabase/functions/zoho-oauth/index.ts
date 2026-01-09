@@ -18,15 +18,29 @@ serve(async (req) => {
     if (req.method === 'GET') {
         const code = url.searchParams.get('code')
         const error = url.searchParams.get('error')
+        const state = url.searchParams.get('state') // Contains platform info
+
+        // Check if this is a mobile OAuth callback
+        const isMobile = state === 'mobile'
 
         // Frontend URL (Base)
         const frontendBase = 'https://project-vinabike.web.app'
+        // Mobile deep link base
+        const mobileDeepLink = 'vinabike://mail/oauth'
 
         if (error) {
+            if (isMobile) {
+                return Response.redirect(`${mobileDeepLink}?provider=zoho&error=${error}`, 302)
+            }
             return Response.redirect(`${frontendBase}?error=${error}#/mail`, 302)
         }
 
         if (code) {
+            if (isMobile) {
+                // Redirect to mobile app via deep link
+                console.log('[Zoho OAuth] Redirecting to mobile app')
+                return Response.redirect(`${mobileDeepLink}?provider=zoho&code=${code}`, 302)
+            }
             // Redirect with query param BEFORE hash for reliable Uri.base parsing
             // Structure: https://host/?zoho_code=...#/mail
             return Response.redirect(`${frontendBase}?zoho_code=${code}#/mail`, 302)

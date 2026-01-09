@@ -57,5 +57,17 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<!-- Deep link URL scheme for OAuth callbacks -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>com.vinabike.erp</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>vinabike</string>
+				</array>
+			</dict>
+		</array>
 	</dict>
 </plist>

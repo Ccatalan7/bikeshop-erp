@@ -99,3 +99,28 @@ String? getAndClearGmailOAuthCode() {
   _capturedGmailCode = null;
   return code;
 }
+
+/// Clean mail URL (remove OAuth params)
+void cleanMailUrl() {
+  try {
+    if (html.window.location.href.contains('_code')) {
+      html.window.history.replaceState(null, '', '/#/mail');
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+}
+
+/// Navigate to a URL (for OAuth redirects)
+void navigateToUrl(String url) {
+  html.window.location.href = url;
+}
+
+/// Set location hash for anchor navigation
+void setLocationHash(String hash) {
+  try {
+    html.window.location.hash = hash;
+  } catch (_) {
+    // Ignore errors
+  }
+}

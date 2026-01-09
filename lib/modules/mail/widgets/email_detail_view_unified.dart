@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:intl/intl.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../providers/email_provider.dart';
 
 /// Email detail view for unified inbox
@@ -95,216 +97,93 @@ class EmailDetailViewUnified extends StatelessWidget {
             ),
           if (onClose == null) const Divider(height: 1),
 
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Subject
-                  Text(
-                    email.subject,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+          // Metadata Header (Fixed)
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: colorScheme.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Subject
+                Text(
+                  email.subject,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Sender info
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: _getProviderColor(email.providerId),
+                      child: Text(
+                        email.senderName.isNotEmpty
+                            ? email.senderName[0].toUpperCase()
+                            : '?',
+                        style:
+                            const TextStyle(fontSize: 18, color: Colors.white),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sender info
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: _getProviderColor(email.providerId),
-                        child: Text(
-                          email.senderName.isNotEmpty
-                              ? email.senderName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                              fontSize: 20, color: Colors.white),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    email.senderName,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    '<${email.senderEmail}>',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'para ${email.toAddress}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        DateFormat('d MMM yyyy, HH:mm', 'es')
-                            .format(email.receivedTime),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Email body
-                  SelectableRegion(
-                    focusNode: FocusNode(),
-                    selectionControls: materialTextSelectionControls,
-                    child: HtmlWidget(
-                      email.content ?? email.summary ?? 'Sin contenido.',
-                      textStyle: theme.textTheme.bodyLarge,
-                      onTapUrl: (url) => true,
-                    ),
-                  ),
-
-                  if (email.hasAttachment) ...[
-                    const SizedBox(height: 32),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.attach_file,
-                              color: colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 8),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  email.senderName,
+                                  style: theme.textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  '<${email.senderEmail}>',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Text(
-                            'Adjuntos disponibles en la versión web.',
-                            style:
-                                TextStyle(color: colorScheme.onSurfaceVariant),
+                            'para ${email.toAddress}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Text(
+                      DateFormat('d MMM, HH:mm', 'es')
+                          .format(email.receivedTime),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
-                ],
-              ),
-            ),
-          ),
-
-          // Reply actions bar at bottom
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border:
-                  Border(top: BorderSide(color: colorScheme.outlineVariant)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onReply,
-                    icon: const Icon(Icons.reply, size: 18),
-                    label: const Text('Responder'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onReplyAll,
-                    icon: const Icon(Icons.reply_all, size: 18),
-                    label: const Text('Responder a todos'),
-                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
+          const Divider(height: 1),
 
-  List<Widget> _buildActions(BuildContext context) {
-    return [
-      IconButton(
-        icon: const Icon(Icons.reply),
-        tooltip: 'Responder',
-        onPressed: onReply,
-      ),
-      const SizedBox(width: 4),
-      PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert),
-        tooltip: 'Más opciones',
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'reply_all',
-            child: Row(
-              children: [
-                Icon(Icons.reply_all, size: 18),
-                SizedBox(width: 8),
-                Text('Responder a todos'),
-              ],
+          // Email Content (WebView takes remaining space)
+          Expanded(
+            child: _EmailContentRenderer(
+              html: email.content ?? email.summary ?? 'Sin contenido.',
             ),
-          ),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: [
-                Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Eliminar', style: TextStyle(color: Colors.red)),
-              ],
-            ),
-          ),
-        ],
-        onSelected: (value) {
-          if (value == 'reply_all') {
-            onReplyAll?.call();
-          } else if (value == 'delete') {
-            _confirmDelete(context);
-          }
-        },
-      ),
-    ];
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar correo'),
-        content:
-            const Text('¿Estás seguro de que quieres eliminar este correo?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onDelete?.call();
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Eliminar'),
           ),
         ],
       ),
@@ -312,14 +191,32 @@ class EmailDetailViewUnified extends StatelessWidget {
   }
 
   Color _getProviderColor(String providerId) {
-    switch (providerId) {
-      case 'gmail':
-        return Colors.red;
-      case 'zoho':
-        return Colors.orange;
-      default:
-        return Colors.blue;
-    }
+    if (providerId.contains('gmail')) return Colors.red;
+    if (providerId.contains('zoho')) return Colors.blue;
+    return Colors.grey;
+  }
+
+  List<Widget> _buildActions(BuildContext context) {
+    return [
+      if (onReply != null)
+        IconButton(
+          icon: const Icon(Icons.reply),
+          onPressed: onReply,
+          tooltip: 'Responder',
+        ),
+      if (onReplyAll != null)
+        IconButton(
+          icon: const Icon(Icons.reply_all),
+          onPressed: onReplyAll,
+          tooltip: 'Responder a todos',
+        ),
+      if (onDelete != null)
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          onPressed: onDelete,
+          tooltip: 'Eliminar',
+        ),
+    ];
   }
 }
 
@@ -394,5 +291,109 @@ class _ProviderBadge extends StatelessWidget {
       default:
         return 'Email';
     }
+  }
+}
+
+/// Email content renderer using WebView for Gmail/Outlook quality HTML rendering
+class _EmailContentRenderer extends StatefulWidget {
+  final String html;
+
+  const _EmailContentRenderer({required this.html});
+
+  @override
+  State<_EmailContentRenderer> createState() => _EmailContentRendererState();
+}
+
+class _EmailContentRendererState extends State<_EmailContentRenderer> {
+  late final WebViewController _controller;
+  bool _isReady = false;
+  String _lastLoadedHtml = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.white)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (_) {
+              if (mounted) setState(() => _isReady = true);
+            },
+            onNavigationRequest: (request) {
+              // Block external navigation, open in browser instead
+              return NavigationDecision.prevent;
+            },
+          ),
+        );
+      _loadContent();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _EmailContentRenderer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload WebView if content changes (async content loading)
+    if (widget.html != oldWidget.html && widget.html != _lastLoadedHtml) {
+      _loadContent();
+    }
+  }
+
+  void _loadContent() {
+    _lastLoadedHtml = widget.html;
+    _isReady = false;
+    _controller.loadHtmlString(_buildFullHtml(widget.html));
+  }
+
+  String _buildFullHtml(String emailContent) {
+    // Minimal CSS - preserve email's original styling (like Gmail/Outlook do)
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <style>
+    /* Minimal resets only - don't override email styles */
+    html { height: 100%; }
+    body { 
+      margin: 0; 
+      padding: 0;
+      min-height: 100%;
+      background: #fff;
+    }
+    /* Only fix responsive images, don't touch anything else */
+    img { max-width: 100% !important; height: auto !important; }
+  </style>
+</head>
+<body>
+$emailContent
+</body>
+</html>
+''';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Fallback for web platform
+    if (kIsWeb) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: HtmlWidget(widget.html),
+      );
+    }
+
+    // WebView fills the Expanded container and handles its own scrolling
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (!_isReady)
+          Container(
+            color: Colors.white,
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+      ],
+    );
   }
 }

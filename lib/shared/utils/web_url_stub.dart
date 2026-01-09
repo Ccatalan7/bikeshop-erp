@@ -35,3 +35,18 @@ String? captureGmailOAuthCode() {
 String? getAndClearGmailOAuthCode() {
   return null;
 }
+
+/// Stub - URL cleaning not available on non-web platforms
+void cleanMailUrl() {
+  // No-op on non-web platforms
+}
+
+/// Stub - direct URL navigation not available on non-web platforms
+void navigateToUrl(String url) {
+  // No-op on non-web platforms - mail OAuth only works on web
+}
+
+/// Stub - anchor hash navigation not available on non-web platforms
+void setLocationHash(String hash) {
+  // No-op on non-web platforms
+}

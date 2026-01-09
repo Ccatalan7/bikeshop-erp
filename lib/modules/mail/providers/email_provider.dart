@@ -119,8 +119,8 @@ abstract class EmailProvider with ChangeNotifier {
   /// Initialize the provider (load tokens from storage)
   Future<void> initialize();
 
-  /// Get the OAuth authorization URL
-  String getAuthorizationUrl({required String redirectUri});
+  /// Get the OAuth authorization URL (state is passed for mobile deep link handling)
+  String getAuthorizationUrl({required String redirectUri, String? state});
 
   /// Exchange auth code for tokens
   Future<bool> exchangeCodeForTokens({

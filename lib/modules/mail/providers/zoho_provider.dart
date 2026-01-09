@@ -85,7 +85,7 @@ class ZohoProvider extends EmailProvider {
   }
 
   @override
-  String getAuthorizationUrl({required String redirectUri}) {
+  String getAuthorizationUrl({required String redirectUri, String? state}) {
     final params = {
       'client_id': _clientId,
       'redirect_uri': redirectUri,
@@ -93,6 +93,7 @@ class ZohoProvider extends EmailProvider {
       'scope': _scopes,
       'access_type': 'offline',
       'prompt': 'consent',
+      if (state != null) 'state': state,
     };
     return '$_authUrl?${Uri(queryParameters: params).query}';
   }

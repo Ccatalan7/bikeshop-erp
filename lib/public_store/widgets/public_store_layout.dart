@@ -32,6 +32,7 @@ import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
 import '../../shared/utils/seo_helper.dart';
 import '../services/customer_account_service.dart';
+import '../../shared/utils/web_url.dart' show setLocationHash;
 import 'customer_chat_widget.dart';
 
 class PublicStoreLayout extends StatefulWidget {
@@ -89,7 +90,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   bool _isConfigHubOpen = false;
   _EditorConfigHubTab _configHubTab = _EditorConfigHubTab.siteHub;
-  
 
   Future<void>? _erpLibraryFuture;
 
@@ -636,72 +636,72 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           currentPath.startsWith('/shop/')) {
         // Skip the generic page SEO updater to avoid overwriting product SEO.
       } else {
-      String normalizedSlug = GoRouterState.of(context).uri.path;
-      if (normalizedSlug.startsWith('/tienda/')) {
-        normalizedSlug = normalizedSlug.substring(8);
-      } else if (normalizedSlug.startsWith('/tienda')) {
-        normalizedSlug = 'home';
-      }
-      if (normalizedSlug.startsWith('/')) {
-        normalizedSlug = normalizedSlug.substring(1);
-      }
-      if (normalizedSlug.isEmpty) normalizedSlug = 'home';
-
-      // Handle legacy route specific cases
-      if (GoRouterState.of(context).uri.path == '/') normalizedSlug = 'home';
-
-      WebsitePage? currentPage;
-      try {
-        // Try to find matching page
-        if (websiteService.pages.isNotEmpty) {
-          currentPage = websiteService.pages.firstWhere(
-            (p) =>
-                p.slug == normalizedSlug ||
-                (p.isHome && normalizedSlug == 'home'),
-            orElse: () => websiteService.pages.firstWhere((p) => p.isHome,
-                orElse: () => websiteService.pages.first),
-          );
+        String normalizedSlug = GoRouterState.of(context).uri.path;
+        if (normalizedSlug.startsWith('/tienda/')) {
+          normalizedSlug = normalizedSlug.substring(8);
+        } else if (normalizedSlug.startsWith('/tienda')) {
+          normalizedSlug = 'home';
         }
-      } catch (_) {
-        // Page not found or list empty
-      }
+        if (normalizedSlug.startsWith('/')) {
+          normalizedSlug = normalizedSlug.substring(1);
+        }
+        if (normalizedSlug.isEmpty) normalizedSlug = 'home';
 
-      String seoTitle = storeName;
-      String? seoDesc = storeDescription;
-      String? seoImage = logoUrl;
+        // Handle legacy route specific cases
+        if (GoRouterState.of(context).uri.path == '/') normalizedSlug = 'home';
 
-      if (currentPage != null) {
-        // Only use page-specific SEO if we matched the correct page
-        bool isCorrectPage = currentPage.slug == normalizedSlug ||
-            (currentPage.isHome && normalizedSlug == 'home');
-
-        if (isCorrectPage) {
-          if (currentPage.metaTitle?.isNotEmpty == true) {
-            seoTitle = currentPage.metaTitle!;
-          } else if (currentPage.title.isNotEmpty) {
-            seoTitle = '${currentPage.title} | $storeName';
+        WebsitePage? currentPage;
+        try {
+          // Try to find matching page
+          if (websiteService.pages.isNotEmpty) {
+            currentPage = websiteService.pages.firstWhere(
+              (p) =>
+                  p.slug == normalizedSlug ||
+                  (p.isHome && normalizedSlug == 'home'),
+              orElse: () => websiteService.pages.firstWhere((p) => p.isHome,
+                  orElse: () => websiteService.pages.first),
+            );
           }
+        } catch (_) {
+          // Page not found or list empty
+        }
 
-          if (currentPage.metaDescription?.isNotEmpty == true) {
-            seoDesc = currentPage.metaDescription;
-          }
+        String seoTitle = storeName;
+        String? seoDesc = storeDescription;
+        String? seoImage = logoUrl;
 
-          if (currentPage.ogImageUrl?.isNotEmpty == true) {
-            seoImage = currentPage.ogImageUrl;
+        if (currentPage != null) {
+          // Only use page-specific SEO if we matched the correct page
+          bool isCorrectPage = currentPage.slug == normalizedSlug ||
+              (currentPage.isHome && normalizedSlug == 'home');
+
+          if (isCorrectPage) {
+            if (currentPage.metaTitle?.isNotEmpty == true) {
+              seoTitle = currentPage.metaTitle!;
+            } else if (currentPage.title.isNotEmpty) {
+              seoTitle = '${currentPage.title} | $storeName';
+            }
+
+            if (currentPage.metaDescription?.isNotEmpty == true) {
+              seoDesc = currentPage.metaDescription;
+            }
+
+            if (currentPage.ogImageUrl?.isNotEmpty == true) {
+              seoImage = currentPage.ogImageUrl;
+            }
           }
         }
-      }
 
-      // Defer SEO update to avoid build-phase conflicts
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          SeoHelper.updateSeo(
-            title: seoTitle,
-            description: seoDesc,
-            imageUrl: seoImage,
-          );
-        }
-      });
+        // Defer SEO update to avoid build-phase conflicts
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            SeoHelper.updateSeo(
+              title: seoTitle,
+              description: seoDesc,
+              imageUrl: seoImage,
+            );
+          }
+        });
       }
     }
 
@@ -920,8 +920,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String storeName,
   ) {
     final isEditMode = editProvider.isEditMode;
-    final sitePublished = websiteService.getSetting('site_published', 'true') ==
-        'true';
+    final sitePublished =
+        websiteService.getSetting('site_published', 'true') == 'true';
     return Container(
       height: 48,
       color: const Color(0xFF1E1E1E),
@@ -3841,11 +3841,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Anchor links (best-effort on web)
     if (normalized.startsWith('#')) {
       if (kIsWeb) {
-        try {
-          html.window.location.hash = normalized;
-        } catch (_) {
-          // Ignore
-        }
+        setLocationHash(normalized);
       }
       return;
     }
