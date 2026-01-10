@@ -217,6 +217,36 @@ Future<void> main() async {
       FlutterError.dumpErrorToConsole(details);
     };
 
+    // Global error boundary - show user-friendly error UI instead of red screen
+    // This prevents widget crashes from looking catastrophic to users
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      return Material(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  size: 48, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text(
+                'Algo salió mal',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                kDebugMode
+                    ? details.exceptionAsString()
+                    : 'Por favor, intenta de nuevo.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    };
+
     runApp(const VinabikeApp());
     _logTiming('RUN_APP');
 

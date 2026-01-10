@@ -39,6 +39,12 @@ extension on _ExpenseBreakdownRange {
 class AccountingDashboardSection extends StatefulWidget {
   const AccountingDashboardSection({super.key});
 
+  /// Call this after making a sale/purchase to ensure dashboard shows fresh data
+  static void invalidateCache() {
+    _AccountingDashboardSectionState._cachedData = null;
+    _AccountingDashboardSectionState._cacheTimestamp = null;
+  }
+
   @override
   State<AccountingDashboardSection> createState() =>
       _AccountingDashboardSectionState();
@@ -55,6 +61,14 @@ class _AccountingDashboardSectionState
   _DashboardPayload? _data;
   bool _isLoading = true;
   String? _error;
+
+  // Static cache - persists across widget rebuilds
+  static _DashboardPayload? _cachedData;
+  static DateTime? _cacheTimestamp;
+  static String? _cachedPeriod;
+  static _AccountingBasis? _cachedBasis;
+  static _ExpenseBreakdownRange? _cachedBreakdownRange;
+  static const Duration _cacheDuration = Duration(minutes: 5);
 
   static const Map<String, int> _periodToMonths = {
     'Esta semana': 1,
@@ -86,7 +100,26 @@ class _AccountingDashboardSectionState
   Future<void> _loadInitialData() async {
     final accountingService = context.read<AccountingService>();
     await accountingService.initialize();
-    if (mounted) {
+
+    if (!mounted) return;
+
+    // Check if we have valid cached data
+    final isCacheValid = _cachedData != null &&
+        _cacheTimestamp != null &&
+        DateTime.now().difference(_cacheTimestamp!) < _cacheDuration &&
+        _cachedPeriod == _selectedPeriod &&
+        _cachedBasis == _basis &&
+        _cachedBreakdownRange == _breakdownRange;
+
+    if (isCacheValid) {
+      // Use cached data immediately - no network request!
+      setState(() {
+        _data = _cachedData;
+        _isLoading = false;
+        _error = null;
+      });
+    } else {
+      // Need to fetch fresh data
       _refreshData();
     }
   }
@@ -118,7 +151,7 @@ class _AccountingDashboardSectionState
     }
   }
 
-  Future<void> _refreshData() async {
+  Future<void> _refreshData({int retryCount = 0}) async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -128,15 +161,34 @@ class _AccountingDashboardSectionState
     try {
       final newData = await _fetchData();
       if (mounted) {
+        // Update static cache
+        _cachedData = newData;
+        _cacheTimestamp = DateTime.now();
+        _cachedPeriod = _selectedPeriod;
+        _cachedBasis = _basis;
+        _cachedBreakdownRange = _breakdownRange;
+
         setState(() {
           _data = newData;
           _isLoading = false;
         });
       }
     } catch (e) {
+      // Auto-retry on HandshakeException (network not ready yet)
+      final errorStr = e.toString();
+      if (retryCount < 2 &&
+          (errorStr.contains('HandshakeException') ||
+              errorStr.contains('Connection terminated'))) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          _refreshData(retryCount: retryCount + 1);
+        }
+        return;
+      }
+
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = errorStr;
           _isLoading = false;
         });
       }

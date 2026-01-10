@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
 import 'gmail_provider.dart';
 import 'zoho_provider.dart';
@@ -29,7 +30,12 @@ class MailAccountManager extends ChangeNotifier {
   String? _error;
   DateTime? _lastFetch;
   Timer? _pollingTimer;
+  Timer? _refreshDebounceTimer;
   final EmailCacheService _cache = EmailCacheService();
+
+  // Push notification subscription
+  RealtimeChannel? _pushChannel;
+  bool _isPushEnabled = false;
 
   /// Filter: null = all, 'gmail' = only gmail, 'zoho' = only zoho
   String? _providerFilter;
@@ -89,6 +95,11 @@ class MailAccountManager extends ChangeNotifier {
 
     debugPrint('📧 [MailManager] Initializing...');
     _isInitialized = true;
+
+    // Set up push notifications (instant updates)
+    await _setupPushSubscription();
+
+    // Keep polling as fallback (5 min instead of 3 min when push is enabled)
     _startPolling();
 
     // INSTANT LOAD: Load from SQLite cache first (no network wait)
@@ -410,13 +421,92 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     _selectedProvider = null;
     _isInitialized = false;
     _lastFetch = null;
+    _pushChannel?.unsubscribe();
+    _pushChannel = null;
+    _isPushEnabled = false;
     _instance = null;
+  }
+
+  /// Set up realtime subscription to listen for push notifications
+  Future<void> _setupPushSubscription() async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+
+    if (userId == null) {
+      debugPrint('📧 [MailManager] No user ID, skipping push setup');
+      return;
+    }
+
+    try {
+      // Subscribe to changes on email_push_subscriptions for this user
+      _pushChannel?.unsubscribe();
+      _pushChannel = supabase
+          .channel('email-push-$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'email_push_subscriptions',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              debugPrint('📧 [MailManager] 🔔 Push notification received!');
+              debugPrint('📧 [MailManager] Payload: ${payload.newRecord}');
+
+              // Check if this is a new mail notification
+              final newMailNotification =
+                  payload.newRecord['new_mail_notification'] as bool? ?? false;
+
+              if (newMailNotification) {
+                // Reset flag asynchronously (fire and forget)
+                supabase
+                    .from('email_push_subscriptions')
+                    .update({'new_mail_notification': false})
+                    .eq('user_id', userId)
+                    .eq('provider', payload.newRecord['provider'])
+                    .then((_) {});
+
+                // Debounce refresh to handle bursts (wait 2s before fetching)
+                if (_refreshDebounceTimer?.isActive ?? false)
+                  _refreshDebounceTimer!.cancel();
+                _refreshDebounceTimer = Timer(const Duration(seconds: 2), () {
+                  debugPrint(
+                      '📧 [MailManager] Debounce complete. Refreshing inbox...');
+                  refreshInbox(background: true);
+                });
+              }
+            },
+          )
+          .subscribe();
+
+      _isPushEnabled = true;
+      debugPrint('📧 [MailManager] ✅ Push notification listener active');
+
+      // Set up push for each connected provider
+      for (final provider in connectedProviders) {
+        if (provider is GmailProvider) {
+          final success = await provider.setupPushNotifications();
+          debugPrint(
+              '📧 [MailManager] Gmail push setup: ${success ? "✅" : "❌ (will use polling)"}');
+        }
+        // TODO: Add Zoho push setup when implemented
+      }
+    } catch (e) {
+      debugPrint('📧 [MailManager] Push setup error: $e');
+      // Push is optional, polling is the fallback
+    }
   }
 
   void _startPolling() {
     _pollingTimer?.cancel();
-    debugPrint('📧 [MailManager] Starting auto-refresh polling (60s)');
-    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+    // Use 300s (5 min) polling as fallback when push is enabled
+    // If push fails, this ensures we still get emails
+    final pollInterval = _isPushEnabled ? 300 : 180;
+    debugPrint(
+        '📧 [MailManager] Starting fallback polling (${pollInterval}s, push: $_isPushEnabled)');
+    _pollingTimer = Timer.periodic(Duration(seconds: pollInterval), (_) async {
       // Only refresh if we have listeners (Active UI)
       if (!hasListeners) return;
 

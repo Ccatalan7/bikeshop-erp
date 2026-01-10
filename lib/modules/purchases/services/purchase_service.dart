@@ -7,6 +7,7 @@ import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
+import '../../accounting/widgets/accounting_dashboard_section.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
 
@@ -26,7 +27,7 @@ class PurchaseService extends ChangeNotifier {
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
-  
+
   // ============================================================
   // CACHING - TTL-based cache for performance optimization
   // ============================================================
@@ -34,52 +35,57 @@ class PurchaseService extends ChangeNotifier {
   DateTime? _invoicesCacheTime;
   DateTime? _paymentsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-  
+
   // Public getters for cached data (instant UI access)
-  List<shared_supplier.Supplier> get cachedSuppliers => List.unmodifiable(_supplierCache);
+  List<shared_supplier.Supplier> get cachedSuppliers =>
+      List.unmodifiable(_supplierCache);
   List<PurchaseInvoice> get cachedInvoices => List.unmodifiable(_invoiceCache);
   List<PurchasePayment> get cachedPayments => List.unmodifiable(_paymentCache);
-  bool get hasSuppliersCache => _supplierCache.isNotEmpty && _suppliersCacheTime != null;
-  bool get hasInvoicesCache => _invoiceCache.isNotEmpty && _invoicesCacheTime != null;
-  bool get hasPaymentsCache => _paymentCache.isNotEmpty && _paymentsCacheTime != null;
-  
+  bool get hasSuppliersCache =>
+      _supplierCache.isNotEmpty && _suppliersCacheTime != null;
+  bool get hasInvoicesCache =>
+      _invoiceCache.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasPaymentsCache =>
+      _paymentCache.isNotEmpty && _paymentsCacheTime != null;
+
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   /// Invalidate supplier cache (call after create/update/delete)
   void invalidateSuppliersCache() {
     _suppliersCacheTime = null;
     _suppliersLoaded = false;
     debugPrint('🗑️ [PurchaseService] Suppliers cache invalidated');
   }
-  
+
   /// Invalidate invoice cache (call after create/update/delete)
   void invalidateInvoicesCache() {
     _invoicesCacheTime = null;
     _invoicesLoaded = false;
     debugPrint('🗑️ [PurchaseService] Invoices cache invalidated');
   }
-  
+
   /// Invalidate payment cache (call after create/update/delete)
   void invalidatePaymentsCache() {
     _paymentsCacheTime = null;
     _paymentsLoaded = false;
     debugPrint('🗑️ [PurchaseService] Payments cache invalidated');
   }
-  
+
   // Pending data from smart purchase list
   String? _pendingSupplierId;
   List<Map<String, dynamic>>? _pendingLineItems;
-  
+
   // Realtime channels
   RealtimeChannel? _purchaseInvoicesChannel;
   RealtimeChannel? _purchasePaymentsChannel;
-  
+
   // Public getters for reactive UI
-  UnmodifiableListView<PurchaseInvoice> get purchaseInvoices => UnmodifiableListView(_invoiceCache);
+  UnmodifiableListView<PurchaseInvoice> get purchaseInvoices =>
+      UnmodifiableListView(_invoiceCache);
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
@@ -92,24 +98,25 @@ class PurchaseService extends ChangeNotifier {
   }) {
     _pendingSupplierId = supplierId;
     _pendingLineItems = lineItems;
-    debugPrint('📦 PurchaseService: Stored pending data - supplier: $supplierId, items: ${lineItems?.length}');
+    debugPrint(
+        '📦 PurchaseService: Stored pending data - supplier: $supplierId, items: ${lineItems?.length}');
   }
-  
+
   // Retrieve and clear pending data (consume once)
   Map<String, dynamic>? consumePendingSmartPurchaseData() {
     if (_pendingSupplierId == null && _pendingLineItems == null) {
       return null;
     }
-    
+
     final data = {
       'supplierId': _pendingSupplierId,
       'lineItems': _pendingLineItems,
     };
-    
+
     // Clear after consuming
     _pendingSupplierId = null;
     _pendingLineItems = null;
-    
+
     debugPrint('📦 PurchaseService: Consumed pending data');
     return data;
   }
@@ -119,8 +126,11 @@ class PurchaseService extends ChangeNotifier {
     bool activeOnly = false,
   }) async {
     // Return cached data if valid
-    if (!forceRefresh && _isCacheValid(_suppliersCacheTime) && _supplierCache.isNotEmpty) {
-      debugPrint('📦 [PurchaseService] Using cached suppliers (${_supplierCache.length} items)');
+    if (!forceRefresh &&
+        _isCacheValid(_suppliersCacheTime) &&
+        _supplierCache.isNotEmpty) {
+      debugPrint(
+          '📦 [PurchaseService] Using cached suppliers (${_supplierCache.length} items)');
       return activeOnly
           ? _supplierCache.where((s) => s.isActive).toList()
           : _supplierCache;
@@ -133,7 +143,8 @@ class PurchaseService extends ChangeNotifier {
         ..sort((a, b) => a.name.compareTo(b.name));
       _suppliersLoaded = true;
       _suppliersCacheTime = DateTime.now();
-      debugPrint('✅ [PurchaseService] Cached ${_supplierCache.length} suppliers');
+      debugPrint(
+          '✅ [PurchaseService] Cached ${_supplierCache.length} suppliers');
       notifyListeners(); // Notify UI after loading suppliers
       return activeOnly
           ? _supplierCache.where((s) => s.isActive).toList()
@@ -168,7 +179,7 @@ class PurchaseService extends ChangeNotifier {
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
-      
+
       final result = await _db.insert('suppliers', {
         'tenant_id': tenantId,
         'name': name,
@@ -191,11 +202,11 @@ class PurchaseService extends ChangeNotifier {
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
-      
+
       final payload = supplier.toJson();
       // Ensure tenant_id is set
       payload['tenant_id'] = tenantId;
-      
+
       if (supplier.id.isEmpty) {
         final inserted = await _db.insert('suppliers', payload..remove('id'));
         final created = shared_supplier.Supplier.fromJson(inserted);
@@ -231,8 +242,11 @@ class PurchaseService extends ChangeNotifier {
   Future<List<PurchaseInvoice>> getPurchaseInvoices(
       {bool forceRefresh = false}) async {
     // Return cached data if valid
-    if (!forceRefresh && _isCacheValid(_invoicesCacheTime) && _invoiceCache.isNotEmpty) {
-      debugPrint('📦 [PurchaseService] Using cached invoices (${_invoiceCache.length} items)');
+    if (!forceRefresh &&
+        _isCacheValid(_invoicesCacheTime) &&
+        _invoiceCache.isNotEmpty) {
+      debugPrint(
+          '📦 [PurchaseService] Using cached invoices (${_invoiceCache.length} items)');
       return _invoiceCache;
     }
     try {
@@ -278,6 +292,7 @@ class PurchaseService extends ChangeNotifier {
       }
 
       invalidateInvoicesCache();
+      AccountingDashboardSection.invalidateCache();
       await getPurchaseInvoices(forceRefresh: true);
       // NOTE: Accounting entries are now created automatically by database triggers
       // when invoice status changes to 'received'. No need to call _postAccountingEntry here.
@@ -291,7 +306,7 @@ class PurchaseService extends ChangeNotifier {
 
   Future<void> deletePurchaseInvoice(String id) async {
     debugPrint('🗑️ DELETE PURCHASE INVOICE CALLED - ID: $id');
-    
+
     try {
       final client = Supabase.instance.client;
 
@@ -305,9 +320,10 @@ class PurchaseService extends ChangeNotifier {
             .eq('source_reference', id);
 
         debugPrint('📊 Found ${journalEntries.length} journal entries');
-        
+
         if (journalEntries.isNotEmpty) {
-          debugPrint('🗑️ Deleting ${journalEntries.length} journal entries...');
+          debugPrint(
+              '🗑️ Deleting ${journalEntries.length} journal entries...');
           for (final entry in journalEntries) {
             debugPrint('  Deleting journal entry: ${entry['id']}');
             await client.from('journal_entries').delete().eq('id', entry['id']);
@@ -325,13 +341,14 @@ class PurchaseService extends ChangeNotifier {
           .delete()
           .eq('id', id)
           .select(); // Request response to verify deletion
-      
+
       debugPrint('📊 Delete response: $response');
       debugPrint('✅ Purchase invoice deleted from database');
-      
+
       // Clear cache and reload
       debugPrint('🔄 Clearing cache and refreshing invoice list...');
       invalidateInvoicesCache();
+      AccountingDashboardSection.invalidateCache();
       _invoiceCache = const []; // Clear cache
       _invoicesLoaded = false;
       await getPurchaseInvoices(forceRefresh: true);
@@ -781,7 +798,8 @@ class PurchaseService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              debugPrint('🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}');
+              debugPrint(
+                  '🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}');
               getPurchaseInvoices(forceRefresh: true);
             },
           )

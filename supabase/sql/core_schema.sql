@@ -14886,6 +14886,104 @@ alter table online_order_items enable row level security;
 -- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
 -- ============================================================================
+-- EMAIL PUSH NOTIFICATIONS (Gmail/Zoho instant notifications)
+-- ============================================================================
+
+-- Store push subscription state for instant email notifications
+create table if not exists email_push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  provider text not null check (provider in ('gmail', 'zoho')),
+  
+  -- Email address for lookup (Added Jan 10, 2026)
+  email_address text,
+  
+  -- Gmail specific: historyId for incremental sync
+  gmail_history_id text,
+  gmail_expiration timestamp with time zone,
+  
+  -- Zoho specific  
+  zoho_webhook_id text,
+  
+  -- Notification trigger: update this to trigger realtime to app
+  new_mail_notification boolean default false,
+  notification_data jsonb,
+  
+  -- Status
+  is_active boolean default true,
+  last_notification_at timestamp with time zone,
+  error_message text,
+  
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  
+  unique(user_id, provider)
+);
+
+-- Indexes for email push subscriptions
+create index if not exists idx_email_push_user on email_push_subscriptions(user_id);
+create index if not exists idx_email_push_provider on email_push_subscriptions(provider);
+create index if not exists idx_email_push_email on email_push_subscriptions(email_address);
+
+-- RLS for email push subscriptions
+alter table email_push_subscriptions enable row level security;
+
+drop policy if exists "users_view_own_push_subscriptions" on email_push_subscriptions;
+create policy "users_view_own_push_subscriptions" on email_push_subscriptions
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "users_manage_own_push_subscriptions" on email_push_subscriptions;
+create policy "users_manage_own_push_subscriptions" on email_push_subscriptions
+  for all using (auth.uid() = user_id);
+
+-- Enable realtime for push notifications to Flutter app
+alter publication supabase_realtime add table email_push_subscriptions;
+
+-- Function to trigger notification (called by Edge Function webhooks)
+create or replace function public.notify_new_email(
+  p_user_id uuid,
+  p_provider text,
+  p_history_id text default null,
+  p_notification_data jsonb default null
+)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Update the subscription to trigger realtime notification
+  update email_push_subscriptions
+  set 
+    new_mail_notification = true,
+    notification_data = p_notification_data,
+    gmail_history_id = coalesce(p_history_id, gmail_history_id),
+    last_notification_at = now(),
+    updated_at = now()
+  where user_id = p_user_id and provider = p_provider;
+  
+  -- If no subscription exists, create one
+  if not found then
+    insert into email_push_subscriptions (user_id, tenant_id, provider, gmail_history_id, new_mail_notification, notification_data, last_notification_at)
+    select 
+      p_user_id,
+      up.tenant_id,
+      p_provider,
+      p_history_id,
+      true,
+      p_notification_data,
+      now()
+    from user_profiles up
+    where up.user_id = p_user_id
+    limit 1;
+  end if;
+end;
+$$;
+
+-- Grant execute to service role (for Edge Functions)
+grant execute on function public.notify_new_email(uuid, text, text, jsonb) to service_role;
+
+-- ============================================================================
 -- ONLINE ORDER SCHEMA EXTENSIONS
 -- ============================================================================
 

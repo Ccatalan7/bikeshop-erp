@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
+import '../../accounting/widgets/accounting_dashboard_section.dart';
 import '../models/sales_models.dart';
 
 class SalesService extends ChangeNotifier {
@@ -180,6 +181,7 @@ class SalesService extends ChangeNotifier {
       await _accountingService.journalEntries.loadJournalEntries();
 
       invalidateInvoicesCache();
+      AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedInvoice;
     } catch (e) {
@@ -197,6 +199,7 @@ class SalesService extends ChangeNotifier {
       await _databaseService.delete(_invoicesCollection, invoiceId);
       _invoices.removeWhere((invoice) => invoice.id == invoiceId);
       invalidateInvoicesCache();
+      AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
       debugPrint('SalesService.deleteInvoice error: $e');
@@ -274,6 +277,7 @@ class SalesService extends ChangeNotifier {
 
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment added
+      AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedPayment;
     } catch (e) {
@@ -291,6 +295,7 @@ class SalesService extends ChangeNotifier {
       await _accountingService.journalEntries.loadJournalEntries();
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment deleted
+      AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
       debugPrint('SalesService.deletePayment error: $e');

@@ -227,6 +227,96 @@ class GmailProvider extends EmailProvider {
     );
   }
 
+  /// Set up push notifications for new emails via Google Cloud Pub/Sub.
+  /// This calls the Gmail API users.watch method to subscribe to inbox changes.
+  /// The subscription lasts 7 days and should be renewed before expiry.
+  Future<bool> setupPushNotifications() async {
+    if (!isAuthenticated || _email == null) {
+      debugPrint('📧 [Gmail Push] Not authenticated, skipping push setup');
+      return false;
+    }
+
+    try {
+      debugPrint('📧 [Gmail Push] Setting up push notifications...');
+
+      // The Pub/Sub topic must be created in Google Cloud Console first
+      // Format: projects/{project-id}/topics/{topic-name}
+      // You need to grant gmail-api-push@system.gserviceaccount.com publish rights
+      const topicName = 'projects/vinabikeapp/topics/gmail-push-notifications';
+
+      final response = await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/watch',
+        body: {
+          'topicName': topicName,
+          'labelIds': ['INBOX'],
+        },
+      );
+
+      final historyId = response['historyId']?.toString();
+      final expiration = response['expiration']?.toString();
+
+      debugPrint('📧 [Gmail Push] ✅ Watch set up!');
+      debugPrint('📧 [Gmail Push] History ID: $historyId');
+      debugPrint('📧 [Gmail Push] Expires: $expiration');
+
+      // Store the subscription info in Supabase for renewal tracking
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId != null) {
+        await _supabase.from('email_push_subscriptions').upsert({
+          'user_id': userId,
+          'tenant_id': await _getTenantId(),
+          'provider': 'gmail',
+          'email_address': _email, // Added for lookup
+          'gmail_history_id': historyId,
+          'gmail_expiration': expiration != null
+              ? DateTime.fromMillisecondsSinceEpoch(int.parse(expiration))
+                  .toIso8601String()
+              : null,
+          'is_active': true,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,provider');
+
+        debugPrint('📧 [Gmail Push] Subscription saved to database');
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('📧 [Gmail Push] ❌ Error setting up push: $e');
+      // Don't throw - push is optional, polling is fallback
+      return false;
+    }
+  }
+
+  /// Stop push notifications (e.g., when disconnecting)
+  Future<void> stopPushNotifications() async {
+    try {
+      debugPrint('📧 [Gmail Push] Stopping push notifications...');
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/stop',
+        body: {},
+      );
+      debugPrint('📧 [Gmail Push] ✅ Push stopped');
+    } catch (e) {
+      debugPrint('📧 [Gmail Push] Error stopping push: $e');
+    }
+  }
+
+  Future<String?> _getTenantId() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final result = await _supabase
+        .from('user_profiles')
+        .select('tenant_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+    return result?['tenant_id'] as String?;
+  }
+
   Future<dynamic> _proxyRequest({
     required String method,
     required String url,
@@ -259,6 +349,7 @@ class GmailProvider extends EmailProvider {
     notifyListeners();
 
     try {
+      debugPrint('📧 [Gmail] Fetching inbox (limit: $limit)...');
       // List messages
       final listUrl = '$_apiBase/messages?maxResults=$limit&labelIds=INBOX';
       final listData = await _proxyRequest(method: 'GET', url: listUrl);
@@ -332,12 +423,19 @@ class GmailProvider extends EmailProvider {
       final url = '$_apiBase/messages/${email.id}?format=full';
       final data = await _proxyRequest(method: 'GET', url: url);
 
-      // Extract body content
-      String content = '';
       final payload = data['payload'];
+      String content = '';
 
       if (payload != null) {
+        // 1. Extract HTML body
         content = _extractBody(payload);
+
+        // 2. Resolve inline images (CIDs)
+        // We need to look for parts with 'Content-Disposition: inline' and 'Content-ID'
+        // Then download the data and replace "cid:..." in the HTML
+        if (content.contains('cid:')) {
+          content = await _resolveInlineImages(content, payload, email.id);
+        }
       }
 
       _selectedEmail = email.copyWith(content: content);
@@ -349,6 +447,99 @@ class GmailProvider extends EmailProvider {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Recursively find all inline parts and replace them in the content
+  Future<String> _resolveInlineImages(String htmlContent,
+      Map<String, dynamic> payload, String messageId) async {
+    final inlineParts = <Map<String, dynamic>>[];
+    _collectInlineParts(payload, inlineParts);
+
+    if (inlineParts.isEmpty) return htmlContent;
+
+    String resolvedContent = htmlContent;
+
+    for (final part in inlineParts) {
+      final headers = part['headers'] as List?;
+      final contentIdHeader = headers?.firstWhere(
+        (h) => h['name']?.toString().toLowerCase() == 'content-id',
+        orElse: () => null,
+      );
+
+      if (contentIdHeader != null) {
+        // Content-ID usually comes like "<image001.png@...>"
+        // We need to strip the angle brackets
+        String contentId = contentIdHeader['value'].toString();
+        contentId = contentId.replaceAll('<', '').replaceAll('>', '');
+
+        // Check if this CID is actually used in the HTML
+        if (resolvedContent.contains('cid:$contentId')) {
+          try {
+            // Get the attachment data
+            final body = part['body'];
+            String? base64Data;
+
+            if (body['data'] != null) {
+              // Already inside the part (small attachments)
+              base64Data = body['data'];
+            } else if (body['attachmentId'] != null) {
+              // Fetch large attachment
+              debugPrint(
+                  '📧 [Gmail] Fetching inline attachment: ${body['attachmentId']}');
+              base64Data =
+                  await _fetchAttachment(messageId, body['attachmentId']);
+            }
+
+            if (base64Data != null) {
+              final normalized =
+                  base64Data.replaceAll('-', '+').replaceAll('_', '/');
+              final mimeType = part['mimeType'] ?? 'image/jpeg';
+
+              // Replace cid with data URI
+              final dataUri = 'data:$mimeType;base64,$normalized';
+              resolvedContent =
+                  resolvedContent.replaceAll('cid:$contentId', dataUri);
+            }
+          } catch (e) {
+            debugPrint('Error resolving CID $contentId: $e');
+          }
+        }
+      }
+    }
+    return resolvedContent;
+  }
+
+  Future<String?> _fetchAttachment(
+      String messageId, String attachmentId) async {
+    try {
+      final url = '$_apiBase/messages/$messageId/attachments/$attachmentId';
+      final data = await _proxyRequest(method: 'GET', url: url);
+      return data['data']; // Returns base64url encoded string
+    } catch (e) {
+      debugPrint('Error fetching attachment: $e');
+      return null;
+    }
+  }
+
+  void _collectInlineParts(
+      Map<String, dynamic> part, List<Map<String, dynamic>> collected) {
+    // Check if current part is inline
+    // logic: headers has Content-ID
+    final headers = part['headers'] as List?;
+    if (headers != null) {
+      final hasCid = headers
+          .any((h) => h['name']?.toString().toLowerCase() == 'content-id');
+      if (hasCid) {
+        collected.add(part);
+      }
+    }
+
+    // Recurse
+    if (part['parts'] != null) {
+      for (final p in part['parts']) {
+        _collectInlineParts(p, collected);
+      }
     }
   }
 
@@ -380,7 +571,7 @@ class GmailProvider extends EmailProvider {
           }
         }
       }
-      // Recursive check for nested parts
+      // Recursive check for nested parts (e.g. multipart/alternative inside multipart/mixed)
       for (final part in parts) {
         if (part['parts'] != null) {
           final nested = _extractBody(part);

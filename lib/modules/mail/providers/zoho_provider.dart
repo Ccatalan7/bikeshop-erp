@@ -442,11 +442,15 @@ class ZohoProvider extends EmailProvider {
   @override
   Future<bool> markAsRead(String emailId, {bool read = true}) async {
     try {
-      final url = '$_accountUrl/messages/$emailId';
+      // Zoho API requires /updatemessage endpoint with messageId array
+      final url = '$_accountUrl/updatemessage';
       await _proxyRequest(
         method: 'PUT',
         url: url,
-        body: {'mode': read ? 'markAsRead' : 'markAsUnread'},
+        body: {
+          'mode': read ? 'markAsRead' : 'markAsUnread',
+          'messageId': [emailId],
+        },
       );
       notifyListeners();
       return true;
