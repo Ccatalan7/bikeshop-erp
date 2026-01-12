@@ -19,6 +19,7 @@ import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
 import 'focal_point_picker.dart';
+import 'website_link_value_editor.dart';
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
@@ -1985,11 +1986,12 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaText', v),
         ),
         const SizedBox(height: 12),
-        _EditorTextField(
+        WebsiteLinkValueEditor(
           label: 'Link del botón',
           value: slide['ctaLink']?.toString() ?? '',
           onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaLink', v),
-          hint: '/productos',
+          dense: true,
+          darkStyle: true,
         ),
         const SizedBox(height: 20),
 
@@ -2913,11 +2915,13 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
         // View all link
         if (widget.data['showViewAll'] != false) ...[
           const SizedBox(height: 16),
-          _EditorTextField(
+          WebsiteLinkValueEditor(
             label: 'Link "Ver todos"',
             value:
                 widget.data['viewAllLink']?.toString() ?? '/productos',
             onChanged: (v) => _updateField('viewAllLink', v),
+            dense: true,
+            darkStyle: true,
           ),
         ],
       ],
@@ -3813,56 +3817,13 @@ class _GenericBlockControls extends StatelessWidget {
       case WebsiteBlockFieldType.link:
         final current =
             raw?.toString() ?? (field.defaultValue?.toString() ?? '');
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _EditorTextField(
-              label: label,
-              value: current,
-              onChanged: (v) => setValue(v),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final next = await _pickPageLink(context);
-                      if (next != null && next.isNotEmpty) setValue(next);
-                    },
-                    icon: const Icon(Icons.article_outlined, size: 16),
-                    label: const Text('Elegir pgina'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.15)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final next = await _pickCommonLink(context);
-                      if (next != null && next.isNotEmpty) setValue(next);
-                    },
-                    icon: const Icon(Icons.link, size: 16),
-                    label: const Text('Enlaces rpidos'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.15)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            _helpText(field.helpText),
-          ],
+        return WebsiteLinkValueEditor(
+          label: label,
+          value: current,
+          helpText: field.helpText,
+          dense: true,
+          darkStyle: true,
+          onChanged: (v) => setValue(v),
         );
       case WebsiteBlockFieldType.color:
         final current =
@@ -4335,112 +4296,6 @@ class _GenericBlockControls extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-
-  Future<String?> _pickPageLink(BuildContext context) async {
-    final websiteService = context.read<WebsiteService>();
-    try {
-      if (websiteService.pages.isEmpty) {
-        await websiteService.loadPages();
-      }
-    } catch (_) {
-      // If load fails (e.g., public store), still show whatever we have.
-    }
-
-    final pages = websiteService.pages;
-    if (!context.mounted) return null;
-
-    final selected = await showDialog<WebsitePage>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Elegir página'),
-        content: SizedBox(
-          width: 420,
-          height: 520,
-          child: ListView(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.home_outlined),
-                title: const Text('Inicio'),
-                subtitle: const Text('/'),
-                onTap: () => Navigator.pop(
-                  context,
-                  WebsitePage(
-                    id: '',
-                    tenantId: '',
-                    slug: '',
-                    title: 'Inicio',
-                    isHome: true,
-                    createdAt: DateTime.now(),
-                    updatedAt: DateTime.now(),
-                  ),
-                ),
-              ),
-              const Divider(),
-              ...pages.map((page) {
-                return ListTile(
-                  leading:
-                      Icon(page.isHome ? Icons.home : Icons.article_outlined),
-                  title: Text(page.title),
-                  subtitle: Text(page.isHome ? '/' : '/pagina/${page.slug}'),
-                  onTap: () => Navigator.pop(context, page),
-                );
-              }),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
-    );
-
-    if (selected == null) return null;
-    return selected.isHome ? '/' : '/pagina/${selected.slug}';
-  }
-
-  Future<String?> _pickCommonLink(BuildContext context) async {
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enlaces rápidos'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.shopping_bag_outlined),
-                title: const Text('Productos'),
-                subtitle: const Text('/productos'),
-                onTap: () => Navigator.pop(context, '/productos'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.home_outlined),
-                title: const Text('Inicio'),
-                subtitle: const Text('/'),
-                onTap: () => Navigator.pop(context, '/'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.contact_mail_outlined),
-                title: const Text('Contacto'),
-                subtitle: const Text('/contacto'),
-                onTap: () => Navigator.pop(context, '/contacto'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -8284,6 +8139,14 @@ class _CategoryGridBlockControlsState
     if (index < categories.length) {
       categories[index] = Map<String, dynamic>.from(categories[index]);
       categories[index][field] = value;
+
+      // Keep the two legacy/new link keys in sync.
+      if (field == 'ctaLink') {
+        categories[index]['link'] = value;
+      } else if (field == 'link') {
+        categories[index]['ctaLink'] = value;
+      }
+
       _updateField('categories', categories);
     }
   }
@@ -8296,6 +8159,7 @@ class _CategoryGridBlockControlsState
       'imageUrl': '',
       'ctaText': 'Ver más',
       'ctaLink': '/productos',
+      'link': '/productos',
       'size': categories.length < 2 ? 'large' : 'medium',
     });
     _updateField('categories', categories);
@@ -8432,12 +8296,14 @@ class _CategoryGridBlockControlsState
                 _updateCategory(_selectedCategoryIndex, 'ctaText', v),
           ),
           const SizedBox(height: 12),
-          _EditorTextField(
+          WebsiteLinkValueEditor(
             label: 'Link botón',
             value: _categories[_selectedCategoryIndex]['ctaLink']?.toString() ??
                 '',
             onChanged: (v) =>
                 _updateCategory(_selectedCategoryIndex, 'ctaLink', v),
+            dense: true,
+            darkStyle: true,
           ),
           const SizedBox(height: 12),
           // Size selector
@@ -8783,10 +8649,12 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
             onChanged: (v) => _updateField('ctaText', v),
           ),
           const SizedBox(height: 12),
-          _EditorTextField(
+          WebsiteLinkValueEditor(
             label: 'Link botón',
             value: widget.data['ctaLink']?.toString() ?? '',
             onChanged: (v) => _updateField('ctaLink', v),
+            dense: true,
+            darkStyle: true,
           ),
         ],
         const SizedBox(height: 16),

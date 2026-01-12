@@ -33,8 +33,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   static const List<int> _itemsPerPageOptions = [20, 50, 100];
 
   String _searchQuery = '';
-  String _lastRouteSearchQuery = '';
+  String _lastRouteFiltersSignature = '';
   String? _selectedCategoryId;
+  ProductType? _selectedProductType;
+  String? _pendingRouteCategoryValue;
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
 
@@ -52,21 +54,37 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncSearchQueryFromRoute();
+    _syncFiltersFromRoute();
   }
 
-  void _syncSearchQueryFromRoute() {
+  void _syncFiltersFromRoute() {
     final qp = GoRouterState.of(context).uri.queryParameters;
-    final routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
-    if (routeQuery == _lastRouteSearchQuery) return;
+    final legacyCategoria = (qp['categoria'] ?? '').trim();
+    var routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
+    final routeCategory = (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '')
+        .trim();
+    final routeType = (qp['type'] ?? qp['product_type'] ?? qp['tipo'] ?? '').trim();
 
-    _lastRouteSearchQuery = routeQuery;
+    // Backward-compat: historically, some website links used `?categoria=mtb`
+    // as a collection-style filter. We now treat that value as a free-text
+    // search term (so it never “forces” the catalog into a wrong category).
+    if (routeQuery.isEmpty && legacyCategoria.isNotEmpty) {
+      routeQuery = legacyCategoria;
+    }
+
+    final signature = '$routeQuery|$routeCategory|$routeType|$legacyCategoria';
+    if (signature == _lastRouteFiltersSignature) return;
+    _lastRouteFiltersSignature = signature;
+
+    final parsedType = _parseProductType(routeType);
 
     // Avoid calling setState during build (this page can be kept-alive/offstage).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       setState(() {
         _searchQuery = routeQuery;
+        _selectedProductType = parsedType;
 
         // Keep the visible search field in sync so users can see
         // what term is currently filtering the catalog.
@@ -78,9 +96,91 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             composing: TextRange.empty,
           );
         }
+
+        if (routeCategory.isEmpty) {
+          _selectedCategoryId = null;
+          _pendingRouteCategoryValue = null;
+        } else {
+          final resolved = _resolveCategoryIdFromValue(routeCategory);
+          if (resolved == null && !_looksLikeUuid(routeCategory)) {
+            // If `category` is a non-UUID string we can't resolve, treat it as
+            // a search token instead of defaulting to an arbitrary category.
+            if (_searchQuery.isEmpty) {
+              _searchQuery = routeCategory;
+              if (_filtersSearchController.text != routeCategory) {
+                _filtersSearchController.value =
+                    _filtersSearchController.value.copyWith(
+                  text: routeCategory,
+                  selection: TextSelection.collapsed(offset: routeCategory.length),
+                  composing: TextRange.empty,
+                );
+              }
+            }
+            _selectedCategoryId = null;
+            _pendingRouteCategoryValue = null;
+          } else {
+            _selectedCategoryId = resolved;
+            _pendingRouteCategoryValue = resolved == null ? routeCategory : null;
+          }
+        }
       });
+
       _applyFilters();
     });
+  }
+
+  ProductType? _parseProductType(String raw) {
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty) return null;
+    if (v == 'service' || v == 'servicio' || v == 'servicios') {
+      return ProductType.service;
+    }
+    if (v == 'product' || v == 'producto' || v == 'productos') {
+      return ProductType.product;
+    }
+    return null;
+  }
+
+  bool _looksLikeUuid(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
+  }
+
+  String? _resolveCategoryIdFromValue(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    // If it's already an ID, accept it.
+    if (_looksLikeUuid(trimmed)) return trimmed;
+
+    // Best-effort mapping by category name.
+    if (_allProducts.isEmpty) return null;
+
+    final wanted = _normalizeForSearch(trimmed);
+    if (wanted.isEmpty) return null;
+
+    // If a type filter is active, prefer matching within that subset.
+    final sourceProducts = _selectedProductType == null
+        ? _allProducts
+        : _allProducts.where((p) => p.productType == _selectedProductType).toList();
+
+    final categoriesMap = <String, String>{};
+    for (final p in sourceProducts) {
+      final id = p.categoryId;
+      if (id == null) continue;
+      categoriesMap[id] = p.categoryName ?? 'Sin categoría';
+    }
+
+    String? bestId;
+    for (final entry in categoriesMap.entries) {
+      final normalizedName = _normalizeForSearch(entry.value);
+      if (normalizedName == wanted || normalizedName.contains(wanted)) {
+        bestId = entry.key;
+        break;
+      }
+    }
+    return bestId;
   }
 
   void _clearSearch() {
@@ -103,7 +203,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         queryParameters: nextQp.isEmpty ? null : nextQp,
       ).toString();
       router.replace(destination);
-      _lastRouteSearchQuery = '';
+      _lastRouteFiltersSignature = '';
     } catch (_) {
       // Ignore (non-critical)
     }
@@ -147,6 +247,40 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
       _allProducts = products;
       debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
+
+      // If the URL carried a category filter we couldn't resolve earlier (e.g.
+      // because products weren't loaded yet), resolve it now.
+      if (_pendingRouteCategoryValue != null) {
+        final resolved = _resolveCategoryIdFromValue(_pendingRouteCategoryValue!);
+        if (resolved != null && mounted) {
+          setState(() {
+            _selectedCategoryId = resolved;
+            _pendingRouteCategoryValue = null;
+          });
+        } else if (resolved == null && mounted) {
+          // If we still can't resolve the legacy category token after products
+          // load, fall back to using it as a search query.
+          final token = _pendingRouteCategoryValue!.trim();
+          if (token.isNotEmpty && _searchQuery.isEmpty) {
+            setState(() {
+              _searchQuery = token;
+              _filtersSearchController.value =
+                  _filtersSearchController.value.copyWith(
+                text: token,
+                selection: TextSelection.collapsed(offset: token.length),
+                composing: TextRange.empty,
+              );
+              _pendingRouteCategoryValue = null;
+              _selectedCategoryId = null;
+            });
+          } else {
+            setState(() {
+              _pendingRouteCategoryValue = null;
+            });
+          }
+        }
+      }
+
       _applyFilters();
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
@@ -165,6 +299,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       final tokens = _tokenizeSearchQuery(_searchQuery);
 
       _filteredProducts = _allProducts.where((product) {
+        // Type filter
+        if (_selectedProductType != null &&
+            product.productType != _selectedProductType) {
+          return false;
+        }
+
         // Search filter
         if (tokens.isNotEmpty) {
           final textHaystack = _buildNormalizedProductSearchText(product);
@@ -718,7 +858,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Widget _buildCategoryFilters() {
     // Use a Map to properly deduplicate categories by ID
     final categoriesMap = <String, String>{};
-    for (final p in _allProducts) {
+    final sourceProducts = _selectedProductType == null
+        ? _allProducts
+        : _allProducts.where((p) => p.productType == _selectedProductType);
+    for (final p in sourceProducts) {
       if (p.categoryId != null) {
         categoriesMap[p.categoryId!] = p.categoryName ?? 'Sin categoría';
       }
@@ -728,12 +871,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final sortedCategories = categoriesMap.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
 
+    final allCount = sourceProducts.length;
+
     return Column(
       children: [
-        _buildCategoryOption(null, 'Todas', _allProducts.length),
+        _buildCategoryOption(null, 'Todas', allCount),
         ...sortedCategories.map((entry) {
-          final count =
-              _allProducts.where((p) => p.categoryId == entry.key).length;
+          final count = sourceProducts.where((p) => p.categoryId == entry.key).length;
           return _buildCategoryOption(entry.key, entry.value, count);
         }),
       ],
@@ -783,6 +927,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final totalProducts = _filteredProducts.length;
     final startIndex = ((_currentPage - 1) * _itemsPerPage) + 1;
     final endIndex = (_currentPage * _itemsPerPage).clamp(0, totalProducts);
+    final isServicesView = _selectedProductType == ProductType.service;
+    final titleText = isServicesView ? 'SERVICIOS' : 'PRODUCTOS';
+    final noun = isServicesView ? 'servicios' : 'productos';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -796,8 +943,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               color: Colors.black,
               margin: const EdgeInsets.only(right: 12),
             ),
-            const Text(
-              'PRODUCTOS',
+            Text(
+              titleText,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -810,8 +957,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         const SizedBox(height: 8),
         Text(
           totalProducts > 0
-              ? 'Mostrando $startIndex - $endIndex de $totalProducts productos'
-              : '0 productos encontrados',
+              ? 'Mostrando $startIndex - $endIndex de $totalProducts $noun'
+              : '0 $noun encontrados',
           style: TextStyle(
             fontSize: 13,
             color: Colors.grey.shade600,

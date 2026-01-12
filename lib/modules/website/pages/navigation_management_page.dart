@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
+import '../widgets/website_link_value_editor.dart';
 
 /// Navigation Management Page - Manage website menus (header, footer)
 class NavigationManagementPage extends StatefulWidget {
@@ -529,14 +530,6 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   late bool _openInNewTab;
   bool _isSaving = false;
 
-  // For page selection
-  List<WebsitePage> _pages = [];
-  String? _selectedPageSlug;
-
-  static final RegExp _uuidLike = RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-  );
-
   @override
   void initState() {
     super.initState();
@@ -546,11 +539,6 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _linkType = widget.link?.linkType ?? NavLinkType.page;
     _isVisible = widget.link?.isVisible ?? true;
     _openInNewTab = widget.link?.openInNewTab ?? false;
-
-    // IMPORTANT:
-    // - linkValue may be legacy UUID (page_id) OR modern path (e.g. '/inicio', '/pagina/terminos')
-    // - We cannot safely set the dropdown value until pages are loaded, otherwise Flutter asserts.
-    _loadPages();
   }
 
   @override
@@ -558,76 +546,6 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _labelController.dispose();
     _linkValueController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadPages() async {
-    try {
-      final service = context.read<WebsiteService>();
-      await service.loadPages();
-
-      final publishedPages = service.pages.where((p) => p.isPublished).toList();
-
-      if (!mounted) return;
-      setState(() {
-        _pages = publishedPages;
-      });
-
-      // Now that we have pages, we can safely sync the dropdown selection.
-      _syncSelectedPageFromLinkValue();
-    } catch (e) {
-      debugPrint('Error loading pages: $e');
-    }
-  }
-
-  void _syncSelectedPageFromLinkValue() {
-    if (!mounted) return;
-    if (_linkType != NavLinkType.page) return;
-
-    final raw = _linkValueController.text.trim();
-    if (raw.isEmpty) {
-      setState(() => _selectedPageSlug = null);
-      return;
-    }
-
-    // Build a stable, unique slug map (avoid duplicate dropdown values).
-    final pagesBySlug = <String, WebsitePage>{
-      for (final p in _pages)
-        if (p.slug.trim().isNotEmpty) p.slug.trim(): p,
-    };
-
-    String? resolvedSlug;
-
-    // Legacy UUID case: linkValue stores page.id
-    if (_uuidLike.hasMatch(raw)) {
-      final page = _pages.cast<WebsitePage?>().firstWhere(
-            (p) => p?.id == raw,
-            orElse: () => null,
-          );
-      if (page != null) {
-        resolvedSlug = page.slug.trim();
-        // Normalize to modern path so future saves are consistent.
-        _linkValueController.text = '/$resolvedSlug';
-      }
-    } else {
-      // Modern path case: '/slug' or '/pagina/slug'
-      var normalized = raw;
-      if (normalized.startsWith('/')) {
-        normalized = normalized.substring(1);
-      }
-      final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
-      if (parts.isNotEmpty) {
-        resolvedSlug = (parts.first == 'pagina' && parts.length >= 2)
-            ? parts[1]
-            : parts.first;
-      }
-    }
-
-    if (resolvedSlug != null && pagesBySlug.containsKey(resolvedSlug)) {
-      setState(() => _selectedPageSlug = resolvedSlug);
-    } else {
-      // Value is not valid for the dropdown -> must be null to avoid assertion.
-      setState(() => _selectedPageSlug = null);
-    }
   }
 
   @override
@@ -663,7 +581,6 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                           setState(() {
                             _linkType = type;
                             _linkValueController.clear();
-                            _selectedPageSlug = null;
                           });
                         }
                       },
@@ -686,48 +603,34 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
 
                 // Link Value - depends on type
                 if (_linkType == NavLinkType.page) ...[
-                  Builder(
-                    builder: (context) {
-                      final pagesBySlug = <String, WebsitePage>{
-                        for (final p in _pages)
-                          if (p.slug.trim().isNotEmpty) p.slug.trim(): p,
-                      };
-                      final entries = pagesBySlug.entries.toList()
-                        ..sort(
-                            (a, b) => a.value.title.compareTo(b.value.title));
-
-                      final safeValue =
-                          pagesBySlug.containsKey(_selectedPageSlug)
-                              ? _selectedPageSlug
-                              : null;
-
-                      return DropdownButtonFormField<String>(
-                        value: safeValue,
-                        decoration: const InputDecoration(
-                          labelText: 'Página *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: entries.map((e) {
-                          final page = e.value;
-                          return DropdownMenuItem(
-                            value: page.slug,
-                            child: Text(page.title),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedPageSlug = value;
-                            if (value == null || value.isEmpty) {
-                              _linkValueController.clear();
-                            } else {
-                              _linkValueController.text = '/$value';
-                            }
-                          });
-                        },
-                        validator: (v) =>
-                            v == null ? 'Selecciona una página' : null,
-                      );
+                  WebsiteLinkValueEditor(
+                    label: 'Destino *',
+                    value: _linkValueController.text,
+                    dense: true,
+                    showValuePreview: true,
+                    allowInternal: true,
+                    allowExternal: false,
+                    allowAnchor: false,
+                    helpText:
+                        'Usá Destinos especiales (Catálogo) para configurar filtros sin pegar URLs.',
+                    onChanged: (v) {
+                      setState(() {
+                        _linkValueController.text = v;
+                      });
                     },
+                  ),
+                  Offstage(
+                    offstage: true,
+                    child: TextFormField(
+                      controller: _linkValueController,
+                      validator: (v) =>
+                          v?.trim().isEmpty == true ? 'Requerido' : null,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tip: si querés linkear una página personalizada, elegí "Página del sitio".',
+                    style: theme.textTheme.bodySmall,
                   ),
                 ] else if (_linkType == NavLinkType.external) ...[
                   TextFormField(
@@ -759,15 +662,29 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                     validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                 ] else if (_linkType == NavLinkType.category) ...[
-                  TextFormField(
-                    controller: _linkValueController,
-                    decoration: const InputDecoration(
-                      labelText: 'Categoría *',
-                      hintText: 'bicicletas, accesorios, etc.',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category),
+                  WebsiteLinkValueEditor(
+                    label: 'Catálogo *',
+                    value: _linkValueController.text,
+                    dense: true,
+                    showValuePreview: true,
+                    allowInternal: true,
+                    allowExternal: false,
+                    allowAnchor: false,
+                    helpText:
+                        'Esto guarda una URL interna (ej: /productos?type=service&category=...).',
+                    onChanged: (v) {
+                      setState(() {
+                        _linkValueController.text = v;
+                      });
+                    },
+                  ),
+                  Offstage(
+                    offstage: true,
+                    child: TextFormField(
+                      controller: _linkValueController,
+                      validator: (v) =>
+                          v?.trim().isEmpty == true ? 'Requerido' : null,
                     ),
-                    validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
                   ),
                 ] else if (_linkType == NavLinkType.action) ...[
                   DropdownButtonFormField<String>(
@@ -870,11 +787,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     try {
       // Determine link value based on type
       String linkValue;
-      if (_linkType == NavLinkType.page && _selectedPageSlug != null) {
-        linkValue = '/$_selectedPageSlug';
-      } else {
-        linkValue = _linkValueController.text.trim();
-      }
+      linkValue = _linkValueController.text.trim();
 
       final link = WebsiteNavigation(
         id: widget.link?.id ?? '',

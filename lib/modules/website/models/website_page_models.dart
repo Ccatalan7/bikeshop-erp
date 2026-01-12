@@ -532,7 +532,13 @@ class WebsiteNavigation {
       case NavLinkType.anchor:
         return linkValue?.startsWith('#') == true ? linkValue : '#$linkValue';
       case NavLinkType.category:
-        return '/productos?categoria=$linkValue';
+        final v = linkValue?.trim();
+        if (v == null || v.isEmpty) return '/productos';
+        // Backward compatible:
+        // - legacy values stored only the category token
+        // - newer UI may store a full internal href (e.g. '/productos?type=service&category=...')
+        if (v.startsWith('/')) return v;
+        return '/productos?categoria=$v';
       case NavLinkType.action:
         return null; // Actions are handled by onClick
     }

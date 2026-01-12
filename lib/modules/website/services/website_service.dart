@@ -133,6 +133,39 @@ class WebsiteService extends ChangeNotifier {
       }
     }
 
+    if (rawTypeLower == 'categorygrid') {
+      final rawCategories = normalized['categories'];
+      if (rawCategories is List) {
+        final next = <Map<String, dynamic>>[];
+        for (final item in rawCategories) {
+          if (item is! Map) continue;
+          final normalizedItem = Map<String, dynamic>.from(item);
+
+          final ctaLink = (normalizedItem['ctaLink'] ?? '').toString().trim();
+          final link = (normalizedItem['link'] ?? '').toString().trim();
+          if (ctaLink.isEmpty && link.isNotEmpty) {
+            normalizedItem['ctaLink'] = link;
+          }
+          if (link.isEmpty && ctaLink.isNotEmpty) {
+            normalizedItem['link'] = ctaLink;
+          }
+
+          final ctaText = (normalizedItem['ctaText'] ?? '').toString().trim();
+          final legacyButtonText =
+              (normalizedItem['buttonText'] ?? '').toString().trim();
+          if (ctaText.isEmpty && legacyButtonText.isNotEmpty) {
+            normalizedItem['ctaText'] = legacyButtonText;
+          }
+          if (legacyButtonText.isEmpty && ctaText.isNotEmpty) {
+            normalizedItem['buttonText'] = ctaText;
+          }
+
+          next.add(normalizedItem);
+        }
+        normalized['categories'] = next;
+      }
+    }
+
     if (rawTypeLower == 'videobanner') {
       if ((normalized['imageUrl'] == null ||
               normalized['imageUrl'].toString().trim().isEmpty) &&
@@ -2704,7 +2737,7 @@ class WebsiteService extends ChangeNotifier {
             'menu_location': 'footer',
             'label': 'Servicios',
             'link_type': 'page',
-            'link_value': '/tienda/servicios',
+            'link_value': '/productos?type=service',
             'open_in_new_tab': false,
             'parent_id': enlacesParentId,
             'order_index': 2,

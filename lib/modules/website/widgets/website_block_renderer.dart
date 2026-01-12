@@ -3085,7 +3085,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Conquista cualquier terreno',
           'imageUrl': null,
           'ctaText': 'Ver colección',
-          'ctaLink': '/productos?categoria=mtb',
+          'ctaLink': '/productos',
           'size': 'large', // large, medium, small
         },
         {
@@ -3093,7 +3093,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Velocidad y rendimiento',
           'imageUrl': null,
           'ctaText': 'Ver colección',
-          'ctaLink': '/productos?categoria=ruta',
+          'ctaLink': '/productos',
           'size': 'large',
         },
         {
@@ -3101,7 +3101,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Movilidad en la ciudad',
           'imageUrl': null,
           'ctaText': 'Ver gama',
-          'ctaLink': '/productos?categoria=urbano',
+          'ctaLink': '/productos',
           'size': 'medium',
         },
         {
@@ -3109,7 +3109,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Todo lo que necesitas',
           'imageUrl': null,
           'ctaText': 'Explorar',
-          'ctaLink': '/productos?categoria=accesorios',
+          'ctaLink': '/productos',
           'size': 'medium',
         },
       ];
@@ -3900,7 +3900,11 @@ class _CategoryCard extends StatelessWidget {
     final title = (data['title'] ?? 'Categoría').toString();
     final subtitle = (data['subtitle'] ?? '').toString();
     final ctaText = (data['ctaText'] ?? 'Ver colección').toString();
-    final ctaLink = (data['ctaLink'] ?? '/productos').toString();
+    // Backward/forward compat: some editors/definitions use `link`, others use `ctaLink`.
+    // If both exist but disagree (common in legacy data), prefer the non-generic one.
+    final ctaLink = (data['ctaLink'] ?? '').toString().trim();
+    final link = (data['link'] ?? '').toString().trim();
+    final href = _resolveCategoryHref(ctaLink: ctaLink, link: link);
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
@@ -3941,7 +3945,7 @@ class _CategoryCard extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: previewMode ? null : () => onNavigate?.call(ctaLink),
+                onTap: previewMode ? null : () => onNavigate?.call(href),
                 hoverColor: Colors.black.withOpacity(0.2),
                 splashColor: Colors.white.withOpacity(0.1),
                 highlightColor: Colors.white.withOpacity(0.05),
@@ -4010,6 +4014,34 @@ class _CategoryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _resolveCategoryHref({
+    required String ctaLink,
+    required String link,
+  }) {
+    const fallback = '/productos';
+    final hasCta = ctaLink.isNotEmpty;
+    final hasLink = link.isNotEmpty;
+
+    if (!hasCta && !hasLink) return fallback;
+    if (!hasCta) return link;
+    if (!hasLink) return ctaLink;
+
+    if (ctaLink == link) return link;
+
+    bool isGenericCatalog(String href) {
+      return href == '/productos' || href == '/tienda/productos';
+    }
+
+    final ctaIsGeneric = isGenericCatalog(ctaLink);
+    final linkIsGeneric = isGenericCatalog(link);
+
+    if (linkIsGeneric && !ctaIsGeneric) return ctaLink;
+    if (ctaIsGeneric && !linkIsGeneric) return link;
+
+    // If both are “specific” but conflicting, prefer `link` (newer schema key).
+    return link;
   }
 }
 

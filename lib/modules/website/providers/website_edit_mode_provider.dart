@@ -1136,7 +1136,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Conquista cualquier terreno',
               'imageUrl': '',
               'ctaText': 'Ver colección',
-              'ctaLink': '/productos?categoria=mtb',
+              'ctaLink': '/productos',
               'size': 'large',
             },
             {
@@ -1144,7 +1144,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Velocidad y rendimiento',
               'imageUrl': '',
               'ctaText': 'Ver colección',
-              'ctaLink': '/productos?categoria=ruta',
+              'ctaLink': '/productos',
               'size': 'large',
             },
             {
@@ -1152,7 +1152,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Movilidad en la ciudad',
               'imageUrl': '',
               'ctaText': 'Ver gama',
-              'ctaLink': '/productos?categoria=urbano',
+              'ctaLink': '/productos',
               'size': 'medium',
             },
             {
@@ -1160,7 +1160,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Todo lo que necesitas',
               'imageUrl': '',
               'ctaText': 'Explorar',
-              'ctaLink': '/productos?categoria=accesorios',
+              'ctaLink': '/productos',
               'size': 'medium',
             },
           ],

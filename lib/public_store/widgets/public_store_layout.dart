@@ -2398,7 +2398,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// Example: `/tienda` -> `/`, `/tienda/productos` -> `/productos`.
   /// Preserves query parameters (e.g. `/tienda?edit=true` -> `/?edit=true`).
   String _routeForPublicStore(String legacyRoute) {
-    final uri = Uri.tryParse(legacyRoute);
+    var uri = Uri.tryParse(legacyRoute);
     if (uri == null) return legacyRoute;
 
     var path = uri.path;
@@ -2407,6 +2407,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // This avoids odd browser URL behavior on web and keeps routing consistent.
     if (uri.scheme.isEmpty && path.isNotEmpty && !path.startsWith('/')) {
       path = '/$path';
+    }
+
+    // Backward-compat: historically, footer navigation used `/tienda/servicios`
+    // for a services catalog. That path is now used for account service history,
+    // so we remap it to a filtered catalog view.
+    if (path == '/tienda/servicios' || path == '/tienda/servicios/') {
+      final nextQp = Map<String, String>.from(uri.queryParameters);
+      nextQp.putIfAbsent('type', () => 'service');
+      uri = uri.replace(
+        path: '/tienda/productos',
+        queryParameters: nextQp,
+      );
+      path = uri.path;
     }
 
     // When running the public store entrypoint on localhost, we still want the
@@ -3942,7 +3955,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               _buildFooterLinkDesktop(
                 context,
                 'Servicios',
-                _routeForPublicStore('/tienda/servicios'),
+                _routeForPublicStore('/productos?type=service'),
                 primaryColor,
               ),
               _buildFooterLinkDesktop(
@@ -4149,8 +4162,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   context, 'Inicio', _routeForPublicStore('/tienda')),
               _buildFooterLinkMobile(
                   context, 'Productos', _routeForPublicStore('/productos')),
-              _buildFooterLinkMobile(context, 'Servicios',
-                  _routeForPublicStore('/tienda/servicios')),
+              _buildFooterLinkMobile(
+                context,
+                'Servicios',
+                _routeForPublicStore('/productos?type=service'),
+              ),
               _buildFooterLinkMobile(context, 'Contacto',
                   _routeForPublicStore('/tienda/contacto')),
             ],
