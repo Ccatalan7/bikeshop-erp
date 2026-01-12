@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
@@ -283,6 +284,7 @@ class WebsiteService extends ChangeNotifier {
   bool _isInitializing = false;
   String? _error;
   bool _disposed = false; // Track disposal state
+  bool _notifyScheduled = false;
   bool _hasLoadedForTenant =
       false; // Track if loadBlocksForTenant completed (even with no blocks)
   bool _isLoadingForTenant = false; // Prevent concurrent loads
@@ -315,9 +317,25 @@ class WebsiteService extends ChangeNotifier {
 
   /// Safe version of notifyListeners that checks disposal state
   void _safeNotifyListeners() {
-    if (!_disposed) {
-      notifyListeners();
+    if (_disposed) return;
+
+    // If we notify while Flutter is building/layouting/painting, Provider will
+    // attempt to mark dependents dirty during the same build pass and can throw.
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final inBuild = phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks;
+    if (inBuild) {
+      if (_notifyScheduled) return;
+      _notifyScheduled = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _notifyScheduled = false;
+        if (_disposed) return;
+        notifyListeners();
+      });
+      return;
     }
+
+    notifyListeners();
   }
 
   // ============================================================================
@@ -334,11 +352,14 @@ class WebsiteService extends ChangeNotifier {
 
   /// Load ALL public store data - tries edge cache first, falls back to Supabase
   /// Edge cache: ~50ms (cache hit) vs Supabase direct: ~700ms
-  Future<void> loadPublicStoreDataUnified(String tenantId) async {
+  Future<void> loadPublicStoreDataUnified(
+    String tenantId, {
+    bool forceRefresh = false,
+  }) async {
     final swTotal = Stopwatch()..start();
 
-    // Prevent duplicate loads
-    if (_hasLoadedForTenant) {
+    // Prevent duplicate loads (unless explicitly forced by user "home refresh")
+    if (_hasLoadedForTenant && !forceRefresh) {
       if (_perfLogsEnabled) {
         debugPrint(
             '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (already loaded)');
@@ -348,7 +369,7 @@ class WebsiteService extends ChangeNotifier {
 
     // If we already have recent cached settings+blocks, skip immediate network refresh.
     // This is especially important on mobile where TLS/DNS can cost ~1s.
-    if (_hasFreshPublicStoreCache(tenantId)) {
+    if (!forceRefresh && _hasFreshPublicStoreCache(tenantId)) {
       // Ensure navigation is available too (sync cache first, then background refresh).
       _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
       // Fire-and-forget refresh: navigation changes are rare, but we still want
@@ -391,25 +412,29 @@ class WebsiteService extends ChangeNotifier {
 
       // 1. Try PRE-FETCHED data (injected by index.html)
       // This is the fastest path (0ms wait if download is faster than app load)
-      try {
-        final swPrefetch = Stopwatch()..start();
-        final preloaded = await WebDataBridge.getPreloadedStoreData();
-        if (preloaded != null) {
-          response = preloaded;
-          source = 'PREFETCH_JS';
-          if (_perfLogsEnabled) {
-            debugPrint(
-                '⏱️ [PublicStorePerf] Source=$source step=${swPrefetch.elapsedMilliseconds}ms');
+      // NOTE: For explicit user refresh (logo/home), skip prefetch to avoid
+      // reusing stale boot-time data.
+      if (!forceRefresh) {
+        try {
+          final swPrefetch = Stopwatch()..start();
+          final preloaded = await WebDataBridge.getPreloadedStoreData();
+          if (preloaded != null) {
+            response = preloaded;
+            source = 'PREFETCH_JS';
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '⏱️ [PublicStorePerf] Source=$source step=${swPrefetch.elapsedMilliseconds}ms');
+            }
+          } else {
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '⏱️ [PublicStorePerf] Prefetch miss: ${swPrefetch.elapsedMilliseconds}ms');
+            }
           }
-        } else {
+        } catch (e) {
           if (_perfLogsEnabled) {
-            debugPrint(
-                '⏱️ [PublicStorePerf] Prefetch miss: ${swPrefetch.elapsedMilliseconds}ms');
+            debugPrint('⏱️ [PublicStorePerf] Prefetch error: $e');
           }
-        }
-      } catch (e) {
-        if (_perfLogsEnabled) {
-          debugPrint('⏱️ [PublicStorePerf] Prefetch error: $e');
         }
       }
 
@@ -1092,8 +1117,17 @@ class WebsiteService extends ChangeNotifier {
           final block = entry.value;
 
           // Accept both legacy snake_case keys and new camelCase keys
-          final blockType = block['type'] ?? block['block_type'];
-          final blockData = block['data'] ?? block['block_data'] ?? {};
+          final blockTypeRaw =
+              (block['type'] ?? block['block_type'] ?? '').toString().trim();
+          final rawBlockData = block['data'] ?? block['block_data'] ?? {};
+          final normalizedBlockData = blockTypeRaw.isNotEmpty
+              ? _normalizeBlockData(
+                  blockTypeRaw: blockTypeRaw,
+                  rawBlockData: rawBlockData,
+                )
+              : (rawBlockData is Map
+                  ? Map<String, dynamic>.from(rawBlockData)
+                  : <String, dynamic>{});
           final isVisible = block['isVisible'] ?? block['is_visible'] ?? true;
           final orderIndex =
               block['order_index'] ?? block['sort_order'] ?? index;
@@ -1102,8 +1136,8 @@ class WebsiteService extends ChangeNotifier {
             'id': block['id'],
             'tenant_id': effectiveTenantId, // ✅ Add tenant_id for RLS
             'page_id': homePageId, // ✅ Add page_id for proper loading
-            'block_type': blockType,
-            'block_data': blockData,
+            'block_type': blockTypeRaw,
+            'block_data': normalizedBlockData,
             'is_visible': isVisible,
             'order_index': orderIndex,
             'updated_at': DateTime.now().toIso8601String(),
@@ -1335,6 +1369,14 @@ class WebsiteService extends ChangeNotifier {
         _settings[row['key'] as String] = row['value'] as String? ?? '';
       }
 
+      // Normalize address/contact SEO keys for runtime consistency.
+      // This fixes legacy values like "Chile, Chile" without requiring a manual save.
+      final normalized =
+          _normalizeWebsiteSettingsForSeoConsistency(const <String, dynamic>{});
+      for (final entry in normalized.entries) {
+        _settings[entry.key] = entry.value?.toString() ?? '';
+      }
+
       _themePresets = _parseThemePresets(_settings['theme_presets']);
 
       _error = null;
@@ -1363,6 +1405,18 @@ class WebsiteService extends ChangeNotifier {
       final settings = <String, String>{};
       for (final row in response as List) {
         settings[row['key'] as String] = row['value'] as String? ?? '';
+      }
+
+      // Apply the same normalization as the editor path so public store/footer
+      // doesn’t show duplicated country tokens like "Chile, Chile".
+      // _normalizeWebsiteSettingsForSeoConsistency overlays `_settings`, so
+      // temporarily point `_settings` at this tenant's map to compute correctly.
+      _settings = {...settings};
+      final normalizedForTenant = _normalizeWebsiteSettingsForSeoConsistency(
+        const <String, dynamic>{},
+      );
+      for (final entry in normalizedForTenant.entries) {
+        settings[entry.key] = entry.value?.toString() ?? '';
       }
 
       // Also update internal state so getSetting() works
@@ -1473,6 +1527,20 @@ class WebsiteService extends ChangeNotifier {
       return;
     }
 
+    // ----------------------------------------------------------------------
+    // SINGLE SOURCE OF TRUTH (Editor → DB → Public Store + index.html)
+    //
+    // The editor UI can edit some fields through different panels (SEO page,
+    // footer/contact panel, etc). Historically we stored both `seo_*` keys and
+    // legacy `contact_*` / `meta_*` keys for backwards compatibility.
+    //
+    // If we allow these to drift, the public store (runtime) and the deployed
+    // `web/index.html` (generated by scripts/sync_seo_index.sh) can disagree.
+    //
+    // This normalization keeps the keys in sync at the point of persistence.
+    // ----------------------------------------------------------------------
+    values = _normalizeWebsiteSettingsForSeoConsistency(values);
+
     try {
       final tenantId = await _tenantService.getTenantId();
       debugPrint(
@@ -1485,18 +1553,24 @@ class WebsiteService extends ChangeNotifier {
 
       // Update or insert each setting individually
       for (final entry in values.entries) {
+        final key = entry.key;
+        final value = entry.value?.toString() ?? '';
+        
+        // Optimistic cache update (fixes UI reverting old value after save)
+        _settings[key] = value;
+
         debugPrint(
-            '💾 [WebsiteService] Upserting setting: ${entry.key} = ${entry.value} for tenant $tenantId');
+            '💾 [WebsiteService] Upserting setting: $key = $value for tenant $tenantId');
         try {
           // Try UPDATE first (most common case after initial setup)
           final updateResult = await _supabase
               .from('website_settings')
               .update({
-                'value': entry.value?.toString() ?? '',
+                'value': value,
                 'updated_at': timestamp,
               })
               .eq('tenant_id', tenantId)
-              .eq('key', entry.key)
+              .eq('key', key)
               .select();
           debugPrint(
               '✅ [WebsiteService] Updated ${entry.key}: ${updateResult.length} rows affected');
@@ -1536,6 +1610,268 @@ class WebsiteService extends ChangeNotifier {
       _safeNotifyListeners();
       rethrow;
     }
+  }
+
+  Map<String, dynamic> _normalizeWebsiteSettingsForSeoConsistency(
+    Map<String, dynamic> raw,
+  ) {
+    // Convert pending updates to string values (this table stores strings).
+    final pending = <String, String>{
+      for (final entry in raw.entries)
+        entry.key: entry.value?.toString() ?? '',
+    };
+
+    // Overlay pending on the in-memory settings to compute an effective view.
+    final effective = <String, String>{
+      ..._settings,
+      ...pending,
+    };
+
+    String firstNonEmpty(List<String> keys) {
+      for (final key in keys) {
+        final v = (effective[key] ?? '').trim();
+        if (v.isNotEmpty) return v;
+      }
+      return '';
+    }
+
+    // 1) Email: keep `seo_email` and `contact_email` in sync.
+    final email = firstNonEmpty(['seo_email', 'contact_email']);
+    if (email.isNotEmpty) {
+      pending['seo_email'] = email;
+      pending['contact_email'] = email;
+    }
+
+    // 2) Phone: keep `seo_phone` and `contact_phone` in sync.
+    final phone = firstNonEmpty(['seo_phone', 'contact_phone']);
+    if (phone.isNotEmpty) {
+      pending['seo_phone'] = phone;
+      pending['contact_phone'] = phone;
+    }
+
+    // 3) Business name: keep `store_name` and `seo_business_name` in sync.
+    final businessName =
+      firstNonEmpty(['seo_business_name', 'store_name', 'meta_site_name']);
+    if (businessName.isNotEmpty) {
+      pending['store_name'] = businessName;
+      pending['seo_business_name'] = businessName;
+    }
+
+    // 4) Address normalization.
+    // Goal: avoid duplicated locality/country in index.html/JSON-LD. We treat
+    // `seo_address_*` as the structured source and also mirror a consistent
+    // human-readable `contact_address`.
+    String normalizeLocality(String rawCity, String country) {
+      final cityRaw = rawCity.trim();
+      if (cityRaw.isEmpty) return '';
+
+      final normalizedCountry = _normalizeCountry(country);
+
+      // If the city field accidentally contains multiple comma parts (e.g.
+      // "Viña del Mar, Chile"), strip any part that equals the country.
+      final parts = cityRaw
+          .split(',')
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .toList();
+
+      if (parts.length <= 1) {
+        // Also handle whitespace duplicate like "Chile Chile".
+        if (normalizedCountry.isNotEmpty &&
+            _equalsIgnoreCase(cityRaw, normalizedCountry)) {
+          return '';
+        }
+        return cityRaw;
+      }
+
+      final cleaned = <String>[];
+      for (final p in parts) {
+        if (normalizedCountry.isNotEmpty && _equalsIgnoreCase(p, normalizedCountry)) {
+          continue;
+        }
+        if (cleaned.isEmpty || !_equalsIgnoreCase(cleaned.last, p)) {
+          cleaned.add(p);
+        }
+      }
+
+      final joined = cleaned.join(', ').trim();
+      if (normalizedCountry.isNotEmpty && _equalsIgnoreCase(joined, normalizedCountry)) {
+        return '';
+      }
+      return joined;
+    }
+
+    var street = (effective['seo_address_street'] ?? '').trim();
+    var city = (effective['seo_address_city'] ?? '').trim();
+    var country = _normalizeCountry(effective['seo_address_country'] ?? '');
+
+    final contactAddress = (effective['contact_address'] ?? '').trim();
+
+    // If the user explicitly edited the footer address (contact_address), treat
+    // it as authoritative and re-derive structured fields unless the user is
+    // also explicitly editing structured seo_address_* keys in the same save.
+    final pendingContactAddress = (pending['contact_address'] ?? '').trim();
+    final pendingSeoStreet = (pending['seo_address_street'] ?? '').trim();
+    final pendingSeoCity = (pending['seo_address_city'] ?? '').trim();
+    final pendingSeoCountry = (pending['seo_address_country'] ?? '').trim();
+
+    final hasExplicitSeoPartsInThisSave =
+        pendingSeoStreet.isNotEmpty || pendingSeoCity.isNotEmpty || pendingSeoCountry.isNotEmpty;
+
+    if (pendingContactAddress.isNotEmpty && !hasExplicitSeoPartsInThisSave) {
+      final parsed = _parseChileanAddressLoose(pendingContactAddress);
+      street = parsed.street.trim();
+      city = parsed.city.trim();
+      country = _normalizeCountry(parsed.country);
+    } else {
+      // Fallback: only fill missing structured parts from the best available address.
+      final addressToParse = contactAddress.isNotEmpty
+          ? contactAddress
+          : (street.isNotEmpty ? street : '');
+
+      if ((street.isEmpty || city.isEmpty || country.isEmpty) &&
+          addressToParse.isNotEmpty) {
+        final parsed = _parseChileanAddressLoose(addressToParse);
+        street = street.isNotEmpty ? street : parsed.street;
+        city = city.isNotEmpty ? city : parsed.city;
+        country = country.isNotEmpty ? country : parsed.country;
+      }
+
+      country = _normalizeCountry(country);
+    }
+
+    // Always sanitize locality against country to prevent "..., Chile, Chile".
+    city = normalizeLocality(city, country);
+    country = _normalizeCountry(country);
+
+    if (street.isNotEmpty) pending['seo_address_street'] = street;
+    if (city.isNotEmpty) pending['seo_address_city'] = city;
+    if (country.isNotEmpty) pending['seo_address_country'] = country;
+
+    final normalizedContactAddress = _joinAddress(street, city, country);
+    if (normalizedContactAddress.isNotEmpty) {
+      pending['contact_address'] = normalizedContactAddress;
+    }
+
+    return pending;
+  }
+
+  _LooseAddressParts _parseChileanAddressLoose(String raw) {
+    final rawParts = raw
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    // Collapse adjacent duplicates (e.g., "Chile, Chile").
+    final parts = <String>[];
+    for (final p in rawParts) {
+      if (parts.isEmpty || !_equalsIgnoreCase(parts.last, p)) {
+        parts.add(p);
+      }
+    }
+
+    if (parts.length >= 3) {
+      final country = _normalizeCountry(parts.last);
+      final city = parts[parts.length - 2];
+      final street = parts.sublist(0, parts.length - 2).join(', ');
+
+      // If city and country ended up the same (legacy "..., Chile, Chile"),
+      // shift city left if possible.
+      if (_equalsIgnoreCase(city, country) && parts.length >= 4) {
+        final shiftedCity = parts[parts.length - 3];
+        final shiftedStreet = parts.sublist(0, parts.length - 3).join(', ');
+        return _LooseAddressParts(
+          street: shiftedStreet,
+          city: shiftedCity,
+          country: country,
+        );
+      }
+
+      return _LooseAddressParts(
+        street: street,
+        city: city,
+        country: country,
+      );
+    }
+
+    if (parts.length == 2) {
+      return _LooseAddressParts(
+        street: parts.first,
+        city: parts.last,
+        country: 'Chile',
+      );
+    }
+
+    return _LooseAddressParts(
+      street: raw.trim(),
+      city: '',
+      country: '',
+    );
+  }
+
+  String _joinAddress(String street, String city, String country) {
+    final tokens = <String>[];
+    final streetT = street.trim();
+    final cityT = city.trim();
+    final countryT = _normalizeCountry(country);
+
+    if (streetT.isNotEmpty) tokens.add(streetT);
+    if (cityT.isNotEmpty) tokens.add(cityT);
+    if (countryT.isNotEmpty) tokens.add(countryT);
+
+    // Collapse adjacent duplicates (case-insensitive).
+    final deduped = <String>[];
+    for (final t in tokens) {
+      if (deduped.isEmpty || !_equalsIgnoreCase(deduped.last, t)) {
+        deduped.add(t);
+      }
+    }
+
+    // If city == country, drop the city.
+    if (deduped.length >= 2 && _equalsIgnoreCase(deduped[deduped.length - 2], deduped.last)) {
+      deduped.removeAt(deduped.length - 2);
+    }
+
+    return deduped.join(', ');
+  }
+
+  bool _equalsIgnoreCase(String a, String b) =>
+      a.trim().toLowerCase() == b.trim().toLowerCase();
+
+  String _normalizeCountry(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return '';
+
+    // Handle comma-separated duplicates like "Chile, Chile".
+    final commaParts = s
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (commaParts.isNotEmpty) {
+      final cleaned = <String>[];
+      for (final p in commaParts) {
+        if (cleaned.isEmpty || !_equalsIgnoreCase(cleaned.last, p)) {
+          cleaned.add(p);
+        }
+      }
+      s = cleaned.isNotEmpty ? cleaned.last : s;
+    }
+
+    // Handle whitespace duplicates like "Chile Chile".
+    final words = s
+        .split(RegExp(r'\s+'))
+        .map((w) => w.trim())
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.length >= 2 && words.every((w) => _equalsIgnoreCase(w, words.first))) {
+      s = words.first;
+    }
+
+    // Standardize common case.
+    if (s.toLowerCase() == 'chile') return 'Chile';
+    return s;
   }
 
   // ============================================================================
@@ -2100,12 +2436,24 @@ class WebsiteService extends ChangeNotifier {
           final index = entry.key;
           final block = entry.value;
 
+          final blockTypeRaw =
+              (block['type'] ?? block['block_type'] ?? '').toString().trim();
+          final rawBlockData = block['data'] ?? block['block_data'] ?? {};
+          final normalizedBlockData = blockTypeRaw.isNotEmpty
+              ? _normalizeBlockData(
+                  blockTypeRaw: blockTypeRaw,
+                  rawBlockData: rawBlockData,
+                )
+              : (rawBlockData is Map
+                  ? Map<String, dynamic>.from(rawBlockData)
+                  : <String, dynamic>{});
+
           return {
             'id': block['id'],
             'tenant_id': effectiveTenantId,
             'page_id': pageId,
-            'block_type': block['type'] ?? block['block_type'],
-            'block_data': block['data'] ?? block['block_data'],
+            'block_type': blockTypeRaw,
+            'block_data': normalizedBlockData,
             'is_visible': block['isVisible'] ?? block['is_visible'] ?? true,
             'order_index': index,
             'updated_at': DateTime.now().toIso8601String(),
@@ -2343,7 +2691,7 @@ class WebsiteService extends ChangeNotifier {
             'menu_location': 'footer',
             'label': 'Productos',
             'link_type': 'page',
-            'link_value': '/tienda/productos',
+            'link_value': '/productos',
             'open_in_new_tab': false,
             'parent_id': enlacesParentId,
             'order_index': 1,
@@ -2672,7 +3020,6 @@ class WebsiteService extends ChangeNotifier {
     // Clear any previous hierarchy to avoid duplicate children.
     for (final item in _navigation) {
       item.children.clear();
-      item.linkedPage = null;
     }
 
     // Create a map for quick lookup
@@ -2805,13 +3152,9 @@ class WebsiteService extends ChangeNotifier {
   Future<void> reorderNavigation(
       MenuLocation location, List<String> orderedIds) async {
     try {
-      for (int i = 0; i < orderedIds.length; i++) {
-        await _supabase.from('website_navigation').update({
-          'order_index': i,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', orderedIds[i]);
-      }
-
+      // Keep signature (location param) for API compatibility.
+      // Batch update to avoid N sequential network calls.
+      await reorderNavigationIds(orderedIds);
       await loadNavigation();
     } catch (e) {
       _error = 'Error al reordenar navegación: $e';
@@ -2826,19 +3169,68 @@ class WebsiteService extends ChangeNotifier {
   /// multiple rebuilds/notifications mid-gesture.
   Future<void> reorderNavigationIds(List<String> orderedIds) async {
     try {
-      final nowIso = DateTime.now().toIso8601String();
+      if (orderedIds.isEmpty) return;
 
-      for (int i = 0; i < orderedIds.length; i++) {
-        await _supabase.from('website_navigation').update({
+      // De-dup defensively (drag/drop code should already do this).
+      final uniqueOrderedIds = <String>[];
+      final seen = <String>{};
+      for (final id in orderedIds) {
+        final trimmed = id.trim();
+        if (trimmed.isEmpty) continue;
+        if (seen.add(trimmed)) uniqueOrderedIds.add(trimmed);
+      }
+      if (uniqueOrderedIds.isEmpty) return;
+
+      final now = DateTime.now();
+      final nowIso = now.toIso8601String();
+
+      // Build payload using cached tenant_id (guards against accidental inserts).
+      final navById = <String, WebsiteNavigation>{
+        for (final nav in _navigation) nav.id: nav,
+      };
+
+      final payload = <Map<String, dynamic>>[];
+      for (int i = 0; i < uniqueOrderedIds.length; i++) {
+        final id = uniqueOrderedIds[i];
+        final nav = navById[id];
+
+        final row = <String, dynamic>{
+          'id': id,
           'order_index': i,
           'updated_at': nowIso,
-        }).eq('id', orderedIds[i]);
+        };
 
-        final localIndex = _navigation.indexWhere((n) => n.id == orderedIds[i]);
+        // Only include tenant_id if we have it (avoids sending empty string).
+        final tenantId = nav?.tenantId.trim() ?? '';
+        if (tenantId.isNotEmpty) {
+          row['tenant_id'] = tenantId;
+        }
+
+        payload.add(row);
+      }
+
+      try {
+        // One request: PostgREST upsert with merge semantics.
+        await _supabase
+            .from('website_navigation')
+            .upsert(payload, onConflict: 'id');
+      } catch (e) {
+        // Fallback to per-row updates if upsert is unsupported by the backend.
+        for (int i = 0; i < uniqueOrderedIds.length; i++) {
+          await _supabase.from('website_navigation').update({
+            'order_index': i,
+            'updated_at': nowIso,
+          }).eq('id', uniqueOrderedIds[i]);
+        }
+      }
+
+      // Update local cache (no extra fetch)
+      for (int i = 0; i < uniqueOrderedIds.length; i++) {
+        final localIndex = _navigation.indexWhere((n) => n.id == uniqueOrderedIds[i]);
         if (localIndex >= 0) {
           _navigation[localIndex] = _navigation[localIndex].copyWith(
             orderIndex: i,
-            updatedAt: DateTime.now(),
+            updatedAt: now,
           );
         }
       }
@@ -2946,7 +3338,7 @@ class WebsiteService extends ChangeNotifier {
 
   /// Load a page by slug with caching (for instant revisits)
   /// Returns page info and blocks, or null if not found
-  Future<_CachedPage?> loadPageWithBlocks(
+  Future<CachedPageSnapshot?> loadPageWithBlocks(
     String slug, {
     required String tenantId,
   }) async {
@@ -2954,7 +3346,7 @@ class WebsiteService extends ChangeNotifier {
     final cacheKey = '$tenantId:$slug';
     final cached = _pageCache[cacheKey];
     if (cached != null && !cached.isExpired) {
-      return cached;
+      return CachedPageSnapshot(page: cached.page, blocks: cached.blocks);
     }
 
     try {
@@ -2972,7 +3364,7 @@ class WebsiteService extends ChangeNotifier {
         cachedAt: DateTime.now(),
       );
       _pageCache[cacheKey] = result;
-      return result;
+      return CachedPageSnapshot(page: result.page, blocks: result.blocks);
     } catch (e) {
       debugPrint('Error loading page with blocks: $e');
       return null;
@@ -3000,6 +3392,18 @@ class WebsiteService extends ChangeNotifier {
     _httpClient.close();
     super.dispose();
   }
+}
+
+class _LooseAddressParts {
+  final String street;
+  final String city;
+  final String country;
+
+  const _LooseAddressParts({
+    required this.street,
+    required this.city,
+    required this.country,
+  });
 }
 
 /// Public snapshot of cached page data (safe to expose).

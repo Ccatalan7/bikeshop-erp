@@ -18,6 +18,7 @@ class AuthCallbackPage extends StatefulWidget {
   const AuthCallbackPage({super.key});
 
   static const webReturnToEditorKey = 'google_oauth_return_to_editor';
+  static const webReturnToPathKey = 'google_oauth_return_path';
 
   @override
   State<AuthCallbackPage> createState() => _AuthCallbackPageState();
@@ -26,10 +27,18 @@ class AuthCallbackPage extends StatefulWidget {
 class _AuthCallbackPageState extends State<AuthCallbackPage> {
   StreamSubscription<AuthState>? _sub;
   Timer? _timeout;
+  bool _navigated = false;
+  bool _awaitingOAuthCode = false;
+  bool _oauthCodeProcessed = false;
 
   @override
   void initState() {
     super.initState();
+
+    if (kIsWeb) {
+      final uri = Uri.base;
+      _awaitingOAuthCode = uri.queryParameters.containsKey('code');
+    }
 
     // Log the raw URL (no secrets) to help diagnose lost callbacks.
     if (kIsWeb) {
@@ -57,28 +66,49 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       debugPrint(
         '🧩 [AuthCallback] Auth event=${data.event}, provider=$provider, identities=$identities, hasProviderToken=$hasProviderToken, hasProviderTokenJson=$hasProviderTokenJson, hasProviderRefreshTokenJson=$hasProviderRefreshTokenJson');
 
+      // If the URL contains an OAuth code, avoid navigating away too early.
+      // We need to exchange the code first so provider_token is available.
+      if (_awaitingOAuthCode && !_oauthCodeProcessed) {
+        return;
+      }
+
       if (session != null) {
-        // Sometimes a refresh makes Supabase rehydrate the session.
-        Supabase.instance.client.auth.refreshSession().then((_) {
-          final s2 = Supabase.instance.client.auth.currentSession;
-          final has2 = s2?.providerToken != null;
-          final s2json = s2?.toJson();
-            final m2 = s2json is Map
-              ? Map<String, dynamic>.from(s2json as Map<dynamic, dynamic>)
-              : null;
-          final has2json = m2?['provider_token'] != null;
-          debugPrint(
-              '🧩 [AuthCallback] After refreshSession: hasProviderToken=$has2, hasProviderTokenJson=$has2json');
-        }).catchError((e) {
-          debugPrint('⚠️ [AuthCallback] refreshSession failed: $e');
-        });
         _navigatePostCallback();
       }
     });
 
+    // If we have an OAuth code in the URL (web), exchange it explicitly.
+    // IMPORTANT: We might already have a session from before OAuth (ERP login),
+    // but we still need to process the callback to populate provider_token.
+    if (kIsWeb && _awaitingOAuthCode) {
+      Future.microtask(() async {
+        final code = Uri.base.queryParameters['code'];
+        if (code == null || code.isEmpty) return;
+
+        try {
+          debugPrint('🧩 [AuthCallback] Exchanging OAuth code for session...');
+          await Supabase.instance.client.auth.exchangeCodeForSession(code);
+          debugPrint('✅ [AuthCallback] exchangeCodeForSession completed');
+        } catch (e) {
+          debugPrint('⚠️ [AuthCallback] exchangeCodeForSession failed: $e');
+        } finally {
+          _oauthCodeProcessed = true;
+          if (mounted) {
+            final session = Supabase.instance.client.auth.currentSession;
+            if (session != null) {
+              await _navigatePostCallback();
+            }
+          }
+        }
+      });
+    }
+
     // Fallback: if session is already available (some browsers restore quickly)
     // navigate after first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // If the callback URL includes an OAuth code, wait for exchange.
+      if (_awaitingOAuthCode && !_oauthCodeProcessed) return;
+
       final session = Supabase.instance.client.auth.currentSession;
       final sessionJson = session?.toJson();
           final map = sessionJson is Map
@@ -101,8 +131,27 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
     });
   }
 
-  void _navigatePostCallback() {
+  Future<void> _navigatePostCallback() async {
+    if (_navigated) return;
+    _navigated = true;
+
     _timeout?.cancel();
+
+    // Sometimes a refresh makes Supabase rehydrate provider_token after OAuth.
+    try {
+      await Supabase.instance.client.auth.refreshSession();
+      final s2 = Supabase.instance.client.auth.currentSession;
+      final has2 = s2?.providerToken != null;
+      final s2json = s2?.toJson();
+      final m2 = s2json is Map
+          ? Map<String, dynamic>.from(s2json as Map<dynamic, dynamic>)
+          : null;
+      final has2json = m2?['provider_token'] != null;
+      debugPrint(
+          '🧩 [AuthCallback] After refreshSession: hasProviderToken=$has2, hasProviderTokenJson=$has2json');
+    } catch (e) {
+      debugPrint('⚠️ [AuthCallback] refreshSession failed: $e');
+    }
 
     // If this callback came from the store editor flow, request returning to
     // edit mode (PublicStoreLayout already consumes this flag).
@@ -118,8 +167,25 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
 
     if (!mounted) return;
 
-    // Send the user somewhere sane. For ERP host, '/' becomes login/dashboard.
-    // For store host, '/' becomes store home.
+    // Prefer returning to the exact route where OAuth was initiated.
+    if (kIsWeb) {
+      try {
+        final returnPath =
+            html.window.localStorage[AuthCallbackPage.webReturnToPathKey];
+        if (returnPath != null && returnPath.startsWith('/')) {
+          // Clear it to avoid loops.
+          html.window.localStorage.remove(AuthCallbackPage.webReturnToPathKey);
+          debugPrint('🧩 [AuthCallback] Navigating back to: $returnPath');
+          context.go(returnPath);
+          return;
+        }
+      } catch (e) {
+        debugPrint('⚠️ [AuthCallback] returnPath read failed: $e');
+      }
+    }
+
+    // Fallback: send the user somewhere sane. For ERP host, '/' becomes
+    // login/dashboard. For store host, '/' becomes store home.
     context.go('/');
   }
 

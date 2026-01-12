@@ -12,6 +12,7 @@ import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/services/tenant_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../widgets/full_page_loading.dart';
+import '../widgets/public_store_layout.dart';
 
 /// Dynamic page that renders website_blocks for any page based on slug
 ///
@@ -94,19 +95,39 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   /// Update the edit provider with new page's blocks if we're in edit mode
   void _updateEditProviderIfNeeded() {
     if (!mounted) return;
+    // Dynamic pages are kept alive across shell branch navigation. Only the
+    // active (ticker-enabled) page should sync provider state.
+    if (!TickerMode.of(context)) return;
 
     final editProvider = context.read<WebsiteEditModeProvider>();
 
+    bool providerHasBlocksForThisPage() {
+      if (_pageId == null) return false;
+
+      final contextMatches = (editProvider.currentPageId == _pageId) ||
+          (editProvider.currentPageSlug == widget.slug);
+      if (!contextMatches) return false;
+
+      final providerBlocks = editProvider.blocks;
+      if (providerBlocks.isEmpty) return false;
+
+      final hasPageId = providerBlocks.any((b) => b['page_id'] != null);
+      if (!hasPageId) return true;
+
+      return providerBlocks
+          .every((b) => b['page_id']?.toString() == _pageId.toString());
+    }
+
     // If we're already in edit mode (or preview mode), update the blocks for the new page
     if (editProvider.isEditMode || editProvider.isPreviewMode) {
-      // Check if we're on a different page than what the provider has
-      if (editProvider.currentPageSlug != widget.slug) {
+      // Check if provider isn't actually synced to this page (context + blocks).
+      if (!providerHasBlocksForThisPage()) {
         final websiteService = context.read<WebsiteService>();
         final blocks = List<Map<String, dynamic>>.from(_blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
 
         debugPrint(
-            '🔄 [DynamicPage] Page changed while in edit mode: ${editProvider.currentPageSlug} → ${widget.slug}');
+            '🔄 [DynamicPage] Sync editor context while in edit mode: ${editProvider.currentPageSlug} → ${widget.slug}');
         debugPrint(
             '📄 [DynamicPage] Updating provider with ${_blocks.length} blocks for: ${widget.slug}');
 
@@ -166,6 +187,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       // Schedule for next frame to avoid calling during build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        if (!TickerMode.of(context)) return;
 
         final blocks = List<Map<String, dynamic>>.from(_blocks);
         final settings = Map<String, dynamic>.from(websiteService.settings);
@@ -394,6 +416,15 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
       if (mounted) {
         setState(() => _isLoading = false);
+
+        // If we arrived here while already inside the persistent editor shell
+        // (edit/preview), we must sync the provider to THIS page; otherwise the
+        // editor panel will still be pointing at the previous page (often home).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (!TickerMode.of(context)) return;
+          _updateEditProviderIfNeeded();
+        });
       }
     } catch (e) {
       debugPrint('❌ [DynamicWebsitePage] Error: $e');
@@ -417,15 +448,24 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       return fallback;
     }
 
-    final primary = eff('theme_primary_color', service.getSetting('theme_primary_color'));
-    final accent = eff('theme_accent_color', service.getSetting('theme_accent_color'));
-    final text = eff('theme_text_color', service.getSetting('theme_text_color'));
-    final headingFont = eff('theme_heading_font', service.getSetting('theme_heading_font'));
-    final bodyFont = eff('theme_body_font', service.getSetting('theme_body_font'));
-    final headingSize = eff('theme_heading_size', service.getSetting('theme_heading_size'));
-    final bodySize = eff('theme_body_size', service.getSetting('theme_body_size'));
-    final sectionSpacing = eff('theme_section_spacing', service.getSetting('theme_section_spacing'));
-    final containerPadding = eff('theme_container_padding', service.getSetting('theme_container_padding'));
+    final primary =
+        eff('theme_primary_color', service.getSetting('theme_primary_color'));
+    final accent =
+        eff('theme_accent_color', service.getSetting('theme_accent_color'));
+    final text =
+        eff('theme_text_color', service.getSetting('theme_text_color'));
+    final headingFont =
+        eff('theme_heading_font', service.getSetting('theme_heading_font'));
+    final bodyFont =
+        eff('theme_body_font', service.getSetting('theme_body_font'));
+    final headingSize =
+        eff('theme_heading_size', service.getSetting('theme_heading_size'));
+    final bodySize =
+        eff('theme_body_size', service.getSetting('theme_body_size'));
+    final sectionSpacing = eff(
+        'theme_section_spacing', service.getSetting('theme_section_spacing'));
+    final containerPadding = eff('theme_container_padding',
+        service.getSetting('theme_container_padding'));
 
     final parsedPrimary = _tryParseColor(primary);
     final parsedAccent = _tryParseColor(accent);
@@ -480,13 +520,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     // In editor context (preview or edit), render the provider blocks for THIS page.
     // This ensures switching to preview after saving shows the updated content.
     final matchesPage = (editProvider.currentPageId != null &&
-        editProvider.currentPageId == _pageId) ||
-      (editProvider.currentPageSlug != null &&
-        editProvider.currentPageSlug == widget.slug);
+            editProvider.currentPageId == _pageId) ||
+        (editProvider.currentPageSlug != null &&
+            editProvider.currentPageSlug == widget.slug);
 
-    final blocksToRender = (isInEditorContext && matchesPage)
-      ? editProvider.blocks
-      : _blocks;
+    final blocksToRender =
+        (isInEditorContext && matchesPage) ? editProvider.blocks : _blocks;
 
     if (_isLoading) {
       return const FullPageLoading();
@@ -541,7 +580,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               bodyFont: _bodyFont,
               headingSize: _headingSize,
               bodySize: _bodySize,
-              onNavigate: (route) => context.go(route),
+              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
               isVisible: isVisible,
               tenantId: tenantId,
             )
@@ -555,7 +594,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               bodyFont: _bodyFont,
               headingSize: _headingSize,
               bodySize: _bodySize,
-              onNavigate: (route) => context.go(route),
+              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
               tenantId: tenantId,
             );
 

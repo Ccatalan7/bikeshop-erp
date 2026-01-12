@@ -1,6 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
 import '../pages/cart_page.dart';
 import '../pages/checkout_page.dart';
 import '../pages/contact_page.dart';
@@ -22,6 +22,152 @@ import '../pages/public_home_page.dart';
 import '../pages/static_policy_page.dart';
 import '../widgets/public_store_layout.dart';
 
+// Match the tenant detection perf logging pattern.
+// Enable in debug, or in release via:
+// flutter build web --release --dart-define=STORE_PERF_LOGS=true
+bool get _storeNavLogsEnabled =>
+    kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
+
+final Set<String> _loggedTransitionFirstFrame = <String>{};
+
+final Expando<bool> _transitionListenerAttached = Expando<bool>();
+
+Widget _mobilePremiumTransition({
+  required Animation<double> animation,
+  required Animation<double> secondaryAnimation,
+  required Widget child,
+}) {
+  // Goal: "zig-zag" motion (push: right->left, pop: left->right).
+  // (animation goes 0->1 on push, 1->0 on pop.)
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: Curves.easeInOutCubic,
+    reverseCurve: Curves.easeInOutCubic,
+  );
+
+  // Opposite-direction slide for pop to get the zig-zag effect.
+  final isPopping = animation.status == AnimationStatus.reverse;
+  final slideTween = isPopping
+      ? Tween<Offset>(begin: const Offset(-1.0, 0), end: Offset.zero)
+      : Tween<Offset>(begin: const Offset(1.0, 0), end: Offset.zero);
+  final slide = slideTween.animate(curved);
+
+  // Keep fade extremely subtle; rely mostly on motion.
+  final slightFade = Tween<double>(begin: 0.98, end: 1.0).animate(curved);
+
+  // Add a subtle edge shadow.
+  final withShadow = DecoratedBox(
+    decoration: const BoxDecoration(
+      boxShadow: <BoxShadow>[
+        BoxShadow(
+          color: Color(0x26000000),
+          blurRadius: 18,
+          spreadRadius: 1,
+          offset: Offset(-8, 0),
+        ),
+      ],
+    ),
+    child: child,
+  );
+
+  return ClipRect(
+    child: FadeTransition(
+      opacity: slightFade,
+      child: SlideTransition(
+        position: slide,
+        child: withShadow,
+      ),
+    ),
+  );
+}
+
+Widget _desktopTransition({
+  required Animation<double> animation,
+  required Widget child,
+  required bool isSmallScreen,
+}) {
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  final beginDy = isSmallScreen
+      ? (_storeNavLogsEnabled ? 0.10 : 0.08)
+      : (_storeNavLogsEnabled ? 0.06 : 0.04);
+  final beginScale = isSmallScreen
+      ? (_storeNavLogsEnabled ? 0.965 : 0.975)
+      : (_storeNavLogsEnabled ? 0.975 : 0.985);
+  final scale = Tween<double>(begin: beginScale, end: 1.0).animate(curved);
+
+  return FadeTransition(
+    opacity: curved,
+    child: SlideTransition(
+      position: Tween<Offset>(
+        begin: Offset(0, beginDy),
+        end: Offset.zero,
+      ).animate(curved),
+      child: ScaleTransition(
+        scale: scale,
+        child: child,
+      ),
+    ),
+  );
+}
+
+void _attachTransitionDebugOnce(
+  Animation<double> animation, {
+  required Uri uri,
+  required String kind,
+}) {
+  if (!_storeNavLogsEnabled) return;
+  if (_transitionListenerAttached[animation] == true) return;
+  _transitionListenerAttached[animation] = true;
+
+  double lastLogged = -1;
+
+  void logValue(String tag) {
+    final v = animation.value;
+    // Avoid spam; only log when value meaningfully changes.
+    if ((v - lastLogged).abs() < 0.08 && tag == 'tick') return;
+    lastLogged = v;
+    debugPrint(
+      '🎞️ [PublicStoreRouter] $kind $tag uri=$uri '
+      'value=${v.toStringAsFixed(3)} status=${animation.status}',
+    );
+  }
+
+  animation.addStatusListener((status) {
+    debugPrint('🎞️ [PublicStoreRouter] $kind status uri=$uri status=$status');
+  });
+
+  animation.addListener(() => logValue('tick'));
+
+  // Log immediately upon attachment.
+  logValue('attach');
+}
+
+class _PublicStoreNavObserver extends NavigatorObserver {
+  void _log(String verb, Route<dynamic>? route, Route<dynamic>? previousRoute) {
+    if (!_storeNavLogsEnabled) return;
+    final name = route?.settings.name;
+    final prev = previousRoute?.settings.name;
+    debugPrint('🧭 [PublicStoreNav] $verb name=$name (from=$prev)');
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _log('push', route, previousRoute);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) =>
+      _log('replace', newRoute, oldRoute);
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _log('pop', previousRoute, route);
+}
+
 // ============================================================================
 // PAGE BUILDER HELPER
 // ============================================================================
@@ -31,12 +177,79 @@ Page<dynamic> _buildPage(
   GoRouterState state,
   Widget child,
 ) {
-  return NoTransitionPage<void>(
+  final mediaQuery = MediaQuery.maybeOf(context);
+  final disableAnimations = mediaQuery?.disableAnimations ?? false;
+  final accessibleNavigation = mediaQuery?.accessibleNavigation ?? false;
+  final reduceMotion = disableAnimations || accessibleNavigation;
+
+  // Mobile tends to hide subtle transitions (small screens + often lower FPS).
+  // Make it a bit more noticeable without being intrusive on desktop.
+  final isSmallScreen = (mediaQuery?.size.shortestSide ?? 9999) < 600;
+
+  if (_storeNavLogsEnabled) {
+    debugPrint(
+      '➡️ [PublicStoreRouter] build uri=${state.uri} matched=${state.matchedLocation} reduceMotion=$reduceMotion',
+    );
+    if (reduceMotion) {
+      debugPrint(
+        '🟡 [PublicStoreRouter] Transitions disabled (reduce motion): '
+        'disableAnimations=$disableAnimations accessibleNavigation=$accessibleNavigation',
+      );
+    }
+  }
+
+  final pageChild = PublicStoreLayout(
+    enablePageViewScrolling: true,
+    child: child,
+  );
+
+  // Respect user reduce-motion settings.
+  if (reduceMotion) {
+    return NoTransitionPage<void>(
+      key: state.pageKey,
+      name: state.uri.toString(),
+      child: pageChild,
+    );
+  }
+
+  return CustomTransitionPage<void>(
     key: state.pageKey,
-    child: PublicStoreLayout(
-      enablePageViewScrolling: true,
-      child: child,
-    ),
+    name: state.uri.toString(),
+    child: pageChild,
+    // Mobile: a more obvious, native-feeling slide+fade.
+    transitionDuration:
+      isSmallScreen ? const Duration(milliseconds: 420) : const Duration(milliseconds: 300),
+    reverseTransitionDuration:
+      isSmallScreen ? const Duration(milliseconds: 380) : const Duration(milliseconds: 260),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      _attachTransitionDebugOnce(
+        animation,
+        uri: state.uri,
+        kind: 'transition',
+      );
+      if (_storeNavLogsEnabled) {
+        final id = '${state.pageKey}_${state.uri}';
+        if (_loggedTransitionFirstFrame.add(id)) {
+          debugPrint(
+            '🎞️ [PublicStoreRouter] transition builder uri=${state.uri} '
+            'value=${animation.value.toStringAsFixed(3)} status=${animation.status}',
+          );
+        }
+      }
+      if (isSmallScreen) {
+        return _mobilePremiumTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          child: child,
+        );
+      }
+
+      return _desktopTransition(
+        animation: animation,
+        child: child,
+        isSmallScreen: isSmallScreen,
+      );
+    },
   );
 }
 
@@ -45,12 +258,77 @@ Page<dynamic> _buildPageNoScroll(
   GoRouterState state,
   Widget child,
 ) {
-  return NoTransitionPage<void>(
+  final mediaQuery = MediaQuery.maybeOf(context);
+  final disableAnimations = mediaQuery?.disableAnimations ?? false;
+  final accessibleNavigation = mediaQuery?.accessibleNavigation ?? false;
+  final reduceMotion = disableAnimations || accessibleNavigation;
+
+  final isSmallScreen = (mediaQuery?.size.shortestSide ?? 9999) < 600;
+
+  if (_storeNavLogsEnabled) {
+    debugPrint(
+      '➡️ [PublicStoreRouter] build(noScroll) uri=${state.uri} matched=${state.matchedLocation} reduceMotion=$reduceMotion',
+    );
+    if (reduceMotion) {
+      debugPrint(
+        '🟡 [PublicStoreRouter] Transitions disabled (reduce motion, noScroll): '
+        'disableAnimations=$disableAnimations accessibleNavigation=$accessibleNavigation',
+      );
+    }
+  }
+
+  final pageChild = PublicStoreLayout(
+    enablePageViewScrolling: false,
+    child: child,
+  );
+
+  if (reduceMotion) {
+    return NoTransitionPage<void>(
+      key: state.pageKey,
+      name: state.uri.toString(),
+      child: pageChild,
+    );
+  }
+
+  return CustomTransitionPage<void>(
     key: state.pageKey,
-    child: PublicStoreLayout(
-      enablePageViewScrolling: false,
-      child: child,
-    ),
+    name: state.uri.toString(),
+    child: pageChild,
+    transitionDuration:
+      isSmallScreen ? const Duration(milliseconds: 420) : const Duration(milliseconds: 300),
+    reverseTransitionDuration:
+      isSmallScreen ? const Duration(milliseconds: 380) : const Duration(milliseconds: 260),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      _attachTransitionDebugOnce(
+        animation,
+        uri: state.uri,
+        kind: 'transition(noScroll)',
+      );
+
+      if (_storeNavLogsEnabled) {
+        final id = '${state.pageKey}_${state.uri}_noScroll';
+        if (_loggedTransitionFirstFrame.add(id)) {
+          debugPrint(
+            '🎞️ [PublicStoreRouter] transition builder(noScroll) uri=${state.uri} '
+            'value=${animation.value.toStringAsFixed(3)} status=${animation.status}',
+          );
+        }
+      }
+
+      if (isSmallScreen) {
+        return _mobilePremiumTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          child: child,
+        );
+      }
+
+      return _desktopTransition(
+        animation: animation,
+        child: child,
+        isSmallScreen: isSmallScreen,
+      );
+    },
   );
 }
 
@@ -60,9 +338,20 @@ Page<dynamic> _buildPageNoScroll(
 
 class PublicStoreRouter {
   static GoRouter createRouter() {
+    // IMPORTANT (Web): We use imperative navigation (`push`/`pop`) to guarantee
+    // consistent forward/back behavior + transitions.
+    // By default, go_router may NOT reflect imperative navigation in the URL,
+    // which makes the address bar stay at the origin (e.g. https://vinabike.cl/)
+    // even while the app is on /productos.
+    // This opt-in makes the URL track `push()` routes as expected.
+    GoRouter.optionURLReflectsImperativeAPIs = true;
+
     return GoRouter(
       debugLogDiagnostics: false,
       initialLocation: null,
+      observers: [
+        if (_storeNavLogsEnabled) _PublicStoreNavObserver(),
+      ],
       routes: [
         // ====================================================================
         // MAIN PAGES
@@ -197,7 +486,8 @@ class PublicStoreRouter {
         // Legacy product detail (redirect to canonical)
         GoRoute(
           path: '/producto/:id',
-          redirect: (context, state) => '/productos/${state.pathParameters['id']}',
+          redirect: (context, state) =>
+              '/productos/${state.pathParameters['id']}',
         ),
 
         // Checkout
@@ -365,7 +655,13 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/tienda/productos',
-          redirect: (context, state) => '/productos',
+          redirect: (context, state) {
+            final qp = state.uri.queryParameters;
+            return Uri(
+              path: '/productos',
+              queryParameters: qp.isEmpty ? null : qp,
+            ).toString();
+          },
         ),
         GoRoute(
           path: '/tienda/producto/:id',

@@ -38,6 +38,26 @@ ls -lh build/web_store/main.dart.js
 # MUST be ~4MB! If it's ~9MB, you used the WRONG entry point!
 ```
 
+### 2.5 Generate Product SEO Snapshots (CRITICAL for Google Merchant)
+// turbo
+Generates static HTML files for canonical product URLs so `/productos/<uuid>` can be served as real HTML (meta + Product JSON-LD) even when bots don’t execute Flutter JS reliably.
+
+```bash
+dart run scripts/generate_product_seo_snapshots.dart \
+	--build-dir build/web_store \
+	--tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
+	--store-url https://vinabike.cl
+```
+
+**Quick sanity check:**
+```bash
+ls -lah build/web_store/productos | head
+```
+
+Notes:
+- Firebase Hosting serves these snapshots as static files if present (SPA rewrite is only a fallback).
+- Hosting headers for `/productos/**` are configured in `firebase.json`.
+
 ### 3. Build the ERP (Full)
 // turbo
 Build the ERP with the full entry point (includes all modules).

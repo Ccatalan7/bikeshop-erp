@@ -133,7 +133,7 @@ class CartPage extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
-              onPressed: () => context.go('/tienda/productos'),
+              onPressed: () => context.go('/productos'),
               icon: const Icon(Icons.shopping_bag_outlined),
               label: const Text('EXPLORAR PRODUCTOS'),
               style: ElevatedButton.styleFrom(
@@ -470,7 +470,7 @@ class CartPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => context.go('/tienda/productos'),
+                onPressed: () => context.go('/productos'),
                 child: const Text('SEGUIR COMPRANDO'),
               ),
             ),

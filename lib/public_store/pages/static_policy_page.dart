@@ -8,6 +8,7 @@ import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../widgets/public_store_layout.dart';
 
 /// Policy page renderer that uses WebsiteService for caching.
 /// Much simpler than the old StaticPolicyPage - no duplicate DB logic!
@@ -37,7 +38,6 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   List<Map<String, dynamic>> _blocks = [];
   String? _pageId;
   bool _editModeChecked = false;
-  bool _syncedEditorContextForThisPage = false;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -70,22 +70,42 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
       _editModeChecked = false;
-      _syncedEditorContextForThisPage = false;
       _loadPage();
     }
   }
 
+  bool _providerHasBlocksForThisPage(WebsiteEditModeProvider editProvider) {
+    if (_pageId == null) return false;
+
+    final contextMatches = (editProvider.currentPageId == _pageId) ||
+        (editProvider.currentPageSlug == widget.slug);
+    if (!contextMatches) return false;
+
+    final providerBlocks = editProvider.blocks;
+    if (providerBlocks.isEmpty) return false;
+
+    // If blocks include page_id, ensure they match this page.
+    final hasPageId = providerBlocks.any((b) => b['page_id'] != null);
+    if (!hasPageId) return true;
+
+    return providerBlocks
+        .every((b) => b['page_id']?.toString() == _pageId.toString());
+  }
+
   void _updateEditProviderIfNeeded() {
     if (!mounted) return;
+    // This page is kept alive across tab/branch navigation. Only the active
+    // (ticker-enabled) branch should be allowed to sync the editor provider;
+    // otherwise offstage pages will fight over currentPageSlug/blocks.
+    if (!TickerMode.of(context)) return;
     if (_loading || _pageId == null) return;
 
     final editProvider = context.read<WebsiteEditModeProvider>();
 
     // Only sync when we are already in editor context and the provider is
-    // pointing at a different page.
+    // not actually synced to this page.
     if (!editProvider.isInEditorContext) return;
-    if (editProvider.currentPageSlug == widget.slug) return;
-    if (_syncedEditorContextForThisPage) return;
+    if (_providerHasBlocksForThisPage(editProvider)) return;
 
     final websiteService = context.read<WebsiteService>();
     final blocks = List<Map<String, dynamic>>.from(_blocks);
@@ -111,7 +131,6 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       );
     }
 
-    _syncedEditorContextForThisPage = true;
   }
 
   Future<void> _loadPage() async {
@@ -204,6 +223,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   void _checkEditModeFromRouter(BuildContext context) {
     if (_loading || _pageId == null) return;
     if (_editModeChecked) return;
+    // Avoid entering edit/preview from an offstage kept-alive page.
+    if (!TickerMode.of(context)) return;
 
     // URL params should only be used to ENTER editor context.
     // Once already inside the editor shell, ignore URL forcing to prevent
@@ -254,9 +275,11 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
 
     // If already in editor context and the user navigated without ?edit=true,
     // keep provider synced to this page so the editor panel can render fields.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateEditProviderIfNeeded();
-    });
+    if (TickerMode.of(context)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateEditProviderIfNeeded();
+      });
+    }
 
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final websiteService = context.watch<WebsiteService>();
@@ -427,7 +450,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             bodyFont: bodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -442,7 +465,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             bodyFont: bodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
   }

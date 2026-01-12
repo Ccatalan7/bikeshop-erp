@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -25,26 +26,20 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
   final String _gaTrackingId = 'G-FR5Q37BW43';
   int _gmcProductCount = 0;
 
+  bool _attemptedProviderTokenEnsure = false;
+
   // Google Business Profile
-  final GoogleBusinessService _googleBusinessService = GoogleBusinessService();
   late final WebsiteService _websiteService;
 
   @override
   void initState() {
     super.initState();
     _websiteService = WebsiteService();
-    _googleBusinessService.addListener(_onGoogleServiceUpdate);
   }
 
   @override
   void dispose() {
-    _googleBusinessService.removeListener(_onGoogleServiceUpdate);
-    _googleBusinessService.dispose();
     super.dispose();
-  }
-
-  void _onGoogleServiceUpdate() {
-    if (mounted) setState(() {});
   }
 
   String get _feedUrl {
@@ -55,6 +50,19 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final googleBusinessService = context.watch<GoogleBusinessService>();
+
+    // After returning from OAuth, some browsers will have the new session
+    // persisted but not yet surfaced to the running app state. A one-time
+    // refresh here avoids the need for a manual hard refresh.
+    if (!_attemptedProviderTokenEnsure &&
+        googleBusinessService.isLinked &&
+        !googleBusinessService.hasProviderToken) {
+      _attemptedProviderTokenEnsure = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        googleBusinessService.ensureProviderToken(timeout: const Duration(seconds: 3));
+      });
+    }
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,9 +133,10 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
   // GOOGLE BUSINESS PROFILE SECTION
   // ==========================================================================
   Widget _buildGoogleBusinessProfileSection(ThemeData theme) {
-    final hasToken = _googleBusinessService.hasProviderToken;
-    final isLinked = _googleBusinessService.isLinked;
-    final error = _googleBusinessService.error;
+    final svc = context.watch<GoogleBusinessService>();
+    final hasToken = svc.hasProviderToken;
+    final isLinked = svc.isLinked;
+    final error = svc.error;
 
     return Card(
       child: Padding(
@@ -232,7 +241,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => _googleBusinessService.clearError(),
+                      onPressed: () => svc.clearError(),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
@@ -264,7 +273,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     label: const Text('Sincronizar Reseñas'),
                   ),
                   TextButton.icon(
-                    onPressed: () => _googleBusinessService.connect(),
+                    onPressed: () => svc.connect(),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Reconectar'),
                   ),
@@ -294,17 +303,17 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: _googleBusinessService.isLoading
+                        onPressed: svc.isLoading
                             ? null
-                            : () => _googleBusinessService.connect(),
-                        icon: _googleBusinessService.isLoading
+                            : () => svc.connect(),
+                        icon: svc.isLoading
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.login),
-                        label: Text(_googleBusinessService.isLoading
+                        label: Text(svc.isLoading
                             ? 'Conectando...'
                             : isLinked
                                 ? 'Autorizar Acceso'
@@ -364,7 +373,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
 
   Future<void> _syncBusinessData() async {
     try {
-      final locations = await _googleBusinessService.fetchLocations();
+      final locations = await context.read<GoogleBusinessService>().fetchLocations();
       if (!mounted) return;
 
       if (locations.isEmpty) {
@@ -435,7 +444,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         return;
       }
 
-      final reviews = await _googleBusinessService.fetchReviews(locationName);
+        final reviews = await context
+          .read<GoogleBusinessService>()
+          .fetchReviews(locationName);
       if (!mounted) return;
 
       if (reviews.isNotEmpty) {

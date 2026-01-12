@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
+import 'public_store_layout.dart';
 
 /// Account menu widget for the public store header
 /// Shows login button when not authenticated, or account menu when logged in
@@ -23,7 +24,9 @@ class CustomerAccountMenu extends StatelessWidget {
 
     if (!accountService.isAuthenticated) {
       return FilledButton.icon(
-        onPressed: () => context.go('/tienda/cuenta/login'),
+        onPressed: () {
+          PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/login');
+        },
         icon: const Icon(Icons.person_outline, size: 18),
         label: const Text('INICIAR SESIÓN'),
         style: FilledButton.styleFrom(
@@ -69,7 +72,9 @@ class CustomerAccountMenu extends StatelessWidget {
                 style: TextStyle(color: Colors.red)),
             onTap: () async {
               await accountService.signOut();
-              if (context.mounted) context.go('/');
+              if (context.mounted) {
+                PublicStoreLayout.navigateToHref(context, '/');
+              }
             },
           ),
         ],
@@ -186,23 +191,28 @@ class CustomerAccountMenu extends StatelessWidget {
       onSelected: (value) async {
         switch (value) {
           case 'account':
-            context.go('/tienda/cuenta');
+            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta');
             break;
           case 'orders':
-            context.go('/tienda/cuenta/pedidos');
+            PublicStoreLayout.navigateToHref(
+                context, '/tienda/cuenta/pedidos');
             break;
           case 'addresses':
-            context.go('/tienda/cuenta/direcciones');
+            PublicStoreLayout.navigateToHref(
+                context, '/tienda/cuenta/direcciones');
             break;
           case 'profile':
-            context.go('/tienda/cuenta/perfil');
+            PublicStoreLayout.navigateToHref(
+                context, '/tienda/cuenta/perfil');
             break;
           case 'chat':
-            context.go('/tienda/cuenta/chats');
+            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/chats');
             break;
           case 'logout':
             await accountService.signOut();
-            if (context.mounted) context.go('/');
+            if (context.mounted) {
+              PublicStoreLayout.navigateToHref(context, '/');
+            }
             break;
         }
       },
@@ -214,7 +224,9 @@ class CustomerAccountMenu extends StatelessWidget {
     return ListTile(
       leading: Icon(icon),
       title: Text(label),
-      onTap: () => context.go(path),
+      onTap: () {
+        PublicStoreLayout.navigateToHref(context, path);
+      },
     );
   }
 }

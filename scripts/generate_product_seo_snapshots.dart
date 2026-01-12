@@ -39,7 +39,7 @@ void main(List<String> args) async {
   }
 
   final buildDir = Directory(buildDirPath);
-  final baseIndexFile = File(p.join(buildDir.path, 'index.html'));
+  final baseIndexFile = File(pathJoin(buildDir.path, 'index.html'));
 
   if (!buildDir.existsSync() || !baseIndexFile.existsSync()) {
     stderr.writeln('❌ Build dir/index.html not found: ${baseIndexFile.path}');
@@ -84,7 +84,7 @@ void main(List<String> args) async {
     onlyMerchant: onlyMerchant,
   );
 
-  final outDir = Directory(p.join(buildDir.path, 'productos'));
+  final outDir = Directory(pathJoin(buildDir.path, 'productos'));
   outDir.createSync(recursive: true);
 
   var written = 0;
@@ -92,7 +92,7 @@ void main(List<String> args) async {
     final id = (product['id'] ?? '').toString();
     if (id.isEmpty) continue;
 
-    final productName = (product['name'] ?? '').toString().trim();
+    final productName = _cleanText((product['name'] ?? '').toString());
     final productSku = (product['sku'] ?? '').toString().trim();
     final productBrand = (product['brand'] ?? '').toString().trim();
     final productDescriptionRaw = (product['description'] ?? '').toString();
@@ -117,8 +117,8 @@ void main(List<String> args) async {
       'product_description': productDescription,
     };
 
-    final title = _truncate(_applyTemplate(titleTemplate, variables), 120);
-    final description = _truncate(_applyTemplate(descriptionTemplate, variables), 320);
+    final title = _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
+    final description = _truncate(_cleanText(_applyTemplate(descriptionTemplate, variables)), 320);
 
     final html = _buildProductHtml(
       baseHtml: baseHtml,
@@ -128,9 +128,9 @@ void main(List<String> args) async {
       ogImageUrl: imageUrl,
       jsonLdProduct: _buildProductJsonLd(
         productUrl: productUrl,
-        storeName: storeName,
+        storeName: _cleanText(storeName),
         product: product,
-        description: description.isNotEmpty ? description : productDescription,
+        description: _cleanText(description.isNotEmpty ? description : productDescription),
         inStock: inStock,
         currency: currency,
         priceNum: priceNum,
@@ -141,7 +141,7 @@ void main(List<String> args) async {
       isProduct: true,
     );
 
-    final outFile = File(p.join(outDir.path, id));
+    final outFile = File(pathJoin(outDir.path, id));
     await outFile.writeAsString(html);
     written++;
   }
@@ -189,7 +189,7 @@ String _buildProductHtml({
   // Inject product JSON-LD right before </head>.
   final injection = '\n  <!-- JSON-LD Structured Data for Product (generated at deploy) -->\n'
       '  <script type="application/ld+json" id="seo-product-jsonld">\n'
-      '  ${jsonLdProduct}\n'
+      '  $jsonLdProduct\n'
       '  </script>\n';
 
   if (html.contains('id="seo-product-jsonld"')) {
@@ -217,14 +217,15 @@ String _buildProductJsonLd({
   required String productBrand,
   required String productSku,
 }) {
-  final name = (product['name'] ?? '').toString().trim();
+  final name = _cleanText((product['name'] ?? '').toString());
   final gtin = (product['gtin'] ?? product['barcode'] ?? '').toString().trim();
+  final cleanDescription = _cleanText(description);
 
   final data = <String, dynamic>{
     '@context': 'https://schema.org',
     '@type': 'Product',
     'name': name,
-    'description': description,
+    'description': cleanDescription,
     'url': productUrl,
     if (imageUrl.isNotEmpty) 'image': [imageUrl],
     if (productSku.isNotEmpty) 'sku': productSku,
@@ -249,7 +250,7 @@ String _buildProductJsonLd({
     },
   };
 
-  return const JsonEncoder.withIndent('  ').convert(data);
+  return jsonEncode(data);
 }
 
 // -----------------------------------------------------------------------------
@@ -515,9 +516,7 @@ Map<String, String> _parseArgs(List<String> args) {
 }
 
 // Minimal path join helper to avoid importing additional packages.
-class p {
-  static String join(String a, String b) {
-    if (a.endsWith(Platform.pathSeparator)) return '$a$b';
-    return '$a${Platform.pathSeparator}$b';
-  }
+String pathJoin(String a, String b) {
+  if (a.endsWith(Platform.pathSeparator)) return '$a$b';
+  return '$a${Platform.pathSeparator}$b';
 }

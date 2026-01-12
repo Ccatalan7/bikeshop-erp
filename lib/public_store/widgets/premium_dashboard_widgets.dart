@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+
+import 'public_store_layout.dart';
 
 // -----------------------------------------------------------------------------
 // 1. LIVE JOB TRACKER - LIGHT MODE + SPANISH
@@ -238,7 +239,8 @@ class GarageGrid extends StatelessWidget {
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
               TextButton.icon(
-                onPressed: () => context.go('/tienda/cuenta/bicicletas'),
+                onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/bicicletas'),
                 icon: const Text('Ver Todo', style: TextStyle(fontSize: 12)),
                 label: const Icon(Icons.chevron_right, size: 14),
                 style: TextButton.styleFrom(
@@ -264,7 +266,8 @@ class GarageGrid extends StatelessWidget {
                             TextStyle(color: Colors.grey[500], fontSize: 13)),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => context.go('/tienda/cuenta/bicicletas'),
+                      onPressed: () => PublicStoreLayout.navigateToHref(
+                        context, '/tienda/cuenta/bicicletas'),
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Agregar Bicicleta',
                           style: TextStyle(fontSize: 12)),
@@ -422,9 +425,11 @@ class _RecentActivityState extends State<RecentActivity> {
               TextButton(
                 onPressed: () {
                   if (_selectedTab == 0) {
-                    context.go('/tienda/cuenta/pedidos');
+                    PublicStoreLayout.navigateToHref(
+                        context, '/tienda/cuenta/pedidos');
                   } else {
-                    context.go('/tienda/cuenta/servicios');
+                    PublicStoreLayout.navigateToHref(
+                        context, '/tienda/cuenta/servicios');
                   }
                 },
                 style: TextButton.styleFrom(
@@ -579,7 +584,8 @@ class QuickReorderWidget extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontSize: 16)),
             TextButton(
-              onPressed: () => context.go('/tienda/productos'),
+              onPressed: () =>
+                PublicStoreLayout.navigateToHref(context, '/productos'),
               style: TextButton.styleFrom(
                   padding: EdgeInsets.zero, minimumSize: Size.zero),
               child: Text('Ver todo',

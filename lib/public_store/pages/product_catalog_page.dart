@@ -24,12 +24,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
 
+  final TextEditingController _filtersSearchController =
+      TextEditingController();
+
   // Pagination state
   int _currentPage = 1;
   int _itemsPerPage = 20; // Default: 20 items per page
   static const List<int> _itemsPerPageOptions = [20, 50, 100];
 
   String _searchQuery = '';
+  String _lastRouteSearchQuery = '';
   String? _selectedCategoryId;
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
@@ -43,6 +47,66 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     super.initState();
     // Debug: initState
     _loadProducts();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSearchQueryFromRoute();
+  }
+
+  void _syncSearchQueryFromRoute() {
+    final qp = GoRouterState.of(context).uri.queryParameters;
+    final routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
+    if (routeQuery == _lastRouteSearchQuery) return;
+
+    _lastRouteSearchQuery = routeQuery;
+
+    // Avoid calling setState during build (this page can be kept-alive/offstage).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _searchQuery = routeQuery;
+
+        // Keep the visible search field in sync so users can see
+        // what term is currently filtering the catalog.
+        if (_filtersSearchController.text != routeQuery) {
+          _filtersSearchController.value =
+              _filtersSearchController.value.copyWith(
+            text: routeQuery,
+            selection: TextSelection.collapsed(offset: routeQuery.length),
+            composing: TextRange.empty,
+          );
+        }
+      });
+      _applyFilters();
+    });
+  }
+
+  void _clearSearch() {
+    if (_searchQuery.isEmpty && _filtersSearchController.text.isEmpty) return;
+    setState(() {
+      _searchQuery = '';
+      _filtersSearchController.clear();
+    });
+    _applyFilters();
+
+    // Best-effort: remove q/search from the URL so refresh/share is consistent.
+    try {
+      final router = GoRouter.of(context);
+      final uri = GoRouterState.of(context).uri;
+      final nextQp = Map<String, String>.from(uri.queryParameters)
+        ..remove('q')
+        ..remove('search');
+      final destination = Uri(
+        path: uri.path,
+        queryParameters: nextQp.isEmpty ? null : nextQp,
+      ).toString();
+      router.replace(destination);
+      _lastRouteSearchQuery = '';
+    } catch (_) {
+      // Ignore (non-critical)
+    }
   }
 
   Future<void> _loadProducts() async {
@@ -98,14 +162,36 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       // Reset to first page when filters change
       _currentPage = 1;
 
+      final tokens = _tokenizeSearchQuery(_searchQuery);
+
       _filteredProducts = _allProducts.where((product) {
         // Search filter
-        if (_searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
-          if (!product.name.toLowerCase().contains(query) &&
-              !product.sku.toLowerCase().contains(query) &&
-              !(product.description?.toLowerCase().contains(query) ?? false)) {
-            return false;
+        if (tokens.isNotEmpty) {
+          final textHaystack = _buildNormalizedProductSearchText(product);
+          final idHaystack = _buildNormalizedProductIdSearchText(product);
+
+          // AND semantics: every token must match somewhere.
+          for (final token in tokens) {
+            final isNumericToken = RegExp(r'^\d+$').hasMatch(token);
+
+            // Heuristic: numeric-only tokens (like "26") often represent sizes.
+            // They should match human text (name/description), and may match
+            // identifiers only when not embedded inside a larger number.
+            if (isNumericToken) {
+              final boundaryRe = RegExp(
+                '(^|[^0-9])${RegExp.escape(token)}([^0-9]|\$)',
+              );
+
+              if (!textHaystack.contains(token) &&
+                  !boundaryRe.hasMatch(idHaystack)) {
+                return false;
+              }
+            } else {
+              if (!textHaystack.contains(token) &&
+                  !idHaystack.contains(token)) {
+                return false;
+              }
+            }
           }
         }
 
@@ -134,6 +220,54 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           break;
       }
     });
+  }
+
+  String _normalizeForSearch(String input) {
+    var s = input.toLowerCase();
+
+    // Fast accent/diacritic normalization for Spanish.
+    s = s
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n');
+
+    // Normalize punctuation to spaces (keeps token boundaries consistent).
+    s = s.replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+    return s.trim();
+  }
+
+  List<String> _tokenizeSearchQuery(String query) {
+    final normalized = _normalizeForSearch(query);
+    if (normalized.isEmpty) return const [];
+    return normalized.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+  }
+
+  String _buildNormalizedProductSearchText(Product product) {
+    final raw = <String?>[
+      product.name,
+      product.description,
+      product.brand,
+      product.model,
+      product.manufacturer,
+      product.manufacturerSku,
+      product.categoryName,
+    ].whereType<String>().join(' ');
+
+    return _normalizeForSearch(raw);
+  }
+
+  String _buildNormalizedProductIdSearchText(Product product) {
+    final raw = <String?>[
+      product.sku,
+      product.barcode,
+      product.gtin,
+    ].whereType<String>().join(' ');
+
+    return _normalizeForSearch(raw);
   }
 
   void _showFilterSheet(BuildContext context) {
@@ -272,7 +406,49 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void dispose() {
     // Debug: dispose
+    _filtersSearchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildActiveSearchIndicator() {
+    final q = _searchQuery.trim();
+    if (q.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.blue.withAlpha(18),
+        border: Border.all(color: Colors.blue.withAlpha(40)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search, size: 18, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Filtrando por: "$q"',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.blue.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: _clearSearch,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(Icons.close, size: 16, color: Colors.blue.shade700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -420,8 +596,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     ),
                     // Product grid
                     Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildProductGrid(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_searchQuery.trim().isNotEmpty)
+                            _buildActiveSearchIndicator(),
+                          const SizedBox(height: 12),
+                          _buildProductGrid(),
+                        ],
+                      ),
                     ),
                   ],
                 );
@@ -446,7 +630,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildHeader(),
-                          const SizedBox(height: 32),
+                          if (_searchQuery.trim().isNotEmpty)
+                            _buildActiveSearchIndicator(),
+                          const SizedBox(height: 24),
                           _buildProductGrid(),
                         ],
                       ),
@@ -477,6 +663,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
         // Search
         TextField(
+          controller: _filtersSearchController,
           decoration: InputDecoration(
             hintText: 'Buscar productos',
             hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
@@ -488,6 +675,17 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               borderRadius: BorderRadius.circular(0),
               borderSide: BorderSide.none,
             ),
+            suffixIcon: _searchQuery.trim().isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Limpiar búsqueda',
+                    onPressed: _clearSearch,
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
@@ -957,158 +1155,179 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
     final inStock = product.stockQuantity > 0;
 
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final reduceMotion = (mediaQuery?.disableAnimations ?? false) ||
+        (mediaQuery?.accessibleNavigation ?? false);
+
+    final hoverActive = _isHovered && !reduceMotion;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () => context.push('/productos/${product.id}'),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product Image
-              Expanded(
-                flex: 4,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      padding: const EdgeInsets.all(16),
-                      child: hasImage
-                          ? Image.network(
-                              displayImageUrl,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.pedal_bike_outlined,
-                                    size: 48,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.pedal_bike_outlined,
-                                size: 48,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                    ),
-                    // Out of stock badge
-                    if (!inStock)
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          color: Colors.black87,
-                          child: const Text(
-                            'AGOTADO',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          scale: hoverActive ? 1.015 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: hoverActive
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
                       ),
-                    // Hover overlay
-                    if (_isHovered)
-                      Positioned(
-                        bottom: 12,
-                        left: 0,
-                        right: 0,
-                        child: Center(
+                    ]
+                  : const [],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product Image
+                Expanded(
+                  flex: 4,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                        child: hasImage
+                            ? Image.network(
+                                displayImageUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(
+                                    child: Icon(
+                                      Icons.pedal_bike_outlined,
+                                      size: 48,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Center(
+                                child: Icon(
+                                  Icons.pedal_bike_outlined,
+                                  size: 48,
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
+                      ),
+                      // Out of stock badge
+                      if (!inStock)
+                        Positioned(
+                          top: 8,
+                          left: 8,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            color: Colors.black,
+                                horizontal: 8, vertical: 4),
+                            color: Colors.black87,
                             child: const Text(
-                              'VER PRODUCTO',
+                              'AGOTADO',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              // Product Info
-              Expanded(
-                flex: 4,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Brand
-                      if (product.brand != null && product.brand!.isNotEmpty)
-                        Text(
-                          product.brand!.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      // Product name
-                      Expanded(
-                        child: Text(
-                          product.name,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                            height: 1.3,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Price
-                      Text(
-                        ChileanUtils.formatCurrency(product.price),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
-                      ),
-                      if (inStock)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Stock: ${product.stockQuantity}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
+                      // Hover overlay
+                      if (hoverActive)
+                        Positioned(
+                          bottom: 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              color: Colors.black,
+                              child: const Text(
+                                'VER PRODUCTO',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                // Product Info
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Brand
+                        if (product.brand != null && product.brand!.isNotEmpty)
+                          Text(
+                            product.brand!.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade500,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        // Product name
+                        Expanded(
+                          child: Text(
+                            product.name,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                              height: 1.3,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Price
+                        Text(
+                          ChileanUtils.formatCurrency(product.price),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black,
+                          ),
+                        ),
+                        if (inStock)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Stock: ${product.stockQuantity}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

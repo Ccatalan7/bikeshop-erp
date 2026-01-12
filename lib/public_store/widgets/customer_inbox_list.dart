@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../modules/messaging/services/messaging_service.dart';
+import 'public_store_layout.dart';
 
 class CustomerInboxList extends StatefulWidget {
   final String? activeConversationId;
@@ -86,7 +87,10 @@ class _CustomerInboxListState extends State<CustomerInboxList> {
             if (widget.onConversationSelected != null) {
               widget.onConversationSelected!(conv['id']);
             } else {
-              context.go('/tienda/cuenta/chats/${conv['id']}');
+              PublicStoreLayout.navigateToHref(
+                context,
+                '/tienda/cuenta/chats/${conv['id']}',
+              );
             }
           },
         );

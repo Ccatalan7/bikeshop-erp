@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,8 @@ import '../../shared/services/tenant_service.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
+import '../services/public_store_scroll_state.dart';
+import '../widgets/public_store_layout.dart';
 
 class PublicHomePage extends StatefulWidget {
   const PublicHomePage({super.key});
@@ -30,9 +33,13 @@ class _PublicHomePageState extends State<PublicHomePage>
   List<Product> _featuredProducts = [];
   bool _editModeChecked =
       false; // Track if we've checked edit mode for this navigation
+  bool _syncedEditorContextForHome = false;
   bool _featuredProductsLoaded = false; // Load featured products once
   String? _resolvedTenantId;
   bool _isResolvingTenantId = false;
+
+  PublicStoreScrollState? _scrollState;
+  int _lastHomeRefreshSignal = 0;
 
   // Progressive rendering to reduce first-frame jank on mobile.
   // We render only a couple of blocks initially, then expand shortly after.
@@ -65,6 +72,49 @@ class _PublicHomePageState extends State<PublicHomePage>
       _ensureTenantId();
       _loadFeaturedProductsOnce();
     });
+  }
+
+  void _onHomeRefreshSignal() {
+    final scrollState = _scrollState;
+    if (!mounted || scrollState == null) return;
+
+    final currentValue = scrollState.homeRefreshSignal.value;
+    if (currentValue == _lastHomeRefreshSignal) return;
+    _lastHomeRefreshSignal = currentValue;
+
+    // Fire-and-forget: this is a user action (logo/home) and should feel instant.
+    unawaited(_refreshHomeFromLogoOrHomeClick());
+  }
+
+  Future<void> _refreshHomeFromLogoOrHomeClick() async {
+    if (!mounted) return;
+
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    // Never clobber editor state while actively editing.
+    if (editProvider.isEditMode) return;
+
+    final tenantId = await _effectiveTenantId();
+    if (!mounted) return;
+    if (tenantId == null || tenantId.isEmpty) return;
+
+    // 1) Refresh Website blocks/settings (force refresh bypasses TTL skips).
+    try {
+      final websiteService = context.read<WebsiteService>();
+      await websiteService.loadPublicStoreDataUnified(
+        tenantId,
+        forceRefresh: true,
+      );
+    } catch (_) {
+      // Ignore; home should still render with existing cached data.
+    }
+
+    // 2) Refresh featured products.
+    if (!mounted) return;
+    setState(() {
+      _featuredProductsLoaded = false;
+      _featuredProducts = [];
+    });
+    await _loadFeaturedProductsOnce();
   }
 
   int get _initialBlockRenderLimit {
@@ -212,11 +262,76 @@ class _PublicHomePageState extends State<PublicHomePage>
     });
   }
 
+  /// When navigating back to the HOME route while already inside the editor shell,
+  /// we must also reset the editor page context and swap the provider blocks to
+  /// the HOME blocks.
+  ///
+  /// Otherwise the home page will keep rendering the previous page's blocks
+  /// because `PublicHomePage` prefers `editProvider.blocks` in editor context.
+  void _syncEditorContextToHomeIfNeeded({
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+  }) {
+    if (_syncedEditorContextForHome) return;
+    // Home is kept alive in the shell. Never let an offstage home instance
+    // overwrite the editor provider while the user is viewing another page.
+    if (!TickerMode.of(context)) return;
+    if (!editProvider.isInEditorContext) return;
+
+    final currentSlug = (editProvider.currentPageSlug ?? '').trim();
+    if (currentSlug.isEmpty) {
+      // Already home.
+      _syncedEditorContextForHome = true;
+      return;
+    }
+
+    // Wait until we have blocks/settings available.
+    if (websiteService.blocks.isEmpty && !websiteService.hasLoadedForTenant) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_syncedEditorContextForHome) return;
+      if (!TickerMode.of(context)) return;
+
+      // Re-check in case something changed between scheduling and execution.
+      final slugNow = (editProvider.currentPageSlug ?? '').trim();
+      if (slugNow.isEmpty) {
+        _syncedEditorContextForHome = true;
+        return;
+      }
+
+      final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
+      final settings = Map<String, dynamic>.from(websiteService.settings);
+
+      debugPrint(
+          '🔄 [PublicHomePage] Sync editor context: ${editProvider.currentPageSlug} → home (${blocks.length} blocks)');
+
+      if (editProvider.isEditMode) {
+        editProvider.enterEditMode(blocks, settings, pageId: null, pageSlug: null);
+      } else {
+        editProvider.enterPreviewMode(blocks, settings, pageId: null, pageSlug: null);
+      }
+
+      _syncedEditorContextForHome = true;
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Reset edit mode check on navigation
     _editModeChecked = false;
+    _syncedEditorContextForHome = false;
+
+    final nextScrollState = context.read<PublicStoreScrollState>();
+    if (_scrollState != nextScrollState) {
+      _scrollState?.homeRefreshSignal.removeListener(_onHomeRefreshSignal);
+      _scrollState = nextScrollState;
+      _lastHomeRefreshSignal = nextScrollState.homeRefreshSignal.value;
+      nextScrollState.homeRefreshSignal.addListener(_onHomeRefreshSignal);
+    }
   }
 
   void _scheduleProgressiveExpansionIfNeeded({
@@ -361,6 +476,7 @@ class _PublicHomePageState extends State<PublicHomePage>
   @override
   void dispose() {
     // Debug: dispose
+    _scrollState?.homeRefreshSignal.removeListener(_onHomeRefreshSignal);
     super.dispose();
   }
 
@@ -383,13 +499,19 @@ class _PublicHomePageState extends State<PublicHomePage>
     final websiteService = context
         .watch<WebsiteService>(); // Changed to watch() for progressive loading
     final editProvider = context.watch<WebsiteEditModeProvider>();
+
+    _syncEditorContextToHomeIfNeeded(
+      editProvider: editProvider,
+      websiteService: websiteService,
+    );
+
     if (tenantProvider.tenantId == null &&
         (_resolvedTenantId == null || _resolvedTenantId!.isEmpty)) {
       // ERP/editor host: resolve tenant via TenantService so product blocks can load.
       _ensureTenantId();
     }
 
-    String _eff(String key, String fallback) {
+    String eff(String key, String fallback) {
       if (editProvider.isInEditorContext) {
         return editProvider.getEffectiveThemeSetting(key, fallback);
       }
@@ -398,48 +520,52 @@ class _PublicHomePageState extends State<PublicHomePage>
 
     final primarySetting = websiteService.getSetting('theme_primary_color', '');
     final accentSetting = websiteService.getSetting('theme_accent_color', '');
-    final headingFontSetting = websiteService.getSetting('theme_heading_font', '');
+    final headingFontSetting =
+        websiteService.getSetting('theme_heading_font', '');
     final bodyFontSetting = websiteService.getSetting('theme_body_font', '');
-    final headingSizeSetting = websiteService.getSetting('theme_heading_size', '');
+    final headingSizeSetting =
+        websiteService.getSetting('theme_heading_size', '');
     final bodySizeSetting = websiteService.getSetting('theme_body_size', '');
     final textColorSetting = websiteService.getSetting('theme_text_color', '');
-    final sectionSpacingSetting = websiteService.getSetting('theme_section_spacing', '');
-    final containerPaddingSetting = websiteService.getSetting('theme_container_padding', '');
+    final sectionSpacingSetting =
+        websiteService.getSetting('theme_section_spacing', '');
+    final containerPaddingSetting =
+        websiteService.getSetting('theme_container_padding', '');
 
     final primaryColor = _resolveColor(
-      _eff('theme_primary_color', primarySetting),
+      eff('theme_primary_color', primarySetting),
       PublicStoreTheme.primaryBlue,
     );
     final accentColor = _resolveColor(
-      _eff('theme_accent_color', accentSetting),
+      eff('theme_accent_color', accentSetting),
       PublicStoreTheme.accentGreen,
     );
-    final headingFont = _eff('theme_heading_font', headingFontSetting);
-    final bodyFont = _eff('theme_body_font', bodyFontSetting);
+    final headingFont = eff('theme_heading_font', headingFontSetting);
+    final bodyFont = eff('theme_body_font', bodyFontSetting);
     final headingSize = _resolveDouble(
-      _eff('theme_heading_size', headingSizeSetting),
+      eff('theme_heading_size', headingSizeSetting),
       48.0,
       min: 24.0,
       max: 72.0,
     );
     final bodySize = _resolveDouble(
-      _eff('theme_body_size', bodySizeSetting),
+      eff('theme_body_size', bodySizeSetting),
       16.0,
       min: 12.0,
       max: 24.0,
     );
     final textColor = _resolveColor(
-      _eff('theme_text_color', textColorSetting),
+      eff('theme_text_color', textColorSetting),
       PublicStoreTheme.textPrimary,
     );
     final sectionSpacing = _resolveDouble(
-      _eff('theme_section_spacing', sectionSpacingSetting),
+      eff('theme_section_spacing', sectionSpacingSetting),
       64.0,
       min: 32.0,
       max: 128.0,
     );
     final containerPadding = _resolveDouble(
-      _eff('theme_container_padding', containerPaddingSetting),
+      eff('theme_container_padding', containerPaddingSetting),
       24.0,
       min: 16.0,
       max: 64.0,
@@ -447,15 +573,15 @@ class _PublicHomePageState extends State<PublicHomePage>
 
     // Debug: verify live theme preview values are applied
     if (editProvider.isInEditorContext &&
-      (editProvider.pendingThemeSettings.containsKey('theme_heading_font') ||
-        editProvider.pendingThemeSettings.containsKey('theme_body_font') ||
-        editProvider.pendingThemeSettings
-          .containsKey('theme_heading_size') ||
-        editProvider.pendingThemeSettings.containsKey('theme_body_size'))) {
+        (editProvider.pendingThemeSettings.containsKey('theme_heading_font') ||
+            editProvider.pendingThemeSettings.containsKey('theme_body_font') ||
+            editProvider.pendingThemeSettings
+                .containsKey('theme_heading_size') ||
+            editProvider.pendingThemeSettings.containsKey('theme_body_size'))) {
       debugPrint(
-        '🧪 [ThemePreview] effective headingFont="$headingFont" bodyFont="$bodyFont" headingSize=$headingSize bodySize=$bodySize');
+          '🧪 [ThemePreview] effective headingFont="$headingFont" bodyFont="$bodyFont" headingSize=$headingSize bodySize=$bodySize');
       debugPrint(
-        '🧪 [ThemePreview] pendingThemeSettings=${editProvider.pendingThemeSettings}');
+          '🧪 [ThemePreview] pendingThemeSettings=${editProvider.pendingThemeSettings}');
     }
 
     // Use blocks from WebsiteService (loaded by main.dart progressively)
@@ -875,7 +1001,7 @@ class _PublicHomePageState extends State<PublicHomePage>
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -892,7 +1018,7 @@ class _PublicHomePageState extends State<PublicHomePage>
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
 

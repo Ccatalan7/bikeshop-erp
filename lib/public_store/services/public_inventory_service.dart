@@ -98,7 +98,15 @@ class PublicInventoryService extends ChangeNotifier {
 
       // Filter by stock if requested (RLS only filters is_active=true)
       if (onlyInStock) {
-        query = query.gt('inventory_qty', 0);
+        // Be resilient: some code paths historically updated only one of the
+        // legacy/current stock columns.
+        // NOTE: We only use `.or(...)` when there's no other `.or(...)` needed
+        // (like searchQuery), because PostgREST `or=` is a single query param.
+        if (searchQuery == null || searchQuery.isEmpty) {
+          query = query.or('inventory_qty.gt.0,stock_quantity.gt.0');
+        } else {
+          query = query.gt('inventory_qty', 0);
+        }
       }
 
       // Apply additional filters
@@ -437,5 +445,45 @@ class PublicInventoryService extends ChangeNotifier {
   }) async {
     clearCache(tenantId: tenantId);
     return getCategoriesForTenant(tenantId: tenantId);
+  }
+
+  /// Search products using fuzzy matching (RPC) for live preview
+  ///
+  /// Uses server-side pg_trgm for typo tolerance
+  Future<List<Product>> searchProductsFuzzy({
+    required String tenantId,
+    required String searchTerm,
+    int limit = 10,
+  }) async {
+    if (searchTerm.trim().isEmpty) return [];
+
+    try {
+      debugPrint('🔍 PublicInventoryService: Fuzzy search for "$searchTerm"');
+
+      final response = await _supabase.rpc(
+        'search_products',
+        params: {
+          'p_search_term': searchTerm,
+          'p_tenant_id': tenantId,
+          'p_limit': limit,
+        },
+      );
+
+      final products =
+          (response as List).map((json) => Product.fromJson(json)).toList();
+
+      debugPrint(
+          '✅ PublicInventoryService: Found ${products.length} matches for "$searchTerm"');
+      return products;
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error in fuzzy search: $e');
+      // Fallback to client-side filtering if RPC fails (e.g. migration not run)
+      // This is a safety degradation
+      return getProductsForTenant(
+        tenantId: tenantId,
+        searchQuery: searchTerm,
+        limit: limit,
+      );
+    }
   }
 }

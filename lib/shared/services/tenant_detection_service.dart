@@ -175,26 +175,78 @@ class TenantDetectionService {
     const forcedStoreSubdomain = String.fromEnvironment('PUBLIC_STORE_SUBDOMAIN');
     const ignoreAuth = bool.fromEnvironment('PUBLIC_STORE_IGNORE_AUTH');
 
+    // Fast path (all platforms, including web): explicit tenant override.
+    // This is primarily for local dev and deterministic previews.
+    if (forcedStoreTenantId.isNotEmpty) {
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (forced_store_tenant)');
+      }
+      return Tenant(
+        id: forcedStoreTenantId,
+        shopName:
+            forcedStoreSubdomain.isNotEmpty ? forcedStoreSubdomain : 'Store',
+        subdomain: forcedStoreSubdomain,
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
+
+    // Web dev-only overrides (do NOT allow on production domains).
+    // Useful when running on localhost without subdomains.
+    if (kIsWeb) {
+      final host = Uri.base.host.toLowerCase();
+      final hostWithoutPort = host.split(':').first;
+
+      final isLocalDevHost = hostWithoutPort == 'localhost' ||
+          hostWithoutPort == '127.0.0.1' ||
+          hostWithoutPort.startsWith('192.168.') ||
+          hostWithoutPort.startsWith('10.') ||
+          hostWithoutPort.startsWith('172.16.');
+
+      if (!kReleaseMode && isLocalDevHost) {
+        final qp = Uri.base.queryParameters;
+        final qpTenantId = (qp['tenant_id'] ?? qp['tenantId'] ?? '').trim();
+        final qpSubdomain =
+            (qp['tenant'] ?? qp['subdomain'] ?? qp['store'] ?? '').trim();
+
+        final uuidRegex = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        );
+
+        if (qpTenantId.isNotEmpty && uuidRegex.hasMatch(qpTenantId)) {
+          if (_perfLogsEnabled) {
+            debugPrint(
+              '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (dev_queryparam_tenant_id)',
+            );
+          }
+          return Tenant(
+            id: qpTenantId,
+            shopName: qpSubdomain.isNotEmpty ? qpSubdomain : 'Store',
+            subdomain: qpSubdomain,
+            isActive: true,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        }
+
+        if (qpSubdomain.isNotEmpty) {
+          final tenant = await getTenantBySubdomain(qpSubdomain);
+          if (tenant != null) {
+            if (_perfLogsEnabled) {
+              debugPrint(
+                '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (dev_queryparam_subdomain)',
+              );
+            }
+            return tenant;
+          }
+        }
+      }
+    }
+
     // For non-web platforms (macOS, Windows, iOS, Android)
     if (!kIsWeb) {
-      // Fast path: explicit tenant override for store app.
-      if (forcedStoreTenantId.isNotEmpty) {
-        if (_perfLogsEnabled) {
-          debugPrint(
-              '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (forced_store_tenant)');
-        }
-        return Tenant(
-          id: forcedStoreTenantId,
-          shopName: 'Vinabike',
-          subdomain: forcedStoreSubdomain.isNotEmpty
-              ? forcedStoreSubdomain
-              : 'vinabike',
-          isActive: true,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-      }
-
       // First try authenticated user's tenant
       if (!ignoreAuth) {
         final user = _supabase.auth.currentUser;
@@ -331,6 +383,25 @@ class TenantDetectionService {
           }
           return tenantFromAuth;
         }
+      }
+
+      // Public store local dev fallback: if you're on localhost and not signed in,
+      // default to Viñabike so the store can boot deterministically.
+      if (!kReleaseMode &&
+          (hostWithoutWww.contains('localhost') ||
+              hostWithoutWww.contains('127.0.0.1'))) {
+        if (_perfLogsEnabled) {
+          debugPrint(
+              '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (localhost_default_store)');
+        }
+        return Tenant(
+          id: '5443b130-cc28-45af-a420-cd500b288890',
+          shopName: 'Vinabike',
+          subdomain: 'vinabike',
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
       }
     }
 

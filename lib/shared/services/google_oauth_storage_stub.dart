@@ -4,6 +4,9 @@ class _LocalStorageStub {
 
   String? operator [](String key) => _store[key];
   void operator []=(String key, String value) => _store[key] = value;
+
+  void remove(String key) => _store.remove(key);
+  void removeItem(String key) => _store.remove(key);
 }
 
 class _WindowStub {

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/providers/website_edit_mode_provider.dart';
@@ -11,6 +10,7 @@ import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
 import '../theme/public_store_theme.dart';
+import 'public_store_layout.dart';
 
 /// Unified widget for rendering website page content (blocks).
 /// 
@@ -262,7 +262,7 @@ class WebsitePageContent extends StatelessWidget {
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -278,7 +278,7 @@ class WebsitePageContent extends StatelessWidget {
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => context.go(route),
+            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
     

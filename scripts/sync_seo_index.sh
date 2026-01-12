@@ -35,8 +35,8 @@ get_setting() {
 BUSINESS_NAME=$(get_setting "seo_business_name" "$(get_setting "store_name" "Vinabike")")
 PHONE=$(get_setting "seo_phone" "$(get_setting "contact_phone" "+56998357797")")
 EMAIL=$(get_setting "seo_email" "$(get_setting "contact_email" "vinabikechile@gmail.com")")
-ADDRESS_STREET=$(get_setting "seo_address_street" "$(get_setting "contact_address" "Álvarez 32, Local 17")")
-ADDRESS_CITY=$(get_setting "seo_address_city" "Viña del Mar")
+ADDRESS_STREET_RAW=$(get_setting "seo_address_street" "$(get_setting "contact_address" "Álvarez 32, Local 17")")
+ADDRESS_CITY=$(get_setting "seo_address_locality" "$(get_setting "seo_address_city" "Viña del Mar")")
 ADDRESS_COUNTRY=$(get_setting "seo_address_country" "Chile")
 META_TITLE=$(get_setting "seo_meta_title" "$(get_setting "meta_title" "$BUSINESS_NAME - Tienda de Bicicletas")")
 META_DESCRIPTION=$(get_setting "seo_meta_description" "$(get_setting "meta_description" "Tu tienda especializada en ciclismo, repuestos y servicio técnico.")")
@@ -103,8 +103,104 @@ EOF
 
 GOOGLE_FONTS_LINKS=$(build_google_fonts_links "$HEADING_FONT" "$BODY_FONT")
 
-# Full address
-FULL_ADDRESS="$ADDRESS_STREET, $ADDRESS_CITY, $ADDRESS_COUNTRY"
+# Normalize address pieces.
+# The editor often stores a full address string (including city/country) in a single field.
+# The index generator also prints city/country separately, which can cause duplicates like:
+# "..., Viña del Mar, Chile, Viña del Mar, Chile".
+normalize_street_address() {
+  local street="$1"
+  local city="$2"
+  local country="$3"
+
+  local street_clean="$street"
+
+  # Generate ASCII/transliterated variants to handle e.g. "Vina" vs "Viña".
+  local city_ascii="$city"
+  local country_ascii="$country"
+  if command -v iconv >/dev/null 2>&1; then
+    city_ascii=$(printf '%s' "$city" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || printf '%s' "$city")
+    country_ascii=$(printf '%s' "$country" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || printf '%s' "$country")
+  fi
+
+  # Strip trailing ", <country>" and ", <city>" if already present in the street field.
+  for v in "$country" "$country_ascii"; do
+    if [[ -n "$v" ]]; then
+      street_clean=$(printf '%s' "$street_clean" | perl -pe "s/,\\s*\\Q$v\\E\\s*\$//i")
+    fi
+  done
+  for v in "$city" "$city_ascii"; do
+    if [[ -n "$v" ]]; then
+      street_clean=$(printf '%s' "$street_clean" | perl -pe "s/,\\s*\\Q$v\\E\\s*\$//i")
+    fi
+  done
+
+  # Final cleanup: trim trailing commas/spaces.
+  street_clean=$(printf '%s' "$street_clean" | perl -pe 's/[\s,]+$//')
+  printf '%s' "$street_clean"
+}
+
+normalize_country() {
+  local country="$1"
+
+  # Trim whitespace/commas.
+  country=$(printf '%s' "$country" | perl -pe 's/^[\s,]+//; s/[\s,]+$//')
+
+  # If the country field itself contains commas (e.g. "Chile, Chile"),
+  # keep only the first token.
+  if [[ "$country" == *","* ]]; then
+    country=$(printf '%s' "$country" | awk -F',' '{print $1}')
+    country=$(printf '%s' "$country" | perl -pe 's/^[\s,]+//; s/[\s,]+$//')
+  fi
+
+  # Guard against accidental duplication without commas ("Chile Chile").
+  local lc
+  lc=$(printf '%s' "$country" | tr '[:upper:]' '[:lower:]' | perl -pe 's/\s+/ /g')
+  if [[ "$lc" == "chile chile" ]]; then
+    country="Chile"
+  fi
+
+  printf '%s' "$country"
+}
+
+build_full_address() {
+  local out=""
+  local last_norm=""
+
+  normalize_part() {
+    local p="$1"
+    p=$(printf '%s' "$p" | perl -pe 's/^[\s,]+//; s/[\s,]+$//; s/\s+/ /g')
+    if command -v iconv >/dev/null 2>&1; then
+      p=$(printf '%s' "$p" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || printf '%s' "$p")
+    fi
+    printf '%s' "$p" | tr '[:upper:]' '[:lower:]'
+  }
+
+  for part in "$@"; do
+    if [[ -n "${part// }" ]]; then
+      # Skip adjacent duplicates like "Chile, Chile".
+      local norm
+      norm=$(normalize_part "$part")
+      if [[ -n "$last_norm" && "$norm" == "$last_norm" ]]; then
+        continue
+      fi
+
+      if [[ -z "$out" ]]; then
+        out="$part"
+      else
+        out="$out, $part"
+      fi
+
+      last_norm="$norm"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+ADDRESS_COUNTRY=$(normalize_country "$ADDRESS_COUNTRY")
+ADDRESS_STREET=$(normalize_street_address "$ADDRESS_STREET_RAW" "$ADDRESS_CITY" "$ADDRESS_COUNTRY")
+
+# Full address (safe from duplicates)
+FULL_ADDRESS=$(build_full_address "$ADDRESS_STREET" "$ADDRESS_CITY" "$ADDRESS_COUNTRY")
 
 echo "✅ Fetched settings:"
 echo "   Business: $BUSINESS_NAME"

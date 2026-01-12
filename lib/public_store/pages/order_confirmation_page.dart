@@ -652,7 +652,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => context.go('/tienda/productos'),
+                      onPressed: () => context.go('/productos'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: const BorderSide(

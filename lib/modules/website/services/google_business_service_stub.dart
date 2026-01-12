@@ -7,8 +7,15 @@ class _FakeStorage {
   String? remove(String key) => null;
 }
 
+class _FakeLocation {
+  String get href => '';
+  void reload() {}
+  void assign(String url) {}
+}
+
 class _FakeWindow {
   final localStorage = _FakeStorage();
+  final location = _FakeLocation();
 }
 
 final window = _FakeWindow();

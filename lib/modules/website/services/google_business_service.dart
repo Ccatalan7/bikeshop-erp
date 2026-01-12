@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,11 +14,68 @@ class GoogleBusinessService with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  StreamSubscription<AuthState>? _authSub;
+  bool _notifyScheduled = false;
+  String? _lastProviderToken;
+  List<String>? _lastIdentityProviders;
+
   static const _kWebReturnToEditorKey = 'google_oauth_return_to_editor';
+  static const _kWebReturnToPathKey = 'google_oauth_return_path';
+  static const _kWebOpenIntegrationsKey = 'google_oauth_open_integrations';
 
   // Edge Function URL for proxying Google Business API calls (bypasses CORS on web)
   static const String _edgeFunctionUrl =
       'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-business-reviews';
+
+  GoogleBusinessService() {
+    _lastProviderToken = _supabase.auth.currentSession?.providerToken;
+    _lastIdentityProviders =
+        _supabase.auth.currentUser?.identities?.map((i) => i.provider).toList();
+
+    // Keep UI in sync when OAuth returns and the session changes.
+    _authSub = _supabase.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      final providerToken = session?.providerToken;
+      final identityProviders =
+          session?.user.identities?.map((i) => i.provider).toList();
+
+      final tokenChanged = providerToken != _lastProviderToken;
+      final identitiesChanged =
+          (identityProviders ?? const <String>[]) !=
+              (_lastIdentityProviders ?? const <String>[]);
+
+      if (tokenChanged || identitiesChanged) {
+        _lastProviderToken = providerToken;
+        _lastIdentityProviders = identityProviders;
+        _safeNotifyListeners();
+      }
+    });
+  }
+
+  void _safeNotifyListeners() {
+    if (_notifyScheduled) return;
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final inFrame = phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks;
+
+    if (inFrame) {
+      _notifyScheduled = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _notifyScheduled = false;
+        notifyListeners();
+      });
+      return;
+    }
+
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 
   void _debugSessionSnapshot(String context) {
     final session = _supabase.auth.currentSession;
@@ -47,9 +106,35 @@ class GoogleBusinessService with ChangeNotifier {
     return _supabase.auth.currentSession?.providerToken != null;
   }
 
+  /// Best-effort: after OAuth returns, some web runtimes may need a short
+  /// rehydration window before `provider_token` becomes available to the
+  /// running app. This avoids requiring a manual hard refresh.
+  Future<bool> ensureProviderToken({Duration timeout = const Duration(seconds: 3)}) async {
+    if (hasProviderToken) return true;
+
+    final start = DateTime.now();
+    while (DateTime.now().difference(start) < timeout) {
+      try {
+        await _supabase.auth.refreshSession();
+      } catch (_) {
+        // ignore; we'll retry briefly
+      }
+
+      if (hasProviderToken) {
+        _safeNotifyListeners();
+        return true;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+
+    _debugSessionSnapshot('ensureProviderToken timeout');
+    return false;
+  }
+
   void clearError() {
     _error = null;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   String _toFriendlyGoogleApiError({
@@ -168,7 +253,7 @@ class GoogleBusinessService with ChangeNotifier {
   Future<void> connect() async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Determines redirect URL based on platform
@@ -180,6 +265,17 @@ class GoogleBusinessService with ChangeNotifier {
           html.window.localStorage[_kWebReturnToEditorKey] = 'true';
           debugPrint(
               '💾 [GoogleBusinessService] Saved edit mode flag to localStorage');
+
+          // Also store the current route so the callback can bring the user
+          // back to the Integraciones module instead of sending them to '/'
+          // (which redirects to /dashboard on ERP hosts).
+          final uri = Uri.base;
+          final pathWithQuery = uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
+          html.window.localStorage[_kWebReturnToPathKey] = pathWithQuery;
+          // Request opening Integraciones panel on return.
+          html.window.localStorage[_kWebOpenIntegrationsKey] = 'true';
+          debugPrint(
+              '💾 [GoogleBusinessService] Saved return path for OAuth: $pathWithQuery');
         } catch (e) {
           debugPrint(
               '⚠️ [GoogleBusinessService] Could not save to localStorage: $e');
@@ -277,11 +373,11 @@ class GoogleBusinessService with ChangeNotifier {
       // Note: The app will likely reload/redirect after this
     } catch (e) {
       _error = _toFriendlyConnectError(e);
-      notifyListeners();
+      _safeNotifyListeners();
       return;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -289,7 +385,7 @@ class GoogleBusinessService with ChangeNotifier {
   Future<List<GoogleLocation>> fetchLocations() async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       final session = _supabase.auth.currentSession;
@@ -408,7 +504,7 @@ class GoogleBusinessService with ChangeNotifier {
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -417,7 +513,7 @@ class GoogleBusinessService with ChangeNotifier {
   Future<List<Map<String, dynamic>>> fetchReviews(String locationName) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       final session = _supabase.auth.currentSession;
@@ -472,11 +568,11 @@ class GoogleBusinessService with ChangeNotifier {
     } catch (e) {
       _error = 'Error fetching reviews: $e';
       debugPrint(_error);
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 }

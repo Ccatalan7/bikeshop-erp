@@ -36,14 +36,14 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
   void initState() {
     super.initState();
 
-    // Start tenant detection immediately (do not block first paint).
-    // We still hide the HTML splash after the first Flutter frame.
-    _bootstrap();
-
-    // Let Flutter paint first, then hide the HTML splash.
-    // This makes startup feel much faster than waiting for network.
+    // Let Flutter paint first, then schedule bootstrap on the next task.
+    // This avoids provider `notifyListeners()` running inside a build scope.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _hideHtmlSplash();
+      Timer.run(() {
+        if (!mounted) return;
+        _hideHtmlSplash();
+        unawaited(_bootstrap());
+      });
     });
   }
 
@@ -87,7 +87,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
       }
 
       // Step 2: Pre-populate settings from sync cache for faster header render.
-        final didPreloadFromCache =
+      final didPreloadFromCache =
           websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
 
       // Step 3: Allow the app to render immediately after tenant detection.

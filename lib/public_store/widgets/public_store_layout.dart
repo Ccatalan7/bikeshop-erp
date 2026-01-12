@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html'
@@ -34,6 +35,7 @@ import '../../shared/utils/seo_helper.dart';
 import '../services/customer_account_service.dart';
 import '../../shared/utils/web_url.dart' show setLocationHash;
 import 'customer_chat_widget.dart';
+import 'search_overlay.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -51,6 +53,75 @@ class PublicStoreLayout extends StatefulWidget {
     this.enablePageViewScrolling = true,
     this.useExternalEditorPanel = true,
   });
+
+  /// Centralized navigation entry-point for public store UI elements.
+  ///
+  /// Prefer this over calling `context.go(...)` directly from pages/blocks so
+  /// transitions + route normalization behave consistently.
+  static Future<void> navigateToHref(
+    BuildContext context,
+    String href, {
+    bool openInNewTab = false,
+  }) async {
+    final state = context.findAncestorStateOfType<_PublicStoreLayoutState>();
+    if (state != null) {
+      await state._navigateToHref(context, href, openInNewTab: openInNewTab);
+      return;
+    }
+
+    // Fallback (should be rare): best-effort navigation without normalization.
+    final normalized = href.trim();
+    if (normalized.isEmpty) return;
+
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      final uri = Uri.tryParse(normalized);
+      if (uri != null) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.platformDefault,
+          webOnlyWindowName: openInNewTab ? '_blank' : '_self',
+        );
+      }
+      return;
+    }
+
+    if (normalized.startsWith('#')) {
+      if (kIsWeb) {
+        setLocationHash(normalized);
+      }
+      return;
+    }
+
+    final targetPath = Uri.tryParse(normalized)?.path ?? normalized;
+    final isHomeTarget = targetPath == '/' ||
+        targetPath == '/tienda' ||
+        targetPath == '/tienda/';
+
+    if (isHomeTarget) {
+      final router = GoRouter.of(context);
+      if (router.canPop()) {
+        var safety = 0;
+        while (router.canPop() && safety < 20) {
+          router.pop();
+          safety++;
+        }
+
+        // If the root isn't home (deep link, etc.), still navigate to home.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          final after = GoRouterState.of(context).uri.toString();
+          if (after != normalized) {
+            GoRouter.of(context).go(normalized);
+          }
+        });
+        return;
+      }
+
+      router.go(normalized);
+    } else {
+      context.push(normalized);
+    }
+  }
 
   @override
   State<PublicStoreLayout> createState() => _PublicStoreLayoutState();
@@ -100,6 +171,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   // Screenshot capture state
   bool _isCapturingScreenshot = false;
 
+  // ------------------------------------------------------------------------
+  // Debug: URL + router state (web)
+  // ------------------------------------------------------------------------
+  bool get _storeUrlLogsEnabled =>
+      kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
+
+  String? _lastLoggedUrlSignature;
+
   @override
   void initState() {
     super.initState();
@@ -116,11 +195,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   void _checkGoogleOAuthReturn() {
     try {
       final flag = html.window.localStorage['google_oauth_return_to_editor'];
+      final openIntegrations =
+          html.window.localStorage['google_oauth_open_integrations'];
       if (flag == 'true') {
         debugPrint(
             '🔄 [PublicStoreLayout] Detected OAuth return - restoring edit mode');
         // Clear the flag
         html.window.localStorage.remove('google_oauth_return_to_editor');
+
+        // Clear one-shot "open integrations" request (if present).
+        if (openIntegrations == 'true') {
+          html.window.localStorage.remove('google_oauth_open_integrations');
+        }
 
         // Schedule edit mode activation after the widget tree is built
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -130,6 +216,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               editProvider.switchToEditMode();
               debugPrint(
                   '✅ [PublicStoreLayout] Edit mode restored after OAuth');
+            }
+
+            if (openIntegrations == 'true') {
+              _openConfigHub(_EditorConfigHubTab.integrations);
             }
           }
         });
@@ -215,6 +305,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // can enter editor context before provider updates.
     final routerState = GoRouterState.of(context);
     final currentUri = routerState.uri;
+
+    // Log when the router thinks we're on a new location, and what the browser
+    // address bar says. This helps diagnose cases where the URL gets rewritten
+    // to the origin (path stripped) by an unexpected history.replaceState().
+    if (kIsWeb && _storeUrlLogsEnabled) {
+      try {
+        final browserHref = html.window.location.href;
+        final signature =
+            '${Uri.base.toString()}|$browserHref|${routerState.uri}|${routerState.matchedLocation}';
+        if (_lastLoggedUrlSignature != signature) {
+          _lastLoggedUrlSignature = signature;
+          debugPrint(
+            '🌐 [StoreURL] base=${Uri.base} href=$browserHref '
+            'routerUri=${routerState.uri} matched=${routerState.matchedLocation}',
+          );
+        }
+      } catch (e) {
+        // Ignore on non-web platforms
+      }
+    }
     final qp = currentUri.queryParameters;
     // IMPORTANT:
     // - URL params are only used to ENTER editor context (first time).
@@ -231,6 +341,85 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final devicePreviewMode = editProvider.devicePreviewMode;
     final isInEditorContext =
         editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
+
+    // ======================================================================
+    // PAGE CONTENT TRANSITION (WEB)
+    // ======================================================================
+    // go_router page transitions can be visually imperceptible here because the
+    // header/layout is nearly identical between routes (only body changes).
+    // This AnimatedSwitcher makes route changes obvious while keeping header
+    // stable. It is disabled for editor/preview modes.
+    final mq = MediaQuery.maybeOf(context);
+    final reduceMotion =
+        (mq?.disableAnimations ?? false) || (mq?.accessibleNavigation ?? false);
+    final isSmallScreen = (mq?.size.shortestSide ?? 9999) < 600;
+
+    Widget animateBody(Widget child, {bool expand = false}) {
+      // Disable the content switcher on small screens (mobile). On mobile web
+      // the animation is often dropped/janky and can feel worse than instant.
+      if (reduceMotion ||
+          isSmallScreen ||
+          isInEditorContext ||
+          isEditMode ||
+          isPreviewMode) {
+        return expand ? SizedBox.expand(child: child) : child;
+      }
+
+      final uri = GoRouterState.of(context).uri.toString();
+      final keyedChild = KeyedSubtree(
+        key: ValueKey<String>('store_body_$uri'),
+        child: expand ? SizedBox.expand(child: child) : child,
+      );
+
+      return AnimatedSwitcher(
+        // Intentionally long and obvious for UX verification.
+        duration: isSmallScreen
+            ? const Duration(milliseconds: 700)
+            : const Duration(milliseconds: 460),
+        reverseDuration: isSmallScreen
+            ? const Duration(milliseconds: 650)
+            : const Duration(milliseconds: 420),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) {
+          // Keep the top of pages aligned so the movement reads clearly.
+          return Stack(
+            alignment: Alignment.topCenter,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
+        transitionBuilder: (child, animation) {
+          // More obvious on mobile: fade + slide + slight scale.
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+
+          final beginDy = isSmallScreen ? 0.06 : 0.035;
+          final beginScale = isSmallScreen ? 0.97 : 0.985;
+
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: Offset(0, beginDy),
+                end: Offset.zero,
+              ).animate(curved),
+              child: ScaleTransition(
+                scale:
+                    Tween<double>(begin: beginScale, end: 1.0).animate(curved),
+                child: child,
+              ),
+            ),
+          );
+        },
+        child: keyedChild,
+      );
+    }
 
     // Don't block rendering - just use defaults until settings load
     // This makes the site feel faster
@@ -453,6 +642,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       instagramHandle: instagramHandle,
       twitterHandle: twitterHandle,
       youtubeHandle: youtubeHandle,
+      whatsappHandle: whatsappRaw,
       primaryColor: primaryColor,
       accentColor: accentColor,
       isEditMode: isEditMode,
@@ -504,7 +694,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         behavior: isEditMode
             ? const _NoDragScrollBehavior()
             : const MaterialScrollBehavior(),
-        child: SingleChildScrollView(
+        child: _PublicStoreScrollView(
           clipBehavior: _isCapturingScreenshot ? Clip.none : Clip.hardEdge,
           physics: _isCapturingScreenshot
               ? const NeverScrollableScrollPhysics()
@@ -516,7 +706,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 // Content starts from top (behind header)
                 Column(
                   children: [
-                    widget.child,
+                    animateBody(widget.child),
                     footerWidget,
                   ],
                 ),
@@ -557,10 +747,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               behavior: isEditMode
                   ? const _NoDragScrollBehavior()
                   : const MaterialScrollBehavior(),
-              child: SingleChildScrollView(
+              child: _PublicStoreScrollView(
                 child: Column(
                   children: [
-                    widget.child,
+                    animateBody(widget.child),
                     footerWidget,
                   ],
                 ),
@@ -587,6 +777,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         headerBgColor: headerBgColor,
         navItems: navItems,
         isEditMode: isEditMode,
+        child: animateBody(widget.child),
         footer: footerWidget,
       );
     } else {
@@ -602,10 +793,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     behavior: isEditMode
                         ? const _NoDragScrollBehavior()
                         : const MaterialScrollBehavior(),
-                    child: SingleChildScrollView(
+                    child: _PublicStoreScrollView(
                       child: Column(
                         children: [
-                          widget.child,
+                          animateBody(widget.child),
                           footerWidget,
                         ],
                       ),
@@ -613,7 +804,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   )
                 : Column(
                     children: [
-                      Expanded(child: widget.child),
+                      Expanded(child: animateBody(widget.child, expand: true)),
                       // In fixed mode, footer is not shown or is part of child.
                       // Let's hide footer for fixed layout to gain max space.
                     ],
@@ -1239,7 +1430,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           IconButton(
             onPressed: () {
               editProvider.exitEditMode();
-              context.go('/website');
+              // In the store-only app (web store domain + all native builds),
+              // the ERP route `/website` doesn't exist.
+              final isStoreContext = !kIsWeb || _isPublicStoreDomain();
+              context.go(isStoreContext
+                  ? _routeForPublicStore('/tienda')
+                  : '/website');
             },
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             tooltip: 'Volver a Gestión de Sitio Web',
@@ -1637,13 +1833,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   String _currentPagePathForLink(WebsiteEditModeProvider editProvider) {
     final slug = (editProvider.currentPageSlug ?? '').trim();
     if (slug.isEmpty) {
-      return _isPublicStoreDomain() ? '/' : '/tienda';
+      return _routeForPublicStore('/tienda');
     }
-    if (_isPublicStoreDomain()) {
-      return '/pagina/$slug';
+
+    // Policy pages are always clean URLs in both hosts.
+    const policySlugs = {
+      'nosotros',
+      'terminos',
+      'privacidad',
+      'devoluciones',
+      'envios',
+    };
+    if (policySlugs.contains(slug)) {
+      return '/$slug';
     }
-    // ERP/legacy host where public store is mounted under /tienda
-    return '/tienda/pagina/$slug';
+
+    // All other CMS pages should use the standard website page route.
+    return _routeForPublicStore('/tienda/pagina/$slug');
   }
 
   String? _buildUrlWithPath({
@@ -2173,7 +2379,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     if (created == null || !context.mounted) return;
 
     // Jump directly into edit mode on the new page.
-    context.go('/tienda/pagina/${created.slug}?edit=true');
+    context
+        .go(_routeForPublicStore('/tienda/pagina/${created.slug}?edit=true'));
   }
 
   /// Check if we're on the public store domain (customer-facing)
@@ -2191,17 +2398,78 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// Example: `/tienda` -> `/`, `/tienda/productos` -> `/productos`.
   /// Preserves query parameters (e.g. `/tienda?edit=true` -> `/?edit=true`).
   String _routeForPublicStore(String legacyRoute) {
-    if (!_isPublicStoreDomain()) return legacyRoute;
     final uri = Uri.tryParse(legacyRoute);
     if (uri == null) return legacyRoute;
 
     var path = uri.path;
-    if (path == '/tienda' || path == '/tienda/') {
-      path = '/';
-    } else if (path.startsWith('/tienda/')) {
-      path = path.substring('/tienda'.length);
-      if (path.isEmpty) path = '/';
+
+    // Normalize relative paths like 'productos' to '/productos'.
+    // This avoids odd browser URL behavior on web and keeps routing consistent.
+    if (uri.scheme.isEmpty && path.isNotEmpty && !path.startsWith('/')) {
+      path = '/$path';
     }
+
+    // When running the public store entrypoint on localhost, we still want the
+    // clean store routes (/, /productos, /contacto, ...) instead of /tienda/*.
+    // We can infer this safely from the current browser path:
+    // - Store-only app: Uri.base.path does NOT start with /tienda
+    // - ERP-mounted store: Uri.base.path starts with /tienda
+    final host = Uri.base.host.toLowerCase().split(':').first;
+    final isLocalHost = host == 'localhost' || host == '127.0.0.1';
+    final isStoreOnlyLocal =
+        kIsWeb && isLocalHost && !Uri.base.path.startsWith('/tienda');
+
+    // Mobile/desktop native apps are always running the public store entrypoint
+    // (there is no ERP-mounted `/tienda/*` router on those platforms).
+    // Therefore we must always produce clean public-store routes.
+    final isPublicDomain =
+        !kIsWeb || _isPublicStoreDomain() || isStoreOnlyLocal;
+
+    if (isPublicDomain) {
+      // Convert legacy in-app routes under `/tienda` to clean public-store routes.
+      if (path == '/tienda' || path == '/tienda/') {
+        path = '/';
+      } else if (path.startsWith('/tienda/')) {
+        path = path.substring('/tienda'.length);
+        if (path.isEmpty) path = '/';
+      }
+      return uri.replace(path: path).toString();
+    }
+
+    // ERP/legacy host: keep policy pages as clean URLs (they are part of the shell).
+    const policyPaths = {
+      '/nosotros',
+      '/terminos',
+      '/privacidad',
+      '/devoluciones',
+      '/envios',
+    };
+    if (policyPaths.contains(path)) {
+      return uri.toString();
+    }
+
+    // Preserve explicit legacy routes.
+    if (path == '/tienda' || path.startsWith('/tienda/')) {
+      return uri.toString();
+    }
+
+    // Never navigate to ERP root.
+    if (path.isEmpty || path == '/') {
+      path = '/tienda';
+      return uri.replace(path: path).toString();
+    }
+
+    // Map common clean store routes into the ERP-mounted `/tienda/*` space.
+    if (path == '/productos') path = '/tienda/productos';
+    if (path == '/carrito') path = '/tienda/carrito';
+    if (path == '/checkout') path = '/tienda/checkout';
+    if (path == '/contacto') path = '/tienda/contacto';
+
+    // Detail and scoped sections.
+    if (path.startsWith('/producto/')) path = '/tienda$path';
+    if (path.startsWith('/pedido/')) path = '/tienda$path';
+    if (path == '/cuenta' || path.startsWith('/cuenta/')) path = '/tienda$path';
+    if (path.startsWith('/pagina/')) path = '/tienda$path';
 
     return uri.replace(path: path).toString();
   }
@@ -2453,11 +2721,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       InkWell(
                         onTap: () {
                           final path = _routeForPublicStore('/tienda');
-                          final isEditMode = context
-                              .read<WebsiteEditModeProvider>()
-                              .isEditMode;
-                          final target = isEditMode ? '$path?edit=true' : path;
-                          context.go(target);
+                          _navigateToHref(
+                            context,
+                            path,
+                            forceHomeRefresh: true,
+                          );
                         },
                         child: _buildLogo(
                           context: context,
@@ -2485,7 +2753,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                     _buildNavLink(
                                       context,
                                       'Productos',
-                                      _routeForPublicStore('/tienda/productos'),
+                                      _routeForPublicStore('/productos'),
                                       textColor,
                                     ),
                                   ]
@@ -2532,8 +2800,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           IconButton(
                             icon: const Icon(Icons.search),
                             color: iconColor,
-                            onPressed: () => context
-                                .go(_routeForPublicStore('/tienda/productos')),
+                            onPressed: () => SearchOverlay.show(context),
                             tooltip: 'Buscar',
                           ),
                           const SizedBox(width: 8),
@@ -2543,7 +2810,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                               IconButton(
                                 icon: const Icon(Icons.shopping_cart_outlined),
                                 color: iconColor,
-                                onPressed: () => context.go(
+                                onPressed: () => _navigateToHref(
+                                  context,
                                   _routeForPublicStore('/tienda/carrito'),
                                 ),
                                 tooltip: 'Carrito',
@@ -2679,6 +2947,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color headerBgColor,
     required List<WebsiteNavigation> navItems,
     required bool isEditMode,
+    required Widget child,
     required Widget footer,
   }) {
     // Sticky uses the scaffold that keeps header fixed at top
@@ -2698,7 +2967,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       navItems: navItems,
       isEditMode: isEditMode,
       buildHeader: _buildHeader,
-      child: widget.child,
+      child: child,
       footer: footer,
     );
   }
@@ -2715,6 +2984,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String? instagramUrl,
     required String? twitterUrl,
     required String? youtubeUrl,
+    required String? whatsappUrl,
     required Color primaryColor,
     required Color accentColor,
     required String logoUrl,
@@ -2837,63 +3107,79 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
           const SizedBox(height: 32),
 
-          const SizedBox(height: 32),
-
-          // Social Icons
-          Text(
-            'SÍGUENOS',
-            style: textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
+          if (facebookUrl != null ||
+              instagramUrl != null ||
+              twitterUrl != null ||
+              youtubeUrl != null ||
+              whatsappUrl != null ||
+              isEditMode) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                '¡SÍGUENOS!',
+                style: textTheme.titleSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+                textAlign: TextAlign.left,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (facebookUrl != null || isEditMode || isPreviewMode) ...[
-                _buildSocialIconMobile(
-                  Icons.facebook,
-                  facebookUrl,
-                  isEditMode, // Only edit in edit mode
-                  settingKey: 'facebook',
-                  label: 'Facebook',
-                ),
-                const SizedBox(width: 16),
-              ],
-              if (instagramUrl != null || isEditMode || isPreviewMode) ...[
-                _buildSocialIconMobile(
-                  Icons.camera_alt,
-                  instagramUrl,
-                  isEditMode, // Only edit in edit mode
-                  settingKey: 'instagram',
-                  label: 'Instagram',
-                ),
-                const SizedBox(width: 16),
-              ],
-              if (twitterUrl != null || isEditMode || isPreviewMode) ...[
-                _buildSocialIconMobile(
-                  Icons.alternate_email,
-                  twitterUrl,
-                  isEditMode, // Only edit in edit mode
-                  settingKey: 'twitter',
-                  label: 'Twitter/X',
-                ),
-                const SizedBox(width: 16),
-              ],
-              if (youtubeUrl != null || isEditMode || isPreviewMode) ...[
-                _buildSocialIconMobile(
-                  Icons.play_circle_fill,
-                  youtubeUrl,
-                  isEditMode, // Only edit in edit mode
-                  settingKey: 'youtube',
-                  label: 'YouTube',
-                ),
-              ],
-            ],
-          ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                alignment: WrapAlignment.start,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (facebookUrl != null || isEditMode)
+                    _buildSocialIconMobile(
+                      FontAwesomeIcons.facebook,
+                      facebookUrl,
+                      isEditMode,
+                      settingKey: 'facebook',
+                      label: 'Facebook',
+                    ),
+                  if (instagramUrl != null || isEditMode)
+                    _buildSocialIconMobile(
+                      FontAwesomeIcons.instagram,
+                      instagramUrl,
+                      isEditMode,
+                      settingKey: 'instagram',
+                      label: 'Instagram',
+                    ),
+                  if (twitterUrl != null || isEditMode)
+                    _buildSocialIconMobile(
+                      FontAwesomeIcons.xTwitter,
+                      twitterUrl,
+                      isEditMode,
+                      settingKey: 'twitter',
+                      label: 'Twitter/X',
+                    ),
+                  if (youtubeUrl != null || isEditMode)
+                    _buildSocialIconMobile(
+                      FontAwesomeIcons.youtube,
+                      youtubeUrl,
+                      isEditMode,
+                      settingKey: 'youtube',
+                      label: 'YouTube',
+                    ),
+                  if (whatsappUrl != null || isEditMode)
+                    _buildSocialIconMobile(
+                      FontAwesomeIcons.whatsapp,
+                      whatsappUrl,
+                      isEditMode,
+                      settingKey: 'whatsapp',
+                      label: 'WhatsApp',
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
 
-          const SizedBox(height: 24),
+          // Copyright
           Center(
             child: Text(
               '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
@@ -2907,15 +3193,72 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildFooterLinkMobile(
-      BuildContext context, String text, String route) {
+  Widget _buildDesktopSocialIcon(
+    BuildContext context,
+    IconData icon,
+    String? url,
+    bool isEditMode,
+    String settingKey,
+    String label, {
+    bool isContact = false, // Special handling for contact items
+  }) {
+    if ((url == null || url.trim().isEmpty) && !isEditMode) {
+      return const SizedBox.shrink();
+    }
+
+    // Determine icon color
+    final hasValue = url != null && url.trim().isNotEmpty;
+    final iconColor =
+        hasValue ? Colors.white70 : Colors.white70.withValues(alpha: 0.35);
+
+    // Determine tooltip
+    final tooltip =
+        isEditMode ? (hasValue ? 'Editar $label' : 'Agregar $label') : label;
+
+    // Determine tap action
+    VoidCallback? onTap;
+    if (isEditMode) {
+      onTap = () {
+        if (isContact) {
+          _showFooterContactEditDialog(context, settingKey, label, url ?? '');
+        } else {
+          _showSocialMediaEditDialog(context, settingKey, label, url);
+        }
+      };
+    } else if (hasValue) {
+      onTap = () {
+        if (isContact) {
+          if (settingKey == 'contact_email') {
+            _launchUri(Uri(scheme: 'mailto', path: url));
+          } else if (settingKey == 'contact_phone') {
+            _launchUri(Uri(scheme: 'tel', path: url));
+          }
+        } else {
+          _launchUri(Uri.parse(url));
+        }
+      };
+    }
+
+    return IconButton(
+      icon: FaIcon(icon, color: iconColor, size: 22),
+      onPressed: onTap,
+      tooltip: tooltip,
+    );
+  }
+
+  Widget _buildFooterLinkMobile(BuildContext context, String text, String route,
+      {bool forceHomeRefresh = false}) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: InkWell(
           onTap: () {
-            _navigateToHref(context, route);
+            _navigateToHref(
+              context,
+              route,
+              forceHomeRefresh: forceHomeRefresh,
+            );
           },
           child: Text(
             text,
@@ -2953,6 +3296,99 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
+  Future<void> _showFooterContactEditDialog(
+    BuildContext context,
+    String settingKey,
+    String label,
+    String currentValue,
+  ) async {
+    final websiteService = context.read<WebsiteService>();
+    final controller = TextEditingController(text: currentValue);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Editar $label'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: label,
+                  hintText: _getHintForFooterContactSetting(settingKey),
+                  prefixIcon: Icon(
+                    settingKey == 'contact_phone'
+                        ? Icons.phone_outlined
+                        : Icons.mail_outline,
+                  ),
+                  helperText: settingKey == 'contact_phone'
+                      ? 'Ej: +56 9 9835 7797'
+                      : 'Ej: vinabikechile@gmail.com',
+                ),
+                keyboardType: settingKey == 'contact_phone'
+                    ? TextInputType.phone
+                    : TextInputType.emailAddress,
+                autofocus: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              final value = controller.text.trim();
+              try {
+                await websiteService.saveSetting(settingKey, value);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al guardar: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (saved == true && mounted) {
+      setState(() {});
+    }
+  }
+
+  String _getHintForFooterContactSetting(String key) {
+    switch (key) {
+      case 'contact_email':
+        return 'vinabikechile@gmail.com';
+      case 'contact_phone':
+        return '+56 9 9835 7797';
+      case 'contact_address':
+        return 'Álvarez 32, Local 17, Viña del Mar';
+      case 'whatsapp':
+        return '+56 9 9835 7797';
+      default:
+        return '';
+    }
+  }
+
   Widget _buildSocialIconMobile(
     IconData icon,
     String? url,
@@ -2978,8 +3414,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       child: Stack(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: hasUrl
@@ -2992,10 +3428,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       strokeAlign: BorderSide.strokeAlignInside)
                   : null,
             ),
-            child: Icon(
-              icon,
-              color: hasUrl ? Colors.white : Colors.white38,
-              size: 20,
+            child: Center(
+              child: FaIcon(
+                icon,
+                color: hasUrl ? Colors.white : Colors.white38,
+                size: 22,
+              ),
             ),
           ),
           if (isEditMode)
@@ -3114,6 +3552,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String instagramHandle,
     required String twitterHandle,
     required String youtubeHandle,
+    required String whatsappHandle,
     required Color primaryColor,
     required Color accentColor,
     required String logoUrl, // Added parameter
@@ -3177,6 +3616,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _buildSocialUrl(instagramHandle, 'https://instagram.com/');
       final twitterUrl = _buildSocialUrl(twitterHandle, 'https://twitter.com/');
       final youtubeUrl = _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
+      final whatsappUrl = whatsappHandle.isNotEmpty
+          ? 'https://wa.me/${_sanitizePhone(whatsappHandle)}?text=${Uri.encodeComponent("Hola $storeName, vengo desde el sitio web")}'
+          : null;
 
       if (isMobile) {
         return _buildMobileFooter(
@@ -3191,6 +3633,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           instagramUrl: instagramUrl,
           twitterUrl: twitterUrl,
           youtubeUrl: youtubeUrl,
+          whatsappUrl: whatsappUrl,
           primaryColor: primaryColor,
           accentColor: accentColor,
           logoUrl: logoUrl,
@@ -3244,53 +3687,55 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           Wrap(
                             spacing: 8,
                             children: [
-                              if (contactEmail.isNotEmpty)
-                                IconButton(
-                                  icon: const Icon(Icons.mail_outline,
-                                      color: Colors.white70),
-                                  onPressed: () => _launchUri(Uri(
-                                      scheme: 'mailto', path: contactEmail)),
-                                  tooltip: 'Email',
+                              // Facebook
+                              if (facebookUrl != null || isEditMode)
+                                _buildDesktopSocialIcon(
+                                  context,
+                                  FontAwesomeIcons.facebook,
+                                  facebookUrl,
+                                  isEditMode,
+                                  'facebook',
+                                  'Facebook',
                                 ),
-                              if (contactPhone.isNotEmpty)
-                                IconButton(
-                                  icon: const Icon(Icons.phone_outlined,
-                                      color: Colors.white70),
-                                  onPressed: () => _launchUri(
-                                      Uri(scheme: 'tel', path: contactPhone)),
-                                  tooltip: 'Teléfono',
+                              // Instagram
+                              if (instagramUrl != null || isEditMode)
+                                _buildDesktopSocialIcon(
+                                  context,
+                                  FontAwesomeIcons.instagram,
+                                  instagramUrl,
+                                  isEditMode,
+                                  'instagram',
+                                  'Instagram',
                                 ),
-                              if (facebookUrl != null)
-                                IconButton(
-                                  icon: const Icon(Icons.facebook_outlined,
-                                      color: Colors.white70),
-                                  onPressed: () =>
-                                      _launchUri(Uri.parse(facebookUrl)),
-                                  tooltip: 'Facebook',
+                              // Twitter
+                              if (twitterUrl != null || isEditMode)
+                                _buildDesktopSocialIcon(
+                                  context,
+                                  FontAwesomeIcons.xTwitter,
+                                  twitterUrl,
+                                  isEditMode,
+                                  'twitter',
+                                  'Twitter',
                                 ),
-                              if (instagramUrl != null)
-                                IconButton(
-                                  icon: const Icon(Icons.camera_alt_outlined,
-                                      color: Colors.white70),
-                                  onPressed: () =>
-                                      _launchUri(Uri.parse(instagramUrl)),
-                                  tooltip: 'Instagram',
+                              // YouTube
+                              if (youtubeUrl != null || isEditMode)
+                                _buildDesktopSocialIcon(
+                                  context,
+                                  FontAwesomeIcons.youtube,
+                                  youtubeUrl,
+                                  isEditMode,
+                                  'youtube',
+                                  'YouTube',
                                 ),
-                              if (twitterUrl != null)
-                                IconButton(
-                                  icon: const Icon(Icons.alternate_email,
-                                      color: Colors.white70),
-                                  onPressed: () =>
-                                      _launchUri(Uri.parse(twitterUrl)),
-                                  tooltip: 'Twitter',
-                                ),
-                              if (youtubeUrl != null)
-                                IconButton(
-                                  icon: const Icon(Icons.play_circle_outline,
-                                      color: Colors.white70),
-                                  onPressed: () =>
-                                      _launchUri(Uri.parse(youtubeUrl)),
-                                  tooltip: 'YouTube',
+                              // WhatsApp
+                              if (whatsappUrl != null || isEditMode)
+                                _buildDesktopSocialIcon(
+                                  context,
+                                  FontAwesomeIcons.whatsapp,
+                                  whatsappUrl,
+                                  isEditMode,
+                                  'whatsapp',
+                                  'WhatsApp',
                                 ),
                             ],
                           ),
@@ -3482,13 +3927,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     ),
               ),
               const SizedBox(height: 16),
-              _buildFooterLink(context, 'Inicio', '/tienda', primaryColor),
-              _buildFooterLink(
-                  context, 'Productos', '/tienda/productos', primaryColor),
-              _buildFooterLink(
-                  context, 'Servicios', '/tienda/servicios', primaryColor),
-              _buildFooterLink(
-                  context, 'Contacto', '/tienda/contacto', primaryColor),
+              _buildFooterLinkDesktop(
+                context,
+                'Inicio',
+                _routeForPublicStore('/tienda'),
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Productos',
+                '/productos',
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Servicios',
+                _routeForPublicStore('/tienda/servicios'),
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Contacto',
+                _routeForPublicStore('/tienda/contacto'),
+                primaryColor,
+              ),
             ],
           ),
         ),
@@ -3505,15 +3967,36 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     ),
               ),
               const SizedBox(height: 16),
-              _buildFooterLink(
-                  context, 'Sobre Nosotros', '/nosotros', primaryColor),
-              _buildFooterLink(
-                  context, 'Términos y Condiciones', '/terminos', primaryColor),
-              _buildFooterLink(context, 'Política de Privacidad', '/privacidad',
-                  primaryColor),
-              _buildFooterLink(context, 'Política de Devoluciones',
-                  '/devoluciones', primaryColor),
-              _buildFooterLink(context, 'Envíos', '/envios', primaryColor),
+              _buildFooterLinkDesktop(
+                context,
+                'Sobre Nosotros',
+                '/nosotros',
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Términos y Condiciones',
+                '/terminos',
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Política de Privacidad',
+                '/privacidad',
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Política de Devoluciones',
+                '/devoluciones',
+                primaryColor,
+              ),
+              _buildFooterLinkDesktop(
+                context,
+                'Envíos',
+                '/envios',
+                primaryColor,
+              ),
             ],
           ),
         ),
@@ -3591,10 +4074,44 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         onTap: () {
-          _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+          _navigateToHref(
+            context,
+            href,
+            openInNewTab: nav.openInNewTab,
+          );
         },
         child: Text(
           nav.label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white70,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterLinkDesktop(
+    BuildContext context,
+    String label,
+    String path,
+    Color primaryColor, {
+    bool forceHomeRefresh = false,
+  }) {
+    final isActive = GoRouterState.of(context).matchedLocation == path;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () {
+          _navigateToHref(
+            context,
+            path,
+            forceHomeRefresh: forceHomeRefresh,
+          );
+        },
+        child: Text(
+          label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.white70,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
@@ -3630,8 +4147,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             children: [
               _buildFooterLinkMobile(
                   context, 'Inicio', _routeForPublicStore('/tienda')),
-              _buildFooterLinkMobile(context, 'Productos',
-                  _routeForPublicStore('/tienda/productos')),
+              _buildFooterLinkMobile(
+                  context, 'Productos', _routeForPublicStore('/productos')),
               _buildFooterLinkMobile(context, 'Servicios',
                   _routeForPublicStore('/tienda/servicios')),
               _buildFooterLinkMobile(context, 'Contacto',
@@ -3788,13 +4305,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     BuildContext context,
     String label,
     String path,
-    Color primaryColor,
-  ) {
+    Color primaryColor, {
+    bool forceHomeRefresh = false,
+  }) {
     final isActive = GoRouterState.of(context).matchedLocation == path;
 
     return InkWell(
       onTap: () {
-        _navigateToHref(context, path);
+        _navigateToHref(
+          context,
+          path,
+          forceHomeRefresh: forceHomeRefresh,
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3821,9 +4343,82 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     BuildContext context,
     String href, {
     bool openInNewTab = false,
+    bool forceHomeRefresh = false,
   }) async {
     final normalized = href.trim();
     if (normalized.isEmpty) return;
+
+    // Sometimes website blocks/navigation store a bare UUID as a link target.
+    // This can be either a product id OR a website_pages.id. Normalize to a
+    // real route so we don't hit go_router 404s.
+    final uuidRe = RegExp(
+      r'^[0-9a-fA-F]{8}-'
+      r'[0-9a-fA-F]{4}-'
+      r'[0-9a-fA-F]{4}-'
+      r'[0-9a-fA-F]{4}-'
+      r'[0-9a-fA-F]{12}$',
+    );
+    String internalHref = normalized;
+    String? uuid;
+    if (uuidRe.hasMatch(internalHref)) {
+      uuid = internalHref;
+    } else if (internalHref.startsWith('/') &&
+        uuidRe.hasMatch(internalHref.substring(1))) {
+      uuid = internalHref.substring(1);
+    }
+
+    if (uuid != null) {
+      // 1) Prefer resolving UUID as a website page id.
+      final websiteService = context.read<WebsiteService>();
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+
+      // Pages might not be loaded in some boot paths (we always have settings,
+      // but pages are loaded lazily). Load them on demand for UUID links.
+      if (websiteService.pages.isEmpty && tenantId != null) {
+        await websiteService.loadPagesForTenant(tenantId);
+      }
+
+      final page = websiteService.pages.cast<WebsitePage?>().firstWhere(
+            (p) => p?.id == uuid,
+            orElse: () => null,
+          );
+
+      // If not found in memory, try a direct lookup (covers stale caches).
+      final resolvedPage = page ?? await websiteService.getPageById(uuid);
+      final slug = (resolvedPage != null &&
+              (tenantId == null || resolvedPage.tenantId == tenantId))
+          ? resolvedPage.slug
+          : null;
+      if (slug != null && slug.trim().isNotEmpty) {
+        final s = slug.trim();
+
+        // Map common system slugs to canonical routes.
+        const directSlugs = <String>{
+          'productos',
+          'contacto',
+          'nosotros',
+          'terminos',
+          'privacidad',
+          'devoluciones',
+          'envios',
+          'carrito',
+          'checkout',
+          'cuenta',
+        };
+
+        if (s == 'inicio' || s == 'home') {
+          internalHref = '/';
+        } else if (directSlugs.contains(s)) {
+          internalHref = '/$s';
+        } else {
+          internalHref = '/pagina/$s';
+        }
+      } else {
+        // 2) Fallback: treat UUID as a product id.
+        internalHref = '/productos/$uuid';
+      }
+    }
 
     // External URLs
     if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
@@ -3846,14 +4441,125 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       return;
     }
 
+    // Normalize internal relative paths like 'productos' to '/productos'.
+    // Some CMS/DB-stored links omit the leading '/', which can lead to
+    // inconsistent URL updates on web.
+    final parsedInternal = Uri.tryParse(internalHref);
+    if (parsedInternal != null &&
+        parsedInternal.scheme.isEmpty &&
+        internalHref.isNotEmpty &&
+        !internalHref.startsWith('/') &&
+        !internalHref.startsWith('?')) {
+      internalHref = '/$internalHref';
+    }
+
+    // Normalize common "home" aliases so they behave like a real home
+    // navigation (including scroll-to-top behavior).
+    final internalPath =
+        (Uri.tryParse(internalHref)?.path ?? internalHref).trim().toLowerCase();
+    if (internalPath == '/inicio' || internalPath == '/home') {
+      internalHref = '/';
+    } else if (internalPath == '/tienda/inicio' ||
+        internalPath == '/tienda/home') {
+      internalHref = '/tienda';
+    }
+
     // Internal navigation
     final isEditMode = context.read<WebsiteEditModeProvider>().isEditMode;
-    final hasQuery = normalized.contains('?');
+    final hasQuery = internalHref.contains('?');
     final target = isEditMode
-        ? (hasQuery ? '$normalized&edit=true' : '$normalized?edit=true')
-        : normalized;
+        ? (hasQuery ? '$internalHref&edit=true' : '$internalHref?edit=true')
+        : internalHref;
 
-    context.go(target);
+    // Avoid redundant navigation.
+    final current = GoRouterState.of(context).uri.toString();
+
+    // Use go() for home targets to avoid stacking redirects (which can
+    // occasionally cause blank states in the browser history). Use push() for
+    // everything else so route transitions animate.
+    final targetPath = Uri.tryParse(target)?.path ?? target;
+    final isHomeTarget = targetPath == '/' ||
+        targetPath == '/tienda' ||
+        targetPath == '/tienda/';
+
+    // Web-only: if the user explicitly asked for a "home refresh" (logo/Inicio)
+    // behave like a traditional website and force a full page reload.
+    // This avoids cases where soft-refresh signals are imperceptible due to
+    // caching or when the route doesn't change (already on home).
+    if (kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode) {
+      try {
+        final currentPath = Uri.parse(html.window.location.href).path;
+        final desiredPath = targetPath.isEmpty ? '/' : targetPath;
+
+        if (currentPath == desiredPath) {
+          html.window.location.reload();
+        } else {
+          // Navigate + reload in one step.
+          html.window.location.assign(target);
+        }
+        return;
+      } catch (e) {
+        // Fallback for non-web platforms - just navigate normally
+      }
+    }
+
+    // If we're already on the target route, still honor explicit "home"
+    // navigations (logo / Inicio) by scrolling to top.
+    if (current == target) {
+      if (isHomeTarget) {
+        context.read<PublicStoreScrollState>().requestScrollToTop(target);
+        context.read<PublicStoreScrollState>().requestScrollToTopForPath('/');
+        context
+            .read<PublicStoreScrollState>()
+            .requestScrollToTopForPath('/tienda');
+
+        if (forceHomeRefresh) {
+          context.read<PublicStoreScrollState>().requestHomeRefresh();
+        }
+      }
+      return;
+    }
+
+    if (isHomeTarget) {
+      // Explicit "home" navigations (logo / Inicio) should land at the top,
+      // even if we pop-to-root (which would otherwise preserve scroll).
+      context.read<PublicStoreScrollState>().requestScrollToTop(target);
+      context.read<PublicStoreScrollState>().requestScrollToTopForPath('/');
+      context
+          .read<PublicStoreScrollState>()
+          .requestScrollToTopForPath('/tienda');
+
+      if (forceHomeRefresh) {
+        context.read<PublicStoreScrollState>().requestHomeRefresh();
+      }
+
+      // Prefer pop-to-root for home targets. Pushing/replacing home can create
+      // blank states on web in some redirect/history scenarios.
+      final router = GoRouter.of(context);
+      if (router.canPop()) {
+        var safety = 0;
+        while (router.canPop() && safety < 20) {
+          router.pop();
+          safety++;
+        }
+
+        // If we didn't land on the desired home URI (e.g., deep link root),
+        // finish by navigating to home.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final after = GoRouterState.of(context).uri.toString();
+          if (after != target) {
+            GoRouter.of(context).go(target);
+          }
+        });
+        return;
+      }
+
+      // No back stack (deep link, fresh tab, etc.) — fall back to go().
+      context.go(target);
+    } else {
+      context.push(target);
+    }
   }
 
   Widget _buildNavItemLink(
@@ -3936,13 +4642,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   void _showMobileMenu(BuildContext context, List<WebsiteNavigation> navItems) {
+    // IMPORTANT: The bottom-sheet builder gets its own BuildContext. After
+    // `Navigator.pop(sheetContext)`, that context can be disposed; using it for
+    // navigation can make taps appear to do nothing (especially on mobile).
+    final navContext = context;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
-        // Access provider here inside the builder to ensure we have context
-        final accountService = context.watch<CustomerAccountService>();
+      builder: (sheetContext) {
+        // Access provider here inside the builder to ensure we have context.
+        final accountService = sheetContext.watch<CustomerAccountService>();
         final isAuthenticated = accountService.isAuthenticated;
 
         return Container(
@@ -3968,12 +4679,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 // Account Section (Top)
                 if (isAuthenticated) ...[
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.person_rounded,
                     label: 'Mi Cuenta',
                     onTap: () {
-                      Navigator.pop(context);
-                      context.go(_routeForPublicStore('/tienda/cuenta'));
+                      Navigator.pop(sheetContext);
+                      _navigateToHref(
+                        navContext,
+                        _routeForPublicStore('/tienda/cuenta'),
+                      );
                     },
                   ),
                   Padding(
@@ -3983,13 +4697,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ),
                 ] else ...[
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.login_rounded,
                     label: 'Iniciar Sesión',
                     color: PublicStoreTheme.primaryBlue,
                     onTap: () {
-                      Navigator.pop(context);
-                      context.go(_routeForPublicStore('/tienda/cuenta/login'));
+                      Navigator.pop(sheetContext);
+                      _navigateToHref(
+                        navContext,
+                        _routeForPublicStore('/tienda/cuenta/login'),
+                      );
                     },
                   ),
                   Padding(
@@ -4002,30 +4719,39 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 // Navigation items
                 if (navItems.isEmpty) ...[
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.home_rounded,
                     label: 'Inicio',
                     onTap: () {
-                      Navigator.pop(context);
-                      context.go(_routeForPublicStore('/tienda'));
+                      Navigator.pop(sheetContext);
+                      _navigateToHref(
+                        navContext,
+                        _routeForPublicStore('/tienda'),
+                      );
                     },
                   ),
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.shopping_bag_rounded,
                     label: 'Productos',
                     onTap: () {
-                      Navigator.pop(context);
-                      context.go(_routeForPublicStore('/tienda/productos'));
+                      Navigator.pop(sheetContext);
+                      _navigateToHref(
+                        navContext,
+                        _routeForPublicStore('/productos'),
+                      );
                     },
                   ),
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.mail_rounded,
                     label: 'Contacto',
                     onTap: () {
-                      Navigator.pop(context);
-                      context.go(_routeForPublicStore('/tienda/contacto'));
+                      Navigator.pop(sheetContext);
+                      _navigateToHref(
+                        navContext,
+                        _routeForPublicStore('/tienda/contacto'),
+                      );
                     },
                   ),
                 ] else ...[
@@ -4041,14 +4767,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
                     final items = <Widget>[
                       _buildMobileMenuItem(
-                        context,
+                        sheetContext,
                         icon: Icons.arrow_forward_ios_rounded,
                         label: nav.label,
                         onTap: () {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           final href = _routeForPublicStore(nav.href ?? '/');
                           _navigateToHref(
-                            context,
+                            navContext,
                             href,
                             openInNewTab: nav.openInNewTab,
                           );
@@ -4059,15 +4785,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     for (final child in children) {
                       items.add(
                         _buildMobileMenuItem(
-                          context,
+                          sheetContext,
                           icon: Icons.subdirectory_arrow_right_rounded,
                           label: child.label,
                           onTap: () {
-                            Navigator.pop(context);
+                            Navigator.pop(sheetContext);
                             final href =
                                 _routeForPublicStore(child.href ?? '/');
                             _navigateToHref(
-                              context,
+                              navContext,
                               href,
                               openInNewTab: child.openInNewTab,
                             );
@@ -4088,21 +4814,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     child: Divider(color: Colors.white.withValues(alpha: 0.2)),
                   ),
                   _buildMobileMenuItem(
-                    context,
+                    sheetContext,
                     icon: Icons.logout_rounded,
                     label: 'Cerrar Sesión',
                     color: Colors.redAccent,
                     onTap: () async {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       await accountService.signOut();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (navContext.mounted) {
+                        ScaffoldMessenger.of(navContext).showSnackBar(
                           const SnackBar(
                             content: Text('Sesión cerrada correctamente'),
                             backgroundColor: Colors.green,
                           ),
                         );
-                        context.go('/');
+                        navContext.go('/');
                       }
                     },
                   ),
@@ -4406,35 +5132,6 @@ extension on _EditorConfigHubTab {
   }
 }
 
-Widget _buildFooterLink(
-  BuildContext context,
-  String label,
-  String path,
-  Color primaryColor,
-) {
-  final isActive = GoRouterState.of(context).matchedLocation == path;
-  final editProvider = context.read<WebsiteEditModeProvider>();
-  final isEditMode = editProvider.isEditMode;
-
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: InkWell(
-      onTap: () {
-        // Preserve edit mode query param when navigating
-        final targetPath = isEditMode ? '$path?edit=true' : path;
-        context.go(targetPath);
-      },
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            ),
-      ),
-    ),
-  );
-}
-
 Future<void> _launchUri(Uri uri) async {
   if (await canLaunchUrl(uri)) {
     await launchUrl(uri, mode: LaunchMode.platformDefault);
@@ -4520,6 +5217,151 @@ class _PreviewNavAction {
         isDivider = true;
 }
 
+/// Scroll container for the non-sticky layouts.
+///
+/// The sticky header scaffold already manages its own ScrollController.
+/// For solid/transparent layouts, we still want:
+/// - restore scroll position when navigating back
+/// - force scroll-to-top when user clicks "Inicio" / home
+class _PublicStoreScrollView extends StatefulWidget {
+  const _PublicStoreScrollView({
+    required this.child,
+    this.physics,
+    this.clipBehavior = Clip.hardEdge,
+  });
+
+  final Widget child;
+  final ScrollPhysics? physics;
+  final Clip clipBehavior;
+
+  @override
+  State<_PublicStoreScrollView> createState() => _PublicStoreScrollViewState();
+}
+
+class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
+  final ScrollController _scrollController = ScrollController();
+  String? _routeKey;
+  bool _restoredForRoute = false;
+  PublicStoreScrollState? _scrollState;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final nextScrollState = context.read<PublicStoreScrollState>();
+    if (!identical(_scrollState, nextScrollState)) {
+      _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
+      _scrollState = nextScrollState;
+      _scrollState?.scrollToTopSignal.addListener(_onScrollToTopSignal);
+    }
+
+    final uri = GoRouterState.of(context).uri;
+    final nextKey = uri.toString();
+    if (_routeKey != nextKey) {
+      _routeKey = nextKey;
+      _restoredForRoute = false;
+    }
+
+    if (_restoredForRoute) return;
+    _restoredForRoute = true;
+
+    final key = _routeKey;
+    final path = GoRouterState.of(context).uri.path;
+    final scrollState = _scrollState ?? context.read<PublicStoreScrollState>();
+
+    final shouldScrollToTop =
+        (key != null && scrollState.consumeScrollToTopRequest(key)) ||
+            scrollState.consumeScrollToTopRequestForPath(path);
+
+    if (key != null && shouldScrollToTop) {
+      scrollState.clear(key);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!_scrollController.hasClients) return;
+        if (_scrollController.offset <= 0) return;
+        _scrollController.jumpTo(0);
+      });
+    } else {
+      _restoreScrollForRoute();
+    }
+  }
+
+  void _onScrollToTopSignal() {
+    if (!mounted) return;
+    final key = _routeKey;
+    if (key == null) return;
+
+    final scrollState = _scrollState;
+    if (scrollState == null) return;
+
+    final path = GoRouterState.of(context).uri.path;
+    final shouldScrollToTop = scrollState.consumeScrollToTopRequest(key) ||
+        scrollState.consumeScrollToTopRequestForPath(path);
+    if (!shouldScrollToTop) return;
+
+    scrollState.clear(key);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_scrollController.hasClients) return;
+      if (_scrollController.offset <= 0) return;
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _restoreScrollForRoute() {
+    final key = _routeKey;
+    if (key == null) return;
+
+    final offset = context.read<PublicStoreScrollState>().getOffset(key);
+    if (offset <= 0) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      final clamped = offset.clamp(0.0, max);
+      if ((_scrollController.offset - clamped).abs() < 1.0) return;
+      _scrollController.jumpTo(clamped);
+    });
+  }
+
+  void _onScroll() {
+    final key = _routeKey;
+    if (key == null) return;
+    context
+        .read<PublicStoreScrollState>()
+        .setOffset(key, _scrollController.offset);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller: _scrollController,
+      clipBehavior: widget.clipBehavior,
+      physics: widget.physics,
+      child: widget.child,
+    );
+  }
+}
+
 /// A stateful widget that manages the sticky header that stays fixed at top while scrolling
 class _StickyHeaderScaffold extends StatefulWidget {
   final String storeName;
@@ -4587,6 +5429,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   double _scrollOffset = 0;
   String? _routeKey;
   bool _restoredForRoute = false;
+  PublicStoreScrollState? _scrollState;
 
   @override
   void initState() {
@@ -4597,6 +5440,16 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // Attach once to the shared scroll state to support "scroll to top" even
+    // when the route doesn't change (e.g., clicking the logo while already on
+    // home).
+    final nextScrollState = context.read<PublicStoreScrollState>();
+    if (!identical(_scrollState, nextScrollState)) {
+      _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
+      _scrollState = nextScrollState;
+      _scrollState?.scrollToTopSignal.addListener(_onScrollToTopSignal);
+    }
 
     // Key scroll offset by current route location so going "back" restores where
     // the user was (most important for long lists like /productos).
@@ -4609,14 +5462,60 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
 
     if (!_restoredForRoute) {
       _restoredForRoute = true;
-      _restoreScrollForRoute();
+      final key = _routeKey;
+      final path = GoRouterState.of(context).uri.path;
+      final scrollState =
+          _scrollState ?? context.read<PublicStoreScrollState>();
+      final shouldScrollToTop =
+          (key != null && scrollState.consumeScrollToTopRequest(key)) ||
+              scrollState.consumeScrollToTopRequestForPath(path);
+
+      if (key != null && shouldScrollToTop) {
+        // Explicit home navigation: land at top, don't restore.
+        scrollState.clear(key);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (!_scrollController.hasClients) return;
+          if (_scrollController.offset <= 0) return;
+          _scrollController.jumpTo(0);
+        });
+      } else {
+        _restoreScrollForRoute();
+      }
     }
+  }
+
+  void _onScrollToTopSignal() {
+    if (!mounted) return;
+    final key = _routeKey;
+    if (key == null) return;
+
+    final scrollState = _scrollState;
+    if (scrollState == null) return;
+
+    final path = GoRouterState.of(context).uri.path;
+    final shouldScrollToTop = scrollState.consumeScrollToTopRequest(key) ||
+        scrollState.consumeScrollToTopRequestForPath(path);
+    if (!shouldScrollToTop) return;
+
+    scrollState.clear(key);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_scrollController.hasClients) return;
+      if (_scrollController.offset <= 0) return;
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
     super.dispose();
   }
 

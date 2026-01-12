@@ -4631,3 +4631,123 @@ FROM expenses WHERE paid_at BETWEEN start_date AND end_date
 - ✅ Test reports in both Devengado AND Efectivo modes
 - ✅ Verify journal entries balance
 - ✅ Check that transactions appear in correct periods
+
+---
+
+# 🧭 Public Store Routing & Animations (Jan 2026)
+
+This section documents the **routing + navigation layer changes** done to make route transitions reliably visible (and debuggable) while keeping the public store stable across **desktop + mobile** and across environments (**vinabike.cl** public domain vs ERP host).
+
+## Goals
+
+- Make navigation transitions **actually animate** (instead of feeling instant).
+- Avoid route regressions like `GoException: no routes for location: /<uuid>`.
+- Keep **ERP-mounted** store routes (`/tienda/*`) and **public store** routes (`/*`) consistent.
+- Ensure the behavior is consistent on **desktop and mobile**.
+
+## What’s safe / unchanged
+
+- The route map and redirects in `lib/public_store/routes/public_store_router.dart` remain the source of truth for store URLs (clean paths + legacy `/tienda/*` support).
+- No changes to `web/index.html`, SEO sync (`scripts/sync_seo_index.sh`), JSON-LD, snapshots, or the Firebase deploy workflow.
+- Edit/preview entry rules remain: `?preview=true` and `?edit=true` are still honored.
+- The bridging helper `_routeForPublicStore()` is still the canonical way to translate between legacy `/tienda/*` and clean store routes.
+
+## What changed (scoped + reversible)
+
+All behavioral changes are intentionally scoped to the public store layout navigation layer:
+
+### 1) Navigation normalization happens in one place
+
+- Use `PublicStoreLayout._navigateToHref(...)` as the single entry-point for internal navigation from menus, logo, footer links, block buttons, etc.
+- This prevents mismatched behavior from direct `context.go(...)` calls scattered across UI.
+
+### 2) UUID href normalization (page-first, product fallback)
+
+Problem observed: some links coming from website navigation/blocks were bare UUIDs, but those UUIDs were often `website_pages.id` (not product ids). That caused:
+
+- `/<uuid>` → router had no match → crash
+- Or treating UUID as product → “Producto no encontrado”
+
+Fix:
+
+- If an href is a bare UUID, navigation now tries to resolve it as `website_pages.id` first (route by slug) before treating it as a product id.
+- If pages aren’t loaded yet at click time, the resolution lazily loads pages for the tenant and/or falls back to `getPageById(uuid)`.
+
+### 3) `push()` vs `go()` strategy to preserve animations and stability
+
+- Use `push()` for normal navigation so `CustomTransitionPage` animations are visible.
+- Use `go()` only for “home-like” targets (`/`, `/tienda`) to avoid stacking redirect/history states that can create “blank” browser history situations.
+
+### 4) Mobile menu fix: never navigate with a disposed bottom-sheet context
+
+On mobile web, the drawer/bottom-sheet menu items could appear “broken” because they did:
+
+- `Navigator.pop(sheetContext);`
+- then tried to navigate using that same `sheetContext`
+
+Fix:
+
+- Capture the parent page `BuildContext` before opening the sheet (e.g., `navContext`).
+- Pop the sheet with `sheetContext`, but always call `_navigateToHref(navContext, ...)` for navigation.
+
+This is required for consistent behavior on mobile.
+
+## Animations implemented (and how to keep doing it)
+
+### Router-level transitions (primary)
+
+- Store router pages use `CustomTransitionPage` (fade + slide) with durations tuned to be visible.
+- Reduced-motion is respected:
+  - If `MediaQuery.disableAnimations` or `MediaQuery.accessibleNavigation` is true, fall back to `NoTransitionPage`.
+
+### Content-level transitions (fallback for “hard to notice” route changes)
+
+Some route changes can still feel instant (same layout shell, sticky header, etc.). To make navigation perceptible:
+
+- The store layout wraps its body content in an `AnimatedSwitcher` keyed by the current URI.
+- This is disabled in editor contexts (`edit/preview`) and when reduced motion is enabled.
+- Be careful to apply the switcher in all layout variants (e.g., sticky header path), otherwise transitions may “disappear” depending on breakpoint.
+
+### Hover micro-animations (desktop-only)
+
+- Hover effects (e.g., subtle scale) are desktop UX sugar; they must not be required for correctness.
+- Ensure hover widgets are not used in a way that breaks touch/semantics on mobile.
+
+## Guardrails for future changes
+
+### ✅ Always do this
+
+- Use `_navigateToHref(...)` for UI-driven navigation inside the public store.
+- Route legacy paths through `_routeForPublicStore(...)` (never hardcode `/tienda/...` or assume clean paths).
+- Prefer `push()` for animated transitions; reserve `go()` for “home-like” navigations.
+- Keep behavior identical across desktop/mobile:
+  - Don’t rely on `kIsWeb` host heuristics alone.
+  - Don’t use disposable overlay contexts for routing.
+- When adding new routes, add both:
+  - clean path (public store)
+  - legacy `/tienda/*` redirect (ERP mounted)
+
+### ❌ Avoid this
+
+- Direct `context.go('/tienda/...')` in the public store UI.
+- Using a bottom-sheet/dialog context for routing after popping the overlay.
+- Introducing routes that exist only in one environment (ERP host vs public store) unless there is a redirect/bridge.
+- Making transitions depend on `go()` navigations (they often won’t animate).
+
+## Practical verification checklist (5 minutes)
+
+### Public domain mode (vinabike.cl)
+
+- Open the mobile menu and tap: Iniciar Sesión / Inicio / Productos / Contacto.
+- Confirm URLs are clean (`/cuenta/login`, `/`, `/productos`, `/contacto`).
+- Tap a product card → `/productos/<id>` loads.
+
+### ERP host mode (project-vinabike…)
+
+- Open `/tienda?preview=true` and `/tienda?edit=true`.
+- Navigate via menu/logo/footer and confirm you remain under `/tienda/*`.
+- Confirm edit/preview state doesn’t “bounce” due to stale query params.
+
+### Deep links
+
+- Directly open: `/productos`, `/contacto`, `/nosotros`, `/pagina/<slug>`.

@@ -12,6 +12,7 @@ import '../../shared/models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
+import 'public_store_layout.dart';
 
 /// A unified website renderer that can toggle edit mode
 /// 
@@ -259,7 +260,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                 
                 // Navigation links
                 _buildNavLink('Inicio', '/', primaryColor),
-                _buildNavLink('Productos', '/tienda/productos', primaryColor),
+                _buildNavLink('Productos', '/productos', primaryColor),
                 _buildNavLink('Contacto', '/contacto', primaryColor),
                 
                 const Spacer(),
@@ -273,7 +274,12 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.shopping_cart_outlined),
-                      onPressed: () => context.go('/tienda/carrito'),
+                      onPressed: () {
+                        PublicStoreLayout.navigateToHref(
+                          context,
+                          '/tienda/carrito',
+                        );
+                      },
                     ),
                     if (cart.itemCount > 0)
                       Positioned(
@@ -297,7 +303,9 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () => context.go('/tienda/cuenta'),
+                  onPressed: () {
+                    PublicStoreLayout.navigateToHref(context, '/tienda/cuenta');
+                  },
                   icon: const Icon(Icons.person_outline, size: 18),
                   label: const Text('INICIAR SESIÓN'),
                   style: ElevatedButton.styleFrom(
@@ -330,7 +338,9 @@ class _EditableWebsiteState extends State<EditableWebsite> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: InkWell(
-        onTap: widget.editMode ? null : () => context.go(route),
+        onTap: widget.editMode
+            ? null
+            : () => PublicStoreLayout.navigateToHref(context, route),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -387,7 +397,9 @@ class _EditableWebsiteState extends State<EditableWebsite> {
       bodyFont: bodyFont.isNotEmpty ? bodyFont : null,
       headingSize: headingSize,
       bodySize: bodySize,
-      onNavigate: widget.editMode ? (_) {} : (route) => context.go(route),
+        onNavigate: widget.editMode
+          ? (_) {}
+          : (route) => PublicStoreLayout.navigateToHref(context, route),
     );
     
     if (!widget.editMode) {
@@ -614,7 +626,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                     ),
                     const SizedBox(height: 16),
                     _buildFooterLink('Inicio', '/'),
-                    _buildFooterLink('Productos', '/tienda/productos'),
+                    _buildFooterLink('Productos', '/productos'),
                     _buildFooterLink('Contacto', '/contacto'),
                   ],
                 ),
@@ -694,7 +706,9 @@ class _EditableWebsiteState extends State<EditableWebsite> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: widget.editMode ? null : () => context.go(route),
+        onTap: widget.editMode
+            ? null
+            : () => PublicStoreLayout.navigateToHref(context, route),
         child: Text(
           label,
           style: TextStyle(color: Colors.grey.shade400),
@@ -936,7 +950,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
           _buildTextField('Título', data['title'] ?? '', (v) => _updateBlockData('title', v)),
           _buildTextField('Subtítulo', data['subtitle'] ?? '', (v) => _updateBlockData('subtitle', v)),
           _buildTextField('Texto del botón', data['buttonText'] ?? 'Ver Catálogo', (v) => _updateBlockData('buttonText', v)),
-          _buildTextField('Enlace del botón', data['buttonLink'] ?? '/tienda/productos', (v) => _updateBlockData('buttonLink', v)),
+          _buildTextField('Enlace del botón', data['buttonLink'] ?? '/productos', (v) => _updateBlockData('buttonLink', v)),
           _buildTextField('URL de imagen', data['imageUrl'] ?? '', (v) => _updateBlockData('imageUrl', v)),
         ];
       case 'products':

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 class Product {
   final String id;
   final String name;
@@ -131,6 +133,9 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    final inventoryQty = json['inventory_qty'] as int?;
+    final stockQty = json['stock_quantity'] as int?;
+
     return Product(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -138,9 +143,9 @@ class Product {
       barcode: json['barcode'] as String?,
       price: (json['price'] as num).toDouble(),
       cost: (json['cost'] as num).toDouble(),
-      // Use inventory_qty as primary (legacy), fallback to stock_quantity
-      stockQuantity:
-          json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0,
+      // Be resilient: some code paths historically updated only one column.
+      // Treat stock as the max of both.
+      stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
       imageUrl: json['image_url'] as String?,

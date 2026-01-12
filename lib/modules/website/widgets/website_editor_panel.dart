@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -513,9 +512,9 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
                                         color: Colors.white12,
                                         size: 18,
                                       ),
-                                      child: MouseRegion(
+                                      child: const MouseRegion(
                                         cursor: SystemMouseCursors.grab,
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.drag_handle,
                                           color: Colors.white38,
                                           size: 18,
@@ -1936,7 +1935,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       'subtitle': 'Descripción del slide',
       'imageUrl': '',
       'ctaText': 'Ver más',
-      'ctaLink': '/tienda/productos',
+      'ctaLink': '/productos',
       'showOverlay': true,
       'overlayOpacity': 0.55,
     });
@@ -1990,7 +1989,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           label: 'Link del botón',
           value: slide['ctaLink']?.toString() ?? '',
           onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaLink', v),
-          hint: '/tienda/productos',
+          hint: '/productos',
         ),
         const SizedBox(height: 20),
 
@@ -2681,7 +2680,7 @@ class _SlideEditorState extends State<_SlideEditor> {
           label: 'Enlace',
           value: widget.slide['ctaLink']?.toString() ?? '',
           onChanged: (v) => widget.onUpdate('ctaLink', v),
-          hint: '/tienda/productos',
+          hint: '/productos',
         ),
       ],
     );
@@ -2917,7 +2916,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           _EditorTextField(
             label: 'Link "Ver todos"',
             value:
-                widget.data['viewAllLink']?.toString() ?? '/tienda/productos',
+                widget.data['viewAllLink']?.toString() ?? '/productos',
             onChanged: (v) => _updateField('viewAllLink', v),
           ),
         ],
@@ -7282,13 +7281,13 @@ class _LinkPickerState extends State<_LinkPicker> {
 
   Widget _buildProductsTab() {
     final links = [
-      ('/tienda/productos', 'Todos los productos', Icons.inventory_2_outlined),
+      ('/productos', 'Todos los productos', Icons.inventory_2_outlined),
       (
-        '/tienda/productos?destacados=true',
+        '/productos?destacados=true',
         'Productos destacados',
         Icons.star_outline
       ),
-      ('/tienda/productos?ofertas=true', 'Ofertas', Icons.local_offer_outlined),
+      ('/productos?ofertas=true', 'Ofertas', Icons.local_offer_outlined),
       ('/tienda/categorias', 'Categorías', Icons.category_outlined),
       ('/carrito', 'Carrito', Icons.shopping_cart_outlined),
     ];
@@ -8296,7 +8295,7 @@ class _CategoryGridBlockControlsState
       'subtitle': 'Descripción breve',
       'imageUrl': '',
       'ctaText': 'Ver más',
-      'ctaLink': '/tienda/productos',
+      'ctaLink': '/productos',
       'size': categories.length < 2 ? 'large' : 'medium',
     });
     _updateField('categories', categories);
@@ -9915,7 +9914,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   List<Map<String, String>> _getDefaultNavLinks() {
     return [
       {'label': 'Inicio', 'url': '/tienda'},
-      {'label': 'Productos', 'url': '/tienda/productos'},
+      {'label': 'Productos', 'url': '/productos'},
       {'label': 'Contacto', 'url': '/tienda/contacto'},
     ];
   }
@@ -10140,7 +10139,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                     itemBuilder: (context, index) {
                       final link = _navLinks[index];
                       return _NavLinkTile(
-                        key: ValueKey('nav_$index'),
+                        key: ValueKey(
+                            'nav_${link['url'] ?? ''}|${link['label'] ?? ''}'),
                         label: link['label'] ?? '',
                         url: link['url'] ?? '',
                         onEdit: () => _editNavLink(index),
@@ -10355,7 +10355,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               controller: urlController,
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
-                labelText: 'URL (ej: /tienda/productos)',
+                labelText: 'URL (ej: /productos)',
                 labelStyle: TextStyle(color: Colors.white60),
                 enabledBorder: UnderlineInputBorder(
                     borderSide: BorderSide(color: Colors.white24)),
@@ -10672,6 +10672,19 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     editProvider.updateFooterLinkOrder(parentId, orderedIds);
   }
 
+  List<String> _moveIdInOrder(List<String> ids, String id, int delta) {
+    final fromIndex = ids.indexOf(id);
+    if (fromIndex < 0) return ids;
+
+    final toIndex = (fromIndex + delta).clamp(0, ids.length - 1);
+    if (toIndex == fromIndex) return ids;
+
+    final next = List<String>.from(ids);
+    final moved = next.removeAt(fromIndex);
+    next.insert(toIndex, moved);
+    return next;
+  }
+
   /// Renders the visual content of a footer section tab (for feedback widget).
   /// This does NOT contain a Draggable to avoid infinite recursion.
   Widget _buildFooterSectionTabContent(
@@ -10757,6 +10770,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     WebsiteNavigation link, {
     required int index,
     required WebsiteNavigation parentSection,
+    required int totalCount,
+    required List<String> orderedIds,
     required double width,
   }) {
     final isDropTarget = _hoveringLinkIndex == index && _draggingLinkId != null;
@@ -10851,9 +10866,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   color: Colors.white24,
                   size: 18,
                 ),
-                child: MouseRegion(
+                child: const MouseRegion(
                   cursor: SystemMouseCursors.grab,
-                  child: const Icon(
+                  child: Icon(
                     Icons.drag_handle,
                     color: Colors.white54,
                     size: 18,
@@ -10870,7 +10885,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   ),
                 ),
               ),
-              _buildFooterItemActionsMenu(link, parent: parentSection),
+              _buildFooterItemActionsMenu(
+                link,
+                parent: parentSection,
+                itemIndex: index,
+                totalCount: totalCount,
+                orderedIds: orderedIds,
+              ),
             ],
           ),
         );
@@ -10882,6 +10903,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     WebsiteNavigation section, {
     required bool isSelected,
     required bool isDropTarget,
+    required int index,
+    required int totalCount,
+    required List<String> orderedIds,
   }) {
     final bg = isSelected
         ? const Color(0xFF00A09D).withValues(alpha: 0.18)
@@ -10928,9 +10952,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   color: Colors.white24,
                   size: 18,
                 ),
-                child: MouseRegion(
+                child: const MouseRegion(
                   cursor: SystemMouseCursors.grab,
-                  child: const Icon(
+                  child: Icon(
                     Icons.drag_handle,
                     color: Colors.white54,
                     size: 18,
@@ -10947,7 +10971,12 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                 ),
               ),
               const SizedBox(width: 4),
-              _buildFooterItemActionsMenu(section),
+              _buildFooterItemActionsMenu(
+                section,
+                itemIndex: index,
+                totalCount: totalCount,
+                orderedIds: orderedIds,
+              ),
             ],
           ),
         ),
@@ -10958,6 +10987,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   Widget _buildFooterItemActionsMenu(
     WebsiteNavigation nav, {
     WebsiteNavigation? parent,
+    int? itemIndex,
+    int? totalCount,
+    List<String>? orderedIds,
   }) {
     return PopupMenuButton<String>(
       tooltip: 'Opciones',
@@ -10965,6 +10997,34 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       icon: const Icon(Icons.more_vert, color: Colors.white70, size: 18),
       onSelected: (value) async {
         switch (value) {
+          case 'move_prev':
+          case 'move_next':
+          case 'move_up':
+          case 'move_down': {
+            final ids = orderedIds;
+            final index = itemIndex;
+            final total = totalCount;
+
+            if (ids == null || index == null || total == null) return;
+
+            // Determine movement direction.
+            final delta = switch (value) {
+              'move_prev' || 'move_up' => -1,
+              'move_next' || 'move_down' => 1,
+              _ => 0,
+            };
+            if (delta == 0) return;
+
+            final nextOrder = _moveIdInOrder(ids, nav.id, delta);
+            if (nextOrder.length != ids.length) return;
+
+            if (parent == null) {
+              _persistFooterSectionOrder(nextOrder);
+            } else {
+              _persistFooterLinkOrder(parent.id, nextOrder);
+            }
+            return;
+          }
           case 'add_link':
             await _addFooterLink(parentId: nav.id);
             return;
@@ -10981,7 +11041,32 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       },
       itemBuilder: (context) {
         final isSection = nav.parentId == null;
+        final canReorder = itemIndex != null && totalCount != null;
+        final idx = itemIndex ?? -1;
+        final total = totalCount ?? 0;
+        final canMovePrev = canReorder && idx > 0;
+        final canMoveNext = canReorder && idx >= 0 && idx < (total - 1);
+
         return <PopupMenuEntry<String>>[
+          if (canReorder && (canMovePrev || canMoveNext)) ...[
+            if (canMovePrev)
+              PopupMenuItem(
+                value: isSection ? 'move_prev' : 'move_up',
+                child: Text(
+                  isSection ? 'Mover a la izquierda' : 'Mover arriba',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            if (canMoveNext)
+              PopupMenuItem(
+                value: isSection ? 'move_next' : 'move_down',
+                child: Text(
+                  isSection ? 'Mover a la derecha' : 'Mover abajo',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            const PopupMenuDivider(),
+          ],
           if (isSection)
             const PopupMenuItem(
               value: 'add_link',
@@ -11040,6 +11125,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final service = context.read<WebsiteService>();
     await service.deleteNavigation(nav.id);
@@ -11105,7 +11191,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
                     // Parent selection (optional)
                     DropdownButtonFormField<String?>(
-                      value: parentId,
+                      initialValue: parentId,
                       dropdownColor: const Color(0xFF2D2D2D),
                       decoration: const InputDecoration(
                         labelText: 'Sección (opcional)',
@@ -11144,7 +11230,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                         style: TextStyle(color: Colors.white54, fontSize: 12),
                       ),
                       value: isSection,
-                      activeColor: const Color(0xFF00A09D),
+                      activeThumbColor: const Color(0xFF00A09D),
                       onChanged: (v) => setState(() {
                         isSection = v;
                         if (isSection) {
@@ -11157,7 +11243,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
                     if (!effectiveIsSection) ...[
                       DropdownButtonFormField<NavLinkType>(
-                        value: linkType,
+                        initialValue: linkType,
                         dropdownColor: const Color(0xFF2D2D2D),
                         decoration: const InputDecoration(
                           labelText: 'Tipo',
@@ -11217,7 +11303,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           title: const Text('Abrir en nueva pestaña',
                               style: TextStyle(color: Colors.white)),
                           value: openInNewTab,
-                          activeColor: const Color(0xFF00A09D),
+                          activeThumbColor: const Color(0xFF00A09D),
                           onChanged: (v) => setState(() => openInNewTab = v),
                         ),
                     ],
@@ -11227,7 +11313,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       title: const Text('Visible',
                           style: TextStyle(color: Colors.white)),
                       value: isVisible,
-                      activeColor: const Color(0xFF00A09D),
+                      activeThumbColor: const Color(0xFF00A09D),
                       onChanged: (v) => setState(() => isVisible = v),
                     ),
                     SwitchListTile(
@@ -11235,7 +11321,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       title: const Text('Mostrar en escritorio',
                           style: TextStyle(color: Colors.white)),
                       value: showOnDesktop,
-                      activeColor: const Color(0xFF00A09D),
+                      activeThumbColor: const Color(0xFF00A09D),
                       onChanged: (v) => setState(() => showOnDesktop = v),
                     ),
                     SwitchListTile(
@@ -11243,7 +11329,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       title: const Text('Mostrar en móvil',
                           style: TextStyle(color: Colors.white)),
                       value: showOnMobile,
-                      activeColor: const Color(0xFF00A09D),
+                      activeThumbColor: const Color(0xFF00A09D),
                       onChanged: (v) => setState(() => showOnMobile = v),
                     ),
                   ],
@@ -11401,14 +11487,6 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                 ),
                 const SizedBox(height: 12),
                 _EditorTextField(
-                  label: 'WhatsApp',
-                  value: _whatsappController.text,
-                  controller: _whatsappController,
-                  onChanged: (_) {},
-                  hint: '+56912345678',
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
                   label: 'Dirección',
                   value: _addressController.text,
                   controller: _addressController,
@@ -11456,6 +11534,14 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   controller: _youtubeController,
                   onChanged: (_) {},
                   hint: 'mitienda',
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'WhatsApp',
+                  value: _whatsappController.text,
+                  controller: _whatsappController,
+                  onChanged: (_) {},
+                  hint: '+56912345678',
                 ),
                 const SizedBox(height: 12),
                 _EditorTextField(
@@ -11558,6 +11644,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                   final isSelected =
                                       section.id == effectiveSelectedId;
 
+                                  final orderedSectionIds =
+                                    sections.map((s) => s.id).toList();
+
                                   return DragTarget<String>(
                                     onWillAcceptWithDetails: (details) {
                                       return details.data != section.id;
@@ -11627,6 +11716,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                             section,
                                             isSelected: isSelected,
                                             isDropTarget: isDropTarget,
+                                            index: index,
+                                            totalCount: sections.length,
+                                            orderedIds: orderedSectionIds,
                                           ),
                                         ),
                                       );
@@ -11691,10 +11783,14 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                   children:
                                       List.generate(links.length, (index) {
                                     final link = links[index];
+                                    final orderedLinkIds =
+                                        links.map((l) => l.id).toList();
                                     return _buildFooterLinkRow(
                                       link,
                                       index: index,
                                       parentSection: selectedSection,
+                                      totalCount: links.length,
+                                      orderedIds: orderedLinkIds,
                                       width: listWidth,
                                     );
                                   }),

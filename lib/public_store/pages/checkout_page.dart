@@ -613,7 +613,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () => context.go('/tienda/productos'),
+            onPressed: () => context.go('/productos'),
             child: const Text('IR A COMPRAR'),
           ),
         ],

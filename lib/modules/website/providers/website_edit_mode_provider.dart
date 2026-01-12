@@ -894,7 +894,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
           'title': 'Servicios y Productos de Bicicleta',
           'subtitle': 'Todo lo que necesitas para tu bicicleta',
           'buttonText': 'Ver Productos',
-          'buttonLink': '/tienda/productos',
+          'buttonLink': '/productos',
           'backgroundImage': '',
         };
       case 'carousel':
@@ -905,7 +905,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Descubre los mejores productos para tu bicicleta',
               'imageUrl': '',
               'ctaText': 'Ver catálogo',
-              'ctaLink': '/tienda/productos',
+              'ctaLink': '/productos',
               'showOverlay': true,
               'overlayOpacity': 0.55,
             },
@@ -1136,7 +1136,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Conquista cualquier terreno',
               'imageUrl': '',
               'ctaText': 'Ver colección',
-              'ctaLink': '/tienda/productos?categoria=mtb',
+              'ctaLink': '/productos?categoria=mtb',
               'size': 'large',
             },
             {
@@ -1144,7 +1144,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Velocidad y rendimiento',
               'imageUrl': '',
               'ctaText': 'Ver colección',
-              'ctaLink': '/tienda/productos?categoria=ruta',
+              'ctaLink': '/productos?categoria=ruta',
               'size': 'large',
             },
             {
@@ -1152,7 +1152,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Movilidad en la ciudad',
               'imageUrl': '',
               'ctaText': 'Ver gama',
-              'ctaLink': '/tienda/productos?categoria=urbano',
+              'ctaLink': '/productos?categoria=urbano',
               'size': 'medium',
             },
             {
@@ -1160,7 +1160,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'subtitle': 'Todo lo que necesitas',
               'imageUrl': '',
               'ctaText': 'Explorar',
-              'ctaLink': '/tienda/productos?categoria=accesorios',
+              'ctaLink': '/productos?categoria=accesorios',
               'size': 'medium',
             },
           ],
@@ -1172,7 +1172,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
           'imageUrl': '',
           'videoUrl': '',
           'ctaText': 'Descubrir más',
-          'ctaLink': '/tienda/productos',
+          'ctaLink': '/productos',
           'showCta': true,
           'overlayOpacity': 0.5,
         };

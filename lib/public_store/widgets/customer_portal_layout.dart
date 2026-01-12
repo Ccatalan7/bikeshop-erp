@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import 'customer_chat_panel.dart';
 import 'premium_dashboard_widgets.dart';
+import 'public_store_layout.dart';
 
 class CustomerPortalLayout extends StatelessWidget {
   final String title;
@@ -93,8 +94,17 @@ class CustomerPortalLayout extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.arrow_back,
                               color: Colors.black87),
-                          onPressed: () =>
-                              context.go(backPath ?? '/tienda/cuenta'),
+                          onPressed: () {
+                            final router = GoRouter.of(context);
+                            if (router.canPop()) {
+                              router.pop();
+                              return;
+                            }
+                            PublicStoreLayout.navigateToHref(
+                              context,
+                              backPath ?? '/tienda/cuenta',
+                            );
+                          },
                         ),
                       if (showBackButton) const SizedBox(width: 8),
                       Text(
@@ -193,15 +203,21 @@ class CustomerPortalLayout extends StatelessWidget {
                               final accountService =
                                   context.read<CustomerAccountService>();
                               await accountService.signOut();
-                              if (context.mounted) context.go('/');
+                              if (context.mounted) {
+                                PublicStoreLayout.navigateToHref(context, '/');
+                              }
                             } else if (value == 'profile') {
-                              context.go('/tienda/cuenta/perfil');
+                              PublicStoreLayout.navigateToHref(
+                                  context, '/tienda/cuenta/perfil');
                             } else if (value == 'orders') {
-                              context.go('/tienda/cuenta/pedidos');
+                              PublicStoreLayout.navigateToHref(
+                                  context, '/tienda/cuenta/pedidos');
                             } else if (value == 'addresses') {
-                              context.go('/tienda/cuenta/direcciones');
+                              PublicStoreLayout.navigateToHref(
+                                  context, '/tienda/cuenta/direcciones');
                             } else if (value == 'chat') {
-                              context.go('/tienda/cuenta/chats');
+                              PublicStoreLayout.navigateToHref(
+                                  context, '/tienda/cuenta/chats');
                             }
                           },
                           itemBuilder: (context) => [
@@ -393,7 +409,17 @@ class CustomerPortalLayout extends StatelessWidget {
                   if (showBackButton)
                     IconButton(
                       icon: const Icon(Icons.arrow_back),
-                      onPressed: () => context.go(backPath ?? '/tienda/cuenta'),
+                      onPressed: () {
+                        final router = GoRouter.of(context);
+                        if (router.canPop()) {
+                          router.pop();
+                          return;
+                        }
+                        PublicStoreLayout.navigateToHref(
+                          context,
+                          backPath ?? '/tienda/cuenta',
+                        );
+                      },
                     ),
                   Expanded(
                       child: Text(title,
@@ -421,7 +447,17 @@ class CustomerPortalLayout extends StatelessWidget {
         children: [
           if (showBackButton)
             InkWell(
-              onTap: () => context.go(backPath ?? '/tienda/cuenta'),
+              onTap: () {
+                final router = GoRouter.of(context);
+                if (router.canPop()) {
+                  router.pop();
+                  return;
+                }
+                PublicStoreLayout.navigateToHref(
+                  context,
+                  backPath ?? '/tienda/cuenta',
+                );
+              },
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(8),

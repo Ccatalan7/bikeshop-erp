@@ -167,10 +167,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final storeName = websiteService.getSetting('store_name', 'Vinabike');
     final storeUrl = websiteService.getSetting(
       'store_url',
-      'https://tienda.vinabike.cl',
+      'https://vinabike.cl',
     );
 
-    final productUrl = '$storeUrl/productos/${product.id}';
+    final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
+    final productUrl = '$normalizedStoreUrl/productos/${product.id}';
     final availability = product.stockQuantity > 0
         ? 'https://schema.org/InStock'
         : 'https://schema.org/OutOfStock';
@@ -185,6 +186,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final description = (product.description?.trim().isNotEmpty ?? false)
         ? product.description!.trim()
         : 'Encuentra $storeName online: ${product.name}';
+    final cleanDescription = _cleanSeoText(description);
+
+    final gtin = (product.gtin?.trim().isNotEmpty ?? false)
+        ? product.gtin!.trim()
+        : (product.barcode?.trim().isNotEmpty ?? false)
+            ? product.barcode!.trim()
+            : null;
 
     final priceString = product.price % 1 == 0
         ? product.price.toStringAsFixed(0)
@@ -194,10 +202,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       '@context': 'https://schema.org/',
       '@type': 'Product',
       'name': product.name,
-      'description': description,
+      'description': cleanDescription,
       'sku': product.sku,
-      if (product.barcode != null && product.barcode!.isNotEmpty)
-        'gtin': product.barcode,
+      if (gtin != null && gtin.isNotEmpty) 'gtin': gtin,
       'brand': {
         '@type': 'Brand',
         'name': product.brand?.isNotEmpty == true ? product.brand : storeName,
@@ -245,13 +252,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       '{product_description}',
     );
 
-    final resolvedTitle = _applySeoTemplate(
+    final resolvedTitle = _cleanSeoText(_applySeoTemplate(
       template: titleTemplate,
       storeName: storeName,
       product: product,
-    ).trim();
+    ).trim());
 
-    final fallbackDescription = (product.description?.trim().isNotEmpty ?? false)
+    final fallbackDescription = (product.description?.trim().isNotEmpty ??
+            false)
         ? product.description!.trim()
         : 'Compra ${product.name} online en $storeName. Envíos y retiro en tienda.';
 
@@ -262,6 +270,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       fallbackDescription: fallbackDescription,
     ).trim();
 
+    final cleanResolvedDescription = _cleanSeoText(resolvedDescription);
+
     final image = (product.imageUrls.isNotEmpty)
         ? product.imageUrls.first
         : (product.imageUrl?.isNotEmpty == true ? product.imageUrl : null);
@@ -270,10 +280,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       if (!mounted) return;
       SeoHelper.updateSeo(
         title: resolvedTitle.isNotEmpty ? resolvedTitle : '$storeName',
-        description: resolvedDescription.isNotEmpty ? resolvedDescription : null,
+        description: cleanResolvedDescription.isNotEmpty
+            ? cleanResolvedDescription
+            : null,
         imageUrl: image,
       );
     });
+  }
+
+  String _cleanSeoText(String text) {
+    return text
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   String _applySeoTemplate({
@@ -294,7 +313,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return template
         .replaceAll('{store_name}', storeName)
         .replaceAll('{product_name}', product.name)
-      .replaceAll('{product_sku}', product.sku.isNotEmpty ? product.sku : '')
+        .replaceAll('{product_sku}', product.sku.isNotEmpty ? product.sku : '')
         .replaceAll('{product_price}', priceText)
         .replaceAll('{product_brand}', brandText)
         .replaceAll('{product_description}', descriptionText);

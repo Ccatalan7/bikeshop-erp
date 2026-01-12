@@ -10,6 +10,7 @@ import '../services/website_service.dart';
 
 // import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
+import '../../../shared/widgets/hover_scale.dart';
 import '../models/website_block_type.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
@@ -462,9 +463,11 @@ class WebsiteBlockRenderer {
       onPressed = () => onNavigate(link);
     }
 
+    late final Widget button;
+
     switch (style) {
       case 'outline':
-        return OutlinedButton(
+        button = OutlinedButton(
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
             foregroundColor: accentColor,
@@ -473,8 +476,9 @@ class WebsiteBlockRenderer {
           ),
           child: Text(label, style: textStyle),
         );
+        break;
       case 'text':
-        return TextButton(
+        button = TextButton(
           onPressed: onPressed,
           style: TextButton.styleFrom(
             foregroundColor: accentColor,
@@ -482,8 +486,9 @@ class WebsiteBlockRenderer {
           ),
           child: Text(label, style: textStyle),
         );
+        break;
       default:
-        return ElevatedButton(
+        button = ElevatedButton(
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: accentColor,
@@ -492,7 +497,17 @@ class WebsiteBlockRenderer {
           ),
           child: Text(label, style: textStyle.copyWith(color: Colors.white)),
         );
+        break;
     }
+
+    final bool isEnabled = onPressed != null;
+
+    return HoverScale(
+      enabled: isEnabled,
+      hoverScale: 1.03,
+      pressedScale: 0.98,
+      child: button,
+    );
   }
 
   static Widget _buildDivider({
@@ -613,16 +628,41 @@ class WebsiteBlockRenderer {
     }
   }
 
-  static EdgeInsets _parsePadding(Map<String, dynamic> data,
-      {double defaultVertical = 64}) {
+  static EdgeInsets _parsePadding(
+    Map<String, dynamic> data, {
+    double defaultVertical = 64,
+    double defaultHorizontal = 24,
+    double? screenWidth,
+    double mobileHorizontal = 16,
+    double mobileBreakpoint = 600,
+  }) {
+    final resolvedDefaultHorizontal =
+        (screenWidth != null && screenWidth < mobileBreakpoint)
+            ? mobileHorizontal
+            : defaultHorizontal;
+
     final style = data['style'] as Map<String, dynamic>?;
-    if (style == null)
-      return EdgeInsets.symmetric(vertical: defaultVertical, horizontal: 24);
+    if (style == null) {
+      return EdgeInsets.symmetric(
+        vertical: defaultVertical,
+        horizontal: resolvedDefaultHorizontal,
+      );
+    }
 
     final top = (style['paddingTop'] as num?)?.toDouble() ?? defaultVertical;
     final bottom =
         (style['paddingBottom'] as num?)?.toDouble() ?? defaultVertical;
-    return EdgeInsets.only(top: top, bottom: bottom, left: 24, right: 24);
+    final left =
+        (style['paddingLeft'] as num?)?.toDouble() ?? resolvedDefaultHorizontal;
+    final right = (style['paddingRight'] as num?)?.toDouble() ??
+        resolvedDefaultHorizontal;
+
+    return EdgeInsets.only(
+      top: top,
+      right: right,
+      bottom: bottom,
+      left: left,
+    );
   }
 
   static BoxDecoration _resolveBackgroundDecoration({
@@ -782,7 +822,7 @@ class WebsiteBlockRenderer {
     final legacyCtaText =
         (data['ctaText'] ?? data['buttonText'] ?? 'Ver más').toString().trim();
     final legacyCtaLink =
-        (data['ctaLink'] ?? data['buttonLink'] ?? '/tienda/productos')
+        (data['ctaLink'] ?? data['buttonLink'] ?? '/productos')
             .toString()
             .trim();
     final primaryAction = _resolvePrimaryNavigateAction(
@@ -958,7 +998,7 @@ class WebsiteBlockRenderer {
                       ? () {}
                       : () {
                           final route =
-                              (primaryAction?.to ?? '/tienda/productos').trim();
+                              (primaryAction?.to ?? '/productos').trim();
                           if (onNavigate != null) {
                             onNavigate(route);
                           }
@@ -1123,11 +1163,20 @@ class WebsiteBlockRenderer {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         final bgColor = _parseColor(data['style']?['backgroundColor']) ??
             const Color(0xFFFAFAFA);
-        final padding = hasFixedHeight
-            ? const EdgeInsets.symmetric(horizontal: 24)
-            : _parsePadding(data, defaultVertical: 56);
+        final isMobile = constraints.maxWidth < 600;
 
-        final isMobile = constraints.maxWidth < 700;
+        final padding = hasFixedHeight
+            ? EdgeInsets.only(
+                left: (data['style']?['paddingLeft'] as num?)?.toDouble() ??
+                    (isMobile ? 16 : 24),
+                right: (data['style']?['paddingRight'] as num?)?.toDouble() ??
+                    (isMobile ? 16 : 24),
+              )
+            : _parsePadding(
+                data,
+                defaultVertical: 56,
+                screenWidth: constraints.maxWidth,
+              );
 
         return Container(
           color: bgColor,
@@ -1288,8 +1337,15 @@ class WebsiteBlockRenderer {
       return const SizedBox.shrink();
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final padding = _parsePadding(
+      data,
+      defaultVertical: 64,
+      screenWidth: screenWidth,
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: padding,
       child: Column(
         children: [
           Text(
@@ -1470,7 +1526,12 @@ class WebsiteBlockRenderer {
     final layout = data['layout']?.toString() ?? 'grid'; // grid or list
     final bgColor = _parseColor(
         data['style']?['backgroundColor']); // Default transparent/theme
-    final padding = _parsePadding(data, defaultVertical: 64);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final padding = _parsePadding(
+      data,
+      defaultVertical: 64,
+      screenWidth: screenWidth,
+    );
 
     return Container(
       padding: padding,
@@ -1651,9 +1712,14 @@ class WebsiteBlockRenderer {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 380;
+    final padding = _parsePadding(
+      data,
+      defaultVertical: 64,
+      screenWidth: screenWidth,
+    );
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: padding,
       color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
       child: Center(
         child: ConstrainedBox(
@@ -1729,7 +1795,7 @@ class WebsiteBlockRenderer {
             'Limpieza básica',
           ],
           'ctaText': 'Reservar',
-          'ctaLink': '/tienda/productos',
+          'ctaLink': '/productos',
         },
         {
           'name': 'Full Service',
@@ -1740,7 +1806,7 @@ class WebsiteBlockRenderer {
             'Ajuste integral',
           ],
           'ctaText': 'Agendar',
-          'ctaLink': '/tienda/productos',
+          'ctaLink': '/productos',
           'highlighted': true,
         },
         {
@@ -1752,7 +1818,7 @@ class WebsiteBlockRenderer {
             'Entrega prioritaria',
           ],
           'ctaText': 'Contactar',
-          'ctaLink': '/tienda/productos',
+          'ctaLink': '/productos',
         },
       ];
     }
@@ -1765,7 +1831,12 @@ class WebsiteBlockRenderer {
     final isCompact = screenWidth < 380;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       color: theme.colorScheme.surfaceVariant.withOpacity(0.15),
       child: Center(
         child: ConstrainedBox(
@@ -2088,9 +2159,15 @@ class WebsiteBlockRenderer {
     }
 
     final useMasonry = layout == 'masonry';
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -2238,8 +2315,15 @@ class WebsiteBlockRenderer {
       ];
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -2347,8 +2431,15 @@ class WebsiteBlockRenderer {
       ];
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
@@ -2470,7 +2561,12 @@ class WebsiteBlockRenderer {
     final isCompact = screenWidth < 400;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -2737,7 +2833,12 @@ class WebsiteBlockRenderer {
     final isCompact = screenWidth < 350;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+      padding: _parsePadding(
+        data,
+        screenWidth: screenWidth,
+        defaultVertical: 64,
+        defaultHorizontal: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -2984,7 +3085,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Conquista cualquier terreno',
           'imageUrl': null,
           'ctaText': 'Ver colección',
-          'ctaLink': '/tienda/productos?categoria=mtb',
+          'ctaLink': '/productos?categoria=mtb',
           'size': 'large', // large, medium, small
         },
         {
@@ -2992,7 +3093,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Velocidad y rendimiento',
           'imageUrl': null,
           'ctaText': 'Ver colección',
-          'ctaLink': '/tienda/productos?categoria=ruta',
+          'ctaLink': '/productos?categoria=ruta',
           'size': 'large',
         },
         {
@@ -3000,7 +3101,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Movilidad en la ciudad',
           'imageUrl': null,
           'ctaText': 'Ver gama',
-          'ctaLink': '/tienda/productos?categoria=urbano',
+          'ctaLink': '/productos?categoria=urbano',
           'size': 'medium',
         },
         {
@@ -3008,7 +3109,7 @@ class WebsiteBlockRenderer {
           'subtitle': 'Todo lo que necesitas',
           'imageUrl': null,
           'ctaText': 'Explorar',
-          'ctaLink': '/tienda/productos?categoria=accesorios',
+          'ctaLink': '/productos?categoria=accesorios',
           'size': 'medium',
         },
       ];
@@ -3079,8 +3180,7 @@ class WebsiteBlockRenderer {
     final videoUrl = data['videoUrl']?.toString();
     final videoFileUrl = data['videoFileUrl']?.toString(); // Direct video file
     final legacyCtaText = (data['ctaText'] ?? 'Ver más').toString().trim();
-    final legacyCtaLink =
-        (data['ctaLink'] ?? '/tienda/productos').toString().trim();
+    final legacyCtaLink = (data['ctaLink'] ?? '/productos').toString().trim();
     final showCta = data['showCta'] != false;
 
     final primaryAction = _resolvePrimaryNavigateAction(
@@ -3204,6 +3304,12 @@ class WebsiteBlockRenderer {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
+        final containerPadding = _parsePadding(
+          data,
+          screenWidth: constraints.maxWidth,
+          defaultVertical: 64,
+          defaultHorizontal: 24,
+        );
 
         return Container(
           width: double.infinity,
@@ -3221,13 +3327,14 @@ class WebsiteBlockRenderer {
                   )
                 : null,
           ),
-          padding: hasFixedHeight
-              ? null
-              : const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
+          padding: hasFixedHeight ? null : containerPadding,
           child: Center(
             child: Padding(
               padding: hasFixedHeight
-                  ? const EdgeInsets.symmetric(horizontal: 24)
+                  ? EdgeInsets.only(
+                      left: containerPadding.left,
+                      right: containerPadding.right,
+                    )
                   : EdgeInsets.zero,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 800),
@@ -3330,14 +3437,24 @@ class WebsiteBlockRenderer {
     return LayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
+        final containerPadding = _parsePadding(
+          data,
+          screenWidth: constraints.maxWidth,
+          defaultVertical: 48,
+          defaultHorizontal: 16,
+          mobileHorizontal: 16,
+        );
 
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
           color: Colors.white,
           padding: hasFixedHeight
-              ? const EdgeInsets.symmetric(horizontal: 16)
-              : const EdgeInsets.symmetric(vertical: 48),
+              ? EdgeInsets.only(
+                  left: containerPadding.left,
+                  right: containerPadding.right,
+                )
+              : containerPadding,
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3356,7 +3473,10 @@ class WebsiteBlockRenderer {
                 Padding(
                   padding: hasFixedHeight
                       ? EdgeInsets.zero
-                      : const EdgeInsets.symmetric(horizontal: 16),
+                      : EdgeInsets.only(
+                          left: containerPadding.left,
+                          right: containerPadding.right,
+                        ),
                   child: _BrandLogosCarousel(
                     brands: brands,
                     bodyFont: bodyFont,
@@ -4158,9 +4278,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                     onPressed: widget.previewMode
                         ? () {}
                         : () {
-                            final route = ctaLink.isNotEmpty
-                                ? ctaLink
-                                : '/tienda/productos';
+                            final route =
+                                ctaLink.isNotEmpty ? ctaLink : '/productos';
                             if (widget.onNavigate != null) {
                               widget.onNavigate!(route);
                             }
@@ -4363,7 +4482,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
         'title': 'Descubre la tienda',
         'subtitle': 'Todo lo que necesitas para tu bicicleta en un solo lugar',
         'ctaText': 'Ver catálogo',
-        'ctaLink': '/tienda/productos',
+        'ctaLink': '/productos',
         'imageUrl': null,
         'showOverlay': true,
         'overlayOpacity': 0.55,
@@ -4667,6 +4786,20 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
     // Responsive override
     final screenWidth = MediaQuery.of(context).size.width;
+    final padding = WebsiteBlockRenderer._parsePadding(
+      widget.data,
+      defaultVertical: 48,
+      screenWidth: screenWidth,
+    );
+    final emptyPadding = WebsiteBlockRenderer._parsePadding(
+      widget.data,
+      defaultVertical: 24,
+      screenWidth: screenWidth,
+    );
+    final bgColor = WebsiteBlockRenderer._parseColor(
+          widget.data['style']?['backgroundColor']?.toString(),
+        ) ??
+        Colors.white;
     if (screenWidth < 450) {
       itemsPerRow = 1;
     } else if (screenWidth < 900) {
@@ -4685,9 +4818,9 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     // If no products after loading, show compact empty state
     if (showEmptyState) {
       return Container(
-        color: Colors.white,
+        color: bgColor,
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+        padding: emptyPadding,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -4726,9 +4859,9 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     }
 
     return Container(
-      color: Colors.white,
+      color: bgColor,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: padding,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),
@@ -4842,7 +4975,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                         ? () {}
                         : () {
                             if (widget.onNavigate != null) {
-                              widget.onNavigate!('/tienda/productos');
+                              widget.onNavigate!('/productos');
                             }
                           },
                     style: OutlinedButton.styleFrom(

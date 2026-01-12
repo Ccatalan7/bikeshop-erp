@@ -27,7 +27,7 @@ class WebsiteBlockRegistry {
         // Prefer the newer keys used by the public renderer, while keeping
         // legacy keys compatible via normalization.
         'ctaText': 'Ver Catálogo',
-        'ctaLink': '/tienda/productos',
+        'ctaLink': '/productos',
         'imageUrl': null,
         'showOverlay': true,
         'overlayOpacity': 0.5,
@@ -57,7 +57,7 @@ class WebsiteBlockRegistry {
           key: 'ctaLink',
           label: 'Enlace del botón',
           type: WebsiteBlockFieldType.link,
-          defaultValue: '/tienda/productos',
+          defaultValue: '/productos',
         ),
         WebsiteBlockFieldSchema(
           key: 'isFullScreen',
@@ -219,7 +219,7 @@ class WebsiteBlockRegistry {
       description: 'Botón con enlace (CTA).',
       defaultData: {
         'label': 'Haz clic aquí',
-        'link': '/tienda/productos',
+        'link': '/productos',
         'style': 'filled',
       },
       fields: const [
@@ -234,7 +234,7 @@ class WebsiteBlockRegistry {
           key: 'link',
           label: 'Enlace',
           type: WebsiteBlockFieldType.link,
-          defaultValue: '/tienda/productos',
+          defaultValue: '/productos',
           group: 'content',
         ),
         WebsiteBlockFieldSchema(
@@ -941,13 +941,13 @@ class WebsiteBlockRegistry {
             'title': 'MTB',
             'subtitle': 'Trail, Enduro, Downhill',
             'imageUrl': null,
-            'link': '/tienda/productos',
+            'link': '/productos',
           },
           {
             'title': 'Ruta',
             'subtitle': 'Carretera y endurance',
             'imageUrl': null,
-            'link': '/tienda/productos',
+            'link': '/productos',
           },
         ],
       },
@@ -985,7 +985,7 @@ class WebsiteBlockRegistry {
               key: 'link',
               label: 'Enlace',
               type: WebsiteBlockFieldType.link,
-              defaultValue: '/tienda/productos',
+              defaultValue: '/productos',
             ),
           ],
         ),
@@ -1010,12 +1010,12 @@ class WebsiteBlockRegistry {
         'videoFileUrl': '',
         'showCta': true,
         'ctaText': 'Ver productos',
-        'ctaLink': '/tienda/productos',
+        'ctaLink': '/productos',
         'actions': [
           {
             'type': 'navigate',
             'label': 'Ver productos',
-            'to': '/tienda/productos',
+            'to': '/productos',
           }
         ],
         'overlayOpacity': 0.5,
@@ -1066,7 +1066,7 @@ class WebsiteBlockRegistry {
           key: 'ctaLink',
           label: 'Enlace del botón',
           type: WebsiteBlockFieldType.link,
-          defaultValue: '/tienda/productos',
+          defaultValue: '/productos',
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayOpacity',

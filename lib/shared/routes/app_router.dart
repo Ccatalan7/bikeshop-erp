@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../widgets/main_layout.dart';
 import '../pages/auth_callback_page.dart';
@@ -34,6 +35,33 @@ import '../../public_store/pages/customer_chat_hub_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
+import '../../public_store/services/public_store_scroll_state.dart';
+
+class _EnsurePublicStoreScrollState extends StatelessWidget {
+  final Widget child;
+
+  const _EnsurePublicStoreScrollState({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    PublicStoreScrollState? existing;
+    try {
+      existing = context.read<PublicStoreScrollState>();
+    } on ProviderNotFoundException {
+      existing = null;
+    }
+
+    if (existing != null) return child;
+
+    // In the store build (`main_store.dart`) this is already provided globally.
+    // In the ERP build, store routes are mounted under the ERP router, so we
+    // ensure the provider exists to avoid runtime crashes.
+    return Provider(
+      create: (_) => PublicStoreScrollState(),
+      child: child,
+    );
+  }
+}
 
 // Helper wrapper for public store pages
 class PublicStoreWrapper extends StatelessWidget {
@@ -48,9 +76,11 @@ class PublicStoreWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PublicStoreLayout(
-      enablePageViewScrolling: enablePageViewScrolling,
-      child: child,
+    return _EnsurePublicStoreScrollState(
+      child: PublicStoreLayout(
+        enablePageViewScrolling: enablePageViewScrolling,
+        child: child,
+      ),
     );
   }
 }
@@ -102,9 +132,11 @@ class _PublicStoreShellState extends State<_PublicStoreShell> {
             widget.currentPath.startsWith('/tienda/cuenta/chats/');
 
     return PersistentEditorShell(
-      child: PublicStoreLayout(
-        enablePageViewScrolling: !disablePageViewScrolling,
-        child: widget.navigationShell,
+      child: _EnsurePublicStoreScrollState(
+        child: PublicStoreLayout(
+          enablePageViewScrolling: !disablePageViewScrolling,
+          child: widget.navigationShell,
+        ),
       ),
     );
   }
@@ -345,9 +377,14 @@ class AppRouter {
           // This catches defaults like '/tienda/productos' and rewrites to '/productos'
           if (path.startsWith('/tienda/')) {
             final newPath = path.replaceFirst('/tienda', '');
+            final qp = state.uri.queryParameters;
+            final destination = Uri(
+              path: newPath,
+              queryParameters: qp.isEmpty ? null : qp,
+            ).toString();
             debugPrint(
-                '🔄 [Router] Redirecting legacy path: $path -> $newPath');
-            return newPath;
+                '🔄 [Router] Redirecting legacy path: $path -> $destination');
+            return destination;
           }
 
           // If somehow a non-public path sneaks in, send to home (should be rare)

@@ -1001,7 +1001,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           'title': 'Título del Banner',
           'subtitle': 'Subtítulo descriptivo',
           'ctaText': 'Ver más',
-          'ctaLink': '/tienda/productos',
+          'ctaLink': '/productos',
         }
       ];
     }
@@ -3342,7 +3342,7 @@ class _InlineLinkPickerState extends State<_InlineLinkPicker> {
   bool _isExpanded = false;
 
   static const _quickLinks = [
-    ('/tienda/productos', 'Productos', Icons.inventory_2_outlined),
+    ('/productos', 'Productos', Icons.inventory_2_outlined),
     ('/tienda/categorias', 'Categorías', Icons.category_outlined),
     ('/contacto', 'Contacto', Icons.email_outlined),
     ('/', 'Inicio', Icons.home_outlined),
@@ -3376,7 +3376,7 @@ class _InlineLinkPickerState extends State<_InlineLinkPicker> {
                 color: Colors.grey[600],
               ),
             ),
-            hintText: '/tienda/productos',
+            hintText: '/productos',
             hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
           ),
           onChanged: widget.onChanged,
@@ -3935,7 +3935,7 @@ class _DarkLinkPickerState extends State<_DarkLinkPicker> {
   bool _isExpanded = false;
 
   static const _quickLinks = [
-    ('/tienda/productos', 'Productos', Icons.inventory_2_outlined),
+    ('/productos', 'Productos', Icons.inventory_2_outlined),
     ('/tienda/categorias', 'Categorías', Icons.category_outlined),
     ('/contacto', 'Contacto', Icons.email_outlined),
     ('/', 'Inicio', Icons.home_outlined),
@@ -4295,7 +4295,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     final title = (slide['title'] ?? 'Título').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
     final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
-    final ctaLink = (slide['ctaLink'] ?? '/tienda/productos').toString().trim();
+    final ctaLink = (slide['ctaLink'] ?? '/productos').toString().trim();
     final imageUrl = slide['imageUrl'];
     final showOverlay = (slide['showOverlay'] ?? true) == true;
 
