@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -9,6 +11,7 @@ import '../../../shared/config/supabase_config.dart';
 /// - Payment preference creation
 /// - Payment status verification
 /// - Webhook handling (for server-side notifications)
+/// - Fetching available payment methods
 class MercadoPagoService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -84,6 +87,19 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
+  /// Manually set credentials (e.g. loaded from another service)
+  void setCredentials({
+    required String? publicKey,
+    required String? accessToken,
+    bool isTestMode = true,
+  }) {
+    _publicKey = publicKey;
+    _accessToken = accessToken;
+    _isTestMode = isTestMode;
+    notifyListeners();
+    debugPrint('🔧 [MercadoPago] Credentials set manually');
+  }
+
   /// Save MercadoPago credentials to database
   /// Requires tenant_id to be set first via setTenantId() or initialize(tenantId:)
   Future<void> saveCredentials({
@@ -123,6 +139,56 @@ class MercadoPagoService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error saving MercadoPago credentials: $e');
       rethrow;
+    }
+  }
+
+  /// Get official payment methods from MercadoPago API
+  /// Returns a list of payment methods with secure_thumbnail
+  Future<List<Map<String, dynamic>>> getPaymentMethods() async {
+    if (!isConfigured) {
+      debugPrint('🔧 [MercadoPago] Not configured, skipping getPaymentMethods');
+      return [];
+    }
+    if (_publicKey == null) {
+      debugPrint('🔧 [MercadoPago] No public key, skipping getPaymentMethods');
+      return [];
+    }
+
+    try {
+      final url = Uri.parse(
+          'https://api.mercadopago.com/v1/payment_methods?public_key=$_publicKey');
+
+      debugPrint('🔧 [MercadoPago] Fetching payment methods from $url');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        debugPrint('🔧 [MercadoPago] Got ${data.length} total payment methods');
+
+        // Filter for credit_card and debit_card
+        final filtered = data
+            .where((pm) =>
+                pm['status'] == 'active' &&
+                (pm['payment_type_id'] == 'credit_card' ||
+                    pm['payment_type_id'] == 'debit_card'))
+            .map((pm) => pm as Map<String, dynamic>)
+            .toList();
+
+        // Log what we're returning for debugging
+        for (final pm in filtered) {
+          debugPrint(
+              '🔧 [MercadoPago] ${pm['name']}: thumbnail=${pm['thumbnail']}, secure=${pm['secure_thumbnail']}');
+        }
+
+        return filtered;
+      } else {
+        debugPrint(
+            '🔧 [MercadoPago] Error fetching payment methods: ${response.statusCode} - ${response.body}');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('🔧 [MercadoPago] Exception fetching payment methods: $e');
+      return [];
     }
   }
 

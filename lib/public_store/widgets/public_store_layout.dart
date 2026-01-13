@@ -38,6 +38,7 @@ import '../../shared/utils/web_url.dart' show setLocationHash;
 import 'customer_chat_widget.dart';
 import 'search_overlay.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -191,6 +192,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
 
   String? _lastLoggedUrlSignature;
+  // Payment methods now hardcoded - icons hosted in Supabase Storage
 
   @override
   void initState() {
@@ -202,6 +204,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     if (kIsWeb) {
       _checkGoogleOAuthReturn();
     }
+    // Payment method icons are now hardcoded - no need to fetch from MercadoPago API
   }
 
   @override
@@ -4375,7 +4378,55 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 48),
+                    // Payment badges - using our own hosted icons from Supabase Storage
+                    const SizedBox(height: 32),
+                    Column(
+                      children: [
+                        Text(
+                          'Medios de Pago',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white60,
+                                    fontSize: 11,
+                                    letterSpacing: 0.5,
+                                  ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _PaymentBadge(
+                              name: 'MercadoPago',
+                              imageUrl:
+                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mercadopago.svg',
+                              isSvg: true,
+                            ),
+                            const SizedBox(width: 12),
+                            _PaymentBadge(
+                              name: 'Visa',
+                              imageUrl:
+                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/visa.svg',
+                              isSvg: true,
+                            ),
+                            const SizedBox(width: 12),
+                            _PaymentBadge(
+                              name: 'Mastercard',
+                              imageUrl:
+                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mastercard.svg',
+                              isSvg: true,
+                            ),
+                            const SizedBox(width: 12),
+                            _PaymentBadge(
+                              name: 'Redcompra',
+                              imageUrl:
+                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/redcompra.png',
+                              isSvg: false,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                     const Divider(color: Colors.white24),
                     const SizedBox(height: 24),
                     Text(
@@ -6714,4 +6765,54 @@ class _NoDragScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.trackpad,
         PointerDeviceKind.unknown,
       };
+}
+
+/// Payment badge widget for footer - displays payment method icons
+class _PaymentBadge extends StatelessWidget {
+  final String name;
+  final String imageUrl;
+  final bool isSvg;
+
+  const _PaymentBadge({
+    required this.name,
+    required this.imageUrl,
+    this.isSvg = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // MercadoPago and Redcompra logos render naturally smaller due to aspect ratio,
+    // so we give them size boosts to visually match the other logos.
+    double height = 40;
+    double maxWidth = 100;
+
+    if (name == 'MercadoPago') {
+      height = 60;
+      maxWidth = 150;
+    } else if (name == 'Redcompra') {
+      height = 48;
+      maxWidth = 120;
+    }
+
+    return Tooltip(
+      message: name,
+      child: Container(
+        height: height,
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: isSvg
+            ? SvgPicture.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                placeholderBuilder: (_) => const SizedBox.shrink(),
+              )
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox.shrink();
+                },
+              ),
+      ),
+    );
+  }
 }
