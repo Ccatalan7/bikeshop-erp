@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 
 import '../models/website_page_models.dart';
@@ -497,7 +498,7 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                             const SizedBox(height: 24),
 
                             // Two column layout for larger screens
-                            LayoutBuilder(
+                            ConstraintLayoutBuilder(
                               builder: (context, constraints) {
                                 if (constraints.maxWidth > 1200) {
                                   return Row(

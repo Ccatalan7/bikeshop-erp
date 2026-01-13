@@ -85,14 +85,20 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
         // Check if the focused element is a text input
         // Since EditableText wraps content in a Focus widget, we must check ancestors.
         bool isTextInput = false;
-        if (focus != null && focus.context != null) {
-          if (focus.context!.widget is EditableText) {
-            isTextInput = true;
-          } else {
-            // Look up the tree for EditableText
-            final editableAncestor =
-                focus.context!.findAncestorWidgetOfExactType<EditableText>();
-            isTextInput = editableAncestor != null;
+        if (focus != null && focus.context != null && focus.context!.mounted) {
+          try {
+            if (focus.context!.widget is EditableText) {
+              isTextInput = true;
+            } else {
+              // Look up the tree for EditableText
+              // SAFETY: Wrap in try-catch since context may be deactivated during rapid rebuilds
+              final editableAncestor =
+                  focus.context!.findAncestorWidgetOfExactType<EditableText>();
+              isTextInput = editableAncestor != null;
+            }
+          } catch (e) {
+            // Context was deactivated during lookup - ignore this key event
+            return;
           }
         }
 

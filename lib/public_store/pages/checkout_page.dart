@@ -12,8 +12,10 @@ import '../services/customer_account_service.dart';
 import '../services/address_autocomplete_service.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/models/customer_address.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -529,11 +531,18 @@ class _CheckoutPageState extends State<CheckoutPage>
       return _buildEmptyCart(context);
     }
 
+    // Get edit mode for key to prevent element reactivation conflicts
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final modeKey = editProvider.isEditMode
+        ? 'edit'
+        : (editProvider.isPreviewMode ? 'preview' : 'normal');
+
     debugPrint('🛒 [CheckoutPage.build] Cart has items, showing checkout form');
     return Container(
       constraints: const BoxConstraints(maxWidth: 1200),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: LayoutBuilder(
+      child: MediaQueryLayoutBuilder(
+        key: ValueKey('checkout_layout_$modeKey'),
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 900;
 

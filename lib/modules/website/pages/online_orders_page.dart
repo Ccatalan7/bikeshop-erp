@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 
@@ -80,7 +81,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           Container(
             padding: const EdgeInsets.all(16),
             color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-            child: LayoutBuilder(
+            child: ConstraintLayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 600) {
                   // Mobile

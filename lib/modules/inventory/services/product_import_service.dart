@@ -518,20 +518,33 @@ class ProductImportService {
       combinedGalleryInputs.add(directImageUrl);
     }
 
+    final rawProductType = (valueFor('product_type') ?? valueFor('type') ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final parsedProductType = (rawProductType == 'service' ||
+            rawProductType == 'servicio' ||
+            rawProductType == 'servicios')
+        ? 'service'
+        : 'product';
+
     final payload = <String, dynamic>{
       'sku': sku,
       'name': name,
       'category_name': valueFor('category_name'),
       'category': _guessCategory(valueFor('category_name')) ?? 'other',
       'brand': valueFor('brand'),
-      'inventory_qty': inventoryQty,
-      'stock_quantity': inventoryQty,
+      'product_type': parsedProductType,
+      // Services never track stock. Even if the import includes inventory_qty,
+      // we store it as 0 to avoid confusing UI and stock adjustment triggers.
+      'track_stock': parsedProductType != 'service',
+      'inventory_qty': parsedProductType == 'service' ? 0 : inventoryQty,
+      'stock_quantity': parsedProductType == 'service' ? 0 : inventoryQty,
       'price': price,
       'cost': cost,
       'price_currency': 'CLP',
       'cost_currency': 'CLP',
       'tax_rate': taxRate,
-      'track_stock': true,
       'is_active': true,
       'is_published': true,
       'show_on_website': true,
@@ -583,8 +596,11 @@ class ProductImportService {
     payload.removeWhere((_, value) => value == null);
 
     payload.putIfAbsent('unit', () => 'unit');
-    payload.putIfAbsent('min_stock_level', () => 1);
-    payload.putIfAbsent('product_type', () => 'product');
+    // Services don't have stock levels.
+    payload.putIfAbsent(
+      'min_stock_level',
+      () => (payload['product_type'] == 'service') ? 0 : 1,
+    );
 
     return payload;
   }

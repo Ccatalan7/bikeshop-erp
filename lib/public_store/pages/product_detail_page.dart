@@ -10,7 +10,9 @@ import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
+import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -32,9 +34,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   int _selectedImageIndex = 0;
   int _loadToken = 0;
 
-  // Keep this page alive in memory to prevent reloading on navigation
+  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
+  // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
 
   @override
   void initState() {
@@ -172,9 +175,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
     final productUrl = '$normalizedStoreUrl/productos/${product.id}';
-    final availability = product.stockQuantity > 0
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock';
+    final isStockTracked =
+        product.productType != ProductType.service && product.trackStock;
+    final availability = isStockTracked
+        ? (product.stockQuantity > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock')
+        : 'https://schema.org/InStock';
 
     final imageList = <String>[];
     if (product.imageUrls.isNotEmpty) {
@@ -320,7 +327,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   void _addToCart() {
-    if (_product == null || _product!.stockQuantity < _quantity) {
+    if (_product == null) return;
+
+    final isStockTracked =
+        _product!.productType != ProductType.service && _product!.trackStock;
+    if (isStockTracked && _product!.stockQuantity < _quantity) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Stock insuficiente'),
@@ -386,7 +397,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       );
     }
 
-    return LayoutBuilder(
+    // Get edit mode for key to prevent element reactivation conflicts
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final modeKey = editProvider.isEditMode
+        ? 'edit'
+        : (editProvider.isPreviewMode ? 'preview' : 'normal');
+
+    return MediaQueryLayoutBuilder(
+      key: ValueKey('product_detail_layout_$modeKey'),
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 768;
         final horizontalMargin = isMobile ? 12.0 : 24.0;
@@ -593,7 +611,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Widget _buildProductInfo({bool isMobile = false}) {
     final cart = context.watch<CartProvider>();
     final inCart = cart.hasProduct(_product!.id);
-    final inStock = _product!.stockQuantity > 0;
+    final isStockTracked =
+        _product!.productType != ProductType.service && _product!.trackStock;
+    final inStock = isStockTracked ? _product!.stockQuantity > 0 : true;
 
     return Container(
       padding: EdgeInsets.all(isMobile ? 16 : 32),
@@ -751,7 +771,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         ),
                       ),
                       InkWell(
-                        onTap: _quantity < _product!.stockQuantity
+                        onTap: (!isStockTracked ||
+                                _quantity < _product!.stockQuantity)
                             ? () => setState(() => _quantity++)
                             : null,
                         child: Container(
@@ -759,7 +780,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                           child: Icon(
                             Icons.add,
                             size: 18,
-                            color: _quantity < _product!.stockQuantity
+                            color: (!isStockTracked ||
+                                    _quantity < _product!.stockQuantity)
                                 ? Colors.black87
                                 : Colors.grey.shade400,
                           ),

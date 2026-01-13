@@ -29,29 +29,30 @@ class PersistentEditorShell extends StatelessWidget {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
 
-    // If not in edit mode, just return the child (router content)
-    if (!isEditMode) {
-      return child;
-    }
-
     // Preload editor-only deferred code so returning to Home in edit mode
     // doesn't pay the deferred-load cost (which feels like a slowdown).
-    DeferredEditableBlockRenderer.preload();
+    if (isEditMode) {
+      DeferredEditableBlockRenderer.preload();
+    }
 
-    // In edit mode, OVERLAY the editor panel instead of shrinking the widget.
-    // This keeps the panel persistent across navigations.
+    // IMPORTANT: Always use Stack layout to keep widget tree structure stable.
+    // Previously, switching from `child` to `Stack(children: [child, panel])`
+    // would reparent the child, causing GlobalKey conflicts and framework
+    // assertions like "_elements.contains(element) is not true".
     return Stack(
       children: [
         // Keep router child full-width so the top command bar uses all space.
         Positioned.fill(child: child),
         // Persistent editor panel (fixed width on the right)
-        Positioned(
-          top: _editorTopBarHeight,
-          right: 0,
-          bottom: 0,
-          width: _editorPanelWidth,
-          child: _PersistentEditorPanel(editProvider: editProvider),
-        ),
+        // Only rendered when in edit mode, but Stack structure is always present
+        if (isEditMode)
+          Positioned(
+            top: _editorTopBarHeight,
+            right: 0,
+            bottom: 0,
+            width: _editorPanelWidth,
+            child: _PersistentEditorPanel(editProvider: editProvider),
+          ),
       ],
     );
   }
@@ -103,6 +104,10 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
         pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingFooterNavLabels: editProvider.pendingFooterNavLabels,
+        pendingFooterNavLinkTypes: editProvider.pendingFooterNavLinkTypes,
+        pendingFooterNavLinkValues: editProvider.pendingFooterNavLinkValues,
+        pendingFooterNavOpenInNewTab: editProvider.pendingFooterNavOpenInNewTab,
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,

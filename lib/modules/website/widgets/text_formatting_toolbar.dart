@@ -131,12 +131,27 @@ class TextFormatting {
 
 /// Floating toolbar for text formatting
 /// Appears when text is being edited, positioned near the text field
+enum TextToolbarPreset {
+  /// Only shows a close button.
+  textOnly,
+
+  /// Bold/Italic/Underline + alignment.
+  minimal,
+
+  /// Common formatting controls (no advanced panel, no link).
+  basic,
+
+  /// Full formatting controls.
+  full,
+}
+
 class TextFormattingToolbar extends StatefulWidget {
   final TextFormatting currentFormatting;
   final ValueChanged<TextFormatting> onFormattingChanged;
   final VoidCallback? onClose;
   final TextStyle? baseStyle;
   final bool showAdvancedOptions;
+  final TextToolbarPreset preset;
   final Offset? position; // If null, toolbar decides position
 
   const TextFormattingToolbar({
@@ -146,6 +161,7 @@ class TextFormattingToolbar extends StatefulWidget {
     this.onClose,
     this.baseStyle,
     this.showAdvancedOptions = true,
+    this.preset = TextToolbarPreset.full,
     this.position,
   });
 
@@ -157,6 +173,18 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
   bool _showColorPicker = false;
   bool _showFontSizePicker = false;
   bool _showMoreOptions = false;
+
+  bool get _allowMinimalControls =>
+    widget.preset != TextToolbarPreset.textOnly;
+
+  bool get _allowBasicControls =>
+    widget.preset == TextToolbarPreset.basic ||
+    widget.preset == TextToolbarPreset.full;
+
+  bool get _allowLink => widget.preset == TextToolbarPreset.full;
+
+  bool get _allowAdvancedOptions =>
+    widget.preset == TextToolbarPreset.full && widget.showAdvancedOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -176,82 +204,88 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Bold
-                  _ToolbarButton(
-                    icon: Icons.format_bold,
-                    tooltip: 'Negrita (Ctrl+B)',
-                    isActive: widget.currentFormatting.isBold,
-                    onPressed: () => _toggleBold(),
-                  ),
+                  if (_allowMinimalControls) ...[
+                    // Bold
+                    _ToolbarButton(
+                      icon: Icons.format_bold,
+                      tooltip: 'Negrita (Ctrl+B)',
+                      isActive: widget.currentFormatting.isBold,
+                      onPressed: () => _toggleBold(),
+                    ),
 
-                  // Italic
-                  _ToolbarButton(
-                    icon: Icons.format_italic,
-                    tooltip: 'Cursiva (Ctrl+I)',
-                    isActive: widget.currentFormatting.isItalic,
-                    onPressed: () => _toggleItalic(),
-                  ),
+                    // Italic
+                    _ToolbarButton(
+                      icon: Icons.format_italic,
+                      tooltip: 'Cursiva (Ctrl+I)',
+                      isActive: widget.currentFormatting.isItalic,
+                      onPressed: () => _toggleItalic(),
+                    ),
 
-                  // Underline
-                  _ToolbarButton(
-                    icon: Icons.format_underlined,
-                    tooltip: 'Subrayado (Ctrl+U)',
-                    isActive: widget.currentFormatting.isUnderline,
-                    onPressed: () => _toggleUnderline(),
-                  ),
+                    // Underline
+                    _ToolbarButton(
+                      icon: Icons.format_underlined,
+                      tooltip: 'Subrayado (Ctrl+U)',
+                      isActive: widget.currentFormatting.isUnderline,
+                      onPressed: () => _toggleUnderline(),
+                    ),
+                  ],
 
-                  _ToolbarDivider(),
+                  if (_allowBasicControls) ...[
+                    _ToolbarDivider(),
 
-                  // Text alignment
-                  _ToolbarButton(
-                    icon: _getAlignIcon(widget.currentFormatting.textAlign),
-                    tooltip: 'Alineación',
-                    onPressed: () => _cycleAlignment(),
-                  ),
+                    // Text alignment
+                    _ToolbarButton(
+                      icon: _getAlignIcon(widget.currentFormatting.textAlign),
+                      tooltip: 'Alineación',
+                      onPressed: () => _cycleAlignment(),
+                    ),
 
-                  _ToolbarDivider(),
+                    _ToolbarDivider(),
 
-                  // Font size
-                  _FontSizeButton(
-                    currentSize: widget.currentFormatting.fontSize ??
-                        widget.baseStyle?.fontSize ??
-                        16,
-                    onSizeChanged: (size) => _setFontSize(size),
-                    isExpanded: _showFontSizePicker,
-                    onToggleExpanded: () => setState(() {
-                      _showFontSizePicker = !_showFontSizePicker;
-                      _showColorPicker = false;
-                      _showMoreOptions = false;
-                    }),
-                  ),
+                    // Font size
+                    _FontSizeButton(
+                      currentSize: widget.currentFormatting.fontSize ??
+                          widget.baseStyle?.fontSize ??
+                          16,
+                      onSizeChanged: (size) => _setFontSize(size),
+                      isExpanded: _showFontSizePicker,
+                      onToggleExpanded: () => setState(() {
+                        _showFontSizePicker = !_showFontSizePicker;
+                        _showColorPicker = false;
+                        _showMoreOptions = false;
+                      }),
+                    ),
 
-                  _ToolbarDivider(),
+                    _ToolbarDivider(),
 
-                  // Text color
-                  _ColorPickerButton(
-                    currentColor: widget.currentFormatting.textColor ??
-                        widget.baseStyle?.color ??
-                        Colors.white,
-                    onColorChanged: (color) => _setTextColor(color),
-                    isExpanded: _showColorPicker,
-                    onToggleExpanded: () => setState(() {
-                      _showColorPicker = !_showColorPicker;
-                      _showFontSizePicker = false;
-                      _showMoreOptions = false;
-                    }),
-                  ),
+                    // Text color
+                    _ColorPickerButton(
+                      currentColor: widget.currentFormatting.textColor ??
+                          widget.baseStyle?.color ??
+                          Colors.white,
+                      onColorChanged: (color) => _setTextColor(color),
+                      isExpanded: _showColorPicker,
+                      onToggleExpanded: () => setState(() {
+                        _showColorPicker = !_showColorPicker;
+                        _showFontSizePicker = false;
+                        _showMoreOptions = false;
+                      }),
+                    ),
+                  ],
 
-                  _ToolbarDivider(),
+                  if (_allowLink) ...[
+                    _ToolbarDivider(),
 
-                  // Link
-                  _ToolbarButton(
-                    icon: Icons.link,
-                    tooltip: 'Insertar enlace',
-                    isActive: widget.currentFormatting.linkUrl != null,
-                    onPressed: () => _showLinkDialog(),
-                  ),
+                    // Link
+                    _ToolbarButton(
+                      icon: Icons.link,
+                      tooltip: 'Insertar enlace',
+                      isActive: widget.currentFormatting.linkUrl != null,
+                      onPressed: () => _showLinkDialog(),
+                    ),
+                  ],
 
-                  if (widget.showAdvancedOptions) ...[
+                  if (_allowAdvancedOptions) ...[
                     _ToolbarDivider(),
 
                     // More options

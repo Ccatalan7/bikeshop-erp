@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/website_page_models.dart';
+
 const _uuid = Uuid();
 
 /// Device preview modes for the website editor
@@ -54,6 +56,16 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   List<String>? _pendingFooterSectionOrder;
   Map<String, List<String>> _pendingFooterLinkOrder = {};
 
+  // Pending footer navigation item edits (label + destination)
+  // Applied immediately in live preview, saved when user clicks "Guardar".
+  final Map<String, String> _pendingFooterNavLabels = {};
+  final Map<String, NavLinkType> _pendingFooterNavLinkTypes = {};
+  final Map<String, String?> _pendingFooterNavLinkValues = {};
+  final Map<String, bool> _pendingFooterNavOpenInNewTab = {};
+
+  // Transient selection for on-canvas inline editing
+  String? _selectedFooterNavId;
+
   // Pending theme settings for live preview
   // These are applied immediately in the UI but only saved when user clicks "Guardar"
   Map<String, String> _pendingThemeSettings = {};
@@ -98,6 +110,16 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   Map<String, Map<String, String>> get pendingPageSeo => _pendingPageSeo;
   Map<String, List<String>> get pendingFooterLinkOrder =>
       _pendingFooterLinkOrder;
+
+  Map<String, String> get pendingFooterNavLabels => _pendingFooterNavLabels;
+  Map<String, NavLinkType> get pendingFooterNavLinkTypes =>
+      _pendingFooterNavLinkTypes;
+  Map<String, String?> get pendingFooterNavLinkValues =>
+      _pendingFooterNavLinkValues;
+  Map<String, bool> get pendingFooterNavOpenInNewTab =>
+      _pendingFooterNavOpenInNewTab;
+
+  String? get selectedFooterNavId => _selectedFooterNavId;
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
 
@@ -192,12 +214,77 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Select a footer navigation item for on-canvas inline editing.
+  void selectFooterNavItem(String? navId) {
+    _selectedFooterNavId = navId;
+    _selectionVersion++;
+    debugPrint(
+        '👉 [EditProvider] Footer Nav Selected: $navId (v$_selectionVersion)');
+    notifyListeners();
+  }
+
+  /// Update a footer navigation label (live preview + saved with Guardar).
+  void updateFooterNavLabel(String navId, String label) {
+    _pendingFooterNavLabels[navId] = label;
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer nav label updated: $navId = $label');
+    notifyListeners();
+  }
+
+  /// Update a footer navigation destination (live preview + saved with Guardar).
+  void updateFooterNavDestination(
+    String navId, {
+    required NavLinkType linkType,
+    required String? linkValue,
+    bool? openInNewTab,
+  }) {
+    _pendingFooterNavLinkTypes[navId] = linkType;
+    _pendingFooterNavLinkValues[navId] = linkValue;
+    if (openInNewTab != null) {
+      _pendingFooterNavOpenInNewTab[navId] = openInNewTab;
+    }
+    _hasFooterChanges = true;
+    debugPrint(
+        '🦶 [EditProvider] Footer nav destination updated: $navId = ${linkType.value}:$linkValue');
+    notifyListeners();
+  }
+
+  String getEffectiveFooterNavLabel(String navId, String savedLabel) {
+    if (_pendingFooterNavLabels.containsKey(navId)) {
+      return _pendingFooterNavLabels[navId]!;
+    }
+    return savedLabel;
+  }
+
+  NavLinkType getEffectiveFooterNavLinkType(String navId, NavLinkType saved) {
+    return _pendingFooterNavLinkTypes[navId] ?? saved;
+  }
+
+  String? getEffectiveFooterNavLinkValue(String navId, String? saved) {
+    if (_pendingFooterNavLinkValues.containsKey(navId)) {
+      return _pendingFooterNavLinkValues[navId];
+    }
+    return saved;
+  }
+
+  bool getEffectiveFooterNavOpenInNewTab(String navId, bool saved) {
+    if (_pendingFooterNavOpenInNewTab.containsKey(navId)) {
+      return _pendingFooterNavOpenInNewTab[navId]!;
+    }
+    return saved;
+  }
+
   /// Clear footer changed flag (after save)
   void clearFooterChanges() {
     _hasFooterChanges = false;
     _pendingFooterSettings = {};
     _pendingFooterSectionOrder = null;
     _pendingFooterLinkOrder = {};
+    _pendingFooterNavLabels.clear();
+    _pendingFooterNavLinkTypes.clear();
+    _pendingFooterNavLinkValues.clear();
+    _pendingFooterNavOpenInNewTab.clear();
+    _selectedFooterNavId = null;
     notifyListeners();
   }
 

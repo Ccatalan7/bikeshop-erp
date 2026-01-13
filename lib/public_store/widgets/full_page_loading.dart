@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../shared/widgets/branded_loading.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 /// A loading indicator that fills the full viewport height.
 /// This prevents the footer from jumping up while content loads.
@@ -22,9 +23,9 @@ class FullPageLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use LayoutBuilder to fill the full available height
+    // Use ConstraintLayoutBuilder to fill the full available height
     // This ensures the footer stays at the bottom of the viewport
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         // Calculate minimum height to fill viewport (minus header/footer space)
         final viewportHeight = MediaQuery.of(context).size.height;

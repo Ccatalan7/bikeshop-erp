@@ -5,6 +5,7 @@ import '../services/customer_account_service.dart';
 import 'customer_chat_panel.dart';
 import 'premium_dashboard_widgets.dart';
 import 'public_store_layout.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CustomerPortalLayout extends StatelessWidget {
   final String title;
@@ -39,7 +40,7 @@ class CustomerPortalLayout extends StatelessWidget {
     final name = profile?['name']?.split(' ')[0] ?? 'Usuario';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 900;
         if (isDesktop) {

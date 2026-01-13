@@ -5,6 +5,7 @@ import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_inbox_list.dart';
 import '../widgets/customer_chat_view.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CustomerChatDetailPage extends StatefulWidget {
   final String conversationId;
@@ -70,7 +71,7 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
       showBackButton: true,
       overrideLayout: true,
       backPath: '/tienda/cuenta/chats',
-      child: LayoutBuilder(
+      child: MediaQueryLayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 900;
 

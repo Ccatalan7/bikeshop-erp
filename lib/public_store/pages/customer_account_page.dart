@@ -5,6 +5,7 @@ import '../services/customer_account_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CustomerAccountPage extends StatefulWidget {
   const CustomerAccountPage({super.key});
@@ -183,7 +184,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
               const SizedBox(height: 24),
 
               // Quick Actions - Responsive Grid
-              LayoutBuilder(
+              MediaQueryLayoutBuilder(
                 builder: (context, constraints) {
                   // 3 columns on desktop, 2 on mobile
                   final crossAxisCount = constraints.maxWidth > 600 ? 3 : 2;

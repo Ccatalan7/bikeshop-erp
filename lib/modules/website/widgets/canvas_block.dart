@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 import 'canvas_block_toolbar.dart';
 
 // Conditional import for web video backgrounds (reuses the video banner platform implementation).
@@ -843,9 +844,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
         (widget.data['backgroundFit'] ?? 'cover').toString().toLowerCase();
     final fit = backgroundFit == 'contain' ? BoxFit.contain : BoxFit.cover;
 
-    // Use LayoutBuilder OUTSIDE SizedBox to get actual available width first
+    // Use ConstraintLayoutBuilder OUTSIDE SizedBox to get actual available width first
     // Then scale the block height proportionally
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, outerConstraints) {
         final availableWidth = outerConstraints.maxWidth;
         final designW = _computeDesignWidth(availableWidth);

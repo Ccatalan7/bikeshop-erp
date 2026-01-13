@@ -1588,7 +1588,7 @@ class WebsiteService extends ChangeNotifier {
       for (final entry in values.entries) {
         final key = entry.key;
         final value = entry.value?.toString() ?? '';
-        
+
         // Optimistic cache update (fixes UI reverting old value after save)
         _settings[key] = value;
 
@@ -1650,8 +1650,7 @@ class WebsiteService extends ChangeNotifier {
   ) {
     // Convert pending updates to string values (this table stores strings).
     final pending = <String, String>{
-      for (final entry in raw.entries)
-        entry.key: entry.value?.toString() ?? '',
+      for (final entry in raw.entries) entry.key: entry.value?.toString() ?? '',
     };
 
     // Overlay pending on the in-memory settings to compute an effective view.
@@ -1684,7 +1683,7 @@ class WebsiteService extends ChangeNotifier {
 
     // 3) Business name: keep `store_name` and `seo_business_name` in sync.
     final businessName =
-      firstNonEmpty(['seo_business_name', 'store_name', 'meta_site_name']);
+        firstNonEmpty(['seo_business_name', 'store_name', 'meta_site_name']);
     if (businessName.isNotEmpty) {
       pending['store_name'] = businessName;
       pending['seo_business_name'] = businessName;
@@ -1719,7 +1718,8 @@ class WebsiteService extends ChangeNotifier {
 
       final cleaned = <String>[];
       for (final p in parts) {
-        if (normalizedCountry.isNotEmpty && _equalsIgnoreCase(p, normalizedCountry)) {
+        if (normalizedCountry.isNotEmpty &&
+            _equalsIgnoreCase(p, normalizedCountry)) {
           continue;
         }
         if (cleaned.isEmpty || !_equalsIgnoreCase(cleaned.last, p)) {
@@ -1728,7 +1728,8 @@ class WebsiteService extends ChangeNotifier {
       }
 
       final joined = cleaned.join(', ').trim();
-      if (normalizedCountry.isNotEmpty && _equalsIgnoreCase(joined, normalizedCountry)) {
+      if (normalizedCountry.isNotEmpty &&
+          _equalsIgnoreCase(joined, normalizedCountry)) {
         return '';
       }
       return joined;
@@ -1748,8 +1749,9 @@ class WebsiteService extends ChangeNotifier {
     final pendingSeoCity = (pending['seo_address_city'] ?? '').trim();
     final pendingSeoCountry = (pending['seo_address_country'] ?? '').trim();
 
-    final hasExplicitSeoPartsInThisSave =
-        pendingSeoStreet.isNotEmpty || pendingSeoCity.isNotEmpty || pendingSeoCountry.isNotEmpty;
+    final hasExplicitSeoPartsInThisSave = pendingSeoStreet.isNotEmpty ||
+        pendingSeoCity.isNotEmpty ||
+        pendingSeoCountry.isNotEmpty;
 
     if (pendingContactAddress.isNotEmpty && !hasExplicitSeoPartsInThisSave) {
       final parsed = _parseChileanAddressLoose(pendingContactAddress);
@@ -1790,11 +1792,8 @@ class WebsiteService extends ChangeNotifier {
   }
 
   _LooseAddressParts _parseChileanAddressLoose(String raw) {
-    final rawParts = raw
-        .split(',')
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final rawParts =
+        raw.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
 
     // Collapse adjacent duplicates (e.g., "Chile, Chile").
     final parts = <String>[];
@@ -1862,7 +1861,8 @@ class WebsiteService extends ChangeNotifier {
     }
 
     // If city == country, drop the city.
-    if (deduped.length >= 2 && _equalsIgnoreCase(deduped[deduped.length - 2], deduped.last)) {
+    if (deduped.length >= 2 &&
+        _equalsIgnoreCase(deduped[deduped.length - 2], deduped.last)) {
       deduped.removeAt(deduped.length - 2);
     }
 
@@ -1877,11 +1877,8 @@ class WebsiteService extends ChangeNotifier {
     if (s.isEmpty) return '';
 
     // Handle comma-separated duplicates like "Chile, Chile".
-    final commaParts = s
-        .split(',')
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final commaParts =
+        s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
     if (commaParts.isNotEmpty) {
       final cleaned = <String>[];
       for (final p in commaParts) {
@@ -1898,7 +1895,8 @@ class WebsiteService extends ChangeNotifier {
         .map((w) => w.trim())
         .where((w) => w.isNotEmpty)
         .toList();
-    if (words.length >= 2 && words.every((w) => _equalsIgnoreCase(w, words.first))) {
+    if (words.length >= 2 &&
+        words.every((w) => _equalsIgnoreCase(w, words.first))) {
       s = words.first;
     }
 
@@ -2518,6 +2516,10 @@ class WebsiteService extends ChangeNotifier {
     required Map<String, String> pendingHeaderSettings,
     required Map<String, String> pendingFooterSettings,
     required Map<String, String> pendingThemeSettings,
+    Map<String, String>? pendingFooterNavLabels,
+    Map<String, NavLinkType>? pendingFooterNavLinkTypes,
+    Map<String, String?>? pendingFooterNavLinkValues,
+    Map<String, bool>? pendingFooterNavOpenInNewTab,
     Map<String, Map<String, String>>? pendingPageSeo,
     List<String>? pendingFooterSectionOrder,
     Map<String, List<String>>? pendingFooterLinkOrder,
@@ -2590,6 +2592,65 @@ class WebsiteService extends ChangeNotifier {
     if (pendingFooterLinkOrder != null && pendingFooterLinkOrder.isNotEmpty) {
       for (final entry in pendingFooterLinkOrder.entries) {
         await reorderNavigationIds(entry.value);
+      }
+    }
+
+    // Save pending footer navigation item edits (label + destination)
+    final hasNavLabelEdits =
+        pendingFooterNavLabels != null && pendingFooterNavLabels.isNotEmpty;
+    final hasNavTypeEdits = pendingFooterNavLinkTypes != null &&
+        pendingFooterNavLinkTypes.isNotEmpty;
+    final hasNavValueEdits = pendingFooterNavLinkValues != null &&
+        pendingFooterNavLinkValues.isNotEmpty;
+    final hasNavTabEdits = pendingFooterNavOpenInNewTab != null &&
+        pendingFooterNavOpenInNewTab.isNotEmpty;
+
+    if (hasNavLabelEdits ||
+        hasNavTypeEdits ||
+        hasNavValueEdits ||
+        hasNavTabEdits) {
+      final ids = <String>{
+        ...?pendingFooterNavLabels?.keys,
+        ...?pendingFooterNavLinkTypes?.keys,
+        ...?pendingFooterNavLinkValues?.keys,
+        ...?pendingFooterNavOpenInNewTab?.keys,
+      };
+
+      for (final navId in ids) {
+        WebsiteNavigation? existing;
+        final localIndex = _navigation.indexWhere((n) => n.id == navId);
+        if (localIndex >= 0) {
+          existing = _navigation[localIndex];
+        } else {
+          try {
+            final row = await _supabase
+                .from('website_navigation')
+                .select()
+                .eq('id', navId)
+                .single();
+            existing = WebsiteNavigation.fromJson(row);
+          } catch (e) {
+            debugPrint(
+                '⚠️ [WebsiteService] Nav $navId not found for update: $e');
+          }
+        }
+
+        if (existing == null) continue;
+
+        var nextLinkValue = existing.linkValue;
+        if (pendingFooterNavLinkValues?.containsKey(navId) ?? false) {
+          nextLinkValue = pendingFooterNavLinkValues?[navId];
+        }
+
+        final next = existing.copyWith(
+          label: pendingFooterNavLabels?[navId] ?? existing.label,
+          linkType: pendingFooterNavLinkTypes?[navId] ?? existing.linkType,
+          linkValue: nextLinkValue,
+          openInNewTab:
+              pendingFooterNavOpenInNewTab?[navId] ?? existing.openInNewTab,
+        );
+
+        await updateNavigation(next);
       }
     }
 
@@ -3259,7 +3320,8 @@ class WebsiteService extends ChangeNotifier {
 
       // Update local cache (no extra fetch)
       for (int i = 0; i < uniqueOrderedIds.length; i++) {
-        final localIndex = _navigation.indexWhere((n) => n.id == uniqueOrderedIds[i]);
+        final localIndex =
+            _navigation.indexWhere((n) => n.id == uniqueOrderedIds[i]);
         if (localIndex >= 0) {
           _navigation[localIndex] = _navigation[localIndex].copyWith(
             orderIndex: i,

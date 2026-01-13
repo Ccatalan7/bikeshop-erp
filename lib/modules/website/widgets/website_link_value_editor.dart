@@ -36,6 +36,31 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     bool showValuePreview = true, // Legacy param, ignored now
   });
 
+  /// Opens the standardized link configurator dialog and returns the selected
+  /// href (or null if cancelled). This is the canonical way to invoke the
+  /// picker from any UI surface (panel, on-canvas toolbars, etc.).
+  static Future<String?> pickLink({
+    required BuildContext context,
+    required String initialValue,
+    bool allowInternal = true,
+    bool allowExternal = true,
+    bool allowAnchor = true,
+    bool darkStyle = false,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => Theme(
+        data: darkStyle ? ThemeData.dark() : Theme.of(context),
+        child: _WebsiteLinkConfigurator(
+          initialValue: initialValue,
+          allowInternal: allowInternal,
+          allowExternal: allowExternal,
+          allowAnchor: allowAnchor,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -123,18 +148,13 @@ class WebsiteLinkValueEditor extends StatelessWidget {
   }
 
   Future<void> _openConfigDialog(BuildContext context) async {
-    final newValue = await showDialog<String>(
+    final newValue = await WebsiteLinkValueEditor.pickLink(
       context: context,
-      builder: (context) => Theme(
-        // Ensure the dialog uses a dark theme if we are in dark mode editor
-        data: darkStyle ? ThemeData.dark() : Theme.of(context),
-        child: _WebsiteLinkConfigurator(
-          initialValue: value,
-          allowInternal: allowInternal,
-          allowExternal: allowExternal,
-          allowAnchor: allowAnchor,
-        ),
-      ),
+      initialValue: value,
+      allowInternal: allowInternal,
+      allowExternal: allowExternal,
+      allowAnchor: allowAnchor,
+      darkStyle: darkStyle,
     );
 
     if (newValue != null && newValue != value) {
@@ -153,28 +173,29 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     for (final entry in specialMap.entries) {
       if (entry.key == href) return entry.value;
     }
-    
+
     // Check approximate special matches (e.g. catalog filters)
     if (href.startsWith('/productos') || href.startsWith('/tienda/productos')) {
-       final uri = Uri.tryParse(href);
-       if (uri != null) {
-          final q = uri.queryParameters['q'];
-          if (q != null && q.isNotEmpty) return 'Catálogo: "$q"';
-          
-          final type = uri.queryParameters['type'];
-          if (type == 'service') return 'Catálogo (Servicios)';
-          if (type == 'product') return 'Catálogo (Productos)';
-          
-          final cat = uri.queryParameters['category'] ?? uri.queryParameters['cat'];
-          if (cat != null) return 'Catálogo: Categoria #$cat';
-       }
-       return 'Catálogo';
+      final uri = Uri.tryParse(href);
+      if (uri != null) {
+        final q = uri.queryParameters['q'];
+        if (q != null && q.isNotEmpty) return 'Catálogo: "$q"';
+
+        final type = uri.queryParameters['type'];
+        if (type == 'service') return 'Catálogo (Servicios)';
+        if (type == 'product') return 'Catálogo (Productos)';
+
+        final cat =
+            uri.queryParameters['category'] ?? uri.queryParameters['cat'];
+        if (cat != null) return 'Catálogo: Categoria #$cat';
+      }
+      return 'Catálogo';
     }
 
     if (href.startsWith('/pagina/') || href.startsWith('/shop/')) {
-        // Try to extract slug
-        final slug = href.split('/').last;
-        return 'Página: $slug';
+      // Try to extract slug
+      final slug = href.split('/').last;
+      return 'Página: $slug';
     }
 
     return 'Interno: $href';
@@ -257,7 +278,6 @@ class _WebsiteLinkConfigurator extends StatefulWidget {
 }
 
 class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
-
   WebsiteLinkEditMode _mode = WebsiteLinkEditMode.internal;
 
   _InternalDestinationType _internalType = _InternalDestinationType.special;
@@ -543,79 +563,176 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       return systemSlugToPath[slug] ?? '/pagina/$slug';
     }
 
+    // Capture theme from parent to ensure dark mode persists in dialog
+    final parentTheme = Theme.of(context);
+    final isDark = parentTheme.brightness == Brightness.dark;
+
+    // Custom dark theme for the editor style
+    final editorTheme = isDark
+        ? parentTheme.copyWith(
+            scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+            dialogBackgroundColor: const Color(0xFF1E1E1E),
+            dividerColor: Colors.white.withOpacity(0.1),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1E1E1E),
+              elevation: 0,
+              iconTheme: IconThemeData(color: Colors.white),
+              titleTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: const Color(0xFF2C2C2C),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              prefixIconColor: Colors.white.withOpacity(0.4),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            ),
+            textTheme: parentTheme.textTheme.apply(
+              bodyColor: Colors.white,
+              displayColor: Colors.white,
+            ),
+            listTileTheme: ListTileThemeData(
+              iconColor: Colors.white.withOpacity(0.7),
+              textColor: Colors.white,
+            ),
+          )
+        : parentTheme;
+
     final selected = await showDialog<String>(
       context: context,
       builder: (context) {
         final searchController = TextEditingController();
         var filtered = pages;
 
-        return StatefulBuilder(
-          builder: (context, setState) {
-            void applyFilter(String q) {
-              final term = q.trim().toLowerCase();
-              setState(() {
-                if (term.isEmpty) {
-                  filtered = pages;
-                } else {
-                  filtered = pages
-                      .where((p) =>
-                          p.title.toLowerCase().contains(term) ||
-                          p.slug.toLowerCase().contains(term))
-                      .toList(growable: false);
-                }
-              });
-            }
-
-            return AlertDialog(
-              title: const Text('Elegir página'),
-              content: SizedBox(
-                width: 520,
-                height: 560,
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Buscar por título o slug…',
-                      ),
-                      onChanged: applyFilter,
+        return Theme(
+          data: editorTheme,
+          child: Dialog(
+            backgroundColor: editorTheme.dialogBackgroundColor,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+            clipBehavior: Clip.antiAlias,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: SizedBox(
+              width: 500,
+              height: 600,
+              child: Scaffold(
+                backgroundColor: editorTheme.scaffoldBackgroundColor,
+                appBar: AppBar(
+                  title: const Text('Ir a página'),
+                  centerTitle: false,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final p = filtered[index];
-                          final href = routeForSlug(
-                            slug: p.slug,
-                            isHome: p.isHome,
-                          );
-                          return ListTile(
-                            leading: Icon(
-                              p.isHome
-                                  ? Icons.home_outlined
-                                  : Icons.article_outlined,
-                            ),
-                            title: Text(p.isHome ? 'Inicio' : p.title),
-                            subtitle: Text(href),
-                            onTap: () => Navigator.pop(context, href),
-                          );
-                        },
-                      ),
-                    ),
+                    const SizedBox(width: 8),
                   ],
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
+                body: StatefulBuilder(
+                  builder: (context, setState) {
+                    void applyFilter(String q) {
+                      final term = q.trim().toLowerCase();
+                      setState(() {
+                        if (term.isEmpty) {
+                          filtered = pages;
+                        } else {
+                          filtered = pages
+                              .where((p) =>
+                                  p.title.toLowerCase().contains(term) ||
+                                  p.slug.toLowerCase().contains(term))
+                              .toList(growable: false);
+                        }
+                      });
+                    }
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: TextField(
+                            controller: searchController,
+                            style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black),
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText: 'Buscar páginas (título o ruta)',
+                            ),
+                            onChanged: applyFilter,
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, indent: 64),
+                            itemBuilder: (context, index) {
+                              final p = filtered[index];
+                              final href = routeForSlug(
+                                slug: p.slug,
+                                isHome: p.isHome,
+                              );
+                              return ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.05)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    p.isHome
+                                        ? Icons.home_filled
+                                        : Icons.article,
+                                    size: 20,
+                                    color: isDark
+                                        ? const Color(0xFF64B5F6)
+                                        : Colors.blue,
+                                  ),
+                                ),
+                                title: Text(
+                                  p.isHome ? 'Inicio' : p.title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                                subtitle: Text(
+                                  href,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.5)
+                                        : Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                hoverColor: isDark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 4),
+                                onTap: () => Navigator.pop(context, href),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ),
         );
       },
     );
@@ -634,69 +751,165 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       return;
     }
 
+    // Reuse the same theme logic (you might want to extract this to a method in a real refactor)
+    final parentTheme = Theme.of(context);
+    final isDark = parentTheme.brightness == Brightness.dark;
+
+    final editorTheme = isDark
+        ? parentTheme.copyWith(
+            scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+            dialogBackgroundColor: const Color(0xFF1E1E1E),
+            dividerColor: Colors.white.withOpacity(0.1),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1E1E1E),
+              elevation: 0,
+              iconTheme: IconThemeData(color: Colors.white),
+              titleTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: const Color(0xFF2C2C2C),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              prefixIconColor: Colors.white.withOpacity(0.4),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            ),
+            textTheme: parentTheme.textTheme.apply(
+              bodyColor: Colors.white,
+              displayColor: Colors.white,
+            ),
+            listTileTheme: ListTileThemeData(
+              iconColor: Colors.white.withOpacity(0.7),
+              textColor: Colors.white,
+            ),
+          )
+        : parentTheme;
+
     final selected = await showDialog<_CategoryOption>(
       context: context,
       builder: (context) {
         final searchController = TextEditingController();
         var filtered = _categories;
 
-        return StatefulBuilder(
-          builder: (context, setState) {
-            void applyFilter(String q) {
-              final term = q.trim().toLowerCase();
-              setState(() {
-                if (term.isEmpty) {
-                  filtered = _categories;
-                } else {
-                  filtered = _categories
-                      .where((c) => c.name.toLowerCase().contains(term))
-                      .toList(growable: false);
-                }
-              });
-            }
-
-            return AlertDialog(
-              title: const Text('Elegir categoría'),
-              content: SizedBox(
-                width: 520,
-                height: 560,
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Buscar categoría…',
-                      ),
-                      onChanged: applyFilter,
+        return Theme(
+          data: editorTheme,
+          child: Dialog(
+            backgroundColor: editorTheme.dialogBackgroundColor,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+            clipBehavior: Clip.antiAlias,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: SizedBox(
+              width: 500,
+              height: 600,
+              child: Scaffold(
+                backgroundColor: editorTheme.scaffoldBackgroundColor,
+                appBar: AppBar(
+                  title: const Text('Elegir categoría'),
+                  centerTitle: false,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final c = filtered[index];
-                          return ListTile(
-                            leading: const Icon(Icons.category_outlined),
-                            title: Text(c.name),
-                            subtitle: Text(c.id),
-                            onTap: () => Navigator.pop(context, c),
-                          );
-                        },
-                      ),
-                    ),
+                    const SizedBox(width: 8),
                   ],
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
+                body: StatefulBuilder(
+                  builder: (context, setState) {
+                    void applyFilter(String q) {
+                      final term = q.trim().toLowerCase();
+                      setState(() {
+                        if (term.isEmpty) {
+                          filtered = _categories;
+                        } else {
+                          filtered = _categories
+                              .where((c) => c.name.toLowerCase().contains(term))
+                              .toList(growable: false);
+                        }
+                      });
+                    }
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: TextField(
+                            controller: searchController,
+                            style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black),
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText: 'Buscar categoría…',
+                            ),
+                            onChanged: applyFilter,
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, indent: 64),
+                            itemBuilder: (context, index) {
+                              final c = filtered[index];
+                              return ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.05)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    Icons.category_outlined,
+                                    size: 20,
+                                    color: isDark
+                                        ? const Color(0xFF64B5F6)
+                                        : Colors.blue,
+                                  ),
+                                ),
+                                title: Text(c.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500)),
+                                subtitle: Text(
+                                  c.id,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.5)
+                                        : Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                hoverColor: isDark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 4),
+                                onTap: () => Navigator.pop(context, c),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ),
         );
       },
     );

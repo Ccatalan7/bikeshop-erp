@@ -13,6 +13,60 @@ IMPORTANT: This document intentionally contains **no code snippets** and should 
 
 ---
 
+## 0) The actual problem we’re solving (and why it felt like a “Frankenstein”)
+
+This refactor started from specific bugs (ex: wrong navigation targets), but the deeper issue is systemic:
+
+- The Website Builder stores configuration as `jsonb` (`website_blocks.block_data`). That means **wrong keys are still valid data**.
+- When the editor writes one shape and the renderer reads another (or uses hardcoded fallbacks), the UI becomes a **Frankenstein**:
+  - edits appear to “not work”
+  - old/stale values “win” silently
+  - similar features behave differently across blocks (links, toolbars, media controls, actions)
+
+So the goal is not “fix the next bug faster” — it’s to **stop drift** by turning repeated behaviors into shared capability systems.
+
+### North Star: capability systems (the future-promising direction)
+
+When multiple blocks share a capability, they MUST share the same:
+- UX surface (same editor widgets)
+- stored data rules (canonical keys + formats)
+- renderer behavior (no per-block hacks)
+
+The guiding capability systems:
+
+1) **Links / Navigation**
+  - One picker UX everywhere (no raw text URL inputs).
+  - One canonical href model (string path/URL) with normalization for legacy `/tienda/*` and legacy params.
+  - Renderers must follow editor-assigned values; avoid “helpful defaults” that override saved config.
+
+2) **Inline Text Editing**
+  - One inline editing system across blocks.
+  - Toolbars must be consistent via presets (so button labels don’t get a different editor than headings).
+
+3) **Media Controls (cover/background images)**
+  - One shared approach for image editing + positioning.
+  - Mobile focal point / background positioning must be consistent across all cover-image blocks (not hero-only).
+
+4) **Navigation Normalization Layer**
+  - Treat stored hrefs as “user data” that may be legacy/inconsistent.
+  - Normalize at load/save boundaries (service layer) so persisted data becomes more correct over time.
+
+### Migration philosophy (how we upgrade without breaking tenants)
+
+Prefer: **compat + normalize + converge**
+- Compat: renderers can read legacy keys safely.
+- Normalize on load: incoming data is shaped into the canonical format before editing.
+- Normalize on save: any edit permanently repairs persisted data.
+- Optional: one-time cleanup scripts per tenant to accelerate convergence.
+
+### Definition of done for any editor change
+
+- Editor-assigned values always win.
+- The same capability behaves the same across blocks.
+- Legacy data is handled and ideally normalized so it doesn’t regress later.
+
+---
+
 ## 1) High-level goals
 
 ### 1.1 Editor roadmap goal (Jan 2026 plan)
@@ -469,6 +523,12 @@ Use this checklist each time you migrate a block from bespoke controls to schema
 ## 9) What’s still left to do (prioritized)
 
 ### P0 — Must do next
+
+Immediate “capability convergence” priorities (to stop drift fast):
+
+- **Text editing presets rollout:** standardize which toolbar preset each field type uses (headings vs body vs button labels) so the editor feels consistent everywhere.
+- **Cover-image focal point rollout:** apply the same mobile focal point/background positioning model + controls to every block that uses cover/background images (hero, carousel, banners, cards, etc.).
+- **Navigation link picker everywhere:** ensure all navigation management surfaces reuse the same link picker UX (same behavior as block link fields).
 
 - Update the handoff and current reality around Phase 2:
   - Decide whether `schemaVersion` is already persisted and used consistently, or only partially.

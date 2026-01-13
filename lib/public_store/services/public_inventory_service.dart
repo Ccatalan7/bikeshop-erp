@@ -97,16 +97,20 @@ class PublicInventoryService extends ChangeNotifier {
       var query = _supabase.from('products').select().eq('tenant_id', tenantId);
 
       // Filter by stock if requested (RLS only filters is_active=true)
-      if (onlyInStock) {
+      // NOTE: We avoid applying a stock filter at the SQL level when
+      // searchQuery is present due to PostgREST's single `or=` query param.
+      // We'll filter in-memory after fetching to keep services/non-stock items
+      // visible.
+      if (onlyInStock && (searchQuery == null || searchQuery.isEmpty)) {
         // Be resilient: some code paths historically updated only one of the
         // legacy/current stock columns.
-        // NOTE: We only use `.or(...)` when there's no other `.or(...)` needed
-        // (like searchQuery), because PostgREST `or=` is a single query param.
-        if (searchQuery == null || searchQuery.isEmpty) {
-          query = query.or('inventory_qty.gt.0,stock_quantity.gt.0');
-        } else {
-          query = query.gt('inventory_qty', 0);
-        }
+        // IMPORTANT: services and non-stock-tracked items must NEVER be
+        // filtered out by stock constraints.
+        // PostgREST supports only one `or=` param, so we include all
+        // “in-stock” conditions in a single OR group.
+        query = query.or(
+          'product_type.eq.service,track_stock.eq.false,inventory_qty.gt.0,stock_quantity.gt.0',
+        );
       }
 
       // Apply additional filters
@@ -143,6 +147,14 @@ class PublicInventoryService extends ChangeNotifier {
 
       final products =
           (response as List).map((json) => Product.fromJson(json)).toList();
+
+      if (onlyInStock && searchQuery != null && searchQuery.isNotEmpty) {
+        return products.where((p) {
+          if (p.productType == ProductType.service) return true;
+          if (!p.trackStock) return true;
+          return p.stockQuantity > 0;
+        }).toList();
+      }
 
       debugPrint(
           '⏱️ [PublicInventory] Products total: ${sw.elapsedMilliseconds}ms (${products.length} products)');

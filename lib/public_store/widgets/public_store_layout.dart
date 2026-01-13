@@ -24,6 +24,7 @@ import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/widgets/website_link_value_editor.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
@@ -36,6 +37,7 @@ import '../services/customer_account_service.dart';
 import '../../shared/utils/web_url.dart' show setLocationHash;
 import 'customer_chat_widget.dart';
 import 'search_overlay.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -171,6 +173,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   // Screenshot capture state
   bool _isCapturingScreenshot = false;
 
+  // Guard to prevent scheduling multiple navigations in the same frame
+  bool _pendingModeNavigation = false;
+
+  // ------------------------------------------------------------------------
+  // On-canvas inline editing: Footer navigation
+  // ------------------------------------------------------------------------
+  String? _activeInlineFooterNavId;
+  final TextEditingController _inlineFooterNavLabelController =
+      TextEditingController();
+  final FocusNode _inlineFooterNavLabelFocusNode = FocusNode();
+
   // ------------------------------------------------------------------------
   // Debug: URL + router state (web)
   // ------------------------------------------------------------------------
@@ -189,6 +202,117 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     if (kIsWeb) {
       _checkGoogleOAuthReturn();
     }
+  }
+
+  @override
+  void dispose() {
+    _inlineFooterNavLabelController.dispose();
+    _inlineFooterNavLabelFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _beginInlineFooterNavEdit(
+    WebsiteEditModeProvider editProvider,
+    WebsiteNavigation nav,
+  ) {
+    setState(() {
+      _activeInlineFooterNavId = nav.id;
+      _inlineFooterNavLabelController.text =
+          editProvider.getEffectiveFooterNavLabel(nav.id, nav.label);
+    });
+    editProvider.selectBlock('footer');
+    editProvider.selectFooterNavItem(nav.id);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _inlineFooterNavLabelFocusNode.requestFocus();
+      _inlineFooterNavLabelController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _inlineFooterNavLabelController.text.length,
+      );
+    });
+  }
+
+  Future<void> _showInlineFooterNavDestinationDialog(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteNavigation nav,
+  ) async {
+    final effective = nav.copyWith(
+      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
+      linkType:
+          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
+      linkValue:
+          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
+      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
+        nav.id,
+        nav.openInNewTab,
+      ),
+    );
+
+    final initialHref = (effective.linkValue ?? '').trim();
+
+    final pickedHref = await WebsiteLinkValueEditor.pickLink(
+      context: context,
+      initialValue: initialHref,
+      allowInternal: true,
+      allowExternal: true,
+      allowAnchor: true,
+      darkStyle: true,
+    );
+
+    if (pickedHref == null) return;
+    final href = pickedHref.trim();
+    if (href.isEmpty) return;
+
+    final inferredType =
+        href.startsWith('http://') || href.startsWith('https://')
+            ? NavLinkType.external
+            : href.startsWith('#')
+                ? NavLinkType.anchor
+                : NavLinkType.page;
+
+    var openInNewTab = effective.openInNewTab;
+    if (inferredType == NavLinkType.external) {
+      final applied = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Opciones del enlace'),
+            content: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Abrir en nueva pestaña'),
+              value: openInNewTab,
+              onChanged: (v) => setDialogState(() => openInNewTab = v),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Aplicar'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (applied != true) {
+        // Keep the destination change, but preserve the current openInNewTab.
+        openInNewTab = effective.openInNewTab;
+      }
+    } else {
+      openInNewTab = false;
+    }
+
+    editProvider.updateFooterNavDestination(
+      nav.id,
+      linkType: inferredType,
+      linkValue: href,
+      openInNewTab: openInNewTab,
+    );
   }
 
   /// Check localStorage for Google OAuth return flag and restore edit mode
@@ -508,7 +632,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // While in editor context, keep the URL mode flag consistent with provider
     // state. This prevents stale query params (common with shell routes) from
     // lingering like ?preview=true while actually in edit mode.
-    if (kIsWeb && editProvider.isInEditorContext) {
+    // NOTE: We guard against scheduling multiple navigations within the same
+    // frame (common when provider notifies and triggers rebuild) to avoid
+    // triggering "already marked needs layout" assertions.
+    if (kIsWeb && editProvider.isInEditorContext && !_pendingModeNavigation) {
       final desiredModeKey = editProvider.isEditMode
           ? 'edit'
           : (editProvider.isPreviewMode ? 'preview' : null);
@@ -523,7 +650,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           nextQp.entries.every((e) => currentQp[e.key] == e.value);
 
       if (!qpMatches) {
+        _pendingModeNavigation = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          _pendingModeNavigation = false;
           if (!context.mounted) return;
           final nextUri = currentUri.replace(
             queryParameters: nextQp.isEmpty ? null : nextQp,
@@ -686,6 +815,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         currentRoute == '/' ||
         currentRoute == '/tienda/';
 
+    // Mode-aware key ensures complete widget recreation on mode change to
+    // avoid element reactivation crashes during layout.
+    final scrollViewMode =
+        isEditMode ? 'edit' : (isPreviewMode ? 'preview' : 'normal');
+
     if (headerStyle == 'transparent' &&
         isHomePage &&
         widget.enablePageViewScrolling) {
@@ -695,6 +829,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ? const _NoDragScrollBehavior()
             : const MaterialScrollBehavior(),
         child: _PublicStoreScrollView(
+          key: ValueKey('scroll_transparent_home_$scrollViewMode'),
           clipBehavior: _isCapturingScreenshot ? Clip.none : Clip.hardEdge,
           physics: _isCapturingScreenshot
               ? const NeverScrollableScrollPhysics()
@@ -748,6 +883,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ? const _NoDragScrollBehavior()
                   : const MaterialScrollBehavior(),
               child: _PublicStoreScrollView(
+                key: ValueKey('scroll_transparent_notHome_$scrollViewMode'),
                 child: Column(
                   children: [
                     animateBody(widget.child),
@@ -779,6 +915,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         isEditMode: isEditMode,
         child: animateBody(widget.child),
         footer: footerWidget,
+        scrollViewMode: scrollViewMode,
       );
     } else {
       // SOLID: Normal layout, header at top, content scrolls below
@@ -794,6 +931,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ? const _NoDragScrollBehavior()
                         : const MaterialScrollBehavior(),
                     child: _PublicStoreScrollView(
+                      key: ValueKey('scroll_solid_$scrollViewMode'),
                       child: Column(
                         children: [
                           animateBody(widget.child),
@@ -979,6 +1117,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       return Theme(
         data: websiteTheme,
         child: Scaffold(
+          key: const ValueKey('scaffold_edit_mode'),
           backgroundColor: backgroundColor,
           body: Column(
             children: [
@@ -1000,6 +1139,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       return Theme(
         data: websiteTheme,
         child: Scaffold(
+          key: const ValueKey('scaffold_preview_mode'),
           backgroundColor: backgroundColor,
           body: Column(
             children: [
@@ -1027,6 +1167,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Build the main content (normal view mode)
     final mainContent = SelectionArea(
       child: Scaffold(
+        key: const ValueKey('scaffold_normal_mode'),
         backgroundColor: backgroundColor,
         body: Stack(
           children: [
@@ -1568,46 +1709,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required WebsiteEditModeProvider editProvider,
     required WebsiteService websiteService,
   }) {
-    String title;
-    if (editProvider.currentPageSlug == null ||
-        editProvider.currentPageSlug!.isEmpty) {
-      title = 'Página: Inicio';
-    } else {
-      title = 'Página: /pagina/${editProvider.currentPageSlug}';
-    }
+    final title = _currentPageTitle(context, editProvider);
 
-    return PopupMenuButton<String>(
-      tooltip: 'Acciones de página',
-      onSelected: (action) => _handleTopBarAction(
+    return InkWell(
+      onTap: () => _showPageNavigator(
         context: context,
         editProvider: editProvider,
         websiteService: websiteService,
-        actionId: action,
       ),
-      itemBuilder: (context) => const [
-        PopupMenuItem(
-          value: _actionPageCopyLink,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.copy),
-            title: Text('Copiar enlace'),
-          ),
-        ),
-        PopupMenuItem(
-          value: _actionPageOpenNewTab,
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.open_in_new),
-            title: Text('Abrir en nueva pestaña'),
-          ),
-        ),
-      ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
-            Icon(Icons.article_outlined,
-                size: 18, color: Colors.white.withValues(alpha: 0.8)),
+            Icon(
+              Icons.article_outlined,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
             const SizedBox(width: 6),
             Text(
               title,
@@ -1617,12 +1735,333 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
             ),
             const SizedBox(width: 2),
-            Icon(Icons.arrow_drop_down,
-                size: 18, color: Colors.white.withValues(alpha: 0.8)),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  String _currentPageTitle(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final slug = _getCurrentSlugFromRoute(context, editProvider);
+    if (slug.isEmpty) return 'Página: Inicio';
+    return 'Página: ${_displayPathForSlug(slug)}';
+  }
+
+  /// Detect the current page slug from the actual URL, falling back to
+  /// editProvider.currentPageSlug for CMS pages.
+  String _getCurrentSlugFromRoute(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    try {
+      final uri = GoRouterState.of(context).uri;
+      final path = uri.path;
+
+      // Remove /tienda prefix if present (ERP host)
+      var cleanPath = path;
+      if (cleanPath.startsWith('/tienda')) {
+        cleanPath = cleanPath.substring('/tienda'.length);
+      }
+      if (cleanPath.isEmpty || cleanPath == '/') {
+        return ''; // Home page
+      }
+
+      // Ensure it starts with /
+      if (!cleanPath.startsWith('/')) cleanPath = '/$cleanPath';
+
+      // Known canonical routes
+      const canonicalRoutes = <String, String>{
+        '/productos': 'productos',
+        '/contacto': 'contacto',
+        '/carrito': 'carrito',
+        '/checkout': 'checkout',
+        '/cuenta': 'cuenta',
+      };
+      if (canonicalRoutes.containsKey(cleanPath)) {
+        return canonicalRoutes[cleanPath]!;
+      }
+
+      // Policy pages at root level
+      const policySlugs = {
+        'nosotros',
+        'terminos',
+        'privacidad',
+        'devoluciones',
+        'envios'
+      };
+      final rootSlug = cleanPath.substring(1); // Remove leading /
+      if (policySlugs.contains(rootSlug)) {
+        return rootSlug;
+      }
+
+      // /pagina/<slug> pattern
+      if (cleanPath.startsWith('/pagina/')) {
+        return cleanPath.substring('/pagina/'.length);
+      }
+
+      // If it's a simple slug (e.g. /servicios), use it
+      if (!rootSlug.contains('/')) {
+        return rootSlug;
+      }
+
+      // Fallback to provider
+      return (editProvider.currentPageSlug ?? '').trim();
+    } catch (_) {
+      return (editProvider.currentPageSlug ?? '').trim();
+    }
+  }
+
+  Future<void> _showPageNavigator({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+  }) async {
+    final navContext = context;
+
+    // Ensure pages are available (public store can run unauthenticated).
+    final tenantProvider = navContext.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId;
+    if (websiteService.pages.isEmpty && tenantId != null) {
+      await websiteService.loadPagesForTenant(tenantId);
+    }
+
+    if (!navContext.mounted) return;
+
+    final canNavigate = await _confirmNavigateAwayIfUnsaved(
+      navContext,
+      editProvider,
+    );
+    if (!canNavigate) return;
+    if (!navContext.mounted) return;
+
+    final initialSlug = _getCurrentSlugFromRoute(navContext, editProvider);
+    final pages = List<WebsitePage>.from(websiteService.pages);
+
+    // Build targets (include a few canonical routes even if pages table is
+    // missing them).
+    final targets = _buildPageNavigatorTargets(pages);
+
+    final selected = await showDialog<_PageNavTarget>(
+      context: navContext,
+      builder: (dialogContext) {
+        final size = MediaQuery.sizeOf(dialogContext);
+        final isCompact = size.width < 720;
+
+        return Dialog(
+          backgroundColor: const Color(0xFF1E1E1E), // Match editor theme
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 8 : 24,
+            vertical: isCompact ? 16 : 24,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 760,
+              maxHeight: isCompact ? size.height - 32 : 680,
+              minHeight: 420,
+            ),
+            child: _PageNavigatorDialog(
+              initialSlug: initialSlug,
+              targets: targets,
+              onCopyLink: () => _copyCurrentPageUrl(
+                dialogContext,
+                editProvider,
+                websiteService,
+              ),
+              onOpenNewTab: () => _openCurrentPageUrl(
+                dialogContext,
+                editProvider,
+                websiteService,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    if (!navContext.mounted) return;
+
+    // The page navigator already provides normalized hrefs. Use direct
+    // navigation instead of _navigateToHref to avoid UUID resolution loops.
+    final href = selected.href;
+
+    // Append edit=true since we're in editor context.
+    final hasQuery = href.contains('?');
+    final target = hasQuery ? '$href&edit=true' : '$href?edit=true';
+
+    // Use go() to replace current route (avoids stacking editor pages).
+    navContext.go(target);
+  }
+
+  Future<bool> _confirmNavigateAwayIfUnsaved(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) async {
+    if (!editProvider.isEditMode) return true;
+    if (!editProvider.hasUnsavedChanges) return true;
+
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Cambiar de página'),
+          content: const Text(
+            'Tienes cambios sin guardar. Si cambias de página ahora, podrías perderlos.\n\n¿Quieres continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Continuar'),
+            ),
+          ],
+        );
+      },
+    );
+    return res ?? false;
+  }
+
+  List<_PageNavTarget> _buildPageNavigatorTargets(List<WebsitePage> pages) {
+    // Some routes are not always present as CMS rows but are still useful to
+    // navigate while in edit mode.
+    const canonical = <_PageNavTarget>[
+      _PageNavTarget(
+        key: 'home',
+        title: 'Inicio',
+        href: '/tienda',
+        kind: _PageNavKind.core,
+      ),
+      _PageNavTarget(
+        key: 'productos',
+        title: 'Productos',
+        href: '/tienda/productos',
+        kind: _PageNavKind.core,
+      ),
+      _PageNavTarget(
+        key: 'contacto',
+        title: 'Contacto',
+        href: '/tienda/contacto',
+        kind: _PageNavKind.core,
+      ),
+      _PageNavTarget(
+        key: 'carrito',
+        title: 'Carrito',
+        href: '/tienda/carrito',
+        kind: _PageNavKind.system,
+      ),
+      _PageNavTarget(
+        key: 'checkout',
+        title: 'Checkout',
+        href: '/tienda/checkout',
+        kind: _PageNavKind.system,
+      ),
+      _PageNavTarget(
+        key: 'cuenta',
+        title: 'Cuenta',
+        href: '/tienda/cuenta',
+        kind: _PageNavKind.system,
+      ),
+    ];
+
+    const policySlugs = <String>{
+      'nosotros',
+      'terminos',
+      'privacidad',
+      'devoluciones',
+      'envios',
+    };
+
+    final byKey = <String, _PageNavTarget>{
+      for (final t in canonical) t.key: t,
+    };
+
+    for (final p in pages) {
+      final slug = p.slug.trim();
+      if (slug.isEmpty) continue;
+
+      final isPolicy = policySlugs.contains(slug);
+      final isHome = p.isHome || slug == 'inicio' || slug == 'home';
+
+      final kind = isHome
+          ? _PageNavKind.core
+          : isPolicy
+              ? _PageNavKind.legal
+              : p.isSystem
+                  ? _PageNavKind.system
+                  : (p.isPublished
+                      ? _PageNavKind.published
+                      : _PageNavKind.draft);
+
+      final legacyHref = isHome
+          ? '/tienda'
+          : isPolicy
+              ? '/$slug'
+              : _isDirectSlug(slug)
+                  ? '/tienda/$slug'
+                  : '/tienda/pagina/$slug';
+
+      final key = isHome ? 'home' : slug;
+      byKey[key] = _PageNavTarget(
+        key: key,
+        title: p.title.isNotEmpty ? p.title : slug,
+        href: legacyHref,
+        kind: kind,
+        subtitle: _displayPathForSlug(isHome ? '' : slug),
+        isPublished: p.isPublished,
+      );
+    }
+
+    final targets = byKey.values.toList();
+    targets.sort((a, b) {
+      final kindCmp = a.kind.index.compareTo(b.kind.index);
+      if (kindCmp != 0) return kindCmp;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+
+    // Normalize hrefs to current host conventions.
+    return targets
+        .map(
+          (t) => t.copyWith(href: _routeForPublicStore(t.href)),
+        )
+        .toList();
+  }
+
+  bool _isDirectSlug(String slug) {
+    // Slugs that map to clean top-level routes (not /pagina/*).
+    const direct = <String>{
+      'productos',
+      'contacto',
+      'carrito',
+      'checkout',
+      'cuenta',
+    };
+    return direct.contains(slug);
+  }
+
+  String _displayPathForSlug(String slug) {
+    if (slug.isEmpty) return '/';
+    if (_isDirectSlug(slug)) return '/$slug';
+    const policySlugs = <String>{
+      'nosotros',
+      'terminos',
+      'privacidad',
+      'devoluciones',
+      'envios',
+    };
+    if (policySlugs.contains(slug)) return '/$slug';
+    return '/pagina/$slug';
   }
 
   Future<void> _handleTopBarAction({
@@ -2123,33 +2562,36 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Checks if we are in an "App Mode" page (like Chat) that handles its own scrolling.
     if (!widget.enablePageViewScrolling) {
       final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
-      return LayoutBuilder(builder: (context, constraints) {
-        // Provide a STRICT height constraint equal to the available space (or a fixed device height).
-        // Using available space (constraints.maxHeight) prevents overflow/unbounded errors.
-        return Center(
-          child: Container(
-            width: targetWidth,
-            height: constraints.maxHeight,
-            decoration: BoxDecoration(
-              color: Colors.white, // Standard frame background
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                )
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                size: Size(targetWidth, constraints.maxHeight),
+      final modeKey = isEditMode ? 'edit' : 'preview';
+      return MediaQueryLayoutBuilder(
+          key: ValueKey('viewport_layout_app_${mode.name}_$modeKey'),
+          builder: (context, constraints) {
+            // Provide a STRICT height constraint equal to the available space (or a fixed device height).
+            // Using available space (constraints.maxHeight) prevents overflow/unbounded errors.
+            return Center(
+              child: Container(
+                width: targetWidth,
+                height: constraints.maxHeight,
+                decoration: BoxDecoration(
+                  color: Colors.white, // Standard frame background
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    )
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    size: Size(targetWidth, constraints.maxHeight),
+                  ),
+                  child: child,
+                ),
               ),
-              child: child,
-            ),
-          ),
-        );
-      });
+            );
+          });
     }
 
     // If we are in an app-like page that handles its own scrolling (like Chat),
@@ -2198,48 +2640,54 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // If the error persists in edit mode, it might be the MediaQuery.size override?
     // Let's try to pass the constraints properly.
 
-    final screenSize = MediaQuery.sizeOf(context);
     final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
+    final modeKey = isEditMode ? 'edit' : 'preview';
 
-    // If we are simulating mobile on desktop, we want to constrain width but keep height full?
-    // Or fixed height?
-    final targetHeight = screenSize.height;
+    return MediaQueryLayoutBuilder(
+      key: ValueKey('viewport_layout_scroll_${mode.name}_$modeKey'),
+      builder: (context, constraints) {
+        final screenSize = MediaQuery.sizeOf(context);
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : screenSize.height;
 
-    // Calculate offset for external editor panel (it overlays on the right)
-    // We need to shift the preview left by half the panel width to appear visually centered
-    // Only apply offset in edit mode when the panel is actually visible
-    final panelOffset = (isEditMode && widget.useExternalEditorPanel)
-        ? _externalEditorPanelWidth / 2
-        : 0.0;
+        // Calculate offset for external editor panel (it overlays on the right)
+        // We need to shift the preview left by half the panel width to appear visually centered
+        // Only apply offset in edit mode when the panel is actually visible
+        final panelOffset = (isEditMode && widget.useExternalEditorPanel)
+            ? _externalEditorPanelWidth / 2
+            : 0.0;
 
-    return Container(
-      color: const Color(0xFFF3F3F3),
-      // Use Padding to shift content left to account for overlaid panel
-      padding: EdgeInsets.only(right: panelOffset * 2),
-      child: Center(
-        child: Container(
-          width: targetWidth,
-          height: targetHeight,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 18,
-                offset: Offset(0, 6),
+        return Container(
+          color: const Color(0xFFF3F3F3),
+          // Use Padding to shift content left to account for overlaid panel
+          padding: EdgeInsets.only(right: panelOffset * 2),
+          child: Center(
+            child: Container(
+              width: targetWidth,
+              height: availableHeight,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
               ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              size: Size(targetWidth, screenSize.height),
+              clipBehavior: Clip.antiAlias,
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  size: Size(targetWidth, availableHeight),
+                ),
+                child: child,
+              ),
             ),
-            child: child,
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2520,6 +2968,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         pendingHeaderSettings: editProvider.pendingHeaderSettings,
         pendingFooterSettings: editProvider.pendingFooterSettings,
         pendingThemeSettings: editProvider.pendingThemeSettings,
+        pendingFooterNavLabels: editProvider.pendingFooterNavLabels,
+        pendingFooterNavLinkTypes: editProvider.pendingFooterNavLinkTypes,
+        pendingFooterNavLinkValues: editProvider.pendingFooterNavLinkValues,
+        pendingFooterNavOpenInNewTab: editProvider.pendingFooterNavOpenInNewTab,
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
@@ -2616,330 +3068,344 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     bool isOverlay = false, // For transparent mode when scrolled up
   }) {
     final cart = context.watch<CartProvider>();
+    final modeKey = isEditMode ? 'edit' : 'normal';
 
-    return LayoutBuilder(builder: (context, constraints) {
-      // Determine colors based on mode
-      final isDarkMode = headerColorMode == 'dark' || isOverlay;
-      final textColor = isDarkMode ? Colors.white : Colors.black87;
-      final iconColor = isDarkMode ? Colors.white : primaryColor;
-      final bgColor = isOverlay ? Colors.transparent : headerBgColor;
+    return MediaQueryLayoutBuilder(
+        key: ValueKey(
+            'header_layout_${isOverlay ? 'overlay' : 'solid'}_$modeKey'),
+        builder: (context, constraints) {
+          // Determine colors based on mode
+          final isDarkMode = headerColorMode == 'dark' || isOverlay;
+          final textColor = isDarkMode ? Colors.white : Colors.black87;
+          final iconColor = isDarkMode ? Colors.white : primaryColor;
+          final bgColor = isOverlay ? Colors.transparent : headerBgColor;
 
-      final screenWidth = constraints.maxWidth;
-      final useMobileGradient = screenWidth < 900 && isOverlay;
+          final screenWidth = constraints.maxWidth;
+          final useMobileGradient = screenWidth < 900 && isOverlay;
 
-      final headerContent = Material(
-        elevation: headerShadow && !isOverlay ? 2 : 0,
-        color: bgColor,
-        child: Container(
-          decoration: useMobileGradient
-              ? BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.55),
-                      Colors.black.withValues(alpha: 0.15),
-                    ],
-                  ),
-                )
-              : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showTopBanner && topBannerText.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  color: isDarkMode
-                      ? Colors.black.withValues(alpha: 0.3)
-                      : primaryColor,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.local_shipping_outlined,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          topBannerText,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
+          final headerContent = Material(
+            elevation: headerShadow && !isOverlay ? 2 : 0,
+            color: bgColor,
+            child: Container(
+              decoration: useMobileGradient
+                  ? BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.55),
+                          Colors.black.withValues(alpha: 0.15),
+                        ],
+                      ),
+                    )
+                  : null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showTopBanner && topBannerText.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      color: isDarkMode
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : primaryColor,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_shipping_outlined,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              topBannerText,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w500,
                                   ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (screenWidth >= 900) ...[
-                        if (contactPhone.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.phone_outlined,
-                                    color: Colors.white, size: 16),
-                                const SizedBox(width: 8),
-                                Text(
-                                  contactPhone,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        if (contactEmail.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.mail_outline,
-                                    color: Colors.white, size: 16),
-                                const SizedBox(width: 8),
-                                Text(
-                                  contactEmail,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                ),
-
-              // Main header with logo
-              Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Row(
-                    children: [
-                      // Logo - uses URL if set, otherwise falls back to asset, then text
-                      // Logo - Force use of local asset for consistency and to fix "white block" issue
-                      // (Database logo_url might be opaque, causing white tint to fill the box)
-                      InkWell(
-                        onTap: () {
-                          final path = _routeForPublicStore('/tienda');
-                          _navigateToHref(
-                            context,
-                            path,
-                            forceHomeRefresh: true,
-                          );
-                        },
-                        child: _buildLogo(
-                          context: context,
-                          logoUrl: logoUrl,
-                          storeName: storeName,
-                          textColor: textColor,
-                          isDarkMode: isDarkMode,
-                          height: 48,
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      // Only show nav links on desktop, use Spacer on mobile
-                      if (screenWidth >= 900)
-                        Expanded(
-                          child: Row(
-                            children: navItems.isEmpty
-                                ? [
-                                    _buildNavLink(
-                                      context,
-                                      'Inicio',
-                                      _routeForPublicStore('/tienda'),
-                                      textColor,
-                                    ),
-                                    const SizedBox(width: 24),
-                                    _buildNavLink(
-                                      context,
-                                      'Productos',
-                                      _routeForPublicStore('/productos'),
-                                      textColor,
-                                    ),
-                                  ]
-                                : [
-                                    ...navItems
-                                        .where((n) => n.showOnDesktop)
-                                        .map((nav) {
-                                      final children = nav.children
-                                          .where((c) => c.isVisible)
-                                          .where((c) => c.showOnDesktop)
-                                          .toList()
-                                        ..sort((a, b) => a.orderIndex
-                                            .compareTo(b.orderIndex));
-
-                                      if (children.isNotEmpty) {
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(right: 24),
-                                          child: _buildNavDropdown(
-                                            context: context,
-                                            parent: nav,
-                                            children: children,
-                                          ),
-                                        );
-                                      }
-
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(right: 24),
-                                        child: _buildNavItemLink(
-                                          context,
-                                          nav,
-                                          textColor,
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                          ),
-                        )
-                      else
-                        const Spacer(),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.search),
-                            color: iconColor,
-                            onPressed: () => SearchOverlay.show(context),
-                            tooltip: 'Buscar',
-                          ),
-                          const SizedBox(width: 8),
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.shopping_cart_outlined),
-                                color: iconColor,
-                                onPressed: () => _navigateToHref(
-                                  context,
-                                  _routeForPublicStore('/tienda/carrito'),
-                                ),
-                                tooltip: 'Carrito',
-                              ),
-                              if (cart.itemCount > 0)
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: accentColor,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 18,
-                                        minHeight: 18,
-                                      ),
-                                      child: Text(
-                                        '${cart.itemCount}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
                           ),
                           if (screenWidth >= 900) ...[
-                            const SizedBox(width: 16),
-                            CustomerAccountMenu(textColor: textColor),
-                          ] else ...[
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.menu),
-                              color: iconColor,
-                              onPressed: () =>
-                                  _showMobileMenu(context, navItems),
-                              tooltip: 'Menú',
-                            ),
-                          ]
+                            if (contactPhone.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 16),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.phone_outlined,
+                                        color: Colors.white, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      contactPhone,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (contactEmail.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 16),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.mail_outline,
+                                        color: Colors.white, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      contactEmail,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // Wrap with edit mode indicator if in edit mode
-      if (isEditMode) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            // Select header for editing in the "Editar" tab
-            final editProvider = context.read<WebsiteEditModeProvider>();
-            editProvider.selectBlock('header');
-          },
-          child: Stack(
-            children: [
-              headerContent,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Colors.blue.withOpacity(0.5),
-                        width: 2,
-                      ),
                     ),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Container(
-                        margin: const EdgeInsets.all(4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.edit, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text(
-                              'Header',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
+
+                  // Main header with logo
+                  Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16),
+                      child: Row(
+                        children: [
+                          // Logo - uses URL if set, otherwise falls back to asset, then text
+                          // Logo - Force use of local asset for consistency and to fix "white block" issue
+                          // (Database logo_url might be opaque, causing white tint to fill the box)
+                          InkWell(
+                            onTap: isEditMode
+                                ? null
+                                : () {
+                                    final path =
+                                        _routeForPublicStore('/tienda');
+                                    _navigateToHref(
+                                      context,
+                                      path,
+                                      forceHomeRefresh: true,
+                                    );
+                                  },
+                            child: _buildLogo(
+                              context: context,
+                              logoUrl: logoUrl,
+                              storeName: storeName,
+                              textColor: textColor,
+                              isDarkMode: isDarkMode,
+                              height: 48,
                             ),
-                          ],
+                          ),
+                          const SizedBox(width: 24),
+                          // Only show nav links on desktop, use Spacer on mobile
+                          if (screenWidth >= 900)
+                            Expanded(
+                              child: Row(
+                                children: navItems.isEmpty
+                                    ? [
+                                        _buildNavLink(
+                                          context,
+                                          'Inicio',
+                                          _routeForPublicStore('/tienda'),
+                                          textColor,
+                                          isEditMode: isEditMode,
+                                        ),
+                                        const SizedBox(width: 24),
+                                        _buildNavLink(
+                                          context,
+                                          'Productos',
+                                          _routeForPublicStore('/productos'),
+                                          textColor,
+                                          isEditMode: isEditMode,
+                                        ),
+                                      ]
+                                    : [
+                                        ...navItems
+                                            .where((n) => n.showOnDesktop)
+                                            .map((nav) {
+                                          final children = nav.children
+                                              .where((c) => c.isVisible)
+                                              .where((c) => c.showOnDesktop)
+                                              .toList()
+                                            ..sort((a, b) => a.orderIndex
+                                                .compareTo(b.orderIndex));
+
+                                          if (children.isNotEmpty) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                  right: 24),
+                                              child: _buildNavDropdown(
+                                                context: context,
+                                                parent: nav,
+                                                children: children,
+                                                isEditMode: isEditMode,
+                                              ),
+                                            );
+                                          }
+
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                right: 24),
+                                            child: _buildNavItemLink(
+                                              context,
+                                              nav,
+                                              textColor,
+                                              isEditMode: isEditMode,
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                              ),
+                            )
+                          else
+                            const Spacer(),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.search),
+                                color: iconColor,
+                                onPressed: () => SearchOverlay.show(context),
+                                tooltip: 'Buscar',
+                              ),
+                              const SizedBox(width: 8),
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.shopping_cart_outlined),
+                                    color: iconColor,
+                                    onPressed: () => _navigateToHref(
+                                      context,
+                                      _routeForPublicStore('/tienda/carrito'),
+                                    ),
+                                    tooltip: 'Carrito',
+                                  ),
+                                  if (cart.itemCount > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: accentColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 18,
+                                            minHeight: 18,
+                                          ),
+                                          child: Text(
+                                            '${cart.itemCount}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (screenWidth >= 900) ...[
+                                const SizedBox(width: 16),
+                                CustomerAccountMenu(textColor: textColor),
+                              ] else ...[
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.menu),
+                                  color: iconColor,
+                                  onPressed: () =>
+                                      _showMobileMenu(context, navItems),
+                                  tooltip: 'Menú',
+                                ),
+                              ]
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          // Wrap with edit mode indicator if in edit mode
+          if (isEditMode) {
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                // Select header for editing in the "Editar" tab
+                final editProvider = context.read<WebsiteEditModeProvider>();
+                editProvider.selectBlock('header');
+              },
+              child: Stack(
+                children: [
+                  headerContent,
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.blue.withOpacity(0.5),
+                            width: 2,
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Container(
+                            margin: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Header',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        );
-      }
+            );
+          }
 
-      return headerContent;
-    });
+          return headerContent;
+        });
   }
 
   /// Builds a layout where the header stays fixed at the top while scrolling
@@ -2962,9 +3428,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isEditMode,
     required Widget child,
     required Widget footer,
+    String scrollViewMode = 'normal',
   }) {
     // Sticky uses the scaffold that keeps header fixed at top
+    // Mode-aware key ensures complete widget recreation on mode change to
+    // avoid element reactivation crashes during layout.
     return _StickyHeaderScaffold(
+      key: ValueKey('sticky_scaffold_$scrollViewMode'),
       storeName: storeName,
       storeDescription: storeDescription,
       logoUrl: logoUrl,
@@ -3079,6 +3549,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               fontWeight: FontWeight.bold,
               letterSpacing: 1.0,
             ),
+            isEditMode: isEditMode,
           ),
 
           // Collapsible: Contact
@@ -3259,20 +3730,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildFooterLinkMobile(BuildContext context, String text, String route,
-      {bool forceHomeRefresh = false}) {
+  Widget _buildFooterLinkMobile(
+    BuildContext context,
+    String text,
+    String route, {
+    bool forceHomeRefresh = false,
+    required bool isEditMode,
+  }) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: InkWell(
-          onTap: () {
-            _navigateToHref(
-              context,
-              route,
-              forceHomeRefresh: forceHomeRefresh,
-            );
-          },
+          onTap: isEditMode
+              ? null
+              : () {
+                  _navigateToHref(
+                    context,
+                    route,
+                    forceHomeRefresh: forceHomeRefresh,
+                  );
+                },
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -3329,9 +3807,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             children: [
               TextField(
                 controller: controller,
+                style: const TextStyle(
+                    color: Colors.black87), // Ensure visible text
                 decoration: InputDecoration(
                   labelText: label,
                   hintText: _getHintForFooterContactSetting(settingKey),
+                  fillColor: Colors.white,
+                  filled: true,
                   prefixIcon: Icon(
                     settingKey == 'contact_phone'
                         ? Icons.phone_outlined
@@ -3492,9 +3974,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             children: [
               TextField(
                 controller: controller,
+                style: const TextStyle(
+                    color: Colors.black87), // Ensure visible text
                 decoration: InputDecoration(
                   labelText: 'Usuario o URL de $label',
                   hintText: _getHintForSetting(settingKey),
+                  fillColor: Colors.white,
+                  filled: true,
                   prefixIcon: const Icon(Icons.link_outlined),
                   helperText: 'Puedes ingresar el @usuario o la URL completa',
                 ),
@@ -3571,354 +4057,405 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String logoUrl, // Added parameter
     bool isEditMode = false,
   }) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final websiteService = context.watch<WebsiteService>();
-      final editProvider = context.watch<WebsiteEditModeProvider>();
-      var footerNavItems =
-          List<WebsiteNavigation>.from(websiteService.footerNavigation);
+    final modeKey = isEditMode ? 'edit' : 'normal';
+    return MediaQueryLayoutBuilder(
+        key: ValueKey('footer_layout_$modeKey'),
+        builder: (context, constraints) {
+          final websiteService = context.watch<WebsiteService>();
+          final editProvider = context.watch<WebsiteEditModeProvider>();
+          var footerNavItems =
+              List<WebsiteNavigation>.from(websiteService.footerNavigation);
 
-      // Apply pending section order from provider for live preview
-      final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
-      if (pendingSectionOrder != null && pendingSectionOrder.isNotEmpty) {
-        final orderMap = <String, int>{};
-        for (var i = 0; i < pendingSectionOrder.length; i++) {
-          orderMap[pendingSectionOrder[i]] = i;
-        }
-        footerNavItems.sort((a, b) {
-          final aIdx = orderMap[a.id] ?? a.orderIndex;
-          final bIdx = orderMap[b.id] ?? b.orderIndex;
-          return aIdx.compareTo(bIdx);
-        });
-      }
+          // Apply pending footer navigation edits (label + destination) for live preview
+          footerNavItems = footerNavItems.map((section) {
+            final effectiveSection = section.copyWith(
+              label: editProvider.getEffectiveFooterNavLabel(
+                  section.id, section.label),
+              linkType: editProvider.getEffectiveFooterNavLinkType(
+                section.id,
+                section.linkType,
+              ),
+              linkValue: editProvider.getEffectiveFooterNavLinkValue(
+                section.id,
+                section.linkValue,
+              ),
+              openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
+                section.id,
+                section.openInNewTab,
+              ),
+              children: section.children
+                  .map(
+                    (child) => child.copyWith(
+                      label: editProvider.getEffectiveFooterNavLabel(
+                        child.id,
+                        child.label,
+                      ),
+                      linkType: editProvider.getEffectiveFooterNavLinkType(
+                        child.id,
+                        child.linkType,
+                      ),
+                      linkValue: editProvider.getEffectiveFooterNavLinkValue(
+                        child.id,
+                        child.linkValue,
+                      ),
+                      openInNewTab:
+                          editProvider.getEffectiveFooterNavOpenInNewTab(
+                        child.id,
+                        child.openInNewTab,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+            return effectiveSection;
+          }).toList();
 
-      // Apply pending link order for each section - create new section objects
-      final pendingLinkOrder = editProvider.pendingFooterLinkOrder;
-      if (pendingLinkOrder.isNotEmpty) {
-        footerNavItems = footerNavItems.map((section) {
-          final linkOrder = pendingLinkOrder[section.id];
-          if (linkOrder != null && linkOrder.isNotEmpty) {
+          // Apply pending section order from provider for live preview
+          final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
+          if (pendingSectionOrder != null && pendingSectionOrder.isNotEmpty) {
             final orderMap = <String, int>{};
-            for (var i = 0; i < linkOrder.length; i++) {
-              orderMap[linkOrder[i]] = i;
+            for (var i = 0; i < pendingSectionOrder.length; i++) {
+              orderMap[pendingSectionOrder[i]] = i;
             }
-            final sortedChildren =
-                List<WebsiteNavigation>.from(section.children)
-                  ..sort((a, b) {
-                    final aHas = orderMap.containsKey(a.id);
-                    final bHas = orderMap.containsKey(b.id);
-                    if (aHas && bHas) {
-                      return orderMap[a.id]!.compareTo(orderMap[b.id]!);
-                    }
-                    if (aHas) return -1;
-                    if (bHas) return 1;
-                    return a.orderIndex.compareTo(b.orderIndex);
-                  });
-
-            return section.copyWith(children: sortedChildren);
+            footerNavItems.sort((a, b) {
+              final aIdx = orderMap[a.id] ?? a.orderIndex;
+              final bIdx = orderMap[b.id] ?? b.orderIndex;
+              return aIdx.compareTo(bIdx);
+            });
           }
-          return section;
-        }).toList();
-      }
 
-      final screenWidth = MediaQuery.of(context).size.width;
-      final isMobile = screenWidth < 800;
+          // Apply pending link order for each section - create new section objects
+          final pendingLinkOrder = editProvider.pendingFooterLinkOrder;
+          if (pendingLinkOrder.isNotEmpty) {
+            footerNavItems = footerNavItems.map((section) {
+              final linkOrder = pendingLinkOrder[section.id];
+              if (linkOrder != null && linkOrder.isNotEmpty) {
+                final orderMap = <String, int>{};
+                for (var i = 0; i < linkOrder.length; i++) {
+                  orderMap[linkOrder[i]] = i;
+                }
+                final sortedChildren =
+                    List<WebsiteNavigation>.from(section.children)
+                      ..sort((a, b) {
+                        final aHas = orderMap.containsKey(a.id);
+                        final bHas = orderMap.containsKey(b.id);
+                        if (aHas && bHas) {
+                          return orderMap[a.id]!.compareTo(orderMap[b.id]!);
+                        }
+                        if (aHas) return -1;
+                        if (bHas) return 1;
+                        return a.orderIndex.compareTo(b.orderIndex);
+                      });
 
-      final facebookUrl =
-          _buildSocialUrl(facebookHandle, 'https://facebook.com/');
-      final instagramUrl =
-          _buildSocialUrl(instagramHandle, 'https://instagram.com/');
-      final twitterUrl = _buildSocialUrl(twitterHandle, 'https://twitter.com/');
-      final youtubeUrl = _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
-      final whatsappUrl = whatsappHandle.isNotEmpty
-          ? 'https://wa.me/${_sanitizePhone(whatsappHandle)}?text=${Uri.encodeComponent("Hola $storeName, vengo desde el sitio web")}'
-          : null;
+                return section.copyWith(children: sortedChildren);
+              }
+              return section;
+            }).toList();
+          }
 
-      if (isMobile) {
-        return _buildMobileFooter(
-          context: context,
-          footerNavItems: footerNavItems,
-          storeName: storeName,
-          storeDescription: storeDescription,
-          contactEmail: contactEmail,
-          contactPhone: contactPhone,
-          contactAddress: contactAddress,
-          facebookUrl: facebookUrl,
-          instagramUrl: instagramUrl,
-          twitterUrl: twitterUrl,
-          youtubeUrl: youtubeUrl,
-          whatsappUrl: whatsappUrl,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          logoUrl: logoUrl,
-          isEditMode: isEditMode,
-          isPreviewMode:
-              isMobile, // Always true when this branch runs, so icons show
-        );
-      }
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isMobile = screenWidth < 800;
 
-      final footerContent = Container(
-        width: double.infinity,
-        color: PublicStoreTheme.textPrimary,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: Column(
-              children: [
-                Wrap(
-                  spacing: 32,
-                  runSpacing: 24,
-                  crossAxisAlignment: WrapCrossAlignment.start,
+          final facebookUrl =
+              _buildSocialUrl(facebookHandle, 'https://facebook.com/');
+          final instagramUrl =
+              _buildSocialUrl(instagramHandle, 'https://instagram.com/');
+          final twitterUrl =
+              _buildSocialUrl(twitterHandle, 'https://twitter.com/');
+          final youtubeUrl =
+              _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
+          final whatsappUrl = whatsappHandle.isNotEmpty
+              ? 'https://wa.me/${_sanitizePhone(whatsappHandle)}?text=${Uri.encodeComponent("Hola $storeName, vengo desde el sitio web")}'
+              : null;
+
+          if (isMobile) {
+            return _buildMobileFooter(
+              context: context,
+              footerNavItems: footerNavItems,
+              storeName: storeName,
+              storeDescription: storeDescription,
+              contactEmail: contactEmail,
+              contactPhone: contactPhone,
+              contactAddress: contactAddress,
+              facebookUrl: facebookUrl,
+              instagramUrl: instagramUrl,
+              twitterUrl: twitterUrl,
+              youtubeUrl: youtubeUrl,
+              whatsappUrl: whatsappUrl,
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              logoUrl: logoUrl,
+              isEditMode: isEditMode,
+              isPreviewMode:
+                  isMobile, // Always true when this branch runs, so icons show
+            );
+          }
+
+          final footerContent = Container(
+            width: double.infinity,
+            color: PublicStoreTheme.textPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Column(
                   children: [
-                    SizedBox(
-                      width: 250,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildLogo(
-                            context: context,
-                            logoUrl: logoUrl,
-                            storeName: storeName,
-                            textColor: Colors.white,
-                            isDarkMode: true,
-                            height: 60,
-                            alignment: Alignment.centerLeft,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            storeDescription.isNotEmpty
-                                ? storeDescription
-                                : 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Colors.white70,
-                                ),
-                          ),
-                          const SizedBox(height: 24),
-                          Wrap(
-                            spacing: 8,
+                    Wrap(
+                      spacing: 32,
+                      runSpacing: 24,
+                      crossAxisAlignment: WrapCrossAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 250,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Facebook
-                              if (facebookUrl != null || isEditMode)
-                                _buildDesktopSocialIcon(
-                                  context,
-                                  FontAwesomeIcons.facebook,
-                                  facebookUrl,
-                                  isEditMode,
-                                  'facebook',
-                                  'Facebook',
+                              _buildLogo(
+                                context: context,
+                                logoUrl: logoUrl,
+                                storeName: storeName,
+                                textColor: Colors.white,
+                                isDarkMode: true,
+                                height: 60,
+                                alignment: Alignment.centerLeft,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                storeDescription.isNotEmpty
+                                    ? storeDescription
+                                    : 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: Colors.white70,
+                                    ),
+                              ),
+                              const SizedBox(height: 24),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  // Facebook
+                                  if (facebookUrl != null || isEditMode)
+                                    _buildDesktopSocialIcon(
+                                      context,
+                                      FontAwesomeIcons.facebook,
+                                      facebookUrl,
+                                      isEditMode,
+                                      'facebook',
+                                      'Facebook',
+                                    ),
+                                  // Instagram
+                                  if (instagramUrl != null || isEditMode)
+                                    _buildDesktopSocialIcon(
+                                      context,
+                                      FontAwesomeIcons.instagram,
+                                      instagramUrl,
+                                      isEditMode,
+                                      'instagram',
+                                      'Instagram',
+                                    ),
+                                  // Twitter
+                                  if (twitterUrl != null || isEditMode)
+                                    _buildDesktopSocialIcon(
+                                      context,
+                                      FontAwesomeIcons.xTwitter,
+                                      twitterUrl,
+                                      isEditMode,
+                                      'twitter',
+                                      'Twitter',
+                                    ),
+                                  // YouTube
+                                  if (youtubeUrl != null || isEditMode)
+                                    _buildDesktopSocialIcon(
+                                      context,
+                                      FontAwesomeIcons.youtube,
+                                      youtubeUrl,
+                                      isEditMode,
+                                      'youtube',
+                                      'YouTube',
+                                    ),
+                                  // WhatsApp
+                                  if (whatsappUrl != null || isEditMode)
+                                    _buildDesktopSocialIcon(
+                                      context,
+                                      FontAwesomeIcons.whatsapp,
+                                      whatsappUrl,
+                                      isEditMode,
+                                      'whatsapp',
+                                      'WhatsApp',
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        ..._buildFooterNavigationColumnsDesktop(
+                          context: context,
+                          footerNavItems: footerNavItems,
+                          primaryColor: primaryColor,
+                          isEditMode: isEditMode,
+                        ),
+                        SizedBox(
+                          width: 200,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Contacto',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 16),
+                              if (contactAddress.isNotEmpty) ...[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.location_on_outlined,
+                                        color: Colors.white70, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        contactAddress,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Colors.white70,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              // Instagram
-                              if (instagramUrl != null || isEditMode)
-                                _buildDesktopSocialIcon(
-                                  context,
-                                  FontAwesomeIcons.instagram,
-                                  instagramUrl,
-                                  isEditMode,
-                                  'instagram',
-                                  'Instagram',
+                                const SizedBox(height: 12),
+                              ],
+                              if (contactPhone.isNotEmpty) ...[
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone_outlined,
+                                        color: Colors.white70, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      contactPhone,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white70,
+                                          ),
+                                    ),
+                                  ],
                                 ),
-                              // Twitter
-                              if (twitterUrl != null || isEditMode)
-                                _buildDesktopSocialIcon(
-                                  context,
-                                  FontAwesomeIcons.xTwitter,
-                                  twitterUrl,
-                                  isEditMode,
-                                  'twitter',
-                                  'Twitter',
-                                ),
-                              // YouTube
-                              if (youtubeUrl != null || isEditMode)
-                                _buildDesktopSocialIcon(
-                                  context,
-                                  FontAwesomeIcons.youtube,
-                                  youtubeUrl,
-                                  isEditMode,
-                                  'youtube',
-                                  'YouTube',
-                                ),
-                              // WhatsApp
-                              if (whatsappUrl != null || isEditMode)
-                                _buildDesktopSocialIcon(
-                                  context,
-                                  FontAwesomeIcons.whatsapp,
-                                  whatsappUrl,
-                                  isEditMode,
-                                  'whatsapp',
-                                  'WhatsApp',
+                                const SizedBox(height: 12),
+                              ],
+                              if (contactEmail.isNotEmpty)
+                                Row(
+                                  children: [
+                                    const Icon(Icons.email_outlined,
+                                        color: Colors.white70, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      contactEmail,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white70,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    ..._buildFooterNavigationColumnsDesktop(
-                      context: context,
-                      footerNavItems: footerNavItems,
-                      primaryColor: primaryColor,
-                    ),
-                    SizedBox(
-                      width: 200,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Contacto',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                    const SizedBox(height: 48),
+                    const Divider(color: Colors.white24),
+                    const SizedBox(height: 24),
+                    Text(
+                      '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white70,
                           ),
-                          const SizedBox(height: 16),
-                          if (contactAddress.isNotEmpty) ...[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+          // Wrap with edit mode indicator if in edit mode
+          if (isEditMode) {
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                // Select footer for editing in the "Editar" tab
+                final editProvider = context.read<WebsiteEditModeProvider>();
+                editProvider.selectBlock('footer');
+              },
+              child: Stack(
+                children: [
+                  footerContent,
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.5),
+                            width: 2,
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Container(
+                            margin: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.location_on_outlined,
-                                    color: Colors.white70, size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    contactAddress,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: Colors.white70,
-                                        ),
+                                Icon(Icons.edit, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Footer',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                          ],
-                          if (contactPhone.isNotEmpty) ...[
-                            Row(
-                              children: [
-                                const Icon(Icons.phone_outlined,
-                                    color: Colors.white70, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  contactPhone,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Colors.white70,
-                                      ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          if (contactEmail.isNotEmpty)
-                            Row(
-                              children: [
-                                const Icon(Icons.email_outlined,
-                                    color: Colors.white70, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  contactEmail,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Colors.white70,
-                                      ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 48),
-                const Divider(color: Colors.white24),
-                const SizedBox(height: 24),
-                Text(
-                  '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      // Wrap with edit mode indicator if in edit mode
-      if (isEditMode) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            // Select footer for editing in the "Editar" tab
-            final editProvider = context.read<WebsiteEditModeProvider>();
-            editProvider.selectBlock('footer');
-          },
-          child: Stack(
-            children: [
-              footerContent,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Colors.green.withOpacity(0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Container(
-                        margin: const EdgeInsets.all(4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.edit, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text(
-                              'Footer',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        );
-      }
+            );
+          }
 
-      return footerContent;
-    });
+          return footerContent;
+        });
   }
 
   List<Widget> _buildFooterNavigationColumnsDesktop({
     required BuildContext context,
     required List<WebsiteNavigation> footerNavItems,
     required Color primaryColor,
+    required bool isEditMode,
   }) {
     final desktopItems = footerNavItems
         .where((n) => n.isVisible)
@@ -3945,24 +4482,28 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 'Inicio',
                 _routeForPublicStore('/tienda'),
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Productos',
                 '/productos',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Servicios',
                 _routeForPublicStore('/productos?type=service'),
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Contacto',
                 _routeForPublicStore('/tienda/contacto'),
                 primaryColor,
+                isEditMode: isEditMode,
               ),
             ],
           ),
@@ -3985,30 +4526,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 'Sobre Nosotros',
                 '/nosotros',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Términos y Condiciones',
                 '/terminos',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Política de Privacidad',
                 '/privacidad',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Política de Devoluciones',
                 '/devoluciones',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
               _buildFooterLinkDesktop(
                 context,
                 'Envíos',
                 '/envios',
                 primaryColor,
+                isEditMode: isEditMode,
               ),
             ],
           ),
@@ -4046,7 +4592,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
               const SizedBox(height: 16),
               for (final child in children)
-                _buildFooterNavLinkDesktop(context, child),
+                _buildFooterNavLinkDesktop(context, child,
+                    isEditMode: isEditMode),
             ],
           ),
         );
@@ -4069,7 +4616,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
             const SizedBox(height: 16),
             for (final nav in desktopItems)
-              _buildFooterNavLinkDesktop(context, nav),
+              _buildFooterNavLinkDesktop(context, nav, isEditMode: isEditMode),
           ],
         ),
       ),
@@ -4078,29 +4625,128 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   Widget _buildFooterNavLinkDesktop(
     BuildContext context,
-    WebsiteNavigation nav,
-  ) {
-    final href = _routeForPublicStore(nav.href ?? '/');
+    WebsiteNavigation nav, {
+    required bool isEditMode,
+  }) {
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final effective = nav.copyWith(
+      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
+      linkType:
+          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
+      linkValue:
+          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
+      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
+        nav.id,
+        nav.openInNewTab,
+      ),
+    );
+
+    final href = _routeForPublicStore(effective.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
+    final isInlineEditing = isEditMode && _activeInlineFooterNavId == nav.id;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () {
-          _navigateToHref(
-            context,
-            href,
-            openInNewTab: nav.openInNewTab,
-          );
-        },
-        child: Text(
-          nav.label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+      child: isInlineEditing
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.16),
+                ),
               ),
-        ),
-      ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: TextField(
+                        controller: _inlineFooterNavLabelController,
+                        focusNode: _inlineFooterNavLabelFocusNode,
+                        onChanged: (value) =>
+                            editProvider.updateFooterNavLabel(nav.id, value),
+                        cursorColor: Colors.white,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight:
+                                  isActive ? FontWeight.bold : FontWeight.w500,
+                            ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.22),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.42),
+                              width: 1.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Editar destino',
+                    onPressed: () => _showInlineFooterNavDestinationDialog(
+                      context,
+                      editProvider,
+                      effective,
+                    ),
+                    icon: const Icon(Icons.link, size: 18, color: Colors.white),
+                  ),
+                  IconButton(
+                    tooltip: 'Terminar',
+                    onPressed: () {
+                      setState(() => _activeInlineFooterNavId = null);
+                      editProvider.selectFooterNavItem(null);
+                    },
+                    icon:
+                        const Icon(Icons.check, size: 18, color: Colors.white),
+                  ),
+                ],
+              ),
+            )
+          : MouseRegion(
+              cursor: isEditMode ? SystemMouseCursors.click : MouseCursor.defer,
+              child: InkWell(
+                onTap: isEditMode
+                    ? () => _beginInlineFooterNavEdit(editProvider, effective)
+                    : () {
+                        _navigateToHref(
+                          context,
+                          href,
+                          openInNewTab: effective.openInNewTab,
+                        );
+                      },
+                child: Text(
+                  effective.label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                        fontWeight:
+                            isActive ? FontWeight.bold : FontWeight.normal,
+                      ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -4110,19 +4756,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String path,
     Color primaryColor, {
     bool forceHomeRefresh = false,
+    required bool isEditMode,
   }) {
     final isActive = GoRouterState.of(context).matchedLocation == path;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () {
-          _navigateToHref(
-            context,
-            path,
-            forceHomeRefresh: forceHomeRefresh,
-          );
-        },
+        onTap: isEditMode
+            ? null
+            : () {
+                _navigateToHref(
+                  context,
+                  path,
+                  forceHomeRefresh: forceHomeRefresh,
+                );
+              },
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -4138,6 +4787,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required BuildContext context,
     required List<WebsiteNavigation> footerNavItems,
     required TextStyle? titleStyle,
+    required bool isEditMode,
   }) {
     final theme = Theme.of(context);
     final dividerColor = Colors.white24;
@@ -4159,16 +4809,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
             children: [
               _buildFooterLinkMobile(
-                  context, 'Inicio', _routeForPublicStore('/tienda')),
+                  context, 'Inicio', _routeForPublicStore('/tienda'),
+                  isEditMode: isEditMode),
               _buildFooterLinkMobile(
-                  context, 'Productos', _routeForPublicStore('/productos')),
+                  context, 'Productos', _routeForPublicStore('/productos'),
+                  isEditMode: isEditMode),
               _buildFooterLinkMobile(
                 context,
                 'Servicios',
                 _routeForPublicStore('/productos?type=service'),
+                isEditMode: isEditMode,
               ),
-              _buildFooterLinkMobile(context, 'Contacto',
-                  _routeForPublicStore('/tienda/contacto')),
+              _buildFooterLinkMobile(
+                  context, 'Contacto', _routeForPublicStore('/tienda/contacto'),
+                  isEditMode: isEditMode),
             ],
           ),
         ),
@@ -4181,11 +4835,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             collapsedIconColor: Colors.white,
             childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
             children: [
-              _buildFooterLinkMobile(context, 'Sobre Nosotros', '/nosotros'),
+              _buildFooterLinkMobile(context, 'Sobre Nosotros', '/nosotros',
+                  isEditMode: isEditMode),
               _buildFooterLinkMobile(
-                  context, 'Términos y Condiciones', '/terminos'),
+                  context, 'Términos y Condiciones', '/terminos',
+                  isEditMode: isEditMode),
               _buildFooterLinkMobile(
-                  context, 'Política de Devolución', '/devoluciones'),
+                  context, 'Política de Devolución', '/devoluciones',
+                  isEditMode: isEditMode),
             ],
           ),
         ),
@@ -4220,10 +4877,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
               children: [
                 for (final child in children)
-                  _buildFooterLinkMobile(
+                  _buildFooterNavLinkMobile(
                     context,
-                    child.label,
-                    _routeForPublicStore(child.href ?? '/'),
+                    child,
+                    isEditMode: isEditMode,
                   ),
               ],
             ),
@@ -4245,16 +4902,146 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
           children: [
             for (final nav in mobileItems)
-              _buildFooterLinkMobile(
+              _buildFooterNavLinkMobile(
                 context,
-                nav.label,
-                _routeForPublicStore(nav.href ?? '/'),
+                nav,
+                isEditMode: isEditMode,
               ),
           ],
         ),
       ),
       Divider(color: dividerColor),
     ];
+  }
+
+  Widget _buildFooterNavLinkMobile(
+    BuildContext context,
+    WebsiteNavigation nav, {
+    required bool isEditMode,
+  }) {
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final effective = nav.copyWith(
+      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
+      linkType:
+          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
+      linkValue:
+          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
+      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
+        nav.id,
+        nav.openInNewTab,
+      ),
+    );
+
+    final href = _routeForPublicStore(effective.href ?? '/');
+    final isInlineEditing = isEditMode && _activeInlineFooterNavId == nav.id;
+
+    if (!isEditMode) {
+      return _buildFooterLinkMobile(
+        context,
+        effective.label,
+        href,
+        isEditMode: false,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: isInlineEditing
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _inlineFooterNavLabelController,
+                      focusNode: _inlineFooterNavLabelFocusNode,
+                      onChanged: (value) =>
+                          editProvider.updateFooterNavLabel(nav.id, value),
+                      cursorColor: Colors.white,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Colors.white),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.10),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.42),
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Destino',
+                    onPressed: () => _showInlineFooterNavDestinationDialog(
+                      context,
+                      editProvider,
+                      effective,
+                    ),
+                    icon: const Icon(Icons.link, size: 18, color: Colors.white),
+                  ),
+                  IconButton(
+                    tooltip: 'OK',
+                    onPressed: () {
+                      setState(() => _activeInlineFooterNavId = null);
+                      editProvider.selectFooterNavItem(null);
+                    },
+                    icon:
+                        const Icon(Icons.check, size: 18, color: Colors.white),
+                  ),
+                ],
+              ),
+            )
+          : InkWell(
+              onTap: () => _beginInlineFooterNavEdit(editProvider, effective),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit, size: 14, color: Colors.white70),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        effective.label,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.white70),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
   }
 
   Widget _buildLogo({
@@ -4323,17 +5110,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String path,
     Color primaryColor, {
     bool forceHomeRefresh = false,
+    bool isEditMode = false,
   }) {
     final isActive = GoRouterState.of(context).matchedLocation == path;
 
     return InkWell(
-      onTap: () {
-        _navigateToHref(
-          context,
-          path,
-          forceHomeRefresh: forceHomeRefresh,
-        );
-      },
+      onTap: isEditMode
+          ? null
+          : () {
+              _navigateToHref(
+                context,
+                path,
+                forceHomeRefresh: forceHomeRefresh,
+              );
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
@@ -4581,15 +5371,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   Widget _buildNavItemLink(
     BuildContext context,
     WebsiteNavigation nav,
-    Color primaryColor,
-  ) {
+    Color primaryColor, {
+    bool isEditMode = false,
+  }) {
     final href = _routeForPublicStore(nav.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
 
     return InkWell(
-      onTap: () {
-        _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
-      },
+      onTap: isEditMode
+          ? null
+          : () {
+              _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
@@ -4615,8 +5408,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required BuildContext context,
     required WebsiteNavigation parent,
     required List<WebsiteNavigation> children,
+    bool isEditMode = false,
   }) {
     return PopupMenuButton<WebsiteNavigation>(
+      enabled: !isEditMode,
       offset: const Offset(0, 40),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -4624,10 +5419,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       ),
       elevation: 8,
       color: Colors.white,
-      onSelected: (WebsiteNavigation nav) {
-        final href = _routeForPublicStore(nav.href ?? '/');
-        _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
-      },
+      onSelected: isEditMode
+          ? null
+          : (WebsiteNavigation nav) {
+              final href = _routeForPublicStore(nav.href ?? '/');
+              _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+            },
       itemBuilder: (BuildContext popupContext) {
         return <PopupMenuEntry<WebsiteNavigation>>[
           for (int i = 0; i < children.length; i++) ...[
@@ -5233,6 +6030,281 @@ class _PreviewNavAction {
         isDivider = true;
 }
 
+enum _PageNavKind {
+  core,
+  published,
+  draft,
+  legal,
+  system,
+}
+
+class _PageNavTarget {
+  final String key;
+  final String title;
+  final String href;
+  final _PageNavKind kind;
+  final String? subtitle;
+  final bool? isPublished;
+
+  const _PageNavTarget({
+    required this.key,
+    required this.title,
+    required this.href,
+    required this.kind,
+    this.subtitle,
+    this.isPublished,
+  });
+
+  _PageNavTarget copyWith({
+    String? key,
+    String? title,
+    String? href,
+    _PageNavKind? kind,
+    String? subtitle,
+    bool? isPublished,
+  }) {
+    return _PageNavTarget(
+      key: key ?? this.key,
+      title: title ?? this.title,
+      href: href ?? this.href,
+      kind: kind ?? this.kind,
+      subtitle: subtitle ?? this.subtitle,
+      isPublished: isPublished ?? this.isPublished,
+    );
+  }
+}
+
+class _PageNavigatorDialog extends StatefulWidget {
+  const _PageNavigatorDialog({
+    required this.initialSlug,
+    required this.targets,
+    required this.onCopyLink,
+    required this.onOpenNewTab,
+  });
+
+  final String initialSlug;
+  final List<_PageNavTarget> targets;
+  final Future<void> Function() onCopyLink;
+  final Future<void> Function() onOpenNewTab;
+
+  @override
+  State<_PageNavigatorDialog> createState() => _PageNavigatorDialogState();
+}
+
+class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      final next = _searchController.text.trim().toLowerCase();
+      if (next == _query) return;
+      setState(() => _query = next);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Only used for logic not for UI colors anymore as we hardcode dark theme
+    // final theme = Theme.of(context);
+
+    // Filter items based on search query
+    // The items are already sorted by the caller (Core -> Published -> Draft -> Legal -> System) + Alphabetical
+    final filtered = _query.isEmpty
+        ? widget.targets
+        : widget.targets.where((t) {
+            final hay = '${t.title} ${t.subtitle ?? ''}'.toLowerCase();
+            return hay.contains(_query);
+          }).toList();
+
+    bool isCurrent(_PageNavTarget t) {
+      final currentSlug = widget.initialSlug;
+      if (currentSlug.isEmpty) return t.key == 'home';
+      return t.key == currentSlug;
+    }
+
+    // Dark theme for the editor dialog
+    return Theme(
+      data: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+        dividerColor: Colors.white.withValues(alpha: 0.1),
+        textTheme: const TextTheme(
+          titleMedium: TextStyle(
+              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+          bodyMedium: TextStyle(color: Colors.white70),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white70),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1E1E1E),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1E1E1E),
+          elevation: 0,
+          leading: IconButton(
+            tooltip: 'Cerrar',
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close),
+          ),
+          title: const Text('Ir a página'),
+          centerTitle: true,
+          shape: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Copiar enlace',
+              onPressed: widget.onCopyLink,
+              icon: const Icon(Icons.copy, size: 20),
+            ),
+            IconButton(
+              tooltip: 'Abrir en nueva pestaña',
+              onPressed: widget.onOpenNewTab,
+              icon: const Icon(Icons.open_in_new, size: 20),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintText: 'Buscar páginas (título o ruta)',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No hay resultados',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5)),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      // Simply use the filtered list which is already sorted
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final t = filtered[index];
+                        final current = isCurrent(t);
+
+                        return InkWell(
+                          onTap: () => Navigator.of(context).pop(t),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                ),
+                              ),
+                              color: current
+                                  ? const Color(0xFF00A09D)
+                                      .withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  current
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
+                                  size: 18,
+                                  color: current
+                                      ? const Color(0xFF00A09D)
+                                      : Colors.white38,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        t.title,
+                                        style: TextStyle(
+                                          color: current
+                                              ? const Color(0xFF00A09D)
+                                              : Colors.white,
+                                          fontWeight: current
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                      if (t.subtitle != null)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            t.subtitle!,
+                                            style: TextStyle(
+                                              color: current
+                                                  ? const Color(0xFF00A09D)
+                                                      .withValues(alpha: 0.7)
+                                                  : Colors.white38,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (t.isPublished != null)
+                                  Tooltip(
+                                    message: t.isPublished!
+                                        ? 'Publicada'
+                                        : 'Borrador (oculta)',
+                                    child: Icon(
+                                      t.isPublished!
+                                          ? Icons.public
+                                          : Icons.lock_outline,
+                                      size: 16,
+                                      color: t.isPublished!
+                                          ? Colors.greenAccent
+                                              .withValues(alpha: 0.7)
+                                          : Colors.orangeAccent
+                                              .withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Scroll container for the non-sticky layouts.
 ///
 /// The sticky header scaffold already manages its own ScrollController.
@@ -5241,6 +6313,7 @@ class _PreviewNavAction {
 /// - force scroll-to-top when user clicks "Inicio" / home
 class _PublicStoreScrollView extends StatefulWidget {
   const _PublicStoreScrollView({
+    super.key,
     required this.child,
     this.physics,
     this.clipBehavior = Clip.hardEdge,
@@ -5417,6 +6490,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
   final Widget footer;
 
   const _StickyHeaderScaffold({
+    super.key,
     required this.storeName,
     required this.storeDescription,
     required this.logoUrl,

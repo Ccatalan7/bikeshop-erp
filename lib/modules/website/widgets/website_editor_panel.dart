@@ -3,12 +3,14 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
@@ -2917,8 +2919,7 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
           const SizedBox(height: 16),
           WebsiteLinkValueEditor(
             label: 'Link "Ver todos"',
-            value:
-                widget.data['viewAllLink']?.toString() ?? '/productos',
+            value: widget.data['viewAllLink']?.toString() ?? '/productos',
             onChanged: (v) => _updateField('viewAllLink', v),
             dense: true,
             darkStyle: true,
@@ -5590,6 +5591,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   final _metaTitleController = TextEditingController();
   final _metaDescriptionController = TextEditingController();
   bool _isLoading = true;
+  bool _isDetecting = false; // Prevent concurrent detection
   WebsitePage? _currentPage;
   String _currentRoute = '';
   bool _isSpecialRoute = false;
@@ -5609,36 +5611,87 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   }
 
   Future<void> _detectCurrentPage() async {
-    if (!mounted) return;
+    if (!mounted || _isDetecting) return;
+    _isDetecting = true;
 
-    // Get current page info from the edit provider (works even outside router context)
-    final pageSlug = widget.editProvider.currentPageSlug;
-    var newRoute = pageSlug ?? 'inicio';
-    if (newRoute.isEmpty) newRoute = 'inicio';
+    try {
+      // Prefer detecting route from actual URL, fallback to provider
+      var newRoute = _getSlugFromRoute() ?? widget.editProvider.currentPageSlug ?? 'inicio';
+      if (newRoute.isEmpty) newRoute = 'inicio';
 
-    debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
+      debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
 
-    // Avoid reloading if route hasn't changed
-    if (newRoute == _currentRoute && !_isLoading) return;
+      // Avoid reloading if route hasn't changed
+      if (newRoute == _currentRoute && !_isLoading) {
+        _isDetecting = false;
+        return;
+      }
 
-    setState(() {
-      _currentRoute = newRoute;
-      _isLoading = true;
-    });
+      setState(() {
+        _currentRoute = newRoute;
+        _isLoading = true;
+      });
 
-    // Check if this is a special route (not a CMS page)
-    final specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
-    _isSpecialRoute = specialRoutes.any((r) => _currentRoute.startsWith(r));
+      // Check if this is a special route (not a CMS page)
+      final specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
+      _isSpecialRoute = specialRoutes.any((r) => _currentRoute.startsWith(r));
 
-    // Special route check logic preserved, but early return removed.
-    // We now attempt to load from DB first for ALL routes.
+      // Special route check logic preserved, but early return removed.
+      // We now attempt to load from DB first for ALL routes.
 
-    await _loadPageData();
+      await _loadPageData();
+    } finally {
+      _isDetecting = false;
+    }
+  }
+
+  /// Detect current slug from URL route (handles /tienda prefix and various patterns)
+  String? _getSlugFromRoute() {
+    try {
+      final uri = GoRouterState.of(context).uri;
+      var path = uri.path;
+
+      // Remove /tienda prefix if present
+      if (path.startsWith('/tienda')) {
+        path = path.substring('/tienda'.length);
+      }
+      if (path.isEmpty || path == '/') return 'inicio';
+      if (!path.startsWith('/')) path = '/$path';
+
+      // Known canonical routes
+      const canonicalRoutes = {
+        '/productos': 'productos',
+        '/contacto': 'contacto',
+        '/carrito': 'carrito',
+        '/checkout': 'checkout',
+        '/cuenta': 'cuenta',
+      };
+      if (canonicalRoutes.containsKey(path)) {
+        return canonicalRoutes[path]!;
+      }
+
+      // Policy pages at root level
+      const policySlugs = {'nosotros', 'terminos', 'privacidad', 'devoluciones', 'envios'};
+      final rootSlug = path.substring(1);
+      if (policySlugs.contains(rootSlug)) return rootSlug;
+
+      // /pagina/<slug> pattern
+      if (path.startsWith('/pagina/')) return path.substring('/pagina/'.length);
+
+      // Simple slug
+      if (!rootSlug.contains('/')) return rootSlug;
+
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _loadPageData() async {
-    final pageId = widget.editProvider.currentPageId;
-    final pageSlug = widget.editProvider.currentPageSlug ?? _currentRoute;
+    final pageSlug = _currentRoute; // Use the route we detected, not provider
+
+    // Clear old page data first to avoid stale display
+    _currentPage = null;
 
     // Home page check removed to use standard website_pages table logic
 
@@ -5646,9 +5699,14 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
       final service = context.read<WebsiteService>();
       WebsitePage? page;
 
-      if (pageId != null) {
-        page = await service.getPageById(pageId);
+      // Only use provider's pageId if it matches our current route
+      final providerSlug = widget.editProvider.currentPageSlug ?? '';
+      final providerPageId = widget.editProvider.currentPageId;
+      
+      if (providerPageId != null && providerSlug == pageSlug) {
+        page = await service.getPageById(providerPageId);
       } else {
+        // Lookup by slug (our detected route)
         page = await service.getPageBySlug(pageSlug);
       }
 
@@ -5656,7 +5714,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
 
       if (page != null) {
         _currentPage = page;
-        _currentRoute = page.slug;
+        // Don't override _currentRoute here - keep what we detected
         final routeKey = _currentRoute.split('/').first;
         final pending = widget.editProvider.getPendingPageSeo(routeKey);
         _metaTitleController.text =
@@ -5665,7 +5723,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
             pending?['meta_description'] ?? page.metaDescription ?? '';
         setState(() => _isLoading = false);
       } else {
-        // Page not found in DB
+        // Page not found in DB - use _currentRoute for display
         if (_isSpecialRoute) {
           // Fallback: Try loading from legacy website_settings
           final service = context.read<WebsiteService>();
@@ -5704,6 +5762,15 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if route changed on every build (navigation might not trigger didUpdateWidget)
+    final routeSlug = _getSlugFromRoute();
+    if (routeSlug != null && routeSlug != _currentRoute && !_isLoading && !_isDetecting) {
+      // Schedule re-detection after this build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isDetecting) _detectCurrentPage();
+      });
+    }
+
     if (_isLoading) {
       return const Center(
         child: Padding(
@@ -5713,7 +5780,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
       );
     }
 
-    final pageName = _currentPage?.slug ?? _currentRoute;
+    final pageName = _currentRoute; // Always use detected route, not DB page
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -10284,6 +10351,18 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   String? _selectedFooterSectionId;
 
+  // Inline editor state (Edit happens inside the panel, not a modal)
+  String? _editingFooterNavId;
+  final _inlineNavLabelController = TextEditingController();
+  final _inlineNavLinkValueController = TextEditingController();
+  String? _inlineNavParentId;
+  NavLinkType _inlineNavLinkType = NavLinkType.page;
+  bool _inlineNavIsVisible = true;
+  bool _inlineNavShowOnDesktop = true;
+  bool _inlineNavShowOnMobile = true;
+  bool _inlineNavOpenInNewTab = false;
+  bool _isSavingInlineNav = false;
+
   List<String>? _footerSectionOrderOverride;
   final Map<String, List<String>> _footerLinkOrderOverrideBySection = {};
 
@@ -10503,18 +10582,328 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     );
   }
 
-  Future<void> _editFooterNav(WebsiteNavigation nav) async {
-    final isSection = nav.hasChildren && nav.linkType == NavLinkType.action;
+  void _beginInlineFooterNavEdit(WebsiteNavigation nav) {
+    setState(() {
+      _editingFooterNavId = nav.id;
 
-    await _showFooterNavDialog(
-      title: isSection ? 'Editar sección' : 'Editar enlace',
-      existing: nav,
-      initialIsSection: isSection,
-      initialParentId: nav.parentId,
-      onSave: (updated) async {
-        final service = context.read<WebsiteService>();
-        await service.updateNavigation(updated);
-      },
+      // Prefill
+      _inlineNavLabelController.text = nav.label;
+      _inlineNavLinkValueController.text = nav.linkValue ?? '';
+      _inlineNavParentId = nav.parentId;
+      _inlineNavLinkType = nav.linkType;
+      _inlineNavIsVisible = nav.isVisible;
+      _inlineNavShowOnDesktop = nav.showOnDesktop;
+      _inlineNavShowOnMobile = nav.showOnMobile;
+      _inlineNavOpenInNewTab = nav.openInNewTab;
+
+      // If user clicked edit on a section tab, ensure the section is selected.
+      if (nav.parentId == null) {
+        _selectedFooterSectionId = nav.id;
+      }
+    });
+  }
+
+  void _cancelInlineFooterNavEdit() {
+    setState(() {
+      _editingFooterNavId = null;
+      _isSavingInlineNav = false;
+    });
+  }
+
+  bool _isEditingNav(WebsiteNavigation nav) => _editingFooterNavId == nav.id;
+
+  bool _isInlineEditingSection(WebsiteNavigation nav) {
+    // A footer "section" is a top-level item (parent_id = null).
+    // Historically we store it with link_type='action' and blank link_value.
+    return nav.parentId == null;
+  }
+
+  Widget _buildInlineFooterNavEditor(
+    WebsiteNavigation nav, {
+    required List<WebsiteNavigation> footerParents,
+  }) {
+    final isSection = _isInlineEditingSection(nav);
+
+    final visibleParents = footerParents
+        .where((p) => p.id != nav.id)
+        .map((p) => (p.id, p.label))
+        .toList();
+
+    String linkTypeValue(NavLinkType type) => switch (type) {
+          NavLinkType.page => 'page',
+          NavLinkType.external => 'external',
+          NavLinkType.anchor => 'anchor',
+          _ => 'page',
+        };
+
+    NavLinkType parseLinkTypeValue(String value) => switch (value) {
+          'page' => NavLinkType.page,
+          'external' => NavLinkType.external,
+          'anchor' => NavLinkType.anchor,
+          _ => NavLinkType.page,
+        };
+
+    String? validate() {
+      if (_inlineNavLabelController.text.trim().isEmpty) {
+        return 'El texto es requerido.';
+      }
+      if (!isSection) {
+        if (_inlineNavLinkValueController.text.trim().isEmpty) {
+          return 'El destino es requerido.';
+        }
+      }
+      return null;
+    }
+
+    final errorText = validate();
+
+    final title = isSection ? 'Editar sección' : 'Editar enlace';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: _cancelInlineFooterNavEdit,
+                child: const Text(
+                  'Cerrar',
+                  style: TextStyle(color: Colors.white60),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Texto
+          _EditorTextField(
+            label: 'Texto',
+            value: _inlineNavLabelController.text,
+            controller: _inlineNavLabelController,
+            onChanged: (_) => setState(() {}),
+            hint: isSection
+                ? 'Ej: Legal, Ayuda, Empresa'
+                : 'Ej: Términos y condiciones',
+          ),
+
+          if (!isSection) ...[
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Sección (opcional)',
+              value: _inlineNavParentId ?? '',
+              options: <(String, String)>[
+                ('', 'Sin sección'),
+                ...visibleParents,
+              ],
+              onChanged: (v) => setState(() {
+                _inlineNavParentId = v.isEmpty ? null : v;
+              }),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Tipo',
+              value: linkTypeValue(_inlineNavLinkType),
+              options: const <(String, String)>[
+                ('page', 'Página'),
+                ('external', 'URL externa'),
+                ('anchor', 'Ancla (#)'),
+              ],
+              onChanged: (v) => setState(() {
+                _inlineNavLinkType = parseLinkTypeValue(v);
+                // Reset new tab toggle when leaving external.
+                if (_inlineNavLinkType != NavLinkType.external) {
+                  _inlineNavOpenInNewTab = false;
+                }
+              }),
+            ),
+            const SizedBox(height: 12),
+            WebsiteLinkValueEditor(
+              label: 'Destino',
+              value: _inlineNavLinkValueController.text,
+              dense: true,
+              darkStyle: true,
+              allowInternal: _inlineNavLinkType == NavLinkType.page,
+              allowExternal: _inlineNavLinkType == NavLinkType.external,
+              allowAnchor: _inlineNavLinkType == NavLinkType.anchor,
+              helpText: switch (_inlineNavLinkType) {
+                NavLinkType.page =>
+                  'Elige una página o ruta del sitio (recomendado).',
+                NavLinkType.external => 'Pega un enlace externo (https://...)',
+                NavLinkType.anchor =>
+                  'Usa un ancla como #seccion (misma página).',
+                _ => null,
+              },
+              onChanged: (v) {
+                _inlineNavLinkValueController.text = v;
+                setState(() {});
+              },
+            ),
+            if (_inlineNavLinkType == NavLinkType.external) ...[
+              const SizedBox(height: 10),
+              _EditorToggle(
+                label: 'Abrir en nueva pestaña',
+                value: _inlineNavOpenInNewTab,
+                onChanged: (v) => setState(() => _inlineNavOpenInNewTab = v),
+              ),
+            ],
+          ] else ...[
+            const SizedBox(height: 12),
+            Text(
+              'Las secciones son títulos (columnas). No tienen destino.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 12,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+          _EditorToggle(
+            label: 'Visible',
+            value: _inlineNavIsVisible,
+            onChanged: (v) => setState(() => _inlineNavIsVisible = v),
+          ),
+          const SizedBox(height: 8),
+          _EditorToggle(
+            label: 'Mostrar en escritorio',
+            value: _inlineNavShowOnDesktop,
+            onChanged: (v) => setState(() => _inlineNavShowOnDesktop = v),
+          ),
+          const SizedBox(height: 8),
+          _EditorToggle(
+            label: 'Mostrar en móvil',
+            value: _inlineNavShowOnMobile,
+            onChanged: (v) => setState(() => _inlineNavShowOnMobile = v),
+          ),
+
+          if (errorText != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              errorText,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 12,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      _isSavingInlineNav ? null : _cancelInlineFooterNavEdit,
+                  style: OutlinedButton.styleFrom(
+                    side:
+                        BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                    foregroundColor: Colors.white70,
+                  ),
+                  child: const Text('Cancelar'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: (errorText != null || _isSavingInlineNav)
+                      ? null
+                      : () async {
+                          final service = context.read<WebsiteService>();
+                          setState(() => _isSavingInlineNav = true);
+
+                          try {
+                            final updated = WebsiteNavigation(
+                              id: nav.id,
+                              tenantId: nav.tenantId,
+                              menuLocation: MenuLocation.footer,
+                              label: _inlineNavLabelController.text.trim(),
+                              linkType: isSection
+                                  ? NavLinkType.action
+                                  : _inlineNavLinkType,
+                              linkValue: isSection
+                                  ? ''
+                                  : _inlineNavLinkValueController.text.trim(),
+                              openInNewTab: (!isSection &&
+                                      _inlineNavLinkType ==
+                                          NavLinkType.external)
+                                  ? _inlineNavOpenInNewTab
+                                  : false,
+                              parentId: isSection ? null : _inlineNavParentId,
+                              orderIndex: nav.orderIndex,
+                              isVisible: _inlineNavIsVisible,
+                              showOnDesktop: _inlineNavShowOnDesktop,
+                              showOnMobile: _inlineNavShowOnMobile,
+                              cssClass: nav.cssClass,
+                              highlight: nav.highlight,
+                              createdAt: nav.createdAt,
+                              updatedAt: DateTime.now(),
+                              children: nav.children,
+                              linkedPage: nav.linkedPage,
+                            );
+
+                            await service.updateNavigation(updated);
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Cambios guardados'),
+                                  backgroundColor: Color(0xFF00A09D),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error al guardar: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isSavingInlineNav = false);
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A09D),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isSavingInlineNav
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Guardar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -10643,6 +11032,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     required double width,
   }) {
     final isDropTarget = _hoveringLinkIndex == index && _draggingLinkId != null;
+    final isEditing = _isEditingNav(link);
 
     return DragTarget<String>(
       key: ValueKey('footer_link_target_$index'),
@@ -10703,10 +11093,15 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           decoration: BoxDecoration(
             color: isDropTarget
                 ? Colors.white.withValues(alpha: 0.12)
-                : const Color(0xFF2D2D2D),
+                : (isEditing
+                    ? const Color(0xFF00A09D).withValues(alpha: 0.10)
+                    : const Color(0xFF2D2D2D)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isDropTarget ? Colors.white24 : Colors.white10,
+              color: isDropTarget
+                  ? Colors.white24
+                  : (isEditing ? const Color(0xFF00A09D) : Colors.white10),
+              width: isEditing ? 1.5 : 1,
             ),
           ),
           child: Row(
@@ -10775,77 +11170,91 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     required int totalCount,
     required List<String> orderedIds,
   }) {
+    final isEditing = _isEditingNav(section);
     final bg = isSelected
         ? const Color(0xFF00A09D).withValues(alpha: 0.18)
         : Colors.white.withValues(alpha: 0.06);
 
-    return Material(
-      color: isDropTarget ? Colors.white.withValues(alpha: 0.10) : bg,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
+    final effectiveBg = isDropTarget
+        ? Colors.white.withValues(alpha: 0.10)
+        : (isEditing ? const Color(0xFF00A09D).withValues(alpha: 0.12) : bg);
+
+    return Container(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => setState(() {
-          _selectedFooterSectionId = section.id;
-        }),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle-only drag. Feedback uses non-recursive content builder.
-              Draggable<String>(
-                data: section.id,
-                dragAnchorStrategy: pointerDragAnchorStrategy,
-                onDragStarted: () {
-                  setState(() {
-                    _draggingSectionId = section.id;
-                  });
-                },
-                // Note: Don't clear state in onDragEnd - it races with
-                // onAcceptWithDetails. Let onAcceptWithDetails handle
-                // successful drops, onDraggableCanceled handles failures.
-                onDraggableCanceled: (_, __) {
-                  setState(() {
-                    _draggingSectionId = null;
-                    _hoveringSectionIndex = null;
-                  });
-                },
-                feedback: _buildFooterSectionTabContent(
-                  section,
-                  isSelected: isSelected,
-                  backgroundColor: bg,
-                ),
-                childWhenDragging: const Icon(
-                  Icons.drag_handle,
-                  color: Colors.white24,
-                  size: 18,
-                ),
-                child: const MouseRegion(
-                  cursor: SystemMouseCursors.grab,
-                  child: Icon(
+        border: Border.all(
+          color: isEditing ? const Color(0xFF00A09D) : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: Material(
+        color: effectiveBg,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() {
+            _selectedFooterSectionId = section.id;
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle-only drag. Feedback uses non-recursive content builder.
+                Draggable<String>(
+                  data: section.id,
+                  dragAnchorStrategy: pointerDragAnchorStrategy,
+                  onDragStarted: () {
+                    setState(() {
+                      _draggingSectionId = section.id;
+                    });
+                  },
+                  // Note: Don't clear state in onDragEnd - it races with
+                  // onAcceptWithDetails. Let onAcceptWithDetails handle
+                  // successful drops, onDraggableCanceled handles failures.
+                  onDraggableCanceled: (_, __) {
+                    setState(() {
+                      _draggingSectionId = null;
+                      _hoveringSectionIndex = null;
+                    });
+                  },
+                  feedback: _buildFooterSectionTabContent(
+                    section,
+                    isSelected: isSelected,
+                    backgroundColor: bg,
+                  ),
+                  childWhenDragging: const Icon(
                     Icons.drag_handle,
-                    color: Colors.white54,
+                    color: Colors.white24,
                     size: 18,
                   ),
+                  child: const MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: Icon(
+                      Icons.drag_handle,
+                      color: Colors.white54,
+                      size: 18,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                section.label,
-                style: TextStyle(
-                  color: section.isVisible ? Colors.white : Colors.orange,
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                const SizedBox(width: 6),
+                Text(
+                  section.label,
+                  style: TextStyle(
+                    color: section.isVisible ? Colors.white : Colors.orange,
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              _buildFooterItemActionsMenu(
-                section,
-                itemIndex: index,
-                totalCount: totalCount,
-                orderedIds: orderedIds,
-              ),
-            ],
+                const SizedBox(width: 4),
+                _buildFooterItemActionsMenu(
+                  section,
+                  itemIndex: index,
+                  totalCount: totalCount,
+                  orderedIds: orderedIds,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -10868,31 +11277,32 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           case 'move_prev':
           case 'move_next':
           case 'move_up':
-          case 'move_down': {
-            final ids = orderedIds;
-            final index = itemIndex;
-            final total = totalCount;
+          case 'move_down':
+            {
+              final ids = orderedIds;
+              final index = itemIndex;
+              final total = totalCount;
 
-            if (ids == null || index == null || total == null) return;
+              if (ids == null || index == null || total == null) return;
 
-            // Determine movement direction.
-            final delta = switch (value) {
-              'move_prev' || 'move_up' => -1,
-              'move_next' || 'move_down' => 1,
-              _ => 0,
-            };
-            if (delta == 0) return;
+              // Determine movement direction.
+              final delta = switch (value) {
+                'move_prev' || 'move_up' => -1,
+                'move_next' || 'move_down' => 1,
+                _ => 0,
+              };
+              if (delta == 0) return;
 
-            final nextOrder = _moveIdInOrder(ids, nav.id, delta);
-            if (nextOrder.length != ids.length) return;
+              final nextOrder = _moveIdInOrder(ids, nav.id, delta);
+              if (nextOrder.length != ids.length) return;
 
-            if (parent == null) {
-              _persistFooterSectionOrder(nextOrder);
-            } else {
-              _persistFooterLinkOrder(parent.id, nextOrder);
+              if (parent == null) {
+                _persistFooterSectionOrder(nextOrder);
+              } else {
+                _persistFooterLinkOrder(parent.id, nextOrder);
+              }
+              return;
             }
-            return;
-          }
           case 'add_link':
             await _addFooterLink(parentId: nav.id);
             return;
@@ -10900,7 +11310,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             await _toggleFooterNavVisibility(nav);
             return;
           case 'edit':
-            await _editFooterNav(nav);
+            _beginInlineFooterNavEdit(nav);
             return;
           case 'delete':
             await _deleteFooterNav(nav);
@@ -11029,178 +11439,245 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           builder: (context, setState) {
             final effectiveIsSection = isSection;
 
+            String linkTypeValue(NavLinkType type) => switch (type) {
+                  NavLinkType.page => 'page',
+                  NavLinkType.external => 'external',
+                  NavLinkType.anchor => 'anchor',
+                  _ => 'page',
+                };
+
+            NavLinkType parseLinkTypeValue(String value) => switch (value) {
+                  'page' => NavLinkType.page,
+                  'external' => NavLinkType.external,
+                  'anchor' => NavLinkType.anchor,
+                  _ => NavLinkType.page,
+                };
+
             return AlertDialog(
               backgroundColor: const Color(0xFF2D2D2D),
               title: Text(title, style: const TextStyle(color: Colors.white)),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: labelController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Texto',
-                        labelStyle: TextStyle(color: Colors.white60),
-                        enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.white24)),
-                        focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF00A09D))),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Requerido';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Parent selection (optional)
-                    DropdownButtonFormField<String?>(
-                      initialValue: parentId,
-                      dropdownColor: const Color(0xFF2D2D2D),
-                      decoration: const InputDecoration(
-                        labelText: 'Sección (opcional)',
-                        labelStyle: TextStyle(color: Colors.white60),
-                        enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.white24)),
-                        focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF00A09D))),
-                      ),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('Sin sección',
-                              style: TextStyle(color: Colors.white)),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Texto
+                        FormField<String>(
+                          initialValue: labelController.text,
+                          validator: (v) {
+                            final value = (v ?? '').trim();
+                            if (value.isEmpty) return 'Requerido';
+                            return null;
+                          },
+                          builder: (state) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _EditorTextField(
+                                  label: 'Texto',
+                                  value: labelController.text,
+                                  controller: labelController,
+                                  onChanged: (v) {
+                                    state.didChange(v);
+                                    setState(() {});
+                                  },
+                                  hint: effectiveIsSection
+                                      ? 'Ej: Legal, Ayuda, Empresa'
+                                      : 'Ej: Términos y condiciones',
+                                ),
+                                if (state.hasError) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    state.errorText ?? '',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
                         ),
-                        ...footerParents.map(
-                          (p) => DropdownMenuItem<String?>(
-                            value: p.id,
-                            child: Text(p.label,
-                                style: const TextStyle(color: Colors.white)),
+                        const SizedBox(height: 12),
+
+                        // Sección (opcional)
+                        _EditorDropdown(
+                          label: 'Sección (opcional)',
+                          value: parentId ?? '',
+                          options: <(String, String)>[
+                            ('', 'Sin sección'),
+                            ...footerParents.map((p) => (p.id, p.label)),
+                          ],
+                          onChanged: (v) => setState(() {
+                            parentId = v.isEmpty ? null : v;
+                          }),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Es sección (título)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.1)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Es sección (título)',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Una sección es un encabezado con enlaces dentro.',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Switch(
+                                value: isSection,
+                                onChanged: (v) => setState(() {
+                                  isSection = v;
+                                  if (isSection) {
+                                    linkType = NavLinkType.action;
+                                    linkValueController.text = '';
+                                  }
+                                }),
+                                activeThumbColor: Colors.white,
+                                activeTrackColor: const Color(0xFF00A09D),
+                                inactiveThumbColor: Colors.grey.shade400,
+                                inactiveTrackColor: Colors.grey.shade700,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                      onChanged: (v) => setState(() {
-                        parentId = v;
-                      }),
-                    ),
-                    const SizedBox(height: 12),
 
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Es sección (título)',
-                          style: TextStyle(color: Colors.white)),
-                      subtitle: const Text(
-                        'Una sección es un encabezado con enlaces dentro',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                      value: isSection,
-                      activeThumbColor: const Color(0xFF00A09D),
-                      onChanged: (v) => setState(() {
-                        isSection = v;
-                        if (isSection) {
-                          linkType = NavLinkType.action;
-                          linkValueController.text = '';
-                        }
-                      }),
-                    ),
-                    const SizedBox(height: 8),
+                        if (!effectiveIsSection) ...[
+                          const SizedBox(height: 12),
 
-                    if (!effectiveIsSection) ...[
-                      DropdownButtonFormField<NavLinkType>(
-                        initialValue: linkType,
-                        dropdownColor: const Color(0xFF2D2D2D),
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo',
-                          labelStyle: TextStyle(color: Colors.white60),
-                          enabledBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: Colors.white24)),
-                          focusedBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: Color(0xFF00A09D))),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                              value: NavLinkType.page,
-                              child: Text('Página',
-                                  style: TextStyle(color: Colors.white))),
-                          DropdownMenuItem(
-                              value: NavLinkType.external,
-                              child: Text('URL externa',
-                                  style: TextStyle(color: Colors.white))),
-                          DropdownMenuItem(
-                              value: NavLinkType.anchor,
-                              child: Text('Ancla (#)',
-                                  style: TextStyle(color: Colors.white))),
+                          // Tipo
+                          _EditorDropdown(
+                            label: 'Tipo',
+                            value: linkTypeValue(linkType),
+                            options: const <(String, String)>[
+                              ('page', 'Página'),
+                              ('external', 'URL externa'),
+                              ('anchor', 'Ancla (#)'),
+                            ],
+                            onChanged: (v) => setState(() {
+                              linkType = parseLinkTypeValue(v);
+                            }),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Destino
+                          FormField<String>(
+                            initialValue: linkValueController.text,
+                            validator: (v) {
+                              final value = (v ?? '').trim();
+                              if (value.isEmpty) return 'Requerido';
+                              return null;
+                            },
+                            builder: (state) {
+                              final help = switch (linkType) {
+                                NavLinkType.page =>
+                                  'Elige una página o ruta del sitio (recomendado).',
+                                NavLinkType.external =>
+                                  'Pega un enlace externo (https://...)',
+                                NavLinkType.anchor =>
+                                  'Usa un ancla como #seccion (misma página).',
+                                _ => null,
+                              };
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  WebsiteLinkValueEditor(
+                                    label: 'Destino',
+                                    value: linkValueController.text,
+                                    helpText: help,
+                                    dense: true,
+                                    darkStyle: true,
+                                    allowInternal: linkType == NavLinkType.page,
+                                    allowExternal:
+                                        linkType == NavLinkType.external,
+                                    allowAnchor: linkType == NavLinkType.anchor,
+                                    onChanged: (v) {
+                                      linkValueController.text = v;
+                                      state.didChange(v);
+                                      setState(() {});
+                                    },
+                                  ),
+                                  if (state.hasError) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      state.errorText ?? '',
+                                      style: const TextStyle(
+                                        color: Colors.redAccent,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
+                          if (linkType == NavLinkType.external) ...[
+                            const SizedBox(height: 10),
+                            _EditorToggle(
+                              label: 'Abrir en nueva pestaña',
+                              value: openInNewTab,
+                              onChanged: (v) =>
+                                  setState(() => openInNewTab = v),
+                            ),
+                          ],
                         ],
-                        onChanged: (v) => setState(() {
-                          if (v == null) return;
-                          linkType = v;
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: linkValueController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Destino',
-                          labelStyle: const TextStyle(color: Colors.white60),
-                          hintText: linkType == NavLinkType.page
-                              ? '/productos, /nosotros'
-                              : (linkType == NavLinkType.anchor
-                                  ? '#seccion'
-                                  : 'https://...'),
-                          hintStyle: const TextStyle(color: Colors.white38),
-                          enabledBorder: const UnderlineInputBorder(
-                              borderSide: BorderSide(color: Colors.white24)),
-                          focusedBorder: const UnderlineInputBorder(
-                              borderSide: BorderSide(color: Color(0xFF00A09D))),
+
+                        const SizedBox(height: 12),
+                        _EditorToggle(
+                          label: 'Visible',
+                          value: isVisible,
+                          onChanged: (v) => setState(() => isVisible = v),
                         ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Requerido';
-                          }
-                          return null;
-                        },
-                      ),
-                      if (linkType == NavLinkType.external)
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Abrir en nueva pestaña',
-                              style: TextStyle(color: Colors.white)),
-                          value: openInNewTab,
-                          activeThumbColor: const Color(0xFF00A09D),
-                          onChanged: (v) => setState(() => openInNewTab = v),
+                        const SizedBox(height: 8),
+                        _EditorToggle(
+                          label: 'Mostrar en escritorio',
+                          value: showOnDesktop,
+                          onChanged: (v) => setState(() => showOnDesktop = v),
                         ),
-                    ],
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Visible',
-                          style: TextStyle(color: Colors.white)),
-                      value: isVisible,
-                      activeThumbColor: const Color(0xFF00A09D),
-                      onChanged: (v) => setState(() => isVisible = v),
+                        const SizedBox(height: 8),
+                        _EditorToggle(
+                          label: 'Mostrar en móvil',
+                          value: showOnMobile,
+                          onChanged: (v) => setState(() => showOnMobile = v),
+                        ),
+                      ],
                     ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Mostrar en escritorio',
-                          style: TextStyle(color: Colors.white)),
-                      value: showOnDesktop,
-                      activeThumbColor: const Color(0xFF00A09D),
-                      onChanged: (v) => setState(() => showOnDesktop = v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Mostrar en móvil',
-                          style: TextStyle(color: Colors.white)),
-                      value: showOnMobile,
-                      activeThumbColor: const Color(0xFF00A09D),
-                      onChanged: (v) => setState(() => showOnMobile = v),
-                    ),
-                  ],
+                  ),
                 ),
               ),
               actions: [
@@ -11265,6 +11742,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     _twitterController.dispose();
     _youtubeController.dispose();
     _tiktokController.dispose();
+    _inlineNavLabelController.dispose();
+    _inlineNavLinkValueController.dispose();
     super.dispose();
   }
 
@@ -11513,7 +11992,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                       section.id == effectiveSelectedId;
 
                                   final orderedSectionIds =
-                                    sections.map((s) => s.id).toList();
+                                      sections.map((s) => s.id).toList();
 
                                   return DragTarget<String>(
                                     onWillAcceptWithDetails: (details) {
@@ -11609,11 +12088,23 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    selectedSection.label,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(6),
+                                      onTap: () => _beginInlineFooterNavEdit(
+                                          selectedSection),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 6, horizontal: 6),
+                                        child: Text(
+                                          selectedSection.label,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -11627,6 +12118,14 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                               ],
                             ),
                           ),
+
+                          // Inline editor for the selected section (when editing a section)
+                          if (_isEditingNav(selectedSection))
+                            _buildInlineFooterNavEditor(
+                              selectedSection,
+                              footerParents: sections,
+                            ),
+
                           const SizedBox(height: 10),
 
                           if (links.isEmpty)
@@ -11644,7 +12143,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                               ),
                             )
                           else
-                            LayoutBuilder(
+                            ConstraintLayoutBuilder(
                               builder: (context, constraints) {
                                 final listWidth = constraints.maxWidth;
                                 return Column(
@@ -11653,13 +12152,24 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                     final link = links[index];
                                     final orderedLinkIds =
                                         links.map((l) => l.id).toList();
-                                    return _buildFooterLinkRow(
-                                      link,
-                                      index: index,
-                                      parentSection: selectedSection,
-                                      totalCount: links.length,
-                                      orderedIds: orderedLinkIds,
-                                      width: listWidth,
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _buildFooterLinkRow(
+                                          link,
+                                          index: index,
+                                          parentSection: selectedSection,
+                                          totalCount: links.length,
+                                          orderedIds: orderedLinkIds,
+                                          width: listWidth,
+                                        ),
+                                        if (_isEditingNav(link))
+                                          _buildInlineFooterNavEditor(
+                                            link,
+                                            footerParents: sections,
+                                          ),
+                                      ],
                                     );
                                   }),
                                 );
@@ -12009,8 +12519,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _descriptionController,
-                    style: const TextStyle(color: Colors.white),
                     maxLines: 2,
+                    style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: 'Descripción (opcional)',
                       hintStyle: const TextStyle(color: Colors.white38),

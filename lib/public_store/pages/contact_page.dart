@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../theme/public_store_theme.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 /// Modern contact page that reads all data from website_settings
 /// Fully editable through the Website Editor
@@ -23,9 +25,10 @@ class _ContactPageState extends State<ContactPage>
   final _messageController = TextEditingController();
   bool _isSending = false;
 
-  // Keep this page alive in memory to prevent reloading on navigation
+  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
+  // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
@@ -88,6 +91,12 @@ class _ContactPageState extends State<ContactPage>
     // Debug: build
     final websiteService = context.watch<WebsiteService>();
 
+    // Get edit mode for key to prevent element reactivation conflicts
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final modeKey = editProvider.isEditMode
+        ? 'edit'
+        : (editProvider.isPreviewMode ? 'preview' : 'normal');
+
     // Get all contact info from website_settings (editable in admin)
     final storeName = websiteService.getSetting('store_name', 'Viñabike');
     final contactEmail =
@@ -128,12 +137,14 @@ class _ContactPageState extends State<ContactPage>
                     contactPhone: contactPhone,
                     contactEmail: contactEmail,
                     primaryColor: primaryColor,
+                    modeKey: modeKey,
                   ),
 
                   const SizedBox(height: 80),
 
                   // Two column layout: Form + Info
-                  LayoutBuilder(
+                  MediaQueryLayoutBuilder(
+                    key: ValueKey('contact_form_layout_$modeKey'),
                     builder: (context, constraints) {
                       final isWide = constraints.maxWidth > 900;
 
@@ -145,7 +156,7 @@ class _ContactPageState extends State<ContactPage>
                             Expanded(
                               flex: 3,
                               child:
-                                  _buildContactForm(contactEmail, primaryColor),
+                                  _buildContactForm(contactEmail, primaryColor, modeKey),
                             ),
                             const SizedBox(width: 48),
                             // Info Panel
@@ -168,7 +179,7 @@ class _ContactPageState extends State<ContactPage>
 
                       return Column(
                         children: [
-                          _buildContactForm(contactEmail, primaryColor),
+                          _buildContactForm(contactEmail, primaryColor, modeKey),
                           const SizedBox(height: 48),
                           _buildInfoPanel(
                             storeName: storeName,
@@ -256,8 +267,10 @@ class _ContactPageState extends State<ContactPage>
     required String contactPhone,
     required String contactEmail,
     required Color primaryColor,
+    required String modeKey,
   }) {
-    return LayoutBuilder(
+    return MediaQueryLayoutBuilder(
+      key: ValueKey('contact_cards_layout_$modeKey'),
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 800;
         final cardWidth =
@@ -376,7 +389,7 @@ class _ContactPageState extends State<ContactPage>
     );
   }
 
-  Widget _buildContactForm(String contactEmail, Color primaryColor) {
+  Widget _buildContactForm(String contactEmail, Color primaryColor, String modeKey) {
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
@@ -429,7 +442,8 @@ class _ContactPageState extends State<ContactPage>
             const SizedBox(height: 20),
 
             // Email & Phone Row
-            LayoutBuilder(
+            MediaQueryLayoutBuilder(
+              key: ValueKey('contact_email_phone_layout_$modeKey'),
               builder: (context, constraints) {
                 if (constraints.maxWidth > 500) {
                   return Row(

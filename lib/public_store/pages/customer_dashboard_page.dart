@@ -5,6 +5,7 @@ import '../services/customer_account_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../widgets/premium_dashboard_widgets.dart';
 import '../widgets/customer_chat_panel.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CustomerDashboardPage extends StatefulWidget {
   const CustomerDashboardPage({super.key});
@@ -53,7 +54,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
 
     return Container(
       color: Colors.white,
-      child: LayoutBuilder(
+      child: MediaQueryLayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 900;
           if (isDesktop) {

@@ -2435,7 +2435,7 @@ Each block stores its configuration in `block_data` JSONB:
   "title": "Welcome to Vinabike",
   "subtitle": "Your cycling partner",
   "buttonText": "Shop Now",
-  "buttonLink": "/tienda/productos",
+  "buttonLink": "/productos",
   "backgroundImage": "https://...",
   "overlayColor": "#000000",
   "overlayOpacity": 0.35,
@@ -2664,38 +2664,112 @@ The Odoo-style editor automatically handles preview if block is registered prope
 
 ---
 
-## 🔘 Button/Link System
+## 🔗 Website Link System (STANDARD - Jan 2026)
 
-**Every block that can have buttons MUST support:**
+**The Website Editor is the ONLY source of truth for navigation.**
 
-1. **Button Text** (`buttonText`): The label on the button
-2. **Button Link** (`buttonLink`): Where it navigates to
+If a UI element can navigate (button, card, menu item, footer link, banner CTA, “ver todos”, etc.), it MUST:
+1) Be configurable in the editor UI.
+2) Be saved to the database.
+3) Be rendered and navigated EXACTLY as saved.
 
-**Valid link formats:**
-- `/tienda` - Internal store home
-- `/tienda/productos` - Product catalog
-- `/tienda/categoria/mtb` - Category page
-- `/pagina/nosotros` - Custom page by slug
-- `https://external.com` - External URL
+### Why we need a standard
+`block_data` is stored as `jsonb` and Flutter treats it as `Map<String, dynamic>`.
+That means saving the “wrong key” (e.g. `link` vs `ctaLink`) will not error at save-time: it’s valid JSON.
+If the renderer reads a different key, it can silently navigate to an old/stale value.
 
-**Implementation:**
-```dart
-if (buttonText != null && buttonText.isNotEmpty)
-  ElevatedButton(
-    onPressed: () {
-      if (buttonLink != null) {
-        if (buttonLink.startsWith('http')) {
-          // External link
-          launchUrl(Uri.parse(buttonLink));
-        } else {
-          // Internal navigation
-          onNavigate?.call(buttonLink);
-        }
-      }
-    },
-    child: Text(buttonText),
-  )
-```
+### Canonical UX (one picker everywhere)
+All link-capable fields MUST use the same editor widget and UX:
+- Use `WebsiteLinkValueEditor` for every “destination” field.
+- Do NOT use raw text fields for links (no manual URL typing-only UX).
+- The UI must support:
+  - Picking an internal website page
+  - Picking common internal routes (Inicio, Productos, Contacto, etc.)
+  - Entering an external URL
+
+### Canonical stored value format
+We standardize on a **single string href** (stored in whatever field key the block schema defines), with consistent rules:
+- **Internal links:** store clean public-store paths (preferred):
+  - `/` (home)
+  - `/productos`
+  - `/productos?q=botellas%20de%20agua` (search term)
+  - `/productos?type=service` (services view)
+  - `/pagina/<slug>` (custom pages)
+- **External links:** store full absolute URL: `https://...`
+- **Legacy links:** `/tienda/...` may exist in old data; editor/save logic SHOULD normalize to clean paths.
+- **Avoid legacy params:** do NOT generate `?categoria=mtb`. Prefer `q=` for tokens or `category=<uuid>` when we truly mean category ID.
+
+### Data model rules (prevent “Frankenstein” drift)
+- For a given clickable element, there MUST be exactly one destination field.
+  - Example: a Category Grid card must not have both `ctaLink` and `link` with different meanings.
+- If we must support legacy aliases temporarily:
+  - The editor MUST keep aliases in sync on save.
+  - `WebsiteService` MUST normalize on load.
+  - The renderer MUST read the canonical value (or explicitly resolve compat until migration is done).
+- Never introduce a new “alias” key casually. If you rename a field, treat it as a migration.
+
+### Renderer rules
+- The renderer must not hardcode destinations.
+- For internal navigation, always call the provided `onNavigate?.call(href)` (it routes through the store’s navigation normalization layer).
+- Only use safe fallbacks (`/productos`, `/`) when a destination is truly missing.
+
+### Schema rule for block definitions
+Any destination field in a block definition MUST use `WebsiteBlockFieldType.link`.
+Never define link fields as plain `text`.
+
+### Navigation Management (menus/footer)
+Navigation editor screens must reuse the same `WebsiteLinkValueEditor` so menu links behave exactly like block links.
+This keeps UX consistent and eliminates special-case pickers.
+
+---
+
+## 🧱 Website Editor Standardization (NORTH STAR - Jan 2026)
+
+The real enemy is not “a single bug” — it’s **drift**. The Website Builder stores configuration in `jsonb`, so schema mismatches and inconsistent UX can silently persist in production data.
+
+### What we learned (root cause)
+- The editor can save any JSON keys without errors; “wrong key” data is still valid.
+- If a renderer reads a different key (or has hardcoded fallbacks), the UI becomes a **Frankenstein**: user edits appear to “not work”, old values “win”, and behavior differs across blocks.
+- Fixing one block at a time doesn’t scale. We need **shared capability systems** that every block uses.
+
+### The solution direction (capability systems)
+When multiple blocks share the same capability, they MUST share the same widgets, data rules, and behavior.
+
+**Capability: Links**
+- Use the Link System standard above (single href string, `WebsiteLinkValueEditor`, normalize legacy `/tienda/*` + legacy query params).
+- Renderer must always route via `onNavigate?.call(href)` (no direct hardcoded route logic inside blocks).
+
+**Capability: Inline Text Editing**
+- Use `InlineEditableTextV2` for any inline-editable text going forward.
+- Toolbars must be consistent via a preset (e.g. `TextToolbarPreset.textOnly/minimal/basic/full`) rather than ad-hoc per block.
+- Do not introduce new “simple” text editors for convenience; migrate older ones when touching a block.
+
+**Capability: Inline Images / Media Controls**
+- Use `InlineEditableImage` for click-to-replace everywhere.
+- If a block renders a cover/background image (hero, carousel, banners, cards), it should support the same **mobile focal point / background positioning** data model and editor controls.
+- Do not implement per-block image alignment UX; use shared controls and shared stored keys.
+
+**Capability: Navigation Normalization**
+- Any href coming from the editor may be legacy (`/tienda/...`) or historically inconsistent (old params like `categoria=`).
+- Normalize at load/save boundaries (service layer) and navigate through the store’s normalization layer.
+
+### Data discipline rules (how we stop drift)
+- **Defaults live in block definitions/registry**, not in renderers.
+- **Editor writes canonical keys** only. If legacy aliases exist, keep them in sync until migration is complete.
+- **WebsiteService must normalize** blocks on load/save so persisted data becomes more correct over time.
+- **Never add a second key for the same meaning** (e.g. avoid `link` + `ctaLink` unless explicitly in a compatibility window).
+
+### Migration philosophy (future-proof, no surprises)
+- Prefer “compat + normalize + converge” over one-off hacks.
+- If production data already contains legacy keys/values, fix it by:
+  1) Normalizing on load (so the UI behaves correctly immediately)
+  2) Normalizing on save (so edits permanently repair the data)
+  3) Optionally running a one-time data cleanup for the tenant
+
+### Definition of done (for any website editor change)
+- The same capability behaves the same across blocks (UX + stored keys + navigation).
+- Editor-assigned values always win over old/hardcoded behavior.
+- If legacy data exists, it is handled (and ideally normalized) so we don’t regress later.
 
 ---
 

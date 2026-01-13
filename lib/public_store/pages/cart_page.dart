@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -11,6 +13,12 @@ class CartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    
+    // Get edit mode for key to prevent element reactivation conflicts
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final modeKey = editProvider.isEditMode
+        ? 'edit'
+        : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
     if (cart.isEmpty) {
       return _buildEmptyCart(context);
@@ -19,7 +27,8 @@ class CartPage extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(maxWidth: 1200),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: LayoutBuilder(
+      child: MediaQueryLayoutBuilder(
+        key: ValueKey('cart_layout_$modeKey'),
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 900;
 

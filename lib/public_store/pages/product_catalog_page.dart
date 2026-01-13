@@ -10,6 +10,7 @@ import '../../shared/utils/chilean_utils.dart';
 import '../widgets/full_page_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/services/tenant_service.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
@@ -40,9 +41,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
 
-  // Keep this page alive in memory to prevent reloading on navigation
+  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
+  // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
 
   @override
   void initState() {
@@ -61,9 +63,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final qp = GoRouterState.of(context).uri.queryParameters;
     final legacyCategoria = (qp['categoria'] ?? '').trim();
     var routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
-    final routeCategory = (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '')
-        .trim();
-    final routeType = (qp['type'] ?? qp['product_type'] ?? qp['tipo'] ?? '').trim();
+    final routeCategory =
+        (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '').trim();
+    final routeType =
+        (qp['type'] ?? qp['product_type'] ?? qp['tipo'] ?? '').trim();
 
     // Backward-compat: historically, some website links used `?categoria=mtb`
     // as a collection-style filter. We now treat that value as a free-text
@@ -111,7 +114,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 _filtersSearchController.value =
                     _filtersSearchController.value.copyWith(
                   text: routeCategory,
-                  selection: TextSelection.collapsed(offset: routeCategory.length),
+                  selection:
+                      TextSelection.collapsed(offset: routeCategory.length),
                   composing: TextRange.empty,
                 );
               }
@@ -120,7 +124,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             _pendingRouteCategoryValue = null;
           } else {
             _selectedCategoryId = resolved;
-            _pendingRouteCategoryValue = resolved == null ? routeCategory : null;
+            _pendingRouteCategoryValue =
+                resolved == null ? routeCategory : null;
           }
         }
       });
@@ -163,7 +168,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // If a type filter is active, prefer matching within that subset.
     final sourceProducts = _selectedProductType == null
         ? _allProducts
-        : _allProducts.where((p) => p.productType == _selectedProductType).toList();
+        : _allProducts
+            .where((p) => p.productType == _selectedProductType)
+            .toList();
 
     final categoriesMap = <String, String>{};
     for (final p in sourceProducts) {
@@ -251,7 +258,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       // If the URL carried a category filter we couldn't resolve earlier (e.g.
       // because products weren't loaded yet), resolve it now.
       if (_pendingRouteCategoryValue != null) {
-        final resolved = _resolveCategoryIdFromValue(_pendingRouteCategoryValue!);
+        final resolved =
+            _resolveCategoryIdFromValue(_pendingRouteCategoryValue!);
         if (resolved != null && mounted) {
           setState(() {
             _selectedCategoryId = resolved;
@@ -599,12 +607,19 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       return const FullPageLoading();
     }
 
+    // Get edit mode to use as key suffix - prevents element reactivation conflicts
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final modeKey = editProvider.isEditMode
+        ? 'edit'
+        : (editProvider.isPreviewMode ? 'preview' : 'normal');
+
     return Container(
       color: Colors.white,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1400),
-          child: LayoutBuilder(
+          child: MediaQueryLayoutBuilder(
+            key: ValueKey('catalog_layout_$modeKey'),
             builder: (context, constraints) {
               // Mobile: stacked layout, hide sidebar
               final isMobile = constraints.maxWidth < 700;
@@ -743,7 +758,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           if (_searchQuery.trim().isNotEmpty)
                             _buildActiveSearchIndicator(),
                           const SizedBox(height: 12),
-                          _buildProductGrid(),
+                          _buildProductGrid(modeKey),
                         ],
                       ),
                     ),
@@ -773,7 +788,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           if (_searchQuery.trim().isNotEmpty)
                             _buildActiveSearchIndicator(),
                           const SizedBox(height: 24),
-                          _buildProductGrid(),
+                          _buildProductGrid(modeKey),
                         ],
                       ),
                     ),
@@ -877,7 +892,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       children: [
         _buildCategoryOption(null, 'Todas', allCount),
         ...sortedCategories.map((entry) {
-          final count = sourceProducts.where((p) => p.categoryId == entry.key).length;
+          final count =
+              sourceProducts.where((p) => p.categoryId == entry.key).length;
           return _buildCategoryOption(entry.key, entry.value, count);
         }),
       ],
@@ -1056,7 +1072,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
-  Widget _buildProductGrid() {
+  Widget _buildProductGrid(String modeKey) {
     if (_filteredProducts.isEmpty) {
       return Center(
         child: Padding(
@@ -1098,7 +1114,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final endIndex = (startIndex + _itemsPerPage).clamp(0, totalProducts);
     final paginatedProducts = _filteredProducts.sublist(startIndex, endIndex);
 
-    return LayoutBuilder(
+    return MediaQueryLayoutBuilder(
+      key: ValueKey('product_grid_layout_$modeKey'),
       builder: (context, constraints) {
         // Responsive grid settings
         final width = constraints.maxWidth;
@@ -1294,13 +1311,19 @@ class _CatalogProductCard extends StatefulWidget {
 class _CatalogProductCardState extends State<_CatalogProductCard> {
   bool _isHovered = false;
 
+  bool _isInStock(Product product) {
+    if (product.productType == ProductType.service) return true;
+    if (!product.trackStock) return true;
+    return product.stockQuantity > 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
     // Prefer optimized image for faster loading, fallback to original
     final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
-    final inStock = product.stockQuantity > 0;
+    final inStock = _isInStock(product);
 
     final mediaQuery = MediaQuery.maybeOf(context);
     final reduceMotion = (mediaQuery?.disableAnimations ?? false) ||
@@ -1367,7 +1390,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                                 ),
                               ),
                       ),
-                      // Out of stock badge
+                      // Out of stock badge (only for stock-tracked products)
                       if (!inStock)
                         Positioned(
                           top: 8,
@@ -1458,7 +1481,8 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                             color: Colors.black,
                           ),
                         ),
-                        if (inStock)
+                        if (product.productType != ProductType.service &&
+                            product.trackStock)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(

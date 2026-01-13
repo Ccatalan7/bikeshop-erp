@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'public_store_layout.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 // -----------------------------------------------------------------------------
 // 1. LIVE JOB TRACKER - LIGHT MODE + SPANISH
@@ -71,7 +72,7 @@ class LiveJobTracker extends StatelessWidget {
               style: TextStyle(color: Colors.grey[600], fontSize: 13)),
           const SizedBox(height: 16),
           // Progress Bar with Dot
-          LayoutBuilder(
+          ConstraintLayoutBuilder(
             builder: (context, constraints) {
               final dotPosition = constraints.maxWidth * progress;
               return Stack(

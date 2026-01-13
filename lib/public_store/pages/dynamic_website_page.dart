@@ -63,9 +63,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     'mobile'
   ];
 
-  // Keep this page alive in memory to prevent reloading on navigation
+  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
+  // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => false;
 
   @override
   void initState() {

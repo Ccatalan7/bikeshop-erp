@@ -8,6 +8,7 @@ import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_chat_view.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
 import '../widgets/deferred_quote_review_panel.dart';
+import '../../shared/widgets/safe_layout_builder.dart';
 
 /// Unified customer chat page handling both list and detail views
 /// Uses standard CustomerPortalLayout but animates the right panel content
@@ -163,7 +164,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       enableContentScrolling: false,
 
       // Main Center Content
-      child: LayoutBuilder(
+      child: MediaQueryLayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 900;
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 
 /// A widget that displays an image with a draggable focal point crosshair.
 /// Used to set where the image should be centered when cropped on mobile.
@@ -86,7 +87,7 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
           ),
           clipBehavior: Clip.antiAlias,
           child: hasImage
-              ? LayoutBuilder(
+              ? ConstraintLayoutBuilder(
                   builder: (context, constraints) {
                     return Listener(
                       onPointerDown: (event) {

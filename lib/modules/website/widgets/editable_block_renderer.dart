@@ -9,6 +9,7 @@ import '../widgets/text_formatting_toolbar.dart';
 import '../widgets/canvas_block.dart';
 import 'website_block_renderer.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 
 /// Renders website blocks with inline editing capability when in edit mode.
 /// This wraps the standard WebsiteBlockRenderer and adds editable overlays.
@@ -902,13 +903,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       onPressed = () => widget.onNavigate!(link);
     }
 
-    final child = SimpleInlineEditableText(
+    final child = InlineEditableTextV2(
       text: label,
       isEditMode: true,
-      style: const TextStyle(fontWeight: FontWeight.w600),
-      onChanged: (v) =>
-          editProvider.updateBlockData(widget.blockId, 'label', v),
+      baseStyle: const TextStyle(fontWeight: FontWeight.w600),
       placeholder: 'Botón',
+      toolbarPreset: TextToolbarPreset.textOnly,
+      onTextChanged: (v) =>
+          editProvider.updateBlockData(widget.blockId, 'label', v),
     );
 
     switch (style) {
@@ -1011,7 +1013,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final showArrows = (widget.data['showArrows'] ?? true) == true;
 
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final constraintHeight =
             constraints.maxHeight.isFinite ? constraints.maxHeight : null;
@@ -1085,7 +1087,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
     // Fall back to widget.data['blockHeight'] or default 480 if no constraints
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final constraintHeight =
             constraints.maxHeight.isFinite ? constraints.maxHeight : null;
@@ -1345,7 +1347,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -1618,7 +1620,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         return Container(
@@ -1814,7 +1816,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         return Container(
@@ -2018,7 +2020,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -2138,7 +2140,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     );
 
     // Use LayoutBuilder to center vertically when height is constrained
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -2348,7 +2350,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -2587,7 +2589,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -2785,7 +2787,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -2962,7 +2964,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
 
@@ -3113,7 +3115,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               editProvider.updateBlockData(widget.blockId, 'title', value),
         ),
         const SizedBox(height: 24),
-        LayoutBuilder(
+        ConstraintLayoutBuilder(
           builder: (context, constraints) {
             final maxWidth = constraints.maxWidth;
             final cols = maxWidth >= 1100
@@ -3188,7 +3190,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       ],
     );
 
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         return Container(
@@ -3537,8 +3539,20 @@ class _EditableButtonState extends State<_EditableButton> {
   }
 
   void _removeOverlay() {
-    _overlayEntry?.remove();
+    final entry = _overlayEntry;
+    if (entry == null) return;
     _overlayEntry = null;
+    if (entry.mounted) {
+      entry.remove();
+    }
+  }
+
+  @override
+  void deactivate() {
+    // Defensive: during route transitions this widget can be deactivated while
+    // still mounted. Ensure any overlay is torn down immediately.
+    _removeOverlay();
+    super.deactivate();
   }
 
   void _closeEditing([bool save = false]) {
@@ -4188,7 +4202,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
     }
 
     // Use LayoutBuilder to get width for mobile detection
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         // Use custom height if set, otherwise default to 520
         final height = widget.blockHeight ?? 520.0;

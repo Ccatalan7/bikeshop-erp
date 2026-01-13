@@ -1852,7 +1852,56 @@ begin
 
   -- Sync inventory_qty to stock_quantity for existing records
   update products set stock_quantity = inventory_qty where stock_quantity = 0 and inventory_qty > 0;
+
+  -- Services must never track stock (backfill existing rows)
+  update products
+     set is_service = true,
+         track_stock = false,
+         inventory_qty = 0,
+         stock_quantity = 0,
+         min_stock_level = 0,
+         max_stock_level = 0
+   where product_type = 'service'
+     and (
+       is_service is distinct from true
+       or track_stock is distinct from false
+       or coalesce(inventory_qty, 0) <> 0
+       or coalesce(stock_quantity, 0) <> 0
+       or coalesce(min_stock_level, 0) <> 0
+       or coalesce(max_stock_level, 0) <> 0
+     );
 end $$;
+
+-- Keep service flags consistent even if callers forget.
+create or replace function public.sync_product_service_flags()
+returns trigger
+language plpgsql
+as $$
+begin
+  if NEW.product_type is null then
+    NEW.product_type := 'product';
+  end if;
+
+  NEW.is_service := (NEW.product_type = 'service');
+
+  if NEW.is_service then
+    NEW.track_stock := false;
+    NEW.inventory_qty := 0;
+    NEW.stock_quantity := 0;
+    NEW.min_stock_level := 0;
+    NEW.max_stock_level := 0;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sync_product_service_flags on products;
+create trigger trg_sync_product_service_flags
+  before insert or update of product_type, is_service, track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
+  on products
+  for each row
+  execute function public.sync_product_service_flags();
 
 create index if not exists idx_products_supplier_id on products(supplier_id);
 create index if not exists idx_products_brand_id on products(brand_id);
@@ -1896,7 +1945,12 @@ as $$
     q.term <> ''
     and p.tenant_id = p_tenant_id
     and p.is_active = true
-    and (coalesce(p.inventory_qty, 0) > 0 or coalesce(p.stock_quantity, 0) > 0)
+    and (
+      p.product_type = 'service'
+      or coalesce(p.track_stock, true) = false
+      or coalesce(p.inventory_qty, 0) > 0
+      or coalesce(p.stock_quantity, 0) > 0
+    )
 
     -- AND semantics across tokens, OR semantics across fields
     and (
@@ -2267,6 +2321,12 @@ declare
   v_reason text;
   v_reference text;
 begin
+  -- Services and non-stock-tracked items should not generate stock adjustments.
+  if coalesce(NEW.product_type, 'product') = 'service'
+     or coalesce(NEW.track_stock, true) = false then
+    return NEW;
+  end if;
+
   -- CRITICAL: Only track MANUAL changes, not automatic ones from invoice triggers
   -- Skip if this update is triggered by invoice consumption functions
   if current_setting('app.skip_stock_adjustment_trigger', true) = 'true' then

@@ -172,6 +172,35 @@ class _PublicStoreNavObserver extends NavigatorObserver {
 // PAGE BUILDER HELPER
 // ============================================================================
 
+/// Generates a unique page key that includes the edit/preview mode.
+/// This forces Flutter to create a NEW page when mode changes,
+/// avoiding element reactivation conflicts during layout passes.
+/// 
+/// NUCLEAR FIX: We now use UniqueKey when mode changes to completely prevent
+/// element reactivation. The _lastMode tracking ensures we only generate new
+/// UniqueKeys when the mode actually changes, not on every rebuild.
+String? _lastModeForKey;
+LocalKey? _cachedModeKey;
+
+LocalKey _modeAwarePageKey(GoRouterState state) {
+  final uri = state.uri;
+  final isEdit = uri.queryParameters['edit'] == 'true';
+  final isPreview = uri.queryParameters['preview'] == 'true';
+  final mode = isEdit ? 'edit' : (isPreview ? 'preview' : 'normal');
+  final currentModeLocation = '${state.matchedLocation}_$mode';
+  
+  // If mode+location changed, create a brand new UniqueKey
+  // This completely prevents element reactivation by giving the widget
+  // a new identity that can't possibly match any cached elements.
+  if (_lastModeForKey != currentModeLocation) {
+    _lastModeForKey = currentModeLocation;
+    _cachedModeKey = UniqueKey();
+    debugPrint('🔑 [Router] NEW UniqueKey for mode change: $currentModeLocation');
+  }
+  
+  return _cachedModeKey!;
+}
+
 Page<dynamic> _buildPage(
   BuildContext context,
   GoRouterState state,
@@ -198,22 +227,32 @@ Page<dynamic> _buildPage(
     }
   }
 
-  final pageChild = PublicStoreLayout(
-    enablePageViewScrolling: true,
-    child: child,
+  // Use mode-aware key to force full page recreation on mode changes.
+  // This prevents element reactivation conflicts during layout passes.
+  final pageKey = _modeAwarePageKey(state);
+
+  // CRITICAL: Wrap in KeyedSubtree to ensure the ENTIRE widget subtree is
+  // recreated (not reactivated from cache) when mode changes. This prevents
+  // LayoutBuilder.didChangeDependencies from triggering during a layout pass.
+  final pageChild = KeyedSubtree(
+    key: pageKey,
+    child: PublicStoreLayout(
+      enablePageViewScrolling: true,
+      child: child,
+    ),
   );
 
   // Respect user reduce-motion settings.
   if (reduceMotion) {
     return NoTransitionPage<void>(
-      key: state.pageKey,
+      key: pageKey,
       name: state.uri.toString(),
       child: pageChild,
     );
   }
 
   return CustomTransitionPage<void>(
-    key: state.pageKey,
+    key: pageKey,
     name: state.uri.toString(),
     child: pageChild,
     // Mobile: a more obvious, native-feeling slide+fade.
@@ -277,21 +316,29 @@ Page<dynamic> _buildPageNoScroll(
     }
   }
 
-  final pageChild = PublicStoreLayout(
-    enablePageViewScrolling: false,
-    child: child,
+  // Use mode-aware key to force full page recreation on mode changes.
+  final pageKey = _modeAwarePageKey(state);
+
+  // CRITICAL: Wrap in KeyedSubtree to ensure the ENTIRE widget subtree is
+  // recreated (not reactivated from cache) when mode changes.
+  final pageChild = KeyedSubtree(
+    key: pageKey,
+    child: PublicStoreLayout(
+      enablePageViewScrolling: false,
+      child: child,
+    ),
   );
 
   if (reduceMotion) {
     return NoTransitionPage<void>(
-      key: state.pageKey,
+      key: pageKey,
       name: state.uri.toString(),
       child: pageChild,
     );
   }
 
   return CustomTransitionPage<void>(
-    key: state.pageKey,
+    key: pageKey,
     name: state.uri.toString(),
     child: pageChild,
     transitionDuration:

@@ -19,6 +19,7 @@ class InlineEditableTextV2 extends StatefulWidget {
   final TextFormatting? formatting;
   final String? fieldKey; // Unique key to identify this field
   final double? maxWidth; // Optional max width constraint for the text box
+  final TextToolbarPreset toolbarPreset;
 
   const InlineEditableTextV2({
     super.key,
@@ -34,6 +35,7 @@ class InlineEditableTextV2 extends StatefulWidget {
     this.formatting,
     this.fieldKey,
     this.maxWidth,
+    this.toolbarPreset = TextToolbarPreset.full,
   });
 
   @override
@@ -64,8 +66,8 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     if (entry == null) return;
 
     final phase = SchedulerBinding.instance.schedulerPhase;
-    final canRebuildNow =
-        phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks;
+    final canRebuildNow = phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks;
 
     if (canRebuildNow) {
       entry.markNeedsBuild();
@@ -92,6 +94,14 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   @override
   void didUpdateWidget(InlineEditableTextV2 oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // If we leave edit mode while the toolbar is open (or the field is focused),
+    // tear down the overlay immediately. Otherwise the OverlayEntry can outlive
+    // the anchor during route transitions, which can trigger framework asserts.
+    if (oldWidget.isEditMode && !widget.isEditMode) {
+      _isEditing = false;
+      _hideToolbar();
+      _focusNode.unfocus();
+    }
     if (oldWidget.text != widget.text && !_isEditing) {
       _controller.text = widget.text;
     }
@@ -107,6 +117,14 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     if (oldWidget.maxWidth != widget.maxWidth && _currentWidth == null) {
       _currentWidth = widget.maxWidth;
     }
+  }
+
+  @override
+  void deactivate() {
+    // Defensive: during AnimatedSwitcher/route transitions this widget can be
+    // temporarily deactivated while still mounted. Ensure the overlay is gone.
+    _hideToolbar();
+    super.deactivate();
   }
 
   @override
@@ -194,6 +212,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                         child: TextFormattingToolbar(
                           currentFormatting: _currentFormatting,
                           baseStyle: widget.baseStyle,
+                          preset: widget.toolbarPreset,
                           onFormattingChanged: (formatting) {
                             setState(() => _currentFormatting = formatting);
                             widget.onFormattingChanged?.call(formatting);
@@ -281,7 +300,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     // Treat TextAlign.start as "unset" so blocks can provide their own default
     // alignment (e.g. centered hero headings) until the user explicitly changes it.
     final formattedAlign = _currentFormatting.textAlign;
-    return formattedAlign == TextAlign.start ? widget.textAlign : formattedAlign;
+    return formattedAlign == TextAlign.start
+        ? widget.textAlign
+        : formattedAlign;
   }
 
   @override

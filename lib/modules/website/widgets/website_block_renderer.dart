@@ -11,6 +11,7 @@ import '../services/website_service.dart';
 // import '../../../public_store/theme/public_store_theme.dart'; // Unused
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
+import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_block_type.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
@@ -881,7 +882,7 @@ class WebsiteBlockRenderer {
         geometryAlign = Alignment.center;
     }
 
-    return LayoutBuilder(builder: (context, constraints) {
+    return ConstraintLayoutBuilder(builder: (context, constraints) {
       final screenWidth = constraints.maxWidth;
       // Use 600 as mobile breakpoint (standard)
       final isMobile = screenWidth < 600;
@@ -1158,7 +1159,7 @@ class WebsiteBlockRenderer {
     }
 
     // Use LayoutBuilder to fill available height and center content
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         final bgColor = _parseColor(data['style']?['backgroundColor']) ??
@@ -2182,7 +2183,7 @@ class WebsiteBlockRenderer {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 36),
-              LayoutBuilder(
+              ConstraintLayoutBuilder(
                 builder: (context, constraints) {
                   final columns = constraints.maxWidth >= 900
                       ? 3
@@ -3301,7 +3302,7 @@ class WebsiteBlockRenderer {
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     // Use LayoutBuilder to fill available height and center content
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         final containerPadding = _parsePadding(
@@ -3434,7 +3435,7 @@ class WebsiteBlockRenderer {
     const double gap = 80;
 
     // Use LayoutBuilder to fill available height and center content
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
         final containerPadding = _parsePadding(
@@ -3556,7 +3557,7 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
     final brandCount = widget.brands.length;
 
     // Use LayoutBuilder to get ACTUAL available width
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
 
@@ -4130,7 +4131,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     }
 
     // Use LayoutBuilder to fill available height, default to 520 if unconstrained
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final height =
             constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
@@ -4341,7 +4342,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
 
     // If we have video, use Stack with video background
     if (hasVideo && video_platform.VideoBannerPlatform.isSupported) {
-      return LayoutBuilder(
+      return ConstraintLayoutBuilder(
         builder: (context, constraints) {
           return Container(
             key: ValueKey<int>(index),
@@ -5133,7 +5134,7 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
         video_platform.VideoBannerPlatform.isSupported;
 
     // Use LayoutBuilder to fill available height, default to 500 if unconstrained
-    return LayoutBuilder(
+    return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final height =
             constraints.maxHeight.isFinite ? constraints.maxHeight : 500.0;
