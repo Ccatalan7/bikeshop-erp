@@ -43,7 +43,6 @@ class _ConstraintLayoutBuilderElement extends RenderObjectElement {
   _ConstraintLayoutBuilderElement(_ConstraintLayoutBuilderWidget super.widget);
 
   Element? _child;
-  BoxConstraints? _constraints;
 
   @override
   _ConstraintLayoutBuilderWidget get widget =>
@@ -98,20 +97,25 @@ class _ConstraintLayoutBuilderElement extends RenderObjectElement {
   // This is what causes the crash in standard LayoutBuilder.
 
   void _layoutCallback(BoxConstraints constraints) {
-    // Only rebuild if constraints actually changed
-    if (_constraints != constraints) {
-      _constraints = constraints;
-      // Build the child widget with the new constraints
-      owner!.buildScope(this, () {
-        Widget built;
-        try {
-          built = widget.builder(this, constraints);
-        } catch (e) {
-          built = ErrorWidget(e);
-        }
-        _child = updateChild(_child, built, null);
-      });
-    }
+    // Rebuild whenever the render object requests it (markNeedsBuild) OR when
+    // constraints change.
+    //
+    // The render object guarantees this callback only runs when either:
+    // - constraints changed, or
+    // - markNeedsBuild() was called.
+    //
+    // Therefore we must NOT ignore calls with identical constraints, otherwise
+    // state changes in parents won't be reflected until constraints change.
+    // Build the child widget with the new constraints
+    owner!.buildScope(this, () {
+      Widget built;
+      try {
+        built = widget.builder(this, constraints);
+      } catch (e) {
+        built = ErrorWidget(e);
+      }
+      _child = updateChild(_child, built, null);
+    });
   }
 
   @override

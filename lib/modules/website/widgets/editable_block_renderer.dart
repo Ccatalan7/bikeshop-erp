@@ -689,7 +689,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       case 'carousel':
         return 200;
       case 'canvas':
-        return 260;
+        return 100;
       case 'products':
         return 250;
       case 'services':

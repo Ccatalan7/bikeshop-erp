@@ -23,6 +23,19 @@ import '../services/google_business_service.dart';
 import 'focal_point_picker.dart';
 import 'website_link_value_editor.dart';
 
+/// Sanitize filename for Supabase Storage (remove spaces and special chars)
+String _sanitizeFileName(String fileName) {
+  String sanitized = fileName
+      .replaceAll(RegExp(r'[^\w\s\-\.]'), '_') // Replace special chars
+      .replaceAll(RegExp(r'\s+'), '_') // Replace spaces with underscore
+      .replaceAll(RegExp(r'_+'), '_') // Collapse multiple underscores
+      .replaceAll(RegExp(r'^_+|_+$'), ''); // Trim leading/trailing underscores
+  if (!sanitized.contains('.')) {
+    sanitized = '$sanitized.png';
+  }
+  return sanitized;
+}
+
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
@@ -6654,8 +6667,9 @@ class _LogoUploaderState extends State<_LogoUploader> {
       setState(() => _isUploading = true);
 
       final bytes = await image.readAsBytes();
+      final sanitizedName = _sanitizeFileName(image.name);
       final fileName =
-          'logo_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+          'logo_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
       final filePath = 'website-images/$fileName';
 
       final supabase = Supabase.instance.client;
@@ -7880,8 +7894,9 @@ class _ImagePickerState extends State<_ImagePicker> {
 
       // Read file bytes
       final bytes = await image.readAsBytes();
+      final sanitizedName = _sanitizeFileName(image.name);
       final fileName =
-          'website_${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+          'website_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
       final filePath = 'website-images/$fileName';
 
       // Upload to Supabase Storage

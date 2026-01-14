@@ -369,7 +369,7 @@ extension BlockHeightPresetExtension on BlockHeightPreset {
       case 'products':
         return 350;
       default:
-        return 200;
+        return 100;
     }
   }
 

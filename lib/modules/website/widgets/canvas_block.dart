@@ -66,6 +66,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
   late List<Map<String, dynamic>> _elements;
   String? _activeElementIdLocal;
 
+  bool _commitScheduled = false;
+  List<Map<String, dynamic>>? _pendingElementsCommit;
+
   Size? _lastReportedCanvasSize;
   Size? _pendingCanvasSizeReport;
   bool _isCanvasSizeReportScheduled = false;
@@ -276,6 +279,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
       _elements = _elementsFromData();
     }
 
+    // Sync selection from provider so panel-driven selection reflects on canvas.
     _activeElementIdLocal = _activeElementIdFromData();
   }
 
@@ -285,14 +289,25 @@ class _CanvasBlockState extends State<CanvasBlock> {
       _activeElementIdLocal = id;
     });
     widget.onActiveElementChanged?.call(id);
-    // Also select the Canvas block itself so the editor panel shows
-    // widget.onBackgroundTap?.call();
   }
 
   void _commitElements() {
-    widget.onElementsChanged?.call(_elements
+    final callback = widget.onElementsChanged;
+    if (callback == null) return;
+
+    _pendingElementsCommit = _elements
         .map((e) => Map<String, dynamic>.from(e))
-        .toList(growable: false));
+        .toList(growable: false);
+
+    if (_commitScheduled) return;
+    _commitScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _commitScheduled = false;
+      final pending = _pendingElementsCommit;
+      _pendingElementsCommit = null;
+      if (!mounted || pending == null) return;
+      callback(pending);
+    });
   }
 
   void _reportCanvasSizeIfNeeded(double canvasW, double canvasH) {
@@ -798,9 +813,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
         _effectiveTop(y: y, h: 0, canvasW: canvasW, canvasH: canvasH);
 
     return Positioned(
+      key: ValueKey('toolbar_$id'), // Ensure clean removal on delete
       top: effectiveY - 48, // 48px above the element
       left: effectiveX,
       child: CanvasElementToolbar(
+        key: ValueKey('toolbar_content_$id'),
         type: type,
         properties: el,
         onDelete: () => _deleteElement(id),
@@ -824,7 +841,6 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final bg =
         _parseHexColor(widget.data['backgroundColor'] as String?, Colors.white);
     final showGrid = (widget.data['showGrid'] as bool?) ?? true;
-    final activeId = _activeElementIdLocal;
     final elements = _elements;
 
     final backgroundImageUrl =
@@ -998,7 +1014,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       _buildElement(
                         context: context,
                         el: el,
-                        isActive: activeId != null && el['id'] == activeId,
+                        isActive: _activeElementIdLocal != null && el['id'] == _activeElementIdLocal,
                         canvasW: canvasW,
                         canvasH: canvasH,
                       ),
@@ -1038,13 +1054,16 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _deleteElement(String id) {
+    final shouldClearActive = _activeElementIdLocal == id;
     setState(() {
       _elements.removeWhere((e) => e['id'] == id);
-      if (_activeElementIdLocal == id) {
+      if (shouldClearActive) {
         _activeElementIdLocal = null;
-        widget.onActiveElementChanged?.call(null);
       }
     });
+    if (shouldClearActive) {
+      widget.onActiveElementChanged?.call(null);
+    }
     _commitElements();
   }
 
@@ -1812,10 +1831,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
     if (commit && controller != null) {
       final next = controller.text;
-      setState(() {
-        _patchElement(id, {field: next});
-      });
-      _commitElements();
+      // _patchElement already calls setState() and schedules a commit.
+      _patchElement(id, {field: next});
     }
 
     setState(() {

@@ -243,7 +243,10 @@ Page<dynamic> _buildPage(
   );
 
   // Respect user reduce-motion settings.
-  if (reduceMotion) {
+  // Also disable transitions on web due to Flutter web rendering bug where
+  // FadeTransition/ScaleTransition can get "stuck" at invisible state
+  // until a window resize forces a repaint.
+  if (reduceMotion || kIsWeb) {
     return NoTransitionPage<void>(
       key: pageKey,
       name: state.uri.toString(),
@@ -329,7 +332,10 @@ Page<dynamic> _buildPageNoScroll(
     ),
   );
 
-  if (reduceMotion) {
+  // Respect user reduce-motion settings.
+  // Also disable transitions on web due to Flutter web rendering bug where
+  // FadeTransition/ScaleTransition can get "stuck" at invisible state.
+  if (reduceMotion || kIsWeb) {
     return NoTransitionPage<void>(
       key: pageKey,
       name: state.uri.toString(),

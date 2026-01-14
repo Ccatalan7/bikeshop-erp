@@ -105,19 +105,16 @@ class CanvasElementToolbar extends StatelessWidget {
               icon: Icons.circle,
               isActive: properties['style'] == 'filled',
               onTap: () => onUpdate('style', 'filled'),
-              tooltip: 'Relleno',
             ),
             _buildIconButton(
               icon: Icons.circle_outlined,
               isActive: properties['style'] == 'outline',
               onTap: () => onUpdate('style', 'outline'),
-              tooltip: 'Borde',
             ),
             _buildIconButton(
               icon: Icons.text_fields,
               isActive: properties['style'] == 'text',
               onTap: () => onUpdate('style', 'text'),
-              tooltip: 'Texto',
             ),
           ],
           if (type == 'image') ...[
@@ -128,30 +125,25 @@ class CanvasElementToolbar extends StatelessWidget {
                 'fit',
                 properties['fit'] == 'contain' ? 'cover' : 'contain',
               ),
-              tooltip: 'Ajuste',
             ),
           ],
           _buildDivider(),
           _buildIconButton(
             icon: Icons.vertical_align_top,
             onTap: onBringToFront,
-            tooltip: 'Traer al frente',
           ),
           _buildIconButton(
             icon: Icons.vertical_align_bottom,
             onTap: onSendToBack,
-            tooltip: 'Enviar al fondo',
           ),
           _buildIconButton(
             icon: Icons.content_copy,
             onTap: onDuplicate,
-            tooltip: 'Duplicar',
           ),
           _buildIconButton(
             icon: Icons.delete_outline,
             color: Colors.red,
             onTap: onDelete,
-            tooltip: 'Eliminar',
           ),
         ],
       ),
@@ -165,26 +157,34 @@ class CanvasElementToolbar extends StatelessWidget {
     Color? color,
     String? tooltip,
   }) {
-    return Tooltip(
-      message: tooltip ?? '',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: isActive ? Colors.black.withValues(alpha: 0.06) : null,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isActive ? Colors.blue : (color ?? Colors.black87),
-          ),
+    final button = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.black.withValues(alpha: 0.06) : null,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: isActive ? Colors.blue : (color ?? Colors.black87),
         ),
       ),
     );
+
+    // Only wrap in Tooltip if there's actually a message.
+    // This avoids OverlayPortal layout issues during rapid widget removal.
+    if (tooltip != null && tooltip.isNotEmpty) {
+      return Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 500),
+        child: button,
+      );
+    }
+    return button;
   }
 
   Widget _buildDivider() {

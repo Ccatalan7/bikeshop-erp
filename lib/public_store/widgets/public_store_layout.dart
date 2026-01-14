@@ -95,35 +95,10 @@ class PublicStoreLayout extends StatefulWidget {
       return;
     }
 
-    final targetPath = Uri.tryParse(normalized)?.path ?? normalized;
-    final isHomeTarget = targetPath == '/' ||
-        targetPath == '/tienda' ||
-        targetPath == '/tienda/';
-
-    if (isHomeTarget) {
-      final router = GoRouter.of(context);
-      if (router.canPop()) {
-        var safety = 0;
-        while (router.canPop() && safety < 20) {
-          router.pop();
-          safety++;
-        }
-
-        // If the root isn't home (deep link, etc.), still navigate to home.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) return;
-          final after = GoRouterState.of(context).uri.toString();
-          if (after != normalized) {
-            GoRouter.of(context).go(normalized);
-          }
-        });
-        return;
-      }
-
-      router.go(normalized);
-    } else {
-      context.push(normalized);
-    }
+    // Fallback: treat non-external links as top-level navigation.
+    // Using go() avoids stacking routes on web (which can lead to blank frames
+    // when a layout exception occurs in an offstage route).
+    context.go(normalized);
   }
 
   @override
@@ -484,11 +459,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     Widget animateBody(Widget child, {bool expand = false}) {
       // Disable the content switcher on small screens (mobile). On mobile web
       // the animation is often dropped/janky and can feel worse than instant.
+      // Also disable on web entirely due to blank screen issues during transitions
+      // where the FadeTransition opacity gets stuck at 0 until a resize forces
+      // a repaint. This is a known Flutter web rendering issue.
       if (reduceMotion ||
           isSmallScreen ||
           isInEditorContext ||
           isEditMode ||
-          isPreviewMode) {
+          isPreviewMode ||
+          kIsWeb) {
         return expand ? SizedBox.expand(child: child) : child;
       }
 
@@ -510,7 +489,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         switchOutCurve: Curves.easeInCubic,
         layoutBuilder: (currentChild, previousChildren) {
           // Keep the top of pages aligned so the movement reads clearly.
+          // Use StackFit.passthrough to ensure children get proper constraints.
+          // This fixes blank screen issues on web where the Stack would have
+          // zero height during transitions.
           return Stack(
+            fit: StackFit.passthrough,
             alignment: Alignment.topCenter,
             children: <Widget>[
               ...previousChildren,
@@ -5331,13 +5314,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Avoid redundant navigation.
     final current = GoRouterState.of(context).uri.toString();
 
-    // Use go() for home targets to avoid stacking redirects (which can
-    // occasionally cause blank states in the browser history). Use push() for
-    // everything else so route transitions animate.
+    // Prefer go() for top-level navigation (header/footer) on web to avoid
+    // stacking routes (Navigator keeps prior routes offstage, which can
+    // exacerbate "RenderBox was not laid out" failures and lead to blank
+    // frames). Keep push() for detail routes like product pages.
     final targetPath = Uri.tryParse(target)?.path ?? target;
     final isHomeTarget = targetPath == '/' ||
-        targetPath == '/tienda' ||
-        targetPath == '/tienda/';
+      targetPath == '/tienda' ||
+      targetPath == '/tienda/';
+    final shouldReplace = _shouldReplaceForPublicStoreNav(targetPath);
 
     // Web-only: if the user explicitly asked for a "home refresh" (logo/Inicio)
     // behave like a traditional website and force a full page reload.
@@ -5363,60 +5348,96 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // If we're already on the target route, still honor explicit "home"
     // navigations (logo / Inicio) by scrolling to top.
     if (current == target) {
-      if (isHomeTarget) {
+      if (shouldReplace) {
         context.read<PublicStoreScrollState>().requestScrollToTop(target);
+        context
+            .read<PublicStoreScrollState>()
+            .requestScrollToTopForPath(targetPath);
+      }
+
+      if (isHomeTarget) {
         context.read<PublicStoreScrollState>().requestScrollToTopForPath('/');
         context
             .read<PublicStoreScrollState>()
             .requestScrollToTopForPath('/tienda');
+      }
 
-        if (forceHomeRefresh) {
-          context.read<PublicStoreScrollState>().requestHomeRefresh();
-        }
+      if (forceHomeRefresh && isHomeTarget) {
+        context.read<PublicStoreScrollState>().requestHomeRefresh();
       }
       return;
     }
 
-    if (isHomeTarget) {
+    if (shouldReplace) {
       // Explicit "home" navigations (logo / Inicio) should land at the top,
       // even if we pop-to-root (which would otherwise preserve scroll).
       context.read<PublicStoreScrollState>().requestScrollToTop(target);
-      context.read<PublicStoreScrollState>().requestScrollToTopForPath('/');
       context
           .read<PublicStoreScrollState>()
-          .requestScrollToTopForPath('/tienda');
+          .requestScrollToTopForPath(targetPath);
+
+      if (isHomeTarget) {
+        context.read<PublicStoreScrollState>().requestScrollToTopForPath('/');
+        context
+            .read<PublicStoreScrollState>()
+            .requestScrollToTopForPath('/tienda');
+      }
 
       if (forceHomeRefresh) {
         context.read<PublicStoreScrollState>().requestHomeRefresh();
       }
 
-      // Prefer pop-to-root for home targets. Pushing/replacing home can create
-      // blank states on web in some redirect/history scenarios.
-      final router = GoRouter.of(context);
-      if (router.canPop()) {
-        var safety = 0;
-        while (router.canPop() && safety < 20) {
-          router.pop();
-          safety++;
-        }
-
-        // If we didn't land on the desired home URI (e.g., deep link root),
-        // finish by navigating to home.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final after = GoRouterState.of(context).uri.toString();
-          if (after != target) {
-            GoRouter.of(context).go(target);
-          }
-        });
-        return;
-      }
-
-      // No back stack (deep link, fresh tab, etc.) — fall back to go().
+      // For home navigation, always use go() directly instead of the pop loop.
+      // The pop-to-root approach was causing blank screen issues on production
+      // because the context becomes invalid after multiple pops, and the
+      // postFrameCallback couldn't reliably navigate to the target.
+      // Using go() directly is more reliable and handles the browser history
+      // correctly on web.
       context.go(target);
     } else {
       context.push(target);
     }
+  }
+
+  bool _shouldReplaceForPublicStoreNav(String path) {
+    final p = path.trim().toLowerCase();
+    if (p.isEmpty) return true;
+
+    // Normalize legacy ERP-mounted store routes.
+    var normalized = p;
+    if (normalized == '/tienda') return true;
+    if (normalized == '/tienda/') return true;
+    if (normalized.startsWith('/tienda/')) {
+      normalized = normalized.substring('/tienda'.length);
+      if (normalized.isEmpty) normalized = '/';
+    }
+
+    // Home
+    if (normalized == '/') return true;
+
+    // Product list is top-level; product detail should remain push().
+    if (normalized == '/productos') return true;
+    if (normalized.startsWith('/productos/')) return false;
+
+    // Top-level pages
+    const topLevelExact = <String>{
+      '/contacto',
+      '/carrito',
+      '/checkout',
+      '/cuenta',
+      '/cuenta/login',
+      '/nosotros',
+      '/terminos',
+      '/privacidad',
+      '/devoluciones',
+      '/envios',
+    };
+    if (topLevelExact.contains(normalized)) return true;
+
+    // Custom pages
+    if (normalized.startsWith('/pagina/')) return true;
+
+    return false;
   }
 
   Widget _buildNavItemLink(
@@ -6495,7 +6516,10 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       controller: _scrollController,
-      clipBehavior: widget.clipBehavior,
+      // Flutter Web can occasionally fail to repaint after route changes when
+      // a scroll viewport is clipped. Disabling clipping is a pragmatic fix
+      // for the "blank until resize" symptom.
+      clipBehavior: kIsWeb ? Clip.none : widget.clipBehavior,
       physics: widget.physics,
       child: widget.child,
     );
@@ -6714,6 +6738,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
               : const MaterialScrollBehavior(),
           child: SingleChildScrollView(
             controller: _scrollController,
+            clipBehavior: kIsWeb ? Clip.none : Clip.hardEdge,
             child: Column(
               children: [
                 // Add padding at top for the header space (only if not in edit mode)
