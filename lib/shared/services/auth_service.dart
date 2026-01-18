@@ -34,10 +34,9 @@ class AuthService extends ChangeNotifier {
     }
 
     // Auto-login for debug mode only
-    // DISABLED to prevent infinite loops during Staff-Only Guard testing
-    // if (kDebugMode && _session == null) {
-    //   _autoLoginForDebug();
-    // }
+    if (kDebugMode && _session == null) {
+      _autoLoginForDebug();
+    }
   }
 
   final SupabaseClient _client = Supabase.instance.client;

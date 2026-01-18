@@ -71,6 +71,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   Map<String, String> _pendingThemeSettings = {};
   bool _hasThemeChanges = false;
 
+  // Pending category visibility changes (saved with Guardar button)
+  // Key: category ID, Value: show_on_website value
+  final Map<String, bool> _pendingCategoryVisibility = {};
+  bool _hasCategoryChanges = false;
+
   // Pending page-level SEO (saved with Guardar button)
   // Keyed by route key / slug (e.g. 'inicio', 'productos', 'terminos')
   // Values: {'meta_title': '...', 'meta_description': '...'}
@@ -96,11 +101,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _hasSiteSettingsChanges ||
       _hasSeoChanges ||
       _hasThemeChanges ||
-      _hasFooterChanges;
+      _hasFooterChanges ||
+      _hasCategoryChanges;
   bool get hasHeaderChanges => _hasHeaderChanges;
   bool get hasSiteSettingsChanges => _hasSiteSettingsChanges;
   bool get hasThemeChanges => _hasThemeChanges;
   bool get hasFooterChanges => _hasFooterChanges;
+  bool get hasCategoryChanges => _hasCategoryChanges;
+  Map<String, bool> get pendingCategoryVisibility => _pendingCategoryVisibility;
   List<Map<String, dynamic>> get blocks => _blocks;
   Map<String, dynamic> get settings => _settings;
   Map<String, String> get pendingHeaderSettings => _pendingHeaderSettings;
@@ -321,6 +329,29 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void clearThemeChanges() {
     _hasThemeChanges = false;
     _pendingThemeSettings = {};
+    notifyListeners();
+  }
+
+  /// Update category visibility (saved with Guardar button)
+  void updateCategoryVisibility(String categoryId, bool showOnWebsite) {
+    _pendingCategoryVisibility[categoryId] = showOnWebsite;
+    _hasCategoryChanges = true;
+    debugPrint('📁 [EditProvider] Category visibility updated: $categoryId = $showOnWebsite');
+    notifyListeners();
+  }
+
+  /// Get effective category visibility (pending value if exists)
+  bool? getEffectiveCategoryVisibility(String categoryId) {
+    if (_pendingCategoryVisibility.containsKey(categoryId)) {
+      return _pendingCategoryVisibility[categoryId];
+    }
+    return null; // No pending change
+  }
+
+  /// Clear category changes (after save)
+  void clearCategoryChanges() {
+    _hasCategoryChanges = false;
+    _pendingCategoryVisibility.clear();
     notifyListeners();
   }
 

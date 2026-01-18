@@ -8,7 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
 
-// import '../../../public_store/theme/public_store_theme.dart'; // Unused
+import '../../../public_store/providers/public_store_tenant_provider.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
@@ -271,8 +272,7 @@ class WebsiteBlockRenderer {
       case WebsiteBlockType.footer:
         return const SizedBox(height: 64);
       case WebsiteBlockType.categoryGrid:
-        return _buildCategoryGrid(
-          context: context,
+        return _AutoCategoryGrid(
           data: data,
           primaryColor: primaryColor,
           accentColor: accentColor,
@@ -3710,6 +3710,240 @@ class _BrandLogoItem extends StatelessWidget {
           ),
           textAlign: TextAlign.center,
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// AUTO CATEGORY GRID - Fetches categories with show_on_website=true
+// ============================================================================
+class _AutoCategoryGrid extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final Color primaryColor;
+  final Color accentColor;
+  final String? headingFont;
+  final String? bodyFont;
+  final bool previewMode;
+  final void Function(String route)? onNavigate;
+
+  const _AutoCategoryGrid({
+    required this.data,
+    required this.primaryColor,
+    required this.accentColor,
+    this.headingFont,
+    this.bodyFont,
+    required this.previewMode,
+    this.onNavigate,
+  });
+
+  @override
+  State<_AutoCategoryGrid> createState() => _AutoCategoryGridState();
+}
+
+class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
+  List<Map<String, dynamic>>? _categories;
+  bool _isLoading = true;
+  bool _useManualCategories = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initCategories();
+  }
+
+  void _initCategories() {
+    // Check if block has manual categories with images defined
+    // If so, use those instead of auto-fetching from database
+    final rawCategories = widget.data['categories'];
+    if (rawCategories is List && rawCategories.isNotEmpty) {
+      // Check if at least one category has an imageUrl
+      final hasImagesConfigured = rawCategories.any((cat) {
+        if (cat is Map) {
+          final imageUrl = cat['imageUrl']?.toString() ?? '';
+          return imageUrl.isNotEmpty;
+        }
+        return false;
+      });
+
+      if (hasImagesConfigured) {
+        // Use manual categories from block data (independent of DB)
+        _useManualCategories = true;
+        _categories = rawCategories
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        _isLoading = false;
+        return;
+      }
+    }
+
+    // No manual categories with images, fetch from database
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      // Get tenant from provider
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      String? tenantId = tenantProvider.tenantId;
+
+      // Fallback for editor context
+      if (tenantId == null) {
+        try {
+          final tenantService = context.read<TenantService>();
+          tenantId = tenantService.currentTenantId;
+        } catch (_) {}
+      }
+
+      if (tenantId == null) {
+        setState(() {
+          _categories = [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Fetch categories with show_on_website = true
+      final response = await Supabase.instance.client
+          .from('product_categories')
+          .select('id, name, description, image_url')
+          .eq('tenant_id', tenantId)
+          .eq('show_on_website', true)
+          .eq('is_active', true)
+          .isFilter('parent_id', null) // Only root categories
+          .order('name');
+
+      final List<Map<String, dynamic>> cats = (response as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // Convert to block format
+      final blockCategories = cats.asMap().entries.map((entry) {
+        final cat = entry.value;
+        final index = entry.key;
+        return {
+          'title': cat['name'] ?? '',
+          'subtitle': cat['description'] ?? '',
+          'imageUrl': cat['image_url'] ?? '',
+          'ctaText': 'Ver productos',
+          'ctaLink': '/productos?category=${cat['id']}',
+          'size': index < 2 ? 'large' : 'medium',
+        };
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _categories = blockCategories;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading website categories: $e');
+      if (mounted) {
+        setState(() {
+          _categories = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = (widget.data['title'] ?? '').toString().trim();
+    final subtitle = (widget.data['subtitle'] ?? '').toString().trim();
+
+    // Use categories (either manual from block or fetched from DB)
+    List<Map<String, dynamic>> categories = _categories ?? [];
+    
+    // If auto-fetch returned empty and not using manual, fall back to block data
+    if (categories.isEmpty && !_isLoading && !_useManualCategories) {
+      final rawCategories = widget.data['categories'];
+      if (rawCategories is List) {
+        categories = rawCategories
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+    }
+
+    // Show placeholder while loading
+    if (_isLoading) {
+      return Container(
+        width: double.infinity,
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    // If still empty, show nothing (or a subtle message in preview mode)
+    if (categories.isEmpty) {
+      if (widget.previewMode) {
+        return Container(
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+          child: Center(
+            child: Text(
+              'Activa categorías en Tema > Categorías para mostrarlas aquí',
+              style: TextStyle(color: Colors.grey.shade500),
+            ),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                title,
+                style: theme.textTheme.displaySmall?.copyWith(
+                  fontFamily: widget.headingFont,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            if (subtitle.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 24, right: 24),
+                child: Text(
+                  subtitle,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontFamily: widget.bodyFont,
+                    color: Colors.black54,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 32),
+          ],
+          _CategoryGridLayout(
+            categories: categories,
+            primaryColor: widget.primaryColor,
+            accentColor: widget.accentColor,
+            bodyFont: widget.bodyFont,
+            previewMode: widget.previewMode,
+            onNavigate: widget.onNavigate,
+          ),
+        ],
       ),
     );
   }

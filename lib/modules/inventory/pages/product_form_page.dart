@@ -1190,7 +1190,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             Row(
               children: [
                 IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Volver',
                 ),

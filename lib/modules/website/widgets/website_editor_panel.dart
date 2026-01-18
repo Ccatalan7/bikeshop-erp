@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../../inventory/models/category_models.dart' as cat_models;
+import '../../inventory/services/category_service.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
@@ -39,7 +41,7 @@ String _sanitizeFileName(String fileName) {
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
-  final VoidCallback? onSave;
+  final Future<void> Function()? onSave;
   final VoidCallback? onDiscard;
 
   const WebsiteEditorPanel({
@@ -114,8 +116,6 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   Widget build(BuildContext context) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    debugPrint(
-        '🔧 [WebsiteEditorPanel] build called. isEditMode: ${editProvider.isEditMode}');
 
     // Check selection changes after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -123,8 +123,6 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     });
 
     if (!editProvider.isEditMode) {
-      debugPrint(
-          '🔧 [WebsiteEditorPanel] isEditMode is false, returning SizedBox.shrink()');
       return const SizedBox.shrink();
     }
 
@@ -196,20 +194,29 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
           ),
           const SizedBox(width: 6),
           // Save button
-          ElevatedButton(
-            onPressed: editProvider.hasUnsavedChanges ? widget.onSave : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A09D),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor:
-                  const Color(0xFF00A09D).withValues(alpha: 0.5),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4)),
-            ),
-            child: const Text('Guardar', style: TextStyle(fontSize: 13)),
+          Builder(
+            builder: (context) {
+              final hasChanges = editProvider.hasUnsavedChanges;
+              return ElevatedButton(
+                onPressed: hasChanges ? () async {
+                  if (widget.onSave != null) {
+                    await widget.onSave!();
+                  }
+                } : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00A09D),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      const Color(0xFF00A09D).withValues(alpha: 0.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+                child: const Text('Guardar', style: TextStyle(fontSize: 13)),
+              );
+            },
           ),
         ],
       ),
@@ -6202,6 +6209,12 @@ class _ThemeTabState extends State<_ThemeTab> {
                 Icons.animation,
                 'transitions',
               ),
+              _buildMenuItem(
+                'Categorías',
+                'Categorías visibles en la tienda',
+                Icons.category_outlined,
+                'categories',
+              ),
             ],
           ),
         ),
@@ -6248,6 +6261,9 @@ class _ThemeTabState extends State<_ThemeTab> {
         break;
       case 'transitions':
         title = 'Transiciones';
+        break;
+      case 'categories':
+        title = 'Categorías';
         break;
     }
 
@@ -6486,6 +6502,9 @@ class _ThemeTabState extends State<_ThemeTab> {
           ),
         );
 
+      case 'categories':
+        return _WebsiteCategoriesEditor();
+
       default:
         return const SizedBox.shrink();
     }
@@ -6574,6 +6593,214 @@ class _ThemeTabState extends State<_ThemeTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Widget to select which categories appear on the website navigation
+class _WebsiteCategoriesEditor extends StatefulWidget {
+  @override
+  State<_WebsiteCategoriesEditor> createState() => _WebsiteCategoriesEditorState();
+}
+
+class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
+  List<cat_models.Category> _rootCategories = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categoryService = context.read<CategoryService>();
+      final editProvider = context.read<WebsiteEditModeProvider>();
+      final pendingChanges = editProvider.pendingCategoryVisibility;
+      
+      var categories = await categoryService.getRootCategories();
+      
+      // Apply any pending (unsaved) visibility changes from the provider
+      if (pendingChanges.isNotEmpty) {
+        categories = categories.map((cat) {
+          if (cat.id != null && pendingChanges.containsKey(cat.id)) {
+            return cat.copyWith(showOnWebsite: pendingChanges[cat.id]!);
+          }
+          return cat;
+        }).toList();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _rootCategories = categories;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      debugPrint('Error loading categories: $e');
+    }
+  }
+
+  Future<void> _toggleCategory(cat_models.Category category) async {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    
+    // Check current effective value (pending or from DB)
+    final currentValue = editProvider.getEffectiveCategoryVisibility(category.id!) 
+        ?? category.showOnWebsite;
+    final newValue = !currentValue;
+    
+    // Optimistic update for UI
+    setState(() {
+      final index = _rootCategories.indexWhere((c) => c.id == category.id);
+      if (index >= 0) {
+        _rootCategories[index] = category.copyWith(showOnWebsite: newValue);
+      }
+    });
+
+    // Update provider - will be saved when user clicks Guardar
+    editProvider.updateCategoryVisibility(category.id!, newValue);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF00A09D)),
+      );
+    }
+
+    if (_rootCategories.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.category_outlined, color: Colors.white24, size: 48),
+            SizedBox(height: 16),
+            Text(
+              'No hay categorías',
+              style: TextStyle(color: Colors.white54),
+            ),
+            Text(
+              'Crea categorías en Inventario > Categorías',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final enabledCount = _rootCategories.where((c) => c.showOnWebsite).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header info
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Color(0xFF00A09D), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Selecciona qué categorías aparecen en la barra de navegación de la tienda.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Stats
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$enabledCount activas',
+                style: const TextStyle(
+                  color: Color(0xFF00A09D),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'de ${_rootCategories.length} categorías',
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        
+        // Category list
+        ..._rootCategories.map((category) => _buildCategoryTile(category)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildCategoryTile(cat_models.Category category) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: category.showOnWebsite 
+            ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+            : const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: category.showOnWebsite 
+              ? const Color(0xFF00A09D).withValues(alpha: 0.3)
+              : Colors.white10,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        leading: Icon(
+          category.showOnWebsite ? Icons.visibility : Icons.visibility_off,
+          color: category.showOnWebsite ? const Color(0xFF00A09D) : Colors.white38,
+          size: 20,
+        ),
+        title: Text(
+          category.name,
+          style: TextStyle(
+            color: category.showOnWebsite ? Colors.white : Colors.white54,
+            fontWeight: category.showOnWebsite ? FontWeight.w500 : FontWeight.normal,
+          ),
+        ),
+        subtitle: category.description != null && category.description!.isNotEmpty
+            ? Text(
+                category.description!,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : null,
+        trailing: Switch(
+          value: category.showOnWebsite,
+          onChanged: (_) => _toggleCategory(category),
+          activeColor: const Color(0xFF00A09D),
+          activeTrackColor: const Color(0xFF00A09D).withValues(alpha: 0.3),
+          inactiveThumbColor: Colors.white38,
+          inactiveTrackColor: Colors.white12,
+        ),
+        onTap: () => _toggleCategory(category),
+      ),
     );
   }
 }
@@ -8181,7 +8408,7 @@ class _ColorField extends StatelessWidget {
 // ============================================================================
 // CATEGORY GRID BLOCK CONTROLS
 // ============================================================================
-class _CategoryGridBlockControls extends StatefulWidget {
+class _CategoryGridBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
@@ -8192,73 +8419,8 @@ class _CategoryGridBlockControls extends StatefulWidget {
     required this.provider,
   });
 
-  @override
-  State<_CategoryGridBlockControls> createState() =>
-      _CategoryGridBlockControlsState();
-}
-
-class _CategoryGridBlockControlsState
-    extends State<_CategoryGridBlockControls> {
-  int _selectedCategoryIndex = 0;
-
-  List<Map<String, dynamic>> get _categories {
-    final raw = widget.data['categories'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    }
-    return [];
-  }
-
   void _updateField(String field, dynamic value) {
-    widget.provider.updateBlockData(widget.blockId, field, value);
-  }
-
-  void _updateCategory(int index, String field, dynamic value) {
-    final categories = List<Map<String, dynamic>>.from(_categories);
-    if (index < categories.length) {
-      categories[index] = Map<String, dynamic>.from(categories[index]);
-      categories[index][field] = value;
-
-      // Keep the two legacy/new link keys in sync.
-      if (field == 'ctaLink') {
-        categories[index]['link'] = value;
-      } else if (field == 'link') {
-        categories[index]['ctaLink'] = value;
-      }
-
-      _updateField('categories', categories);
-    }
-  }
-
-  void _addCategory() {
-    final categories = List<Map<String, dynamic>>.from(_categories);
-    categories.add({
-      'title': 'Nueva Categoría',
-      'subtitle': 'Descripción breve',
-      'imageUrl': '',
-      'ctaText': 'Ver más',
-      'ctaLink': '/productos',
-      'link': '/productos',
-      'size': categories.length < 2 ? 'large' : 'medium',
-    });
-    _updateField('categories', categories);
-    setState(() => _selectedCategoryIndex = categories.length - 1);
-  }
-
-  void _removeCategory(int index) {
-    final categories = List<Map<String, dynamic>>.from(_categories);
-    if (categories.length > 1) {
-      categories.removeAt(index);
-      _updateField('categories', categories);
-      setState(() {
-        if (_selectedCategoryIndex >= categories.length) {
-          _selectedCategoryIndex = categories.length - 1;
-        }
-      });
-    }
+    provider.updateBlockData(blockId, field, value);
   }
 
   @override
@@ -8266,176 +8428,42 @@ class _CategoryGridBlockControlsState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _EditorTextField(
-          label: 'Título de sección',
-          value: widget.data['title']?.toString() ?? '',
-          onChanged: (v) => _updateField('title', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Subtítulo',
-          value: widget.data['subtitle']?.toString() ?? '',
-          onChanged: (v) => _updateField('subtitle', v),
-        ),
-        const SizedBox(height: 20),
-        const Text('Categorías',
-            style: TextStyle(
-                color: Colors.white54,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1)),
-        const SizedBox(height: 8),
-        // Category selector chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        // Info box explaining auto-sync
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00A09D).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF00A09D).withOpacity(0.3)),
+          ),
           child: Row(
             children: [
-              ..._categories.asMap().entries.map((entry) {
-                final index = entry.key;
-                final cat = entry.value;
-                final isSelected = index == _selectedCategoryIndex;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedCategoryIndex = index),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF00A09D)
-                            : const Color(0xFF2D2D2D),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF00A09D)
-                              : Colors.white24,
-                        ),
-                      ),
-                      child: Text(
-                        cat['title']?.toString() ?? 'Cat ${index + 1}',
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
+              const Icon(Icons.auto_awesome, color: Color(0xFF00A09D), size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Las categorías se cargan automáticamente desde Tema > Categorías',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 12,
                   ),
-                );
-              }),
-              GestureDetector(
-                onTap: _addCategory,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2D2D2D),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24),
-                  ),
-                  child:
-                      const Icon(Icons.add, color: Color(0xFF00A09D), size: 16),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        // Selected category editor
-        if (_categories.isNotEmpty &&
-            _selectedCategoryIndex < _categories.length) ...[
-          // Image picker for this category
-          const _SectionHeader('Imagen de categoría'),
-          const SizedBox(height: 8),
-          _ImagePicker(
-            currentUrl:
-                _categories[_selectedCategoryIndex]['imageUrl']?.toString(),
-            onChanged: (url) =>
-                _updateCategory(_selectedCategoryIndex, 'imageUrl', url),
-          ),
-          const SizedBox(height: 16),
-          _EditorTextField(
-            label: 'Título categoría',
-            value:
-                _categories[_selectedCategoryIndex]['title']?.toString() ?? '',
-            onChanged: (v) =>
-                _updateCategory(_selectedCategoryIndex, 'title', v),
-          ),
-          const SizedBox(height: 12),
-          _EditorTextField(
-            label: 'Subtítulo',
-            value:
-                _categories[_selectedCategoryIndex]['subtitle']?.toString() ??
-                    '',
-            onChanged: (v) =>
-                _updateCategory(_selectedCategoryIndex, 'subtitle', v),
-          ),
-          const SizedBox(height: 12),
-          _EditorTextField(
-            label: 'Texto botón',
-            value: _categories[_selectedCategoryIndex]['ctaText']?.toString() ??
-                '',
-            onChanged: (v) =>
-                _updateCategory(_selectedCategoryIndex, 'ctaText', v),
-          ),
-          const SizedBox(height: 12),
-          WebsiteLinkValueEditor(
-            label: 'Link botón',
-            value: _categories[_selectedCategoryIndex]['ctaLink']?.toString() ??
-                '',
-            onChanged: (v) =>
-                _updateCategory(_selectedCategoryIndex, 'ctaLink', v),
-            dense: true,
-            darkStyle: true,
-          ),
-          const SizedBox(height: 12),
-          // Size selector
-          const Text('Tamaño',
-              style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1)),
-          const SizedBox(height: 8),
-          Row(
-            children: ['large', 'medium'].map((size) {
-              final isSelected =
-                  _categories[_selectedCategoryIndex]['size'] == size;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () =>
-                      _updateCategory(_selectedCategoryIndex, 'size', size),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF00A09D)
-                          : const Color(0xFF2D2D2D),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      size == 'large' ? 'Grande' : 'Mediano',
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          // Delete category button
-          if (_categories.length > 1)
-            TextButton.icon(
-              onPressed: () => _removeCategory(_selectedCategoryIndex),
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Eliminar categoría'),
-              style: TextButton.styleFrom(foregroundColor: Colors.red.shade300),
-            ),
-        ],
+        const SizedBox(height: 20),
+        _EditorTextField(
+          label: 'Título de sección',
+          value: data['title']?.toString() ?? '',
+          onChanged: (v) => _updateField('title', v),
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Subtítulo',
+          value: data['subtitle']?.toString() ?? '',
+          onChanged: (v) => _updateField('subtitle', v),
+        ),
       ],
     );
   }

@@ -8,6 +8,7 @@ class Category {
   final String? description;
   final String? imageUrl;
   final bool isActive;
+  final bool showOnWebsite; // Whether to show in public store navigation
   final int sortOrder;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -22,6 +23,7 @@ class Category {
     this.description,
     this.imageUrl,
     this.isActive = true,
+    this.showOnWebsite = false,
     this.sortOrder = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -54,6 +56,7 @@ class Category {
       description: json['description'],
       imageUrl: json['image_url'],
       isActive: json['is_active'] ?? true,
+      showOnWebsite: json['show_on_website'] ?? false,
       sortOrder: json['sort_order'] ?? 0,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
@@ -71,6 +74,7 @@ class Category {
       'description': description,
       'image_url': imageUrl,
       'is_active': isActive,
+      'show_on_website': showOnWebsite,
       'sort_order': sortOrder,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -87,6 +91,7 @@ class Category {
     String? description,
     String? imageUrl,
     bool? isActive,
+    bool? showOnWebsite,
     int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -101,6 +106,7 @@ class Category {
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       isActive: isActive ?? this.isActive,
+      showOnWebsite: showOnWebsite ?? this.showOnWebsite,
       sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

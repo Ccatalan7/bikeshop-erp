@@ -2519,11 +2519,15 @@ create table if not exists product_categories (
   description text,
   image_url text,
   is_active boolean not null default true,
+  show_on_website boolean not null default false, -- Whether to show in public store navigation
   sort_order integer not null default 0,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, full_path) -- Each tenant can have same category paths
 );
+
+-- Add show_on_website column if not exists (for existing tables)
+alter table product_categories add column if not exists show_on_website boolean not null default false;
 
 -- Step 2: Create indexes for product_categories
 create index if not exists idx_product_categories_parent_id on product_categories(parent_id);

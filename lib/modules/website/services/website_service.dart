@@ -2523,9 +2523,27 @@ class WebsiteService extends ChangeNotifier {
     Map<String, Map<String, String>>? pendingPageSeo,
     List<String>? pendingFooterSectionOrder,
     Map<String, List<String>>? pendingFooterLinkOrder,
+    Map<String, bool>? pendingCategoryVisibility,
     String? pageId,
     String? pageSlug,
   }) async {
+    // Save category visibility changes first
+    if (pendingCategoryVisibility != null && pendingCategoryVisibility.isNotEmpty) {
+      debugPrint('📁 [WebsiteService] Saving ${pendingCategoryVisibility.length} category visibility changes');
+      for (final entry in pendingCategoryVisibility.entries) {
+        try {
+          await _supabase
+              .from('product_categories')
+              .update({'show_on_website': entry.value})
+              .eq('id', entry.key)
+              .eq('tenant_id', tenantId);
+          debugPrint('✅ [WebsiteService] Category ${entry.key} show_on_website = ${entry.value}');
+        } catch (e) {
+          debugPrint('❌ [WebsiteService] Failed to update category visibility: $e');
+        }
+      }
+    }
+
     // Save generic site-wide settings first (if any)
     if (pendingSiteSettings != null && pendingSiteSettings.isNotEmpty) {
       await saveSettings(pendingSiteSettings);

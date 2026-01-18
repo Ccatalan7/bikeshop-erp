@@ -20,6 +20,84 @@ class InventoryService extends ChangeNotifier {
   List<Product> get cachedProducts => _cachedProducts ?? [];
   bool get hasProductsCache => _cachedProducts != null;
   
+  // ============================================================
+  // PRODUCT LIST PAGE STATE - Preserve across navigation
+  // ============================================================
+  bool _pendingStateRestore = false; // Only true when returning from edit
+  DateTime? _lastListStateSavedAt;
+  static const Duration _listStateGraceWindow = Duration(minutes: 5); // Extended to survive long edit sessions
+  String? savedSearchTerm;
+  int savedCurrentPage = 1;
+  double savedScrollOffset = 0;
+  String? savedCategoryId;
+  String? savedSupplierId;
+  int? savedProductTypeIndex; // Store index for ProductType enum
+  int savedStockFilterIndex = 0; // Store index for StockFilter enum
+  bool savedFilterWebPublished = false;
+  bool savedFilterGoogleMerchant = false;
+  bool savedShowInactive = false;
+  int savedSortOptionIndex = 2; // Default: nameAsc (index 2)
+  
+  /// Returns true if we should restore state (returning from edit)
+  bool get shouldRestoreState => _pendingStateRestore;
+  bool get hasRecentSavedState {
+    if (_pendingStateRestore) return true;
+    if (_lastListStateSavedAt == null) return false;
+    // Grace window to survive router/workspace rebuilds during navigation
+    return DateTime.now().difference(_lastListStateSavedAt!) < _listStateGraceWindow;
+  }
+  
+  void saveListState({
+    String? searchTerm,
+    int? currentPage,
+    double? scrollOffset,
+    String? categoryId,
+    String? supplierId,
+    int? productTypeIndex,
+    int? stockFilterIndex,
+    bool? filterWebPublished,
+    bool? filterGoogleMerchant,
+    bool? showInactive,
+    int? sortOptionIndex,
+  }) {
+    _pendingStateRestore = true; // Mark that we should restore on next visit
+    _lastListStateSavedAt = DateTime.now();
+    savedSearchTerm = searchTerm;
+    savedCurrentPage = currentPage ?? 1;
+    savedScrollOffset = scrollOffset ?? 0;
+    savedCategoryId = categoryId;
+    savedSupplierId = supplierId;
+    savedProductTypeIndex = productTypeIndex;
+    savedStockFilterIndex = stockFilterIndex ?? 0;
+    savedFilterWebPublished = filterWebPublished ?? false;
+    savedFilterGoogleMerchant = filterGoogleMerchant ?? false;
+    savedShowInactive = showInactive ?? false;
+    savedSortOptionIndex = sortOptionIndex ?? 2;
+  }
+  
+  /// Call after restoring state to prevent restoring on subsequent visits
+  void markStateRestored() {
+    _pendingStateRestore = false;
+    // Keep a short timestamp so immediate rebuilds still restore.
+    _lastListStateSavedAt = DateTime.now();
+  }
+  
+  void clearListState() {
+    _pendingStateRestore = false;
+    _lastListStateSavedAt = null;
+    savedSearchTerm = null;
+    savedCurrentPage = 1;
+    savedScrollOffset = 0;
+    savedCategoryId = null;
+    savedSupplierId = null;
+    savedProductTypeIndex = null;
+    savedStockFilterIndex = 0;
+    savedFilterWebPublished = false;
+    savedFilterGoogleMerchant = false;
+    savedShowInactive = false;
+    savedSortOptionIndex = 2;
+  }
+  
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;

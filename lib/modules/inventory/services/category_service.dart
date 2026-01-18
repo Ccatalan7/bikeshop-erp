@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/category_models.dart' as models;
@@ -302,44 +303,78 @@ class CategoryService extends ChangeNotifier {
   // HIERARCHICAL CATEGORY METHODS
   // ============================================================================
 
-  /// Get root categories (level 0)
+  /// Get root categories (level 0) - filtered by tenant_id
   Future<List<models.Category>> getRootCategories() async {
     try {
-      final data = await _db.select(
-        'product_categories',
-        where: 'level=0',
-        orderBy: 'sort_order, name',
-      );
-      return data.map((json) => models.Category.fromJson(json)).toList();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        if (kDebugMode) print('No tenant_id found for getRootCategories');
+        return [];
+      }
+      
+      // Use direct Supabase query to filter by both level AND tenant_id
+      final data = await Supabase.instance.client
+          .from('product_categories')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('level', 0)
+          .order('sort_order')
+          .order('name');
+      
+      return (data as List)
+          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching root categories: $e');
       rethrow;
     }
   }
 
-  /// Get direct children of a category
+  /// Get direct children of a category - filtered by tenant_id
   Future<List<models.Category>> getSubcategories(String parentId) async {
     try {
-      final data = await _db.select(
-        'product_categories',
-        where: 'parent_id=$parentId',
-        orderBy: 'sort_order, name',
-      );
-      return data.map((json) => models.Category.fromJson(json)).toList();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        if (kDebugMode) print('No tenant_id found for getSubcategories');
+        return [];
+      }
+      
+      // Use direct Supabase query to filter by both parent_id AND tenant_id
+      final data = await Supabase.instance.client
+          .from('product_categories')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('parent_id', parentId)
+          .order('sort_order')
+          .order('name');
+      
+      return (data as List)
+          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching subcategories: $e');
       rethrow;
     }
   }
 
-  /// Get category by full path
+  /// Get category by full path - filtered by tenant_id
   Future<models.Category?> getCategoryByPath(String fullPath) async {
     try {
-      final data = await _db.select(
-        'product_categories',
-        where: 'full_path=$fullPath',
-      );
-      return data.isNotEmpty ? models.Category.fromJson(data.first) : null;
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        if (kDebugMode) print('No tenant_id found for getCategoryByPath');
+        return null;
+      }
+      
+      final data = await Supabase.instance.client
+          .from('product_categories')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('full_path', fullPath)
+          .limit(1);
+      
+      if ((data as List).isEmpty) return null;
+      return models.Category.fromJson(Map<String, dynamic>.from(data.first as Map));
     } catch (e) {
       if (kDebugMode) print('Error fetching category by path: $e');
       rethrow;
@@ -458,6 +493,96 @@ class CategoryService extends ChangeNotifier {
       };
     } catch (e) {
       if (kDebugMode) print('Error importing categories: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // WEBSITE CATEGORY VISIBILITY METHODS
+  // ============================================================================
+
+  /// Get root categories that are visible on website
+  Future<List<models.Category>> getWebsiteCategories() async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        if (kDebugMode) print('No tenant_id found for getWebsiteCategories');
+        return [];
+      }
+      
+      final data = await Supabase.instance.client
+          .from('product_categories')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('level', 0)
+          .eq('show_on_website', true)
+          .eq('is_active', true)
+          .order('sort_order')
+          .order('name');
+      
+      return (data as List)
+          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching website categories: $e');
+      rethrow;
+    }
+  }
+
+  /// Toggle show_on_website flag for a category
+  Future<void> toggleWebsiteVisibility(String categoryId, bool showOnWebsite) async {
+    try {
+      await Supabase.instance.client
+          .from('product_categories')
+          .update({
+            'show_on_website': showOnWebsite,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', categoryId);
+      
+      invalidateCategoriesCache();
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('Error toggling website visibility: $e');
+      rethrow;
+    }
+  }
+
+  /// Bulk update website visibility for multiple categories
+  Future<void> setWebsiteCategories(List<String> categoryIds) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      
+      // First, set all level-0 categories to show_on_website = false
+      await Supabase.instance.client
+          .from('product_categories')
+          .update({
+            'show_on_website': false,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('tenant_id', tenantId)
+          .eq('level', 0);
+      
+      // Then, set the selected ones to true
+      if (categoryIds.isNotEmpty) {
+        for (final id in categoryIds) {
+          await Supabase.instance.client
+              .from('product_categories')
+              .update({
+                'show_on_website': true,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', id);
+        }
+      }
+      
+      invalidateCategoriesCache();
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) print('Error setting website categories: $e');
       rethrow;
     }
   }

@@ -92,7 +92,13 @@ class DatabaseService extends ChangeNotifier {
       if (where != null && where.contains('=')) {
         final parts = where.split('=');
         final field = parts[0].trim();
-        final value = parts.sublist(1).join('=').trim();
+        final rawValue = parts.sublist(1).join('=').trim();
+        // Parse numeric values properly for integer columns
+        final dynamic value = int.tryParse(rawValue) ?? 
+                              double.tryParse(rawValue) ?? 
+                              (rawValue == 'true' ? true : 
+                               rawValue == 'false' ? false : 
+                               rawValue);
         query = query.eq(field, value);
       }
 

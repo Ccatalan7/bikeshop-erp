@@ -28,7 +28,20 @@ import '../../modules/website/widgets/website_link_value_editor.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
-import '../../shared/routes/erp_routes_barrel.dart' deferred as erp;
+import '../../shared/routes/erp_routes_barrel.dart' deferred as erp show
+  AnalyticsDashboardPage,
+  ContentManagementPage,
+  FeaturedProductsPage,
+  HierarchicalCategoryPage,
+  IntegrationsPage,
+  NavigationManagementPage,
+  OnlineOrdersPage,
+  PageManagementPage,
+  PaymentMethodsSettingsPage,
+  ProductListPage,
+  SeoSettingsPage,
+  WebsiteManagementPage,
+  WebsiteSettingsPage;
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
@@ -1647,8 +1660,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           value: a.id!,
           child: ListTile(
             dense: true,
-            leading: Icon(a.icon),
-            title: Text(a.label!),
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(a.icon, color: Colors.white.withValues(alpha: 0.9), size: 20),
+            title: Text(
+              a.label!,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
+            ),
           ),
         ),
       );
@@ -1656,6 +1673,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     return PopupMenuButton<String>(
       tooltip: label,
+      offset: const Offset(0, 38),
+      color: const Color(0xFF252525),
+      surfaceTintColor: Colors.transparent,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       onSelected: (action) => _handleTopBarAction(
         context: context,
         editProvider: editProvider,
@@ -2961,6 +2983,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
+        pendingCategoryVisibility: editProvider.pendingCategoryVisibility,
         pageId: editProvider.currentPageId,
         pageSlug: editProvider.currentPageSlug,
       );
@@ -2980,6 +3003,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       editProvider.clearFooterChanges();
       editProvider.clearThemeChanges();
       editProvider.clearSeoChanges();
+      editProvider.clearCategoryChanges();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

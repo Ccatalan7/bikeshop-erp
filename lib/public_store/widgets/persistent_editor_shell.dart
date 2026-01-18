@@ -111,6 +111,7 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
+        pendingCategoryVisibility: editProvider.pendingCategoryVisibility,
         pageId: editProvider.currentPageId,
         pageSlug: editProvider.currentPageSlug,
       );
@@ -129,6 +130,7 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
       editProvider.clearFooterChanges();
       editProvider.clearThemeChanges();
       editProvider.clearSeoChanges();
+      editProvider.clearCategoryChanges();
 
       _showSuccess('✅ Cambios guardados');
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 // import '../theme/public_store_theme.dart'; // Unused
 import '../services/public_inventory_service.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -19,11 +20,44 @@ class ProductCatalogPage extends StatefulWidget {
   State<ProductCatalogPage> createState() => _ProductCatalogPageState();
 }
 
+/// Represents a category node in the hierarchical tree
+class _CategoryNode {
+  final String id;
+  final String name;
+  final String? parentId;
+  final List<_CategoryNode> children;
+  
+  _CategoryNode({
+    required this.id,
+    required this.name,
+    this.parentId,
+    List<_CategoryNode>? children,
+  }) : children = children ?? [];
+  
+  /// Get all descendant IDs (children, grandchildren, etc.)
+  Set<String> getAllDescendantIds() {
+    final result = <String>{id};
+    for (final child in children) {
+      result.addAll(child.getAllDescendantIds());
+    }
+    return result;
+  }
+}
+
 class _ProductCatalogPageState extends State<ProductCatalogPage>
     with AutomaticKeepAliveClientMixin {
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
+
+  // Hierarchical category tree (only root-level visible categories)
+  List<_CategoryNode> _categoryTree = [];
+  
+  // All categories indexed by ID for quick lookup
+  Map<String, _CategoryNode> _allCategoriesById = {};
+  
+  // Track which parent categories are expanded in the UI
+  Set<String> _expandedCategories = {};
 
   final TextEditingController _filtersSearchController =
       TextEditingController();
@@ -255,6 +289,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _allProducts = products;
       debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
 
+      // Load visible categories (show_on_website = true)
+      await _loadVisibleCategories(tenantId);
+
       // If the URL carried a category filter we couldn't resolve earlier (e.g.
       // because products weren't loaded yet), resolve it now.
       if (_pendingRouteCategoryValue != null) {
@@ -297,6 +334,87 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadVisibleCategories(String tenantId) async {
+    try {
+      // Load ALL categories to build the hierarchy
+      // We need the full tree to show children of visible parents
+      final response = await Supabase.instance.client
+          .from('product_categories')
+          .select('id, name, parent_id, show_on_website')
+          .eq('tenant_id', tenantId)
+          .order('name');
+      
+      final allCategories = <String, Map<String, dynamic>>{};
+      final visibleCategoryIds = <String>{};
+      
+      // First pass: collect all categories and identify visible ones
+      for (final row in response as List) {
+        final id = row['id'] as String?;
+        if (id == null) continue;
+        allCategories[id] = row as Map<String, dynamic>;
+        if (row['show_on_website'] == true) {
+          visibleCategoryIds.add(id);
+        }
+      }
+      
+      // Build nodes for all categories
+      final nodesById = <String, _CategoryNode>{};
+      for (final entry in allCategories.entries) {
+        final id = entry.key;
+        final data = entry.value;
+        nodesById[id] = _CategoryNode(
+          id: id,
+          name: data['name'] as String? ?? 'Sin nombre',
+          parentId: data['parent_id'] as String?,
+        );
+      }
+      
+      // Build parent-child relationships
+      for (final node in nodesById.values) {
+        if (node.parentId != null && nodesById.containsKey(node.parentId)) {
+          nodesById[node.parentId]!.children.add(node);
+        }
+      }
+      
+      // Sort children alphabetically
+      for (final node in nodesById.values) {
+        node.children.sort((a, b) => a.name.compareTo(b.name));
+      }
+      
+      // Build root-level tree: only categories with show_on_website = true
+      // that are either root OR whose parent is not visible
+      final rootCategories = <_CategoryNode>[];
+      for (final id in visibleCategoryIds) {
+        final node = nodesById[id]!;
+        // A visible category is a "root" in our display if:
+        // - It has no parent, OR
+        // - Its parent is not in the visible set
+        if (node.parentId == null || !visibleCategoryIds.contains(node.parentId)) {
+          rootCategories.add(node);
+        }
+      }
+      rootCategories.sort((a, b) => a.name.compareTo(b.name));
+      
+      if (mounted) {
+        setState(() {
+          _categoryTree = rootCategories;
+          _allCategoriesById = nodesById;
+        });
+      }
+      debugPrint('[ProductCatalogPage] Loaded ${visibleCategoryIds.length} visible categories, ${rootCategories.length} root nodes');
+    } catch (e) {
+      debugPrint('[ProductCatalogPage] Error loading visible categories: $e');
+    }
+  }
+  
+  /// Get all category IDs that should be included when filtering by the given category
+  /// This includes the category itself and all its descendants
+  Set<String> _getCategoryAndDescendantIds(String categoryId) {
+    final node = _allCategoriesById[categoryId];
+    if (node == null) return {categoryId};
+    return node.getAllDescendantIds();
   }
 
   void _applyFilters() {
@@ -343,10 +461,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           }
         }
 
-        // Category filter
-        if (_selectedCategoryId != null &&
-            product.categoryId != _selectedCategoryId) {
-          return false;
+        // Category filter - includes selected category AND all descendants
+        if (_selectedCategoryId != null) {
+          final validCategoryIds = _getCategoryAndDescendantIds(_selectedCategoryId!);
+          if (product.categoryId == null || !validCategoryIds.contains(product.categoryId)) {
+            return false;
+          }
         }
 
         return true;
@@ -871,36 +991,144 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   }
 
   Widget _buildCategoryFilters() {
-    // Use a Map to properly deduplicate categories by ID
-    final categoriesMap = <String, String>{};
     final sourceProducts = _selectedProductType == null
         ? _allProducts
-        : _allProducts.where((p) => p.productType == _selectedProductType);
-    for (final p in sourceProducts) {
-      if (p.categoryId != null) {
-        categoriesMap[p.categoryId!] = p.categoryName ?? 'Sin categoría';
-      }
-    }
-
-    // Sort categories alphabetically by name
-    final sortedCategories = categoriesMap.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-
+        : _allProducts.where((p) => p.productType == _selectedProductType).toList();
+    
     final allCount = sourceProducts.length;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCategoryOption(null, 'Todas', allCount),
-        ...sortedCategories.map((entry) {
-          final count =
-              sourceProducts.where((p) => p.categoryId == entry.key).length;
-          return _buildCategoryOption(entry.key, entry.value, count);
-        }),
+        // "Todas" option
+        _buildCategoryOption(null, 'Todas', allCount, isRoot: true),
+        const SizedBox(height: 4),
+        // Hierarchical category tree
+        ..._categoryTree.map((node) => _buildCategoryTreeNode(
+          node,
+          sourceProducts,
+          depth: 0,
+        )),
+      ],
+    );
+  }
+  
+  /// Count products in a category and all its descendants
+  int _countProductsInCategoryTree(_CategoryNode node, Iterable<Product> products) {
+    final validIds = node.getAllDescendantIds();
+    return products.where((p) => p.categoryId != null && validIds.contains(p.categoryId)).length;
+  }
+  
+  Widget _buildCategoryTreeNode(
+    _CategoryNode node,
+    List<Product> sourceProducts, {
+    required int depth,
+  }) {
+    final productCount = _countProductsInCategoryTree(node, sourceProducts);
+    
+    // Don't show categories with no products in their tree
+    if (productCount == 0) return const SizedBox.shrink();
+    
+    final hasChildren = node.children.isNotEmpty;
+    final isExpanded = _expandedCategories.contains(node.id);
+    final isSelected = _selectedCategoryId == node.id;
+    
+    // Check if any child has products
+    final childrenWithProducts = hasChildren
+        ? node.children.where((child) => _countProductsInCategoryTree(child, sourceProducts) > 0).toList()
+        : <_CategoryNode>[];
+    final hasVisibleChildren = childrenWithProducts.isNotEmpty;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Category row with optional expand arrow
+        InkWell(
+          onTap: () {
+            setState(() {
+              _selectedCategoryId = node.id;
+              // Auto-expand when selecting a parent category
+              if (hasVisibleChildren && !isExpanded) {
+                _expandedCategories.add(node.id);
+              }
+            });
+            _applyFilters();
+          },
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: depth * 16.0,
+              top: 8,
+              bottom: 8,
+            ),
+            child: Row(
+              children: [
+                // Expand/collapse arrow for categories with children
+                if (hasVisibleChildren)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedCategories.remove(node.id);
+                        } else {
+                          _expandedCategories.add(node.id);
+                        }
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(
+                        isExpanded ? Icons.expand_more : Icons.chevron_right,
+                        size: 18,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 22), // Align with items that have arrows
+                // Selection indicator
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected ? Colors.black : Colors.transparent,
+                    border: Border.all(
+                      color: isSelected ? Colors.black : Colors.grey.shade400,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, size: 12, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                // Category name and count
+                Expanded(
+                  child: Text(
+                    '${node.name} ($productCount)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isSelected ? Colors.black : Colors.grey.shade700,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Children (if expanded)
+        if (isExpanded && hasVisibleChildren)
+          ...childrenWithProducts.map((child) => _buildCategoryTreeNode(
+            child,
+            sourceProducts,
+            depth: depth + 1,
+          )),
       ],
     );
   }
 
-  Widget _buildCategoryOption(String? id, String name, int count) {
+  Widget _buildCategoryOption(String? id, String name, int count, {bool isRoot = false}) {
     final isSelected = _selectedCategoryId == id;
     return InkWell(
       onTap: () {
@@ -911,25 +1139,30 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
+            const SizedBox(width: 22), // Align with tree items
             Container(
-              width: 18,
-              height: 18,
+              width: 16,
+              height: 16,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
+                color: isSelected ? Colors.black : Colors.transparent,
                 border: Border.all(
                   color: isSelected ? Colors.black : Colors.grey.shade400,
-                  width: isSelected ? 5 : 1,
+                  width: 1.5,
                 ),
               ),
+              child: isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '$name ($count)',
                 style: TextStyle(
                   fontSize: 13,
                   color: isSelected ? Colors.black : Colors.grey.shade700,
-                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ),

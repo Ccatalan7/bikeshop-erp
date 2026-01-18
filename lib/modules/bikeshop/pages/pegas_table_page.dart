@@ -7879,9 +7879,21 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
         borderRadius: BorderRadius.circular(4),
         child: Tooltip(
           message: hasAnyContent
-              ? 'Click para ver/editar detalles ($filledCount/4 campos)'
+              ? currentPage!.content
               : 'Click para agregar detalles',
           waitDuration: const Duration(milliseconds: 500),
+          showDuration: Duration.zero,
+          preferBelow: true,
+          decoration: BoxDecoration(
+            color: Colors.grey[850],
+            borderRadius: BorderRadius.circular(6),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 12,
+            color: Colors.white,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          constraints: const BoxConstraints(maxWidth: 280),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(

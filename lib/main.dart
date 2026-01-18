@@ -739,7 +739,7 @@ class _WorkspaceRouterView extends StatefulWidget {
 
 class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     with AutomaticKeepAliveClientMixin {
-  late final GoRouter _router;
+  late GoRouter _router;
   StreamSubscription<String>? _notificationTapSubscription;
 
   @override
@@ -752,20 +752,12 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     debugPrint(
         '🎯 [WorkspaceRouterView] Creating router for workspace: ${widget.workspace.title} with route: ${widget.workspace.initialRoute}');
 
-    // Create router WITHOUT initialLocation to avoid navigation conflicts
-    // The MainLayout will handle navigation to the correct route
-    _router = AppRouter.createRouter(widget.authService);
-
-    // Navigate to the workspace's initial route after the router is created
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        debugPrint(
-            '🚀 [WorkspaceRouterView] Navigating to: ${widget.workspace.initialRoute}');
-        _router.go(widget.workspace.initialRoute);
-      } catch (e) {
-        debugPrint('❌ [WorkspaceRouterView] Navigation error: $e');
-      }
-    });
+    // Create the router with an explicit initial location for this workspace.
+    // This avoids post-frame .go() calls that can cause extra navigation cycles.
+    _router = AppRouter.createRouter(
+      widget.authService,
+      initialLocationOverride: widget.workspace.currentRoute,
+    );
 
     // Listen for notification taps to navigate to specific chats
     // Only handle if this is the active workspace
