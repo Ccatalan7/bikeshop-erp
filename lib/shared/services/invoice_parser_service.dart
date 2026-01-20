@@ -36,6 +36,11 @@ class ParsedLineItem {
   final double? discount;
   final double? discountRate;
 
+  // Product verification fields (populated after database lookup)
+  final bool? existsInDatabase;
+  final String? matchedProductId;
+  final String? matchedProductName;
+
   ParsedLineItem({
     required this.description,
     this.sku,
@@ -44,11 +49,41 @@ class ParsedLineItem {
     this.total,
     this.discount,
     this.discountRate,
+    this.existsInDatabase,
+    this.matchedProductId,
+    this.matchedProductName,
   });
+
+  /// Create a copy with updated verification fields
+  ParsedLineItem copyWith({
+    String? description,
+    String? sku,
+    double? quantity,
+    double? unitPrice,
+    double? total,
+    double? discount,
+    double? discountRate,
+    bool? existsInDatabase,
+    String? matchedProductId,
+    String? matchedProductName,
+  }) {
+    return ParsedLineItem(
+      description: description ?? this.description,
+      sku: sku ?? this.sku,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      total: total ?? this.total,
+      discount: discount ?? this.discount,
+      discountRate: discountRate ?? this.discountRate,
+      existsInDatabase: existsInDatabase ?? this.existsInDatabase,
+      matchedProductId: matchedProductId ?? this.matchedProductId,
+      matchedProductName: matchedProductName ?? this.matchedProductName,
+    );
+  }
 
   @override
   String toString() {
-    return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate)';
+    return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate, exists: $existsInDatabase)';
   }
 }
 

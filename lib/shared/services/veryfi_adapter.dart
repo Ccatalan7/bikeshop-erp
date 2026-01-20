@@ -23,6 +23,97 @@ class VeryfiAdapter {
     return buffer.toString().split('').reversed.join();
   }
 
+  /// Patterns to extract SKU codes from product descriptions.
+  /// Priority order:
+  /// 1. Explicit "SKU: XXXXX" labels (highest priority)
+  /// 2. Alphanumeric codes with dashes like "U-311728"
+  /// 3. Pure alphanumeric codes like "213111BN"
+  /// 4. Size/dimension codes as last resort
+
+  /// Try to extract a SKU from a description string.
+  /// Prioritizes explicit SKU labels over dimension/size codes.
+  static String? _extractSkuFromDescription(String description) {
+    if (description.isEmpty) return null;
+
+    // PRIORITY 1: Look for explicit "SKU: XXXXX" or "Código: XXXXX" labels
+    // These are the most reliable - suppliers explicitly label their SKUs
+    final explicitSkuPatterns = [
+      // "SKU: 213111BN" or "SKU:213111BN" or "SKU 213111BN"
+      RegExp(r'SKU[:\s]+([A-Z0-9\-]+)', caseSensitive: false),
+      // "Código: ABC123" or "Cod: ABC123"
+      RegExp(r'C[óo]d(?:igo)?[:\s]+([A-Z0-9\-]+)', caseSensitive: false),
+      // "Ref: ABC123" or "Referencia: ABC123"
+      RegExp(r'Ref(?:erencia)?[:\s]+([A-Z0-9\-]+)', caseSensitive: false),
+    ];
+
+    for (final pattern in explicitSkuPatterns) {
+      final match = pattern.firstMatch(description);
+      if (match != null) {
+        final sku = match.group(1)!.trim();
+        if (sku.length >= 3) {
+          debugPrint('   🔍 Found explicit SKU label: "$sku"');
+          return sku;
+        }
+      }
+    }
+
+    // PRIORITY 2: Alphanumeric codes with dashes (likely supplier codes)
+    final dashedPattern =
+        RegExp(r'[A-Z0-9]{1,3}-[A-Z0-9\-]+', caseSensitive: false);
+    final match = dashedPattern.firstMatch(description);
+    if (match != null) {
+      final sku = match.group(0)!.trim();
+      debugPrint('   🔍 Found dashed code: "$sku"');
+      return sku;
+    }
+
+    // Default: Check if the description itself starts with a code-like pattern
+    // Continue searching for other patterns if not found...
+
+    // PRIORITY 3: Pure numeric codes (6+ digits, likely supplier codes)
+    // e.g., "213111", "213016"
+    final numericPattern = RegExp(r'\b(\d{6,})\b');
+    final numericMatch = numericPattern.firstMatch(description);
+    if (numericMatch != null) {
+      final sku = numericMatch.group(1)!;
+      debugPrint('   🔍 Found numeric SKU: "$sku"');
+      return sku;
+    }
+
+    // PRIORITY 4: Alphanumeric codes ending with letters (e.g., "213111BN")
+    // Must have at least 4 digits followed by letters
+    final alphanumericPattern =
+        RegExp(r'\b(\d{4,}[A-Z]{1,3})\b', caseSensitive: false);
+    final alphaMatch =
+        alphanumericPattern.firstMatch(description.toUpperCase());
+    if (alphaMatch != null) {
+      final sku = alphaMatch.group(1)!;
+      debugPrint('   🔍 Found alphanumeric SKU: "$sku"');
+      return sku;
+    }
+
+    // PRIORITY 5 (LOWEST): Size/dimension codes - only if nothing else found
+    // These are less reliable as SKUs, but better than nothing
+    // Skipping this for now - size codes caused confusion
+
+    debugPrint('   ⚠ No SKU pattern found in: "$description"');
+    return null;
+  }
+
+  /// Try to extract a SKU from raw text line (e.g. "2207 CAMARA 26...")
+  /// This is used when Veryfi returns a null SKU but the text clearly starts with one.
+  static String? _extractSkuFromRawText(String text) {
+    if (text.isEmpty) return null;
+    // Look for alphanumeric code at start of string (3+ chars)
+    // Avoids catching "10 " quantity
+    final regex = RegExp(r'^([A-Z0-9-]{3,})\s+');
+    final match = regex.firstMatch(text.trim());
+    if (match != null) {
+      return match.group(1);
+    }
+    return null;
+  }
+
   /// Parse a Veryfi response map into a `Invoice`.
   ///
   /// `tenantId` is required (multi-tenant). `defaultInvoiceType` can be
@@ -206,7 +297,23 @@ class VeryfiAdapter {
           (map['qty'] as num?)?.toDouble();
       var price = (map['unit_price'] as num?)?.toDouble() ??
           (map['price'] as num?)?.toDouble();
-      final sku = map['sku']?.toString();
+
+      // Get SKU from Veryfi, or try to extract from description if not detected
+      var sku = map['sku']?.toString();
+      final rawText = map['text']?.toString() ?? '';
+
+      if (sku == null || sku.isEmpty) {
+        sku = _extractSkuFromDescription(desc);
+
+        // If still null, try extracting from raw text (start of line)
+        // Useful when the line starts with the code but Veryfi missed it
+        if (sku == null || sku.isEmpty) {
+          sku = _extractSkuFromRawText(rawText);
+          if (sku != null) {
+            debugPrint('   💡 Extracted SKU from raw text: $sku');
+          }
+        }
+      }
       var lineTotal = (map['total'] as num?)?.toDouble() ??
           (map['line_total'] as num?)?.toDouble();
 
@@ -220,8 +327,6 @@ class VeryfiAdapter {
       // The text field contains the original OCR text like "$1.790\t6\t$10.740"
       // If the text shows a value like "$1.790" but Veryfi parsed it as 1.79,
       // we need to multiply by 1000.
-
-      final rawText = map['text']?.toString() ?? '';
 
       // Helper to check if raw text contains a value that looks like it should be 1000x larger
       // e.g., "$1.790" in text but parsed as 1.79

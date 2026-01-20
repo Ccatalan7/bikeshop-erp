@@ -93,6 +93,49 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
+  Future<Product?> getProductBySupplierCode(String supplierCode) async {
+    debugPrint('🔎 Finding Product by supplierCode: "$supplierCode"');
+    await getProducts();
+    debugPrint('📦 Cache size: ${_products.length}');
+
+    final cleanCode = supplierCode.trim();
+    final lowerCode = cleanCode.toLowerCase();
+
+    try {
+      final match = _products.firstWhere(
+        (product) => product.supplierCode?.trim().toLowerCase() == lowerCode,
+      );
+      debugPrint('✅ Memory Match: ${match.name} (ID: ${match.id})');
+      return match;
+    } catch (_) {
+      debugPrint('⚠️ Not in memory. DB Fallback for cleanCode="$cleanCode"...');
+      if (_db == null) return null;
+      try {
+        debugPrint('🔌 Executing DB Select: supplier_code=$cleanCode');
+        final records =
+            await _db!.select('products', where: "supplier_code=$cleanCode");
+        debugPrint('🔌 DB returned ${records.length} records');
+
+        if (records.isEmpty) {
+          debugPrint('❌ DB Check: zero results.');
+          return null;
+        }
+
+        debugPrint('🔨 Mapping record 0...');
+        final product = _productFromMap(records.first);
+        debugPrint('✅ Mapped: ${product.name}');
+
+        _upsertLocalProduct(product);
+        notifyListeners();
+        return product;
+      } catch (e, stack) {
+        debugPrint('❌ DB/Mapping Exception: $e');
+        debugPrint(stack.toString());
+        return null;
+      }
+    }
+  }
+
   Future<List<Product>> searchProducts(String query) async {
     final products = await getProducts();
     if (query.trim().isEmpty) return products;
@@ -318,7 +361,7 @@ class InventoryService extends ChangeNotifier {
           Map<String, String>.from(json['specifications'] as Map? ?? {}),
       supplierId: json['supplier_id']?.toString(),
       supplierReference: json['supplier_reference'] as String?,
-      supplierCode: json['supplier_code'] as String?,
+      supplierCode: json['supplier_code']?.toString(),
       manufacturer: json['manufacturer'] as String?,
       manufacturerSku: json['manufacturer_sku'] as String?,
       gtin: json['gtin'] as String?,

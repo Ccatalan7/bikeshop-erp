@@ -260,28 +260,58 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Show OCR upload widget in centered dialog
     await showDialog(
       context: context,
-      barrierDismissible: false, // Prevent accidental closing
+      barrierDismissible: true, // Allow tapping outside to close
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: OCRUploadWidget(
-              documentType: OCRDocumentType.invoice,
-              showPreview: true,
-              onComplete: (parsedInvoice) {
-                // Close dialog
-                Navigator.of(context).pop();
+          constraints: BoxConstraints(
+            maxWidth: 1100,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Close button aligned to right
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Cerrar',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey.shade100,
+                      foregroundColor: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ),
+              // Content with padding
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: OCRUploadWidget(
+                    documentType: OCRDocumentType.invoice,
+                    showPreview: true,
+                    supplierId: _selectedSupplier?.id,
+                    supplierName: _selectedSupplier?.name,
+                    onComplete: (parsedInvoice) {
+                      // Close dialog
+                      Navigator.of(context).pop();
 
-                // Apply extracted data to form
-                _applyOCRData(parsedInvoice);
-              },
-              onError: (error) {
-                // Error already shown in widget
-                debugPrint('OCR Error: $error');
-              },
-            ),
+                      // Apply extracted data to form
+                      _applyOCRData(parsedInvoice);
+                    },
+                    onError: (error) {
+                      // Error already shown in widget
+                      debugPrint('OCR Error: $error');
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
