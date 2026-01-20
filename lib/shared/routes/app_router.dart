@@ -8,98 +8,98 @@ import '../pages/auth_callback_page.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
-import 'erp_routes_barrel.dart' deferred as erp show
-  AcceptInvitationPage,
-  AccountFormPage,
-  AccountListPage,
-  AnalyticsDashboardPage,
-  AppearanceSettingsPage,
-  AttendancesPage,
-  BackupManagementPage,
-  BalanceSheetPage,
-  BikeBrandsPage,
-  BikeEncyclopediaPage,
-  BluetoothScannerPage,
-  BrandFormPage,
-  BrandListPage,
-  CategoryFormPage,
-  ClientLogbookPage,
-  ContentManagementPage,
-  CustomerBikeDirectoryPage,
-  CustomerFormPage,
-  CustomerListPage,
-  DashboardScreen,
-  EmployeeChatPage,
-  EmployeeDetailPage,
-  EmployeeListPage,
-  ExpenseCategoriesPage,
-  ExpenseDetailPage,
-  ExpenseFormPage,
-  ExpenseListPage,
-  F29DashboardPage,
-  FactoryResetPageNew,
-  FeaturedProductsPage,
-  FinancialReportsHubPage,
-  GenericWebToolPage,
-  GoogleSheetsModulePage,
-  HierarchicalCategoryPage,
-  IncomeStatementPage,
-  IntegrationsPage,
-  InvoiceFormPage,
-  InvoiceListPage,
-  InvoicePaymentPage,
-  JobStatusesPage,
-  JournalEntryFormPage,
-  JournalEntryListPage,
-  KeyboardScannerPage,
-  KioskModePage,
-  LoginScreen,
-  MailInboxPage,
-  MechanicJobFormPage,
-  MedicalLeavesPage,
-  NavigationManagementPage,
-  NotificationSettingsPage,
-  NotionModulePage,
-  OnlineOrdersPage,
-  POSCartPage,
-  POSDashboardPage,
-  POSPaymentPage,
-  POSReceiptPage,
-  PageManagementPage,
-  PaymentMethodsSettingsPage,
-  PaymentsPage,
-  PegasTablePage,
-  ProductFormPage,
-  ProductImportPage,
-  ProductListPage,
-  PurchaseInvoiceFormPage,
-  PurchaseInvoiceListPage,
-  PurchasePaymentFormPage,
-  PurchasePaymentsListPage,
-  RemoteScannerPage,
-  ResetPasswordScreen,
-  SalesByCustomerPage,
-  SalesByProductDetailPage,
-  SalesByProductPage,
-  SalesReportsPage,
-  SeoSettingsPage,
-  SettingsPage,
-  SmartPurchaseListPage,
-  SpokeLengthCalculatorPage,
-  StockMovementListPage,
-  StockMovementsPage,
-  SupplierFormPage,
-  SupplierListPage,
-  UserManagementPage,
-  WebsiteManagementPage,
-  WebsiteSettingsPage,
-  WhatsAppWebModulePage,
-  WheelBuilderWizardPage,
-  WheelHubsPage,
-  WheelRimsPage,
-  WheelSpokesPage,
-  WorkshopCalendarPage,
-  WorkspaceDemoPage;
+import 'erp_routes_barrel.dart' deferred as erp
+    show
+        AcceptInvitationPage,
+        AccountFormPage,
+        AccountListPage,
+        AnalyticsDashboardPage,
+        AppearanceSettingsPage,
+        AttendancesPage,
+        BackupManagementPage,
+        BalanceSheetPage,
+        BikeBrandsPage,
+        BikeEncyclopediaPage,
+        BluetoothScannerPage,
+        BrandFormPage,
+        BrandListPage,
+        CategoryFormPage,
+        ClientLogbookPage,
+        ContentManagementPage,
+        CustomerBikeDirectoryPage,
+        CustomerFormPage,
+        CustomerListPage,
+        DashboardScreen,
+        EmployeeChatPage,
+        EmployeeDetailPage,
+        EmployeeListPage,
+        ExpenseCategoriesPage,
+        ExpenseDetailPage,
+        ExpenseFormPage,
+        ExpenseListPage,
+        F29DashboardPage,
+        FactoryResetPageNew,
+        FeaturedProductsPage,
+        FinancialReportsHubPage,
+        GenericWebToolPage,
+        GoogleSheetsModulePage,
+        HierarchicalCategoryPage,
+        IncomeStatementPage,
+        IntegrationsPage,
+        InvoiceFormPage,
+        InvoiceListPage,
+        InvoicePaymentPage,
+        JobStatusesPage,
+        JournalEntryFormPage,
+        JournalEntryListPage,
+        KeyboardScannerPage,
+        KioskModePage,
+        LoginScreen,
+        MailInboxPage,
+        MechanicJobFormPage,
+        MedicalLeavesPage,
+        NavigationManagementPage,
+        NotificationSettingsPage,
+        NotionModulePage,
+        OnlineOrdersPage,
+        POSCartPage,
+        POSDashboardPage,
+        POSPaymentPage,
+        POSReceiptPage,
+        PageManagementPage,
+        PaymentMethodsSettingsPage,
+        PaymentsPage,
+        PegasTablePage,
+        ProductFormPage,
+        ProductImportPage,
+        ProductListPage,
+        PurchaseInvoiceFormPage,
+        PurchaseInvoiceListPage,
+        PurchasePaymentFormPage,
+        PurchasePaymentsListPage,
+        RemoteScannerPage,
+        ResetPasswordScreen,
+        SalesByCustomerPage,
+        SalesByProductDetailPage,
+        SalesByProductPage,
+        SalesReportsPage,
+        SeoSettingsPage,
+        SettingsPage,
+        SmartPurchaseListPage,
+        SpokeLengthCalculatorPage,
+        StockMovementsPage,
+        SupplierFormPage,
+        SupplierListPage,
+        UserManagementPage,
+        WebsiteManagementPage,
+        WebsiteSettingsPage,
+        WhatsAppWebModulePage,
+        WheelBuilderWizardPage,
+        WheelHubsPage,
+        WheelRimsPage,
+        WheelSpokesPage,
+        WorkshopCalendarPage,
+        WorkspaceDemoPage;
 
 // WebView Modules (Deferred via barrel)
 // import '../../modules/webview_modules/webview_modules.dart'; // Already in barrel
@@ -1577,13 +1577,13 @@ class AppRouter {
                 initialSupplierId: supplierId,
                 refreshToken: refreshToken,
               ),
-              pageKeyOverride: const ValueKey<String>('inventory_products_list'),
             );
           },
           routes: [
             GoRoute(
               path: 'new',
-              pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
                 erp.loadLibrary(),
@@ -1592,7 +1592,8 @@ class AppRouter {
             ),
             GoRoute(
               path: 'import',
-              pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
                 context,
                 state,
                 erp.loadLibrary(),
@@ -1621,52 +1622,46 @@ class AppRouter {
             erp.loadLibrary(),
             () => erp.HierarchicalCategoryPage(),
           ),
-        ),
-        GoRoute(
-          path: '/inventory/categories/new',
-          pageBuilder: (context, state) {
-            final parentId = state.uri.queryParameters['parent'];
-            return _buildDeferredPageWithNoTransition(
-              context,
-              state,
-              erp.loadLibrary(),
-              () => erp.CategoryFormPage(parentCategoryId: parentId),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/inventory/categories/:id',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['id']!;
-            // Check if this is an edit route by looking at the full path
-            if (state.uri.path.endsWith('/edit')) {
-              return _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                erp.loadLibrary(),
-                () => erp.CategoryFormPage(categoryId: id),
-              );
-            }
-            // Otherwise it's a category view
-            return _buildDeferredPageWithNoTransition(
-              context,
-              state,
-              erp.loadLibrary(),
-              () => erp.HierarchicalCategoryPage(categoryId: id),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/inventory/categories/:id/edit',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['id']!;
-            return _buildDeferredPageWithNoTransition(
-              context,
-              state,
-              erp.loadLibrary(),
-              () => erp.CategoryFormPage(categoryId: id),
-            );
-          },
+          routes: [
+            GoRoute(
+              path: 'new',
+              pageBuilder: (context, state) {
+                final parentId = state.uri.queryParameters['parent'];
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.CategoryFormPage(parentCategoryId: parentId),
+                );
+              },
+            ),
+            GoRoute(
+              path: ':id',
+              pageBuilder: (context, state) {
+                final id = state.pathParameters['id']!;
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.HierarchicalCategoryPage(categoryId: id),
+                );
+              },
+              routes: [
+                GoRoute(
+                  path: 'edit',
+                  pageBuilder: (context, state) {
+                    final id = state.pathParameters['id']!;
+                    return _buildDeferredPageWithNoTransition(
+                      context,
+                      state,
+                      erp.loadLibrary(),
+                      () => erp.CategoryFormPage(categoryId: id),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
         GoRoute(
           path: '/inventory/brands',
@@ -1676,6 +1671,30 @@ class AppRouter {
             erp.loadLibrary(),
             () => erp.BrandListPage(),
           ),
+          routes: [
+            GoRoute(
+              path: 'new',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                erp.loadLibrary(),
+                () => erp.BrandFormPage(),
+              ),
+            ),
+            GoRoute(
+              path: ':id/edit',
+              pageBuilder: (context, state) {
+                final id = state.pathParameters['id']!;
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.BrandFormPage(brandId: id),
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: '/inventory/movements',
@@ -1684,36 +1703,6 @@ class AppRouter {
             state,
             erp.loadLibrary(),
             () => erp.StockMovementsPage(),
-          ),
-        ),
-        GoRoute(
-          path: '/inventory/brands/new',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => erp.BrandFormPage(),
-          ),
-        ),
-        GoRoute(
-          path: '/inventory/brands/:id/edit',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['id']!;
-            return _buildDeferredPageWithNoTransition(
-              context,
-              state,
-              erp.loadLibrary(),
-              () => erp.BrandFormPage(brandId: id),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/inventory/movements',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => erp.StockMovementListPage(),
           ),
         ),
 

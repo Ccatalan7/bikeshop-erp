@@ -15,17 +15,19 @@ class InventoryService extends ChangeNotifier {
   DateTime? _productsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
   bool _isLoadingProducts = false;
-  
+
   // Public getters for cached data (instant access)
   List<Product> get cachedProducts => _cachedProducts ?? [];
   bool get hasProductsCache => _cachedProducts != null;
-  
+
   // ============================================================
   // PRODUCT LIST PAGE STATE - Preserve across navigation
   // ============================================================
   bool _pendingStateRestore = false; // Only true when returning from edit
   DateTime? _lastListStateSavedAt;
-  static const Duration _listStateGraceWindow = Duration(minutes: 5); // Extended to survive long edit sessions
+  // Grace window: short enough that navigating to another module resets state,
+  // but long enough to survive router rebuilds during within-module navigation
+  static const Duration _listStateGraceWindow = Duration(seconds: 30);
   String? savedSearchTerm;
   int savedCurrentPage = 1;
   double savedScrollOffset = 0;
@@ -37,16 +39,17 @@ class InventoryService extends ChangeNotifier {
   bool savedFilterGoogleMerchant = false;
   bool savedShowInactive = false;
   int savedSortOptionIndex = 2; // Default: nameAsc (index 2)
-  
+
   /// Returns true if we should restore state (returning from edit)
   bool get shouldRestoreState => _pendingStateRestore;
   bool get hasRecentSavedState {
     if (_pendingStateRestore) return true;
     if (_lastListStateSavedAt == null) return false;
     // Grace window to survive router/workspace rebuilds during navigation
-    return DateTime.now().difference(_lastListStateSavedAt!) < _listStateGraceWindow;
+    return DateTime.now().difference(_lastListStateSavedAt!) <
+        _listStateGraceWindow;
   }
-  
+
   void saveListState({
     String? searchTerm,
     int? currentPage,
@@ -74,14 +77,14 @@ class InventoryService extends ChangeNotifier {
     savedShowInactive = showInactive ?? false;
     savedSortOptionIndex = sortOptionIndex ?? 2;
   }
-  
+
   /// Call after restoring state to prevent restoring on subsequent visits
   void markStateRestored() {
     _pendingStateRestore = false;
-    // Keep a short timestamp so immediate rebuilds still restore.
-    _lastListStateSavedAt = DateTime.now();
+    // Don't update _lastListStateSavedAt - let the grace window expire naturally
+    // so navigating to another module for 30+ seconds will clear state
   }
-  
+
   void clearListState() {
     _pendingStateRestore = false;
     _lastListStateSavedAt = null;
@@ -97,12 +100,12 @@ class InventoryService extends ChangeNotifier {
     savedShowInactive = false;
     savedSortOptionIndex = 2;
   }
-  
+
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   void invalidateProductsCache() {
     _cachedProducts = null;
     _productsCacheTime = null;
@@ -120,26 +123,31 @@ class InventoryService extends ChangeNotifier {
     try {
       // Check if this is a filtered query
       final isFilteredQuery = (searchTerm != null && searchTerm.isNotEmpty) ||
-                              categoryId != null ||
-                              lowStockOnly == true;
-      
+          categoryId != null ||
+          lowStockOnly == true;
+
       // Return cached data if valid and not a filtered query
-      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_productsCacheTime) && _cachedProducts != null) {
-        debugPrint('📦 [InventoryService] Using cached products (${_cachedProducts!.length} items)');
+      if (!forceRefresh &&
+          !isFilteredQuery &&
+          _isCacheValid(_productsCacheTime) &&
+          _cachedProducts != null) {
+        debugPrint(
+            '📦 [InventoryService] Using cached products (${_cachedProducts!.length} items)');
         return _cachedProducts!;
       }
-      
+
       // Prevent concurrent fetches
       if (_isLoadingProducts && !isFilteredQuery) {
         debugPrint('⏳ [InventoryService] Already loading products, waiting...');
         while (_isLoadingProducts) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
-        if (_cachedProducts != null && !isFilteredQuery) return _cachedProducts!;
+        if (_cachedProducts != null && !isFilteredQuery)
+          return _cachedProducts!;
       }
-      
+
       if (!isFilteredQuery) _isLoadingProducts = true;
-      
+
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -176,17 +184,18 @@ class InventoryService extends ChangeNotifier {
       }
 
       final sortedProducts = products..sort((a, b) => a.name.compareTo(b.name));
-      
+
       // Cache only unfiltered results
       if (!isFilteredQuery) {
         _cachedProducts = sortedProducts;
         _productsCacheTime = DateTime.now();
         if (!kReleaseMode) {
-          debugPrint('✅ [InventoryService] Cached ${sortedProducts.length} products');
+          debugPrint(
+              '✅ [InventoryService] Cached ${sortedProducts.length} products');
         }
         _isLoadingProducts = false;
       }
-      
+
       return sortedProducts;
     } catch (e) {
       _isLoadingProducts = false;
@@ -268,9 +277,10 @@ class InventoryService extends ChangeNotifier {
 
       // Check if stock quantity changed - if so, create stock_adjustments record
       final existingProduct = await getProductById(product.id!);
-      if (existingProduct != null && existingProduct.inventoryQty != product.inventoryQty) {
+      if (existingProduct != null &&
+          existingProduct.inventoryQty != product.inventoryQty) {
         final difference = product.inventoryQty - existingProduct.inventoryQty;
-        
+
         // Create stock_adjustments record (NOT stock_movements)
         final tenantId = await _tenantService.getTenantId();
         if (tenantId != null) {
@@ -284,7 +294,8 @@ class InventoryService extends ChangeNotifier {
               'reason': 'Ajuste manual desde formulario de producto',
             });
           } catch (e) {
-            if (kDebugMode) print('⚠️ Error creating stock adjustment record: $e');
+            if (kDebugMode)
+              print('⚠️ Error creating stock adjustment record: $e');
             // Don't fail the whole update if adjustment logging fails
           }
         }
@@ -465,7 +476,7 @@ class InventoryService extends ChangeNotifier {
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
       }
-      
+
       final movement = StockMovement(
         productId: productId,
         tenantId: tenantId,

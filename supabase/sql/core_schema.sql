@@ -2320,6 +2320,7 @@ declare
   v_adjustment_type text;
   v_reason text;
   v_reference text;
+  v_context text;
 begin
   -- Services and non-stock-tracked items should not generate stock adjustments.
   if coalesce(NEW.product_type, 'product') = 'service'
@@ -2332,23 +2333,31 @@ begin
   if current_setting('app.skip_stock_adjustment_trigger', true) = 'true' then
     return NEW;
   end if;
-  
+
   -- Only track if stock_quantity actually changed
   if (TG_OP = 'UPDATE' and OLD.stock_quantity <> NEW.stock_quantity) then
+    
+    v_context := current_setting('app.stock_adjustment_context', true);
+
     -- Determine adjustment type based on context
-    if current_setting('app.stock_adjustment_context', true) = 'import' then
+    if v_context = 'import' then
       v_adjustment_type := 'import';
-      v_reason := coalesce(
-        current_setting('app.import_reason', true),
-        'Stock updated via import'
-      );
-      v_reference := current_setting('app.import_reference', true); -- Import filename or batch ID
+      v_reason := coalesce(current_setting('app.import_reason', true), 'Stock updated via import');
+      v_reference := current_setting('app.import_reference', true);
+    
+    elsif v_context = 'purchase' then
+      -- ✅ NEW: Handle purchase context
+      v_adjustment_type := 'purchase'; 
+      v_reason := 'Compra recibida (Invoice ' || coalesce(current_setting('app.stock_adjustment_reference', true), 'Unknown') || ')';
+      v_reference := current_setting('app.stock_adjustment_reference', true);
+
     else
       v_adjustment_type := 'manual';
-      v_reason := 'Manual adjustment via product form';
+      v_reason := 'Ajuste Manual'; -- Changed label to match user expectation
       v_reference := null;
     end if;
-    
+
+    -- Insert into stock_adjustments (which now syncs to stock_movements via Migration 2)
     insert into stock_adjustments (
       tenant_id,
       product_id,
@@ -2370,22 +2379,21 @@ begin
       v_reference,
       auth.uid()
     );
+
   elsif (TG_OP = 'INSERT' and NEW.stock_quantity > 0) then
-    -- Track initial stock when product is created with stock
-    -- Check if this is part of an import
-    if current_setting('app.stock_adjustment_context', true) = 'import' then
+    -- Track initial stock logic
+    v_context := current_setting('app.stock_adjustment_context', true);
+    
+    if v_context = 'import' then
       v_adjustment_type := 'import';
-      v_reason := coalesce(
-        current_setting('app.import_reason', true),
-        'Initial stock via import'
-      );
+      v_reason := coalesce(current_setting('app.import_reason', true), 'Initial stock via import');
       v_reference := current_setting('app.import_reference', true);
     else
       v_adjustment_type := 'initial';
       v_reason := 'Initial stock on product creation';
       v_reference := null;
     end if;
-    
+
     insert into stock_adjustments (
       tenant_id,
       product_id,
@@ -2408,7 +2416,7 @@ begin
       auth.uid()
     );
   end if;
-  
+
   return NEW;
 end;
 $$ language plpgsql security definer;
@@ -5418,15 +5426,20 @@ security definer
 set search_path = public
 as $$
 declare
-  v_reference text;
   v_item record;
   v_resolved_product_id uuid;
   v_quantity_int integer;
   v_status text;
+  v_reference text;
   v_items_count integer;
+  v_is_set boolean;
+  v_component record;
+  v_qty_to_deduct integer;
+  v_set_name text;
 begin
   -- CRITICAL: Set flag to skip stock_adjustment trigger for automatic changes
   perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+
   -- Early exit if invoice ID is null
   if p_invoice.id is null then
     raise notice 'consume_sales_invoice_inventory: invoice ID is null';
@@ -5434,11 +5447,9 @@ begin
   end if;
 
   v_status := lower(coalesce(p_invoice.status, 'draft'));
-  raise notice 'consume_sales_invoice_inventory: invoice %, status %', p_invoice.id, v_status;
-
-  -- Only process if status is posted (not draft/cancelled)
+  
+  -- Only process if status is posted
   if v_status = any (array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada']) then
-    raise notice 'consume_sales_invoice_inventory: status is non-posted, skipping';
     return;
   end if;
 
@@ -5450,15 +5461,12 @@ begin
         where reference = v_reference
           and type = 'OUT'
      ) then
-    raise notice 'consume_sales_invoice_inventory: inventory already reduced for %', v_reference;
     return;
   end if;
 
   -- Count items
   select jsonb_array_length(coalesce(p_invoice.items, '[]'::jsonb))
     into v_items_count;
-  
-  raise notice 'consume_sales_invoice_inventory: processing % items', v_items_count;
 
   -- Process each item
   for v_item in
@@ -5477,61 +5485,90 @@ begin
         from public.products
        where sku = v_item.product_sku
        limit 1;
-      
-      raise notice 'consume_sales_invoice_inventory: resolved product % by SKU %', v_resolved_product_id, v_item.product_sku;
     end if;
 
     v_quantity_int := coalesce(v_item.quantity::int, 0);
 
-    if v_resolved_product_id is null then
-      raise notice 'consume_sales_invoice_inventory: skipping item - product_id is null, sku: %', v_item.product_sku;
+    if v_resolved_product_id is null or v_quantity_int <= 0 then
       continue;
     end if;
 
-    if v_quantity_int <= 0 then
-      raise notice 'consume_sales_invoice_inventory: skipping item - quantity <= 0, product: %', v_resolved_product_id;
-      continue;
-    end if;
+    -- CHECK IF PRODUCT IS A SET
+    select is_set, name
+      into v_is_set, v_set_name
+      from public.products
+     where id = v_resolved_product_id;
 
-    -- Reduce inventory (update BOTH inventory_qty and stock_quantity)
-    update public.products
-       set inventory_qty = coalesce(inventory_qty, 0) - v_quantity_int,
-           stock_quantity = greatest(coalesce(stock_quantity, 0) - v_quantity_int, 0),
-           updated_at = now()
-     where id = v_resolved_product_id
-       and coalesce(is_service, false) = false;
+    if v_is_set then
+       -- Iterate over components
+       for v_component in
+         select 
+           component_product_id,
+           quantity_in_set
+         from public.product_set_components
+         where set_product_id = v_resolved_product_id
+       loop
+          v_qty_to_deduct := v_quantity_int * v_component.quantity_in_set;
+          
+          -- Deduct Component Stock
+          update public.products
+             set inventory_qty = coalesce(inventory_qty, 0) - v_qty_to_deduct,
+                 stock_quantity = greatest(coalesce(stock_quantity, 0) - v_qty_to_deduct, 0),
+                 updated_at = now()
+           where id = v_component.component_product_id;
 
-    if found then
-      raise notice 'consume_sales_invoice_inventory: reduced inventory for product % by %', v_resolved_product_id, v_quantity_int;
-      
-      -- Create stock movement record
-      insert into public.stock_movements (
-        id,
-        product_id,
-        warehouse_id,
-        type,
-        movement_type,
-        quantity,
-        reference,
-        notes,
-        date,
-        created_at,
-        updated_at
-      ) values (
-        gen_random_uuid(),
-        v_resolved_product_id,
-        null,
-        'OUT',
-        'sales_invoice',
-        -v_quantity_int, -- Negative for OUT movements
-        v_reference,
-        format('Salida por factura %s', coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)),
-        coalesce(p_invoice.date, now()),
-        now(),
-        now()
-      );
+          -- Log Component Movement (FIXED: Includes tenant_id)
+          insert into public.stock_movements (
+            tenant_id, id, product_id, warehouse_id, type, movement_type, quantity,
+            reference, notes, date, created_at, updated_at
+          ) values (
+            p_invoice.tenant_id, -- ✅ Added tenant_id
+            gen_random_uuid(),
+            v_component.component_product_id,
+            null,
+            'OUT',
+            'sales_invoice_component',
+            -v_qty_to_deduct,
+            v_reference,
+            format('Salida por venta de Set "%s" (Factura %s)', 
+                   v_set_name, 
+                   coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)
+            ),
+            coalesce(p_invoice.date, now()),
+            now(),
+            now()
+          );
+       end loop;
+
     else
-      raise notice 'consume_sales_invoice_inventory: product % is a service or does not exist', v_resolved_product_id;
+      -- STANDARD LOGIC: NOT A SET
+      update public.products
+         set inventory_qty = coalesce(inventory_qty, 0) - v_quantity_int,
+             stock_quantity = greatest(coalesce(stock_quantity, 0) - v_quantity_int, 0),
+             updated_at = now()
+       where id = v_resolved_product_id
+         and coalesce(is_service, false) = false;
+
+      if found then
+        -- Create stock movement record (FIXED: Includes tenant_id)
+        insert into public.stock_movements (
+          tenant_id, id, product_id, warehouse_id, type, movement_type, quantity,
+          reference, notes, date, created_at, updated_at
+        ) values (
+          p_invoice.tenant_id, -- ✅ Added tenant_id
+          gen_random_uuid(),
+          v_resolved_product_id,
+          null,
+          'OUT',
+          'sale',
+          -v_quantity_int,
+          v_reference,
+          concat('Salida por venta (Factura ', coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text), ')'),
+          coalesce(p_invoice.date, now()),
+          now(),
+          now()
+        );
+      end if;
     end if;
   end loop;
 
@@ -6345,144 +6382,6 @@ create index if not exists idx_purchase_invoices_date
 -- Previous transactions: work backwards subtracting quantities
 
 -- Drop existing view first (needed when changing column structure)
-drop view if exists stock_movements_view cascade;
-
-create view stock_movements_view as
-with all_movements as (
-  -- 1. Purchase Invoices (IN)
-  select 
-    gen_random_uuid() as id,
-    (item->>'product_id')::uuid as product_id,
-    p.name as product_name,
-    p.sku as product_sku,
-    pi.date as transaction_date,
-    'purchase' as movement_type,
-    'manual_purchase' as source,
-    pi.id as reference_id,
-    pi.invoice_number as reference_number,
-    ((item->>'quantity')::numeric)::integer as quantity, -- Positive
-    pi.notes,
-    pi.created_by,
-    pi.created_at,
-    pi.tenant_id
-  from purchase_invoices pi,
-       jsonb_array_elements(pi.items) as item
-  left join products p on (item->>'product_id')::uuid = p.id
-  where pi.status in ('received', 'paid')
-
-  union all
-
-  -- 2. Sales Invoices (OUT)
-  select 
-    gen_random_uuid() as id,
-    (item->>'product_id')::uuid as product_id,
-    p.name as product_name,
-    p.sku as product_sku,
-    si.date as transaction_date,
-    'sale' as movement_type,
-    coalesce(si.source, 'manual_sale') as source,
-    si.id as reference_id,
-    si.invoice_number as reference_number,
-    -((item->>'quantity')::numeric)::integer as quantity, -- Negaive
-    si.reference as notes,
-    si.created_by,
-    si.created_at,
-    si.tenant_id
-  from sales_invoices si,
-       jsonb_array_elements(si.items) as item
-  left join products p on (item->>'product_id')::uuid = p.id
-  where si.status in ('confirmed', 'paid')
-
-  union all
-
-  -- 3. Mechanic Jobs (OUT) - UNINVOICED OR PENDING INVOICE
-  -- Include Job if:
-  --   a) No invoice linked (mj.invoice_id IS NULL)
-  --   b) Invoice linked but NOT confirmed/paid (gap filling)
-  select 
-    mji.id,
-    mji.product_id,
-    coalesce(mji.product_name, p.name) as product_name,
-    coalesce(mji.product_sku, p.sku) as product_sku,
-    mj.created_at as transaction_date,
-    'mechanic_job' as movement_type,
-    'workshop' as source,
-    mj.id as reference_id,
-    mj.job_number as reference_number,
-    -(mji.quantity)::integer as quantity, -- Negative
-    mj.notes,
-    null::uuid as created_by,
-    mji.created_at,
-    mj.tenant_id
-  from mechanic_job_items mji
-  join mechanic_jobs mj on mji.job_id = mj.id
-  left join products p on mji.product_id = p.id
-  left join sales_invoices si on mj.invoice_id = si.id -- Check invoice status
-  where 
-    -- Include if invoice not present OR present but filtered out of Sales block above
-    (mj.invoice_id is null OR si.status not in ('confirmed', 'paid') OR si.id is null)
-    and mj.status not in ('borrador', 'draft', 'cancelado', 'cancelled')
-    and (mji.item_type = 'product' or mji.item_type is null)
-    and mji.product_id is not null
-
-  union all
-
-  -- 4. Stock Adjustments (IN/OUT)
-  select 
-    sa.id,
-    sa.product_id,
-    p.name as product_name,
-    p.sku as product_sku,
-    sa.created_at as transaction_date,
-    'adjustment' as movement_type,
-    sa.adjustment_type as source,
-    sa.id as reference_id,
-    'ADJ-' || to_char(sa.created_at, 'YYYYMMDD-HH24MISS') as reference_number,
-    sa.quantity, 
-    sa.reason as notes,
-    sa.created_by,
-    sa.created_at,
-    sa.tenant_id
-  from stock_adjustments sa
-  left join products p on sa.product_id = p.id
-),
-movements_with_running_stock as (
-  select 
-    m.*,
-    p.stock_quantity as current_stock,
-    -- Calculate stock_after by working backwards from current stock
-    p.stock_quantity - coalesce(
-      sum(m.quantity) over (
-        partition by m.product_id, m.tenant_id 
-        order by m.created_at desc, m.id desc
-        rows between unbounded preceding and 1 preceding
-      ), 
-      0
-    )::integer as calculated_stock_after
-  from all_movements m
-  left join products p on m.product_id = p.id
-)
-select 
-  id,
-  product_id,
-  product_name,
-  product_sku,
-  transaction_date,
-  movement_type,
-  source,
-  reference_id,
-  reference_number,
-  quantity,
-  (calculated_stock_after - quantity)::integer as stock_before,
-  calculated_stock_after as stock_after,
-  notes,
-  created_by,
-  created_at,
-  tenant_id
-from movements_with_running_stock;
-
--- Ensure RLS is enabled
-alter view stock_movements_view set (security_invoker = on);
 
 create index if not exists idx_purchase_invoices_invoice_number
   on purchase_invoices(invoice_number);
@@ -8366,6 +8265,179 @@ begin
     null;
   end;
 end $$;
+
+-- ============================================================================
+-- STOCK MOVEMENTS LOGIC (View, Triggers) 
+-- Added to support unified stock history and purchase corrections.
+-- ============================================================================
+
+-- 1. Stock Movements View (Modern: Reads from table, not calculation)
+drop view if exists stock_movements_view cascade;
+
+create view stock_movements_view as
+with movements_with_sign as (
+  select 
+    sm.id,
+    sm.product_id,
+    p.name as product_name,
+    p.sku as product_sku,
+    sm.date as transaction_date,
+    sm.movement_type,
+    coalesce(sm.movement_type, 'manual') as source,
+    sm.id as reference_id,
+    coalesce(sm.reference, sm.id::text) as reference_number,
+    case 
+      when sm.type = 'OUT' then -abs(sm.quantity)
+      when sm.type = 'IN' then abs(sm.quantity)
+      else sm.quantity 
+    end as quantity, 
+    sm.notes,
+    null::uuid as created_by,
+    sm.created_at,
+    sm.tenant_id
+  from stock_movements sm
+  left join products p on nullif(sm.product_id::text, '')::uuid = p.id
+),
+movements_with_running_stock as (
+  select 
+    m.*,
+    p.stock_quantity as current_stock,
+    p.stock_quantity - coalesce(
+      sum(m.quantity) over (
+        partition by m.product_id, m.tenant_id 
+        order by m.created_at desc, m.id desc
+        rows between unbounded preceding and 1 preceding
+      ), 
+      0
+    )::integer as calculated_stock_after
+  from movements_with_sign m
+  left join products p on nullif(m.product_id::text, '')::uuid = p.id
+)
+select 
+  id,
+  product_id,
+  product_name,
+  product_sku,
+  transaction_date,
+  movement_type,
+  source,
+  reference_id,
+  reference_number,
+  quantity,
+  (calculated_stock_after - quantity)::integer as stock_before,
+  calculated_stock_after as stock_after,
+  notes,
+  created_by,
+  created_at,
+  tenant_id
+from movements_with_running_stock;
+
+alter view stock_movements_view set (security_invoker = on);
+
+-- 2. Sync Stock Adjustments -> Stock Movements
+create or replace function sync_stock_adjustment_to_movement()
+returns trigger as $$
+begin
+  insert into stock_movements (
+    tenant_id, 
+    product_id, 
+    date, 
+    type, 
+    movement_type, 
+    reference, 
+    quantity, 
+    notes, 
+    created_at
+  ) values (
+    NEW.tenant_id, 
+    NEW.product_id, 
+    NEW.created_at, -- transaction date
+    case when NEW.quantity >= 0 then 'IN' else 'OUT' end,
+    NEW.adjustment_type, 
+    NEW.reference,
+    abs(NEW.quantity),
+    NEW.reason,
+    NEW.created_at
+  );
+  return NEW;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_sync_adjustment_to_movement on stock_adjustments;
+create trigger trg_sync_adjustment_to_movement
+  after insert on stock_adjustments
+  for each row
+  execute function sync_stock_adjustment_to_movement();
+
+-- 3. Handle Purchase Invoice Deletion (Stock Reversal)
+create or replace function public.handle_purchase_invoice_deletion()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_item jsonb;
+  v_product_id uuid;
+  v_quantity numeric;
+begin
+  -- Only proceed if the invoice was effectively adding stock
+  if OLD.status in ('received', 'paid') then
+    
+    -- Iterate over the deleted invoice items
+    for v_item in select * from jsonb_array_elements(OLD.items)
+    loop
+      v_product_id := (v_item->>'product_id')::uuid;
+      v_quantity := (v_item->>'quantity')::numeric;
+
+      if v_product_id is not null and v_quantity > 0 then
+        -- CRITICAL: Prevent the generic trigger from firing and creating a duplicate/mislabeled adjustment
+        perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+
+        -- Reverse the stock (Subtract the quantity that was added)
+        update products
+        set stock_quantity = stock_quantity - v_quantity,
+            inventory_qty = inventory_qty - v_quantity
+        where id = v_product_id;
+
+        -- Manually log the reversal in stock_adjustments to keep history clean
+        insert into stock_adjustments (
+            tenant_id,
+            product_id,
+            adjustment_type,
+            quantity,
+            stock_before, 
+            stock_after,
+            reason,
+            reference,
+            created_by
+        )
+        select
+            OLD.tenant_id,
+            v_product_id,
+            'correction',           -- Type: Correction
+            -v_quantity,            -- Quantity: Negative (removal)
+            p.stock_quantity + v_quantity, -- Stock Before (re-calculated)
+            p.stock_quantity,       -- Stock After (current)
+            'Reversal: Purchase Invoice Deleted #' || coalesce(OLD.invoice_number, OLD.id::text),
+            OLD.id::text,           -- Reference: Deleted Invoice ID
+            auth.uid()
+        from products p
+        where p.id = v_product_id;
+        
+      end if;
+    end loop;
+  end if;
+
+  return OLD;
+end;
+$$;
+
+drop trigger if exists trg_handle_purchase_invoice_deletion on purchase_invoices;
+create trigger trg_handle_purchase_invoice_deletion
+  before delete on purchase_invoices
+  for each row
+  execute function handle_purchase_invoice_deletion();
+
 
 do $$
 declare

@@ -97,7 +97,10 @@ class TenantService extends ChangeNotifier {
       }
 
       // Cache the result
-      _cachedTenantId = response['tenant_id'] as String?;
+      var tid = response['tenant_id'] as String?;
+      if (tid != null && tid.isEmpty) tid = null;
+
+      _cachedTenantId = tid;
       _cachedUserId = userId;
       if (!kReleaseMode) {
         debugPrint('[TenantService] Got tenant_id: $_cachedTenantId');
@@ -127,13 +130,15 @@ class TenantService extends ChangeNotifier {
     // CRITICAL FIX: Try app_metadata first (set by database trigger)
     final appMetadata = user.appMetadata;
     if (appMetadata['tenant_id'] != null) {
-      return appMetadata['tenant_id'] as String?;
+      final tid = appMetadata['tenant_id'] as String?;
+      if (tid != null && tid.isNotEmpty) return tid;
     }
 
     // Try to get from user_metadata second (cached)
     final metadata = user.userMetadata;
     if (metadata != null && metadata['tenant_id'] != null) {
-      return metadata['tenant_id'] as String?;
+      final tid = metadata['tenant_id'] as String?;
+      if (tid != null && tid.isNotEmpty) return tid;
     }
 
     // If not in metadata, need to query database (use getTenantId() instead)

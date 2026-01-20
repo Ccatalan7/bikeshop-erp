@@ -1,4 +1,4 @@
-enum PayrollVoucherStatus { draft, pending, paid, voided }
+enum PayrollVoucherStatus { draft, confirmed, paid, voided }
 
 class PayrollVoucher {
   final String? id;

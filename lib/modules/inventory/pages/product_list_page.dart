@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/image_service.dart';
-import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -29,10 +28,14 @@ enum StockFilter { all, inStock, lowStock, outOfStock }
 extension StockFilterX on StockFilter {
   String get label {
     switch (this) {
-      case StockFilter.all: return 'Todos';
-      case StockFilter.inStock: return 'En stock';
-      case StockFilter.lowStock: return 'Stock bajo';
-      case StockFilter.outOfStock: return 'Sin stock';
+      case StockFilter.all:
+        return 'Todos';
+      case StockFilter.inStock:
+        return 'En stock';
+      case StockFilter.lowStock:
+        return 'Stock bajo';
+      case StockFilter.outOfStock:
+        return 'Sin stock';
     }
   }
 }
@@ -169,6 +172,8 @@ class _ProductListPageState extends State<ProductListPage> {
 
   StreamSubscription? _scanSubscription;
   bool _shouldRestoreState = false; // Local flag for this page instance
+  DateTime?
+      _lastVisibleTime; // Track when page was last visible for state timeout
 
   @override
   void initState() {
@@ -183,15 +188,35 @@ class _ProductListPageState extends State<ProductListPage> {
     // NEVER clear saved state in initState - the page can be rebuilt multiple
     // times by the router during navigation transitions, and clearing here
     // would lose the user's scroll/filter state on the second rebuild.
-    _shouldRestoreState =
-        _inventoryService.shouldRestoreState || _inventoryService.hasRecentSavedState;
+    _shouldRestoreState = _inventoryService.shouldRestoreState ||
+        _inventoryService.hasRecentSavedState;
     if (_shouldRestoreState) {
       _restoreSavedState();
     }
     // Note: Don't clear state here - it's cleared when user navigates away from inventory
 
-    // Initial load sequence
-    _loadData();
+    // Initial load sequence - SMART: skip full reload if we have cached data
+    if (_shouldRestoreState && _inventoryService.hasProductsCache) {
+      // Use cached data directly - no network fetch needed!
+      debugPrint(
+          '⚡ [ProductListPage] Using cached products for restore (skip reload)');
+      _products = _inventoryService.cachedProducts;
+      _loadCategories(); // Still need filter options
+      _loadSuppliers();
+      _applyFilters(resetPagination: false);
+      _isLoading = false;
+      // Schedule scroll restore after the frame renders
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _scheduleScrollRestore();
+          // Mark state as restored so next navigation to another module starts fresh
+          _inventoryService.markStateRestored();
+        }
+      });
+    } else {
+      // Fresh load - no state to restore or cache is empty
+      _loadData();
+    }
 
     _loadColumnPreferences();
 
@@ -210,6 +235,50 @@ class _ProductListPageState extends State<ProductListPage> {
     if (widget.initialSupplierId != null) {
       _selectedSupplierId = widget.initialSupplierId;
     }
+
+    // Track initial visibility
+    _lastVisibleTime = DateTime.now();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if we're becoming visible again after being away from inventory
+    _checkVisibilityAndResetIfNeeded();
+  }
+
+  /// Check if we've been away from this page for more than the grace window.
+  /// If so, reset all filters and reload fresh data.
+  void _checkVisibilityAndResetIfNeeded() {
+    if (_lastVisibleTime == null) return;
+
+    final now = DateTime.now();
+    final timeSinceLastVisible = now.difference(_lastVisibleTime!);
+
+    // If we've been away for more than 30 seconds, reset to fresh state
+    if (timeSinceLastVisible.inSeconds > 30) {
+      debugPrint(
+          '🔄 [ProductListPage] Away for ${timeSinceLastVisible.inSeconds}s - resetting to fresh state');
+      // Reset all filters to defaults
+      _searchTerm = '';
+      _searchController.clear();
+      _selectedCategoryId = null;
+      _selectedSupplierId = null;
+      _selectedProductType = null;
+      _stockFilter = StockFilter.all;
+      _filterWebPublished = false;
+      _filterGoogleMerchant = false;
+      _showInactive = false;
+      _currentPage = 1;
+      _sortOption = ProductSortOption.nameAsc;
+      // Clear saved state in service too
+      _inventoryService.clearListState();
+      // Reload fresh data
+      _loadData();
+    }
+
+    // Update last visible time
+    _lastVisibleTime = now;
   }
 
   Future<void> _loadColumnPreferences() async {
@@ -218,8 +287,9 @@ class _ProductListPageState extends State<ProductListPage> {
     if (saved == null || saved.isEmpty) return;
 
     final parsed = saved
-        .map((name) => ProductTableColumn.values
-            .firstWhere((c) => c.name == name, orElse: () => ProductTableColumn.product))
+        .map((name) => ProductTableColumn.values.firstWhere(
+            (c) => c.name == name,
+            orElse: () => ProductTableColumn.product))
         .toSet();
 
     if (!mounted) return;
@@ -252,33 +322,37 @@ class _ProductListPageState extends State<ProductListPage> {
     _searchTerm = _inventoryService.savedSearchTerm ?? '';
     _searchController.text = _searchTerm;
     _currentPage = _inventoryService.savedCurrentPage;
-    _savedScrollOffset = _inventoryService.savedScrollOffset > 0 
-        ? _inventoryService.savedScrollOffset 
+    _savedScrollOffset = _inventoryService.savedScrollOffset > 0
+        ? _inventoryService.savedScrollOffset
         : null;
     _selectedCategoryId = _inventoryService.savedCategoryId;
     _selectedSupplierId = _inventoryService.savedSupplierId;
-    
+
     // Restore ProductType enum
     if (_inventoryService.savedProductTypeIndex != null) {
-      _selectedProductType = ProductType.values[_inventoryService.savedProductTypeIndex!];
+      _selectedProductType =
+          ProductType.values[_inventoryService.savedProductTypeIndex!];
     }
-    
+
     // Restore StockFilter enum
     _stockFilter = StockFilter.values[_inventoryService.savedStockFilterIndex];
-    
+
     _filterWebPublished = _inventoryService.savedFilterWebPublished;
     _filterGoogleMerchant = _inventoryService.savedFilterGoogleMerchant;
     _showInactive = _inventoryService.savedShowInactive;
-    
+
     // Restore sort option
-    _sortOption = ProductSortOption.values[_inventoryService.savedSortOptionIndex];
+    _sortOption =
+        ProductSortOption.values[_inventoryService.savedSortOptionIndex];
   }
 
   /// Schedules a scroll position restoration after the current frame.
   /// Uses a double-delayed approach to handle rapid rebuilds.
   void _scheduleScrollRestore() {
-    final scrollOffset = _savedScrollOffset ?? 
-        (_inventoryService.savedScrollOffset > 0 ? _inventoryService.savedScrollOffset : null);
+    final scrollOffset = _savedScrollOffset ??
+        (_inventoryService.savedScrollOffset > 0
+            ? _inventoryService.savedScrollOffset
+            : null);
     if (scrollOffset == null || scrollOffset <= 0) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -295,14 +369,13 @@ class _ProductListPageState extends State<ProductListPage> {
       });
     });
   }
-  
+
   void _saveCurrentState() {
     _inventoryService.saveListState(
       searchTerm: _searchTerm,
       currentPage: _currentPage,
-      scrollOffset: _tableScrollController.hasClients 
-          ? _tableScrollController.offset 
-          : 0,
+      scrollOffset:
+          _tableScrollController.hasClients ? _tableScrollController.offset : 0,
       categoryId: _selectedCategoryId,
       supplierId: _selectedSupplierId,
       productTypeIndex: _selectedProductType?.index,
@@ -352,7 +425,7 @@ class _ProductListPageState extends State<ProductListPage> {
       if (mounted) {
         // Save current state to service before navigating
         _saveCurrentState();
-        
+
         final result =
             await context.push('/inventory/products/${product.id}/edit');
         if (!mounted) return;
@@ -416,7 +489,8 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
-  Future<void> _loadProducts({bool forceRefresh = false, bool preserveState = false}) async {
+  Future<void> _loadProducts(
+      {bool forceRefresh = false, bool preserveState = false}) async {
     if (!mounted) return;
 
     // 🚀 INSTANT RENDER: Show cached data immediately if available
@@ -428,7 +502,7 @@ class _ProductListPageState extends State<ProductListPage> {
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
-      
+
       // Also restore scroll position on instant render
       if (preserveState) {
         _scheduleScrollRestore();
@@ -454,7 +528,7 @@ class _ProductListPageState extends State<ProductListPage> {
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
-      
+
       // Restore scroll position after data loads
       if (preserveState) {
         _scheduleScrollRestore();
@@ -462,7 +536,9 @@ class _ProductListPageState extends State<ProductListPage> {
         // The router can rebuild the page multiple times during navigation.
       }
 
-      _syncSharedInventorySilently();
+      // OPTIMIZATION: Disabled redundant sync - shared inventory has its own cache
+      // and is preloaded on app start. Syncing on every list load caused double fetches.
+      // _syncSharedInventorySilently();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -472,16 +548,6 @@ class _ProductListPageState extends State<ProductListPage> {
           backgroundColor: Colors.red,
         ),
       );
-    }
-  }
-
-  void _syncSharedInventorySilently() {
-    if (!mounted) return;
-    try {
-      final sharedInventory = context.read<shared_inventory.InventoryService>();
-      unawaited(sharedInventory.getProducts(forceRefresh: true));
-    } catch (_) {
-      // Shared inventory may not be available in some test contexts.
     }
   }
 
@@ -608,7 +674,7 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     _filteredProducts = filtered;
-    
+
     // Only reset pagination when filters/search change, not on reload
     if (resetPagination) {
       _currentPage = 1;
@@ -707,7 +773,9 @@ class _ProductListPageState extends State<ProductListPage> {
             padding: const EdgeInsets.only(right: 24),
             decoration: BoxDecoration(
               border: Border(
-                right: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.4), width: 1),
+                right: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+                    width: 1),
               ),
             ),
             child: Column(
@@ -724,7 +792,10 @@ class _ProductListPageState extends State<ProductListPage> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.5)],
+                          colors: [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.primary.withOpacity(0.5)
+                          ],
                         ),
                         borderRadius: BorderRadius.circular(2),
                       ),
@@ -752,7 +823,7 @@ class _ProductListPageState extends State<ProductListPage> {
               ],
             ),
           ),
-          
+
           const SizedBox(width: 16),
 
           // Search Bar - Left-aligned right after title
@@ -762,7 +833,8 @@ class _ProductListPageState extends State<ProductListPage> {
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              border: Border.all(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
             ),
             child: TextField(
               controller: _searchController,
@@ -776,19 +848,24 @@ class _ProductListPageState extends State<ProductListPage> {
                 ),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 12, right: 8),
-                  child: Icon(Icons.search_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                  child: Icon(Icons.search_rounded,
+                      size: 20, color: theme.colorScheme.onSurfaceVariant),
                 ),
-                prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                suffixIcon: _searchTerm.isNotEmpty 
-                  ? IconButton(
-                      icon: Icon(Icons.close_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                      onPressed: () {
-                        _searchController.clear();
-                        _onSearchChanged('');
-                      },
-                    )
-                  : null,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 0, minHeight: 0),
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.close_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        onPressed: () {
+                          _searchController.clear();
+                          _onSearchChanged('');
+                        },
+                      )
+                    : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: InputBorder.none,
               ),
             ),
@@ -801,21 +878,22 @@ class _ProductListPageState extends State<ProductListPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Scanner Toggle
-               _buildScannerToggle(theme),
+              _buildScannerToggle(theme),
               const SizedBox(width: 10),
-              
+
               // Import Button
               _buildSecondaryActionButton(
                 theme: theme,
                 icon: Icons.file_upload_outlined,
                 label: 'Importar',
                 onPressed: () async {
-                  final result = await context.push('/inventory/products/import');
+                  final result =
+                      await context.push('/inventory/products/import');
                   if (result == true) _loadProducts(forceRefresh: true);
                 },
               ),
               const SizedBox(width: 10),
-              
+
               // Primary CTA - New Product
               _buildPrimaryCTA(
                 theme: theme,
@@ -889,7 +967,8 @@ class _ProductListPageState extends State<ProductListPage> {
             gradient: LinearGradient(
               colors: [
                 theme.colorScheme.primary,
-                theme.colorScheme.primary.withBlue((theme.colorScheme.primary.blue + 20).clamp(0, 255)),
+                theme.colorScheme.primary.withBlue(
+                    (theme.colorScheme.primary.blue + 20).clamp(0, 255)),
               ],
             ),
             borderRadius: BorderRadius.circular(10),
@@ -929,7 +1008,8 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-           bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
         ),
       ),
       child: Column(
@@ -938,44 +1018,57 @@ class _ProductListPageState extends State<ProductListPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-               Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   Text('Productos', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                   Text('${_filteredProducts.length} items', style: theme.textTheme.bodySmall),
+                  Text('Productos',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('${_filteredProducts.length} items',
+                      style: theme.textTheme.bodySmall),
                 ],
-               ),
-               Row(
-                 children: [
-                   // Scanner Toggle (Mobile Compact)
-                   IconButton.filledTonal(
-                     icon: Icon(
-                        _isScannerEnabled ? Icons.qr_code_scanner : Icons.qr_code_2_outlined, 
-                        size: 20,
-                        color: _isScannerEnabled ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                     ),
-                     onPressed: () {
-                        setState(() => _isScannerEnabled = !_isScannerEnabled);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(_isScannerEnabled ? 'Escáner activado' : 'Escáner desactivado')),
-                        );
-                     },
-                     style: IconButton.styleFrom(
-                        backgroundColor: _isScannerEnabled ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceVariant,
-                     ),
-                     visualDensity: VisualDensity.compact,
-                   ),
-                   const SizedBox(width: 8),
-                   IconButton.filled(
-                     icon: const Icon(Icons.add, size: 20),
-                     onPressed: () async {
-                        final result = await context.push('/inventory/products/new');
-                        if (result == true) _loadProducts(forceRefresh: true);
-                     },
-                     visualDensity: VisualDensity.compact,
-                   ),
-                 ],
-               )
+              ),
+              Row(
+                children: [
+                  // Scanner Toggle (Mobile Compact)
+                  IconButton.filledTonal(
+                    icon: Icon(
+                      _isScannerEnabled
+                          ? Icons.qr_code_scanner
+                          : Icons.qr_code_2_outlined,
+                      size: 20,
+                      color: _isScannerEnabled
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () {
+                      setState(() => _isScannerEnabled = !_isScannerEnabled);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(_isScannerEnabled
+                                ? 'Escáner activado'
+                                : 'Escáner desactivado')),
+                      );
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: _isScannerEnabled
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.surfaceVariant,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    icon: const Icon(Icons.add, size: 20),
+                    onPressed: () async {
+                      final result =
+                          await context.push('/inventory/products/new');
+                      if (result == true) _loadProducts(forceRefresh: true);
+                    },
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              )
             ],
           ),
           const SizedBox(height: 12),
@@ -983,12 +1076,12 @@ class _ProductListPageState extends State<ProductListPage> {
           SizedBox(
             height: 40,
             child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Buscar...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                   suffixIcon: _searchTerm.isNotEmpty 
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Buscar...',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _searchTerm.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
@@ -997,11 +1090,12 @@ class _ProductListPageState extends State<ProductListPage> {
                         },
                       )
                     : null,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              ),
             ),
           ),
         ],
@@ -1011,7 +1105,9 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildScannerToggle(ThemeData theme) {
     return Tooltip(
-      message: _isScannerEnabled ? 'Escáner activo - Click para desactivar' : 'Click para activar escáner',
+      message: _isScannerEnabled
+          ? 'Escáner activo - Click para desactivar'
+          : 'Click para activar escáner',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1022,32 +1118,38 @@ class _ProductListPageState extends State<ProductListPage> {
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              gradient: _isScannerEnabled ? LinearGradient(
-                colors: [
-                  theme.colorScheme.primary,
-                  theme.colorScheme.primary.withOpacity(0.85),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ) : null,
-              color: _isScannerEnabled ? null : theme.colorScheme.surfaceContainerHighest,
+              gradient: _isScannerEnabled
+                  ? LinearGradient(
+                      colors: [
+                        theme.colorScheme.primary,
+                        theme.colorScheme.primary.withOpacity(0.85),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: _isScannerEnabled
+                  ? null
+                  : theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
-              boxShadow: _isScannerEnabled ? [
-                BoxShadow(
-                  color: theme.colorScheme.primary.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ] : null,
+              boxShadow: _isScannerEnabled
+                  ? [
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.qr_code_scanner_rounded, 
+                  Icons.qr_code_scanner_rounded,
                   size: 18,
-                  color: _isScannerEnabled 
-                      ? Colors.white 
+                  color: _isScannerEnabled
+                      ? Colors.white
                       : theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
@@ -1056,8 +1158,8 @@ class _ProductListPageState extends State<ProductListPage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: _isScannerEnabled 
-                        ? Colors.white 
+                    color: _isScannerEnabled
+                        ? Colors.white
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                   child: const Text('ON'),
@@ -1080,7 +1182,8 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-           bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.2)),
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.2)),
         ),
       ),
       child: Row(
@@ -1092,11 +1195,15 @@ class _ProductListPageState extends State<ProductListPage> {
               child: Row(
                 children: [
                   _buildModernFilterChip(
-                    theme, 
-                    _selectedCategoryId != null 
-                        ? (_categories.where((c) => c.id == _selectedCategoryId).firstOrNull?.name ?? 'Categoría') 
-                        : 'Categoría', 
-                    _selectedCategoryId != null, 
+                    theme,
+                    _selectedCategoryId != null
+                        ? (_categories
+                                .where((c) => c.id == _selectedCategoryId)
+                                .firstOrNull
+                                ?.name ??
+                            'Categoría')
+                        : 'Categoría',
+                    _selectedCategoryId != null,
                     () {
                       _showFilterMenu<Category>(
                         context: context,
@@ -1117,11 +1224,15 @@ class _ProductListPageState extends State<ProductListPage> {
                   ),
                   const SizedBox(width: 8),
                   _buildModernFilterChip(
-                    theme, 
-                    _selectedSupplierId != null 
-                        ? (_suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull?.name ?? 'Proveedor') 
-                        : 'Proveedor', 
-                    _selectedSupplierId != null, 
+                    theme,
+                    _selectedSupplierId != null
+                        ? (_suppliers
+                                .where((s) => s.id == _selectedSupplierId)
+                                .firstOrNull
+                                ?.name ??
+                            'Proveedor')
+                        : 'Proveedor',
+                    _selectedSupplierId != null,
                     () {
                       _showFilterMenu<Supplier>(
                         context: context,
@@ -1142,20 +1253,23 @@ class _ProductListPageState extends State<ProductListPage> {
                   ),
                   const SizedBox(width: 8),
                   _buildModernFilterChip(
-                    theme, 
-                    _selectedProductType?.displayName ?? 'Tipo', 
-                    _selectedProductType != null, 
+                    theme,
+                    _selectedProductType?.displayName ?? 'Tipo',
+                    _selectedProductType != null,
                     () => _showProductTypeMenu(context, theme),
                   ),
                   const SizedBox(width: 8),
                   _buildModernFilterChip(
-                    theme, 
-                    _stockFilter != StockFilter.all ? _stockFilter.label : 'Inventario', 
-                    _stockFilter != StockFilter.all, 
+                    theme,
+                    _stockFilter != StockFilter.all
+                        ? _stockFilter.label
+                        : 'Inventario',
+                    _stockFilter != StockFilter.all,
                     () => _showStockFilterMenu(context, theme),
                   ),
                   const SizedBox(width: 8),
-                  _buildModernFilterChip(theme, 'Canales', _filterWebPublished || _filterGoogleMerchant, () {
+                  _buildModernFilterChip(theme, 'Canales',
+                      _filterWebPublished || _filterGoogleMerchant, () {
                     _showChannelsMenu(context, theme);
                   }),
                   const SizedBox(width: 8),
@@ -1165,7 +1279,6 @@ class _ProductListPageState extends State<ProductListPage> {
                       _applyFilters();
                     });
                   }),
-                  
                   if (_hasActiveFilters) ...[
                     const SizedBox(width: 16),
                     _buildClearFiltersButton(theme),
@@ -1174,13 +1287,13 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
           ),
-          
+
           const SizedBox(width: 16),
 
           // Right: View Controls
           _buildModernSortButton(theme),
           const SizedBox(width: 10),
-          
+
           if (_viewMode == ProductViewMode.table) ...[
             _buildModernIconButton(
               theme: theme,
@@ -1198,7 +1311,8 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  Widget _buildModernFilterChip(ThemeData theme, String label, bool isActive, VoidCallback onTap) {
+  Widget _buildModernFilterChip(
+      ThemeData theme, String label, bool isActive, VoidCallback onTap) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1208,16 +1322,22 @@ class _ProductListPageState extends State<ProductListPage> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            gradient: isActive ? LinearGradient(
-              colors: [
-                theme.colorScheme.primary.withOpacity(0.15),
-                theme.colorScheme.primary.withOpacity(0.08),
-              ],
-            ) : null,
-            color: isActive ? null : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            gradient: isActive
+                ? LinearGradient(
+                    colors: [
+                      theme.colorScheme.primary.withOpacity(0.15),
+                      theme.colorScheme.primary.withOpacity(0.08),
+                    ],
+                  )
+                : null,
+            color: isActive
+                ? null
+                : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isActive ? theme.colorScheme.primary.withOpacity(0.4) : theme.colorScheme.outlineVariant.withOpacity(0.6),
+              color: isActive
+                  ? theme.colorScheme.primary.withOpacity(0.4)
+                  : theme.colorScheme.outlineVariant.withOpacity(0.6),
               width: isActive ? 1.5 : 1,
             ),
           ),
@@ -1227,7 +1347,9 @@ class _ProductListPageState extends State<ProductListPage> {
               Text(
                 label,
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  color: isActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
@@ -1235,7 +1357,9 @@ class _ProductListPageState extends State<ProductListPage> {
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 18,
-                color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                color: isActive
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -1259,7 +1383,8 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.filter_alt_off_rounded, size: 16, color: theme.colorScheme.error),
+              Icon(Icons.filter_alt_off_rounded,
+                  size: 16, color: theme.colorScheme.error),
               const SizedBox(width: 6),
               Text(
                 'Limpiar',
@@ -1286,12 +1411,14 @@ class _ProductListPageState extends State<ProductListPage> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+          border: Border.all(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.sort_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+            Icon(Icons.sort_rounded,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 8),
             Text(
               _sortOption.label,
@@ -1301,7 +1428,8 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+            Icon(Icons.keyboard_arrow_down_rounded,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -1311,8 +1439,9 @@ class _ProductListPageState extends State<ProductListPage> {
           value: option.name,
           child: Row(
             children: [
-              if (isSelected) 
-                Icon(Icons.check_rounded, size: 18, color: theme.colorScheme.primary)
+              if (isSelected)
+                Icon(Icons.check_rounded,
+                    size: 18, color: theme.colorScheme.primary)
               else
                 const SizedBox(width: 18),
               const SizedBox(width: 8),
@@ -1329,7 +1458,8 @@ class _ProductListPageState extends State<ProductListPage> {
       }).toList(),
       onSelected: (value) {
         setState(() {
-          _sortOption = ProductSortOption.values.firstWhere((e) => e.name == value);
+          _sortOption =
+              ProductSortOption.values.firstWhere((e) => e.name == value);
           _applyFilters();
         });
       },
@@ -1353,7 +1483,8 @@ class _ProductListPageState extends State<ProductListPage> {
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+            border: Border.all(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1380,7 +1511,8 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1392,7 +1524,10 @@ class _ProductListPageState extends State<ProductListPage> {
             onTap: () => setState(() => _viewMode = ProductViewMode.table),
             isFirst: true,
           ),
-          Container(width: 1, height: 20, color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+          Container(
+              width: 1,
+              height: 20,
+              color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
           _buildToggleOption(
             theme: theme,
             icon: Icons.grid_view_rounded,
@@ -1424,7 +1559,9 @@ class _ProductListPageState extends State<ProductListPage> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.primary.withOpacity(0.15) : Colors.transparent,
+            color: isSelected
+                ? theme.colorScheme.primary.withOpacity(0.15)
+                : Colors.transparent,
             borderRadius: BorderRadius.horizontal(
               left: isFirst ? const Radius.circular(9) : Radius.zero,
               right: !isFirst ? const Radius.circular(9) : Radius.zero,
@@ -1433,7 +1570,9 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Icon(
             icon,
             size: 18,
-            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -1462,7 +1601,9 @@ class _ProductListPageState extends State<ProductListPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(title,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Flexible(
               child: ListView(
@@ -1484,20 +1625,20 @@ class _ProductListPageState extends State<ProductListPage> {
                     },
                   ),
                   ...items.map((item) => ListTile(
-                    title: Text(labelBuilder(item)),
-                    leading: Radio<String?>(
-                      value: idExtractor(item),
-                      groupValue: selectedId,
-                      onChanged: (val) {
-                        onSelected(val);
-                        Navigator.pop(context);
-                      },
-                    ),
-                    onTap: () {
-                      onSelected(idExtractor(item));
-                      Navigator.pop(context);
-                    },
-                  )),
+                        title: Text(labelBuilder(item)),
+                        leading: Radio<String?>(
+                          value: idExtractor(item),
+                          groupValue: selectedId,
+                          onChanged: (val) {
+                            onSelected(val);
+                            Navigator.pop(context);
+                          },
+                        ),
+                        onTap: () {
+                          onSelected(idExtractor(item));
+                          Navigator.pop(context);
+                        },
+                      )),
                 ],
               ),
             ),
@@ -1519,24 +1660,50 @@ class _ProductListPageState extends State<ProductListPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Tipo de Producto', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('Tipo de Producto',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             ListTile(
               title: const Text('Todos'),
-              leading: Radio<ProductType?>(value: null, groupValue: _selectedProductType, onChanged: (_) {
-                setState(() { _selectedProductType = null; _applyFilters(); });
+              leading: Radio<ProductType?>(
+                  value: null,
+                  groupValue: _selectedProductType,
+                  onChanged: (_) {
+                    setState(() {
+                      _selectedProductType = null;
+                      _applyFilters();
+                    });
+                    Navigator.pop(ctx);
+                  }),
+              onTap: () {
+                setState(() {
+                  _selectedProductType = null;
+                  _applyFilters();
+                });
                 Navigator.pop(ctx);
-              }),
-              onTap: () { setState(() { _selectedProductType = null; _applyFilters(); }); Navigator.pop(ctx); },
+              },
             ),
             ...ProductType.values.map((type) => ListTile(
-              title: Text(type.displayName),
-              leading: Radio<ProductType?>(value: type, groupValue: _selectedProductType, onChanged: (_) {
-                setState(() { _selectedProductType = type; _applyFilters(); });
-                Navigator.pop(ctx);
-              }),
-              onTap: () { setState(() { _selectedProductType = type; _applyFilters(); }); Navigator.pop(ctx); },
-            )),
+                  title: Text(type.displayName),
+                  leading: Radio<ProductType?>(
+                      value: type,
+                      groupValue: _selectedProductType,
+                      onChanged: (_) {
+                        setState(() {
+                          _selectedProductType = type;
+                          _applyFilters();
+                        });
+                        Navigator.pop(ctx);
+                      }),
+                  onTap: () {
+                    setState(() {
+                      _selectedProductType = type;
+                      _applyFilters();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                )),
           ],
         ),
       ),
@@ -1555,16 +1722,30 @@ class _ProductListPageState extends State<ProductListPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Inventario', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('Inventario',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             ...StockFilter.values.map((filter) => ListTile(
-              title: Text(filter.label),
-              leading: Radio<StockFilter>(value: filter, groupValue: _stockFilter, onChanged: (_) {
-                setState(() { _stockFilter = filter; _applyFilters(); });
-                Navigator.pop(ctx);
-              }),
-              onTap: () { setState(() { _stockFilter = filter; _applyFilters(); }); Navigator.pop(ctx); },
-            )),
+                  title: Text(filter.label),
+                  leading: Radio<StockFilter>(
+                      value: filter,
+                      groupValue: _stockFilter,
+                      onChanged: (_) {
+                        setState(() {
+                          _stockFilter = filter;
+                          _applyFilters();
+                        });
+                        Navigator.pop(ctx);
+                      }),
+                  onTap: () {
+                    setState(() {
+                      _stockFilter = filter;
+                      _applyFilters();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                )),
           ],
         ),
       ),
@@ -1584,7 +1765,9 @@ class _ProductListPageState extends State<ProductListPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Canales de Venta', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Canales de Venta',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               CheckboxListTile(
                 title: const Text('Publicado en Web'),
@@ -1622,7 +1805,8 @@ class _ProductListPageState extends State<ProductListPage> {
     if (_filteredProducts.isEmpty) return const SizedBox.shrink();
 
     final stockProducts = _filteredProducts.where((p) => !p.isService).toList();
-    final lowStock = stockProducts.where((p) => p.inventoryQty > 0 && p.isLowStock).length;
+    final lowStock =
+        stockProducts.where((p) => p.inventoryQty > 0 && p.isLowStock).length;
     final outOfStock = stockProducts.where((p) => p.inventoryQty <= 0).length;
     final stockValue = stockProducts.fold<double>(
       0,
@@ -1634,22 +1818,31 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
         ),
       ),
       child: Row(
         children: [
-          _buildCompactStat(theme, Icons.inventory_2_outlined, 'Costo inventario:', ChileanUtils.formatCurrency(stockValue), theme.colorScheme.primary),
+          _buildCompactStat(
+              theme,
+              Icons.inventory_2_outlined,
+              'Costo inventario:',
+              ChileanUtils.formatCurrency(stockValue),
+              theme.colorScheme.primary),
           const SizedBox(width: 24),
-          _buildCompactStat(theme, Icons.warning_amber_rounded, 'Bajo stock:', '$lowStock', const Color(0xFFE67E22)),
+          _buildCompactStat(theme, Icons.warning_amber_rounded, 'Bajo stock:',
+              '$lowStock', const Color(0xFFE67E22)),
           const SizedBox(width: 24),
-          _buildCompactStat(theme, Icons.remove_shopping_cart_outlined, 'Sin stock:', '$outOfStock', const Color(0xFFE74C3C)),
+          _buildCompactStat(theme, Icons.remove_shopping_cart_outlined,
+              'Sin stock:', '$outOfStock', const Color(0xFFE74C3C)),
         ],
       ),
     );
   }
 
-  Widget _buildCompactStat(ThemeData theme, IconData icon, String label, String value, Color color) {
+  Widget _buildCompactStat(
+      ThemeData theme, IconData icon, String label, String value, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1672,9 +1865,7 @@ class _ProductListPageState extends State<ProductListPage> {
       ],
     );
   }
- 
-  // Legacy method placeholders to avoid breaking compilation if referenced
-  Widget _buildDesktopHeader(ThemeData theme) => _buildUnifiedHeader(theme);
+
   Widget _buildSmartFilterBar(ThemeData theme) {
     final isMobile = MediaQuery.of(context).size.width < 800;
 
@@ -1848,10 +2039,10 @@ class _ProductListPageState extends State<ProductListPage> {
             child: Row(
               children: [
                 // Category Filter
-                  _buildSearchableMenu<Category>(
-                    theme: theme,
-                    hint: 'Categoría',
-                    allLabel: 'Categoría: Todas',
+                _buildSearchableMenu<Category>(
+                  theme: theme,
+                  hint: 'Categoría',
+                  allLabel: 'Categoría: Todas',
                   value: _categories.cast<Category?>().firstWhere(
                         (c) => c!.id == _selectedCategoryId,
                         orElse: () => null,
@@ -1868,10 +2059,10 @@ class _ProductListPageState extends State<ProductListPage> {
                 const SizedBox(width: 8),
 
                 // Supplier Filter
-                  _buildSearchableMenu<Supplier>(
-                    theme: theme,
-                    hint: 'Proveedor',
-                    allLabel: 'Proveedor: Todos',
+                _buildSearchableMenu<Supplier>(
+                  theme: theme,
+                  hint: 'Proveedor',
+                  allLabel: 'Proveedor: Todos',
                   value: _suppliers.cast<Supplier?>().firstWhere(
                         (s) => s!.id == _selectedSupplierId,
                         orElse: () => null,
@@ -1918,44 +2109,6 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  Widget _buildManagerStatsRow(ThemeData theme) {
-    if (_filteredProducts.isEmpty) return const SizedBox.shrink();
-
-    final stockProducts = _filteredProducts.where((p) => !p.isService).toList();
-    final lowStock =
-        stockProducts.where((p) => p.inventoryQty > 0 && p.isLowStock).length;
-    final outOfStock = stockProducts.where((p) => p.inventoryQty <= 0).length;
-    
-    // Calculate total stock value
-    final stockValue = stockProducts.fold<double>(
-      0,
-      (sum, p) => sum + (p.cost > 0 ? p.cost * p.inventoryQty : 0),
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-          ),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          _buildStatItem(theme, 'Productos', '${_filteredProducts.length}', Icons.apps),
-          _buildVerticalDivider(theme),
-          _buildStatItem(theme, 'Valor Stock', ChileanUtils.formatCurrency(stockValue), Icons.monetization_on_outlined, valueColor: theme.colorScheme.primary),
-          _buildVerticalDivider(theme),
-          _buildStatItem(theme, 'Bajo Stock', '$lowStock', Icons.warning_amber_rounded, valueColor: Colors.orange),
-          _buildVerticalDivider(theme),
-          _buildStatItem(theme, 'Sin Stock', '$outOfStock', Icons.error_outline, valueColor: theme.colorScheme.error),
-        ],
-      ),
-    );
-  }
-
   Widget _buildVerticalDivider(ThemeData theme) {
     return Container(
       height: 24,
@@ -1978,10 +2131,13 @@ class _ProductListPageState extends State<ProductListPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: (valueColor ?? theme.colorScheme.onSurface).withOpacity(0.05),
+            color:
+                (valueColor ?? theme.colorScheme.onSurface).withOpacity(0.05),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 16, color: valueColor ?? theme.colorScheme.onSurfaceVariant),
+          child: Icon(icon,
+              size: 16,
+              color: valueColor ?? theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(width: 12),
         Column(
@@ -2298,23 +2454,31 @@ class _ProductListPageState extends State<ProductListPage> {
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: hasValue ? theme.colorScheme.primaryContainer.withOpacity(0.3) : Colors.transparent,
+        color: hasValue
+            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
+          color:
+              hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
         ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
-          hint: Text(hint, style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w500
-          )),
+          hint: Text(hint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500)),
           icon: Icon(Icons.arrow_drop_down,
-              size: 18, color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
+              size: 18,
+              color: hasValue
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant),
           style: theme.textTheme.bodySmall?.copyWith(
-            color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+            color: hasValue
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
             fontWeight: hasValue ? FontWeight.bold : FontWeight.normal,
           ),
           selectedItemBuilder: (context) {
@@ -2325,14 +2489,18 @@ class _ProductListPageState extends State<ProductListPage> {
               // If value matches, selectedItemBuilder index is used.
               // Wait, SelectedItemBuilder requires mapping ALL items including null if items has it?
               // The original impl had custom selectedItemBuilder.
-              
+
               // Simplification: Standard builder.
               ...[null, ...items].map((item) {
-                 if (item == null) return Text(hint, style: TextStyle(color: theme.colorScheme.onSurfaceVariant));
-                 return Align(
-                   alignment: Alignment.centerLeft,
-                   child: Text(labelBuilder(item as T), overflow: TextOverflow.ellipsis),
-                 ); 
+                if (item == null)
+                  return Text(hint,
+                      style:
+                          TextStyle(color: theme.colorScheme.onSurfaceVariant));
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(labelBuilder(item as T),
+                      overflow: TextOverflow.ellipsis),
+                );
               }),
             ];
           },
@@ -2389,10 +2557,13 @@ class _ProductListPageState extends State<ProductListPage> {
     return Container(
       height: 32, // Sleek height
       decoration: BoxDecoration(
-        color: hasValue ? theme.colorScheme.primaryContainer.withOpacity(0.3) : Colors.transparent,
+        color: hasValue
+            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
+          color:
+              hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
         ),
       ),
       child: Tooltip(
@@ -2401,9 +2572,11 @@ class _ProductListPageState extends State<ProductListPage> {
         child: DropdownMenu<T?>(
           width: 200,
           initialSelection: value,
-          hintText: hint, 
+          hintText: hint,
           textStyle: theme.textTheme.bodySmall?.copyWith(
-            color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+            color: hasValue
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
             fontWeight: hasValue ? FontWeight.w600 : FontWeight.normal,
           ),
           menuHeight: 300,
@@ -2415,18 +2588,22 @@ class _ProductListPageState extends State<ProductListPage> {
             border: InputBorder.none,
             constraints: const BoxConstraints(maxHeight: 32),
             hintStyle: theme.textTheme.bodySmall?.copyWith(
-              color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              color: hasValue
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w500,
             ),
           ),
           trailingIcon: Icon(Icons.arrow_drop_down,
-              size: 18, 
-              color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant
-          ),
+              size: 18,
+              color: hasValue
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant),
           selectedTrailingIcon: Icon(Icons.arrow_drop_up,
-              size: 18, 
-              color: hasValue ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant
-          ),
+              size: 18,
+              color: hasValue
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant),
           dropdownMenuEntries: [
             DropdownMenuEntry<T?>(
               value: null,
@@ -2536,9 +2713,8 @@ class _ProductListPageState extends State<ProductListPage> {
                                 setModalState(() {});
                               },
                         title: Text(column.label),
-                        subtitle: isLocked
-                            ? const Text('Siempre visible')
-                            : null,
+                        subtitle:
+                            isLocked ? const Text('Siempre visible') : null,
                         controlAffinity: ListTileControlAffinity.leading,
                         dense: true,
                       );
@@ -2676,30 +2852,65 @@ class _ProductListPageState extends State<ProductListPage> {
         ),
         child: Row(
           children: [
-            // Thumbnail
-            Container(
-              width: 48,
-              height: 48,
+            // Thumbnail - hover for 2 seconds to show larger image
+            Tooltip(
+              waitDuration: const Duration(seconds: 2),
+              preferBelow: false,
+              verticalOffset: 60,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant,
-                borderRadius: BorderRadius.circular(6),
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              clipBehavior: Clip.antiAlias,
-              child: product.imageUrl != null
-                  ? Image.network(
-                      product.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.image_not_supported,
+              richMessage: product.imageUrl != null
+                  ? WidgetSpan(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          product.imageUrl!,
+                          width: 250,
+                          height: 250,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 250,
+                            height: 250,
+                            color: theme.colorScheme.surfaceVariant,
+                            child: const Icon(Icons.broken_image, size: 48),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const TextSpan(text: 'Sin imagen'),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: product.imageUrl != null
+                    ? Image.network(
+                        product.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.image_not_supported,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : Icon(
+                        Icons.inventory_2_outlined,
                         size: 20,
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
-                    )
-                  : Icon(
-                      Icons.inventory_2_outlined,
-                      size: 20,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+              ),
             ),
             const SizedBox(width: 12),
 
@@ -3023,24 +3234,61 @@ class _ProductListPageState extends State<ProductListPage> {
                               size: 20,
                               color: theme.colorScheme.onSurfaceVariant),
                         ),
-                      Container(
-                        width: 40,
-                        height: 40,
+                      // Thumbnail - hover for 2 seconds to show larger image
+                      Tooltip(
+                        waitDuration: const Duration(seconds: 2),
+                        preferBelow: false,
+                        verticalOffset: 50,
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(4),
-                          image: product.imageUrl != null
-                              ? DecorationImage(
-                                  image: NetworkImage(product.imageUrl!),
-                                  fit: BoxFit.cover,
-                                )
+                          color: Colors.black.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        richMessage: product.imageUrl != null
+                            ? WidgetSpan(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Image.network(
+                                    product.imageUrl!,
+                                    width: 250,
+                                    height: 250,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 250,
+                                      height: 250,
+                                      color: theme.colorScheme.surfaceVariant,
+                                      child: const Icon(Icons.broken_image,
+                                          size: 48),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const TextSpan(text: 'Sin imagen'),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(4),
+                            image: product.imageUrl != null
+                                ? DecorationImage(
+                                    image: NetworkImage(product.imageUrl!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: product.imageUrl == null
+                              ? Icon(Icons.image_not_supported_outlined,
+                                  size: 20,
+                                  color: theme.colorScheme.onSurfaceVariant)
                               : null,
                         ),
-                        child: product.imageUrl == null
-                            ? Icon(Icons.image_not_supported_outlined,
-                                size: 20,
-                                color: theme.colorScheme.onSurfaceVariant)
-                            : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -3521,7 +3769,7 @@ class _ProductListPageState extends State<ProductListPage> {
   Future<void> _openEditor(Product product) async {
     // Save current state to service before navigating
     _saveCurrentState();
-    
+
     final result = await context.push('/inventory/products/${product.id}/edit');
     if (!mounted) return;
 
