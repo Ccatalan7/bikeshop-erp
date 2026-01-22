@@ -10107,16 +10107,32 @@ as $$
       0
     )::numeric(14,2) as income,
 
-    -- EXPENSE CALCULATION
+    -- EXPENSE CALCULATION (FIXED: includes paid operating expenses)
     coalesce(
       case when p_is_cash_flow then
-        -- Cash Flow: Sum of Purchase Payments made in this period
+        -- Cash Flow: Sum of ALL cash outflows in this period
         (
-          select sum(amount)
-          from purchase_payments pp
-          where pp.date >= mw.period_start
-            and pp.date < mw.period_start + interval '1 month'
-            and pp.tenant_id = user_tenant_id()
+          -- 1. Purchase payments (payments to suppliers for inventory/purchases)
+          coalesce((
+            select sum(amount)
+            from purchase_payments pp
+            where pp.date >= mw.period_start
+              and pp.date < mw.period_start + interval '1 month'
+              and pp.tenant_id = user_tenant_id()
+          ), 0)
+          +
+          -- 2. Paid operating expenses (salaries, rent, utilities, services, etc.)
+          coalesce((
+            select sum(el.total)
+            from expenses e
+            join expense_lines el on el.expense_id = e.id
+            join accounts a on a.id = el.account_id
+            where e.payment_status = 'paid'
+              and e.paid_at >= mw.period_start
+              and e.paid_at < mw.period_start + interval '1 month'
+              and e.tenant_id = user_tenant_id()
+              and a.type = 'expense'
+          ), 0)
         )
       else
         -- Accrual: Sum of Expense Journal Entries (posted)
@@ -10141,6 +10157,7 @@ as $$
   from month_windows mw
   order by mw.period_start;
 $$;
+
 
 -- Grant execute permissions to authenticated users
 grant execute on function public.get_income_expense_timeseries(integer, boolean) to authenticated;
@@ -10202,16 +10219,32 @@ as $$
       0
     )::numeric(14,2) as income,
 
-    -- EXPENSE CALCULATION
+    -- EXPENSE CALCULATION (FIXED: includes paid operating expenses)
     coalesce(
       case when p_is_cash_flow then
-        -- Cash Flow: Purchase Payments
+        -- Cash Flow: Sum of ALL cash outflows on this day
         (
-          select sum(amount)
-          from purchase_payments pp
-          where pp.date >= dw.period_start
-            and pp.date < dw.period_start + interval '1 day'
-            and pp.tenant_id = user_tenant_id()
+          -- 1. Purchase payments
+          coalesce((
+            select sum(amount)
+            from purchase_payments pp
+            where pp.date >= dw.period_start
+              and pp.date < dw.period_start + interval '1 day'
+              and pp.tenant_id = user_tenant_id()
+          ), 0)
+          +
+          -- 2. Paid operating expenses
+          coalesce((
+            select sum(el.total)
+            from expenses e
+            join expense_lines el on el.expense_id = e.id
+            join accounts a on a.id = el.account_id
+            where e.payment_status = 'paid'
+              and e.paid_at >= dw.period_start
+              and e.paid_at < dw.period_start + interval '1 day'
+              and e.tenant_id = user_tenant_id()
+              and a.type = 'expense'
+          ), 0)
         )
       else
         -- Accrual: Expense Journal Entries
@@ -10236,6 +10269,7 @@ as $$
   from day_windows dw
   order by dw.period_start;
 $$;
+
 
 -- Grant execute permissions to authenticated users
 grant execute on function public.get_income_expense_daily_timeseries(timestamp with time zone, timestamp with time zone, boolean) to authenticated;

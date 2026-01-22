@@ -470,4 +470,78 @@ class FinancialReportsService extends ChangeNotifier {
       );
     }).toList();
   }
+
+  /// Get income details for a specific period (for bar chart drill-down)
+  Future<List<PeriodDetailItem>> getIncomePeriodDetails({
+    required DateTime startDate,
+    required DateTime endDate,
+    bool isCashFlow = false,
+  }) async {
+    debugPrint(
+        '📊 Fetching income details from $startDate to $endDate (Cash Flow: $isCashFlow)');
+
+    final result = await _databaseService.rpc(
+      'get_income_period_details',
+      params: {
+        'p_start_date': startDate.toIso8601String(),
+        'p_end_date': endDate.toIso8601String(),
+        'p_is_cash_flow': isCashFlow,
+      },
+    );
+
+    if (result is! List) {
+      return const [];
+    }
+
+    return result.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      return PeriodDetailItem(
+        id: map['id']?.toString() ?? '',
+        documentNumber: map['document_number']?.toString() ?? '',
+        description: map['description']?.toString() ?? '',
+        secondaryText: map['customer_name']?.toString() ?? '',
+        amount: _parseDouble(map['amount']) ?? 0,
+        transactionDate: _parseDate(map['transaction_date']) ?? DateTime.now(),
+        sourceType: map['source_type']?.toString() ?? '',
+      );
+    }).toList();
+  }
+
+  /// Get expense details for a specific period (for bar chart drill-down)
+  Future<List<PeriodDetailItem>> getExpensePeriodDetails({
+    required DateTime startDate,
+    required DateTime endDate,
+    bool isCashFlow = false,
+  }) async {
+    debugPrint(
+        '📊 Fetching expense details from $startDate to $endDate (Cash Flow: $isCashFlow)');
+
+    final result = await _databaseService.rpc(
+      'get_expense_period_details',
+      params: {
+        'p_start_date': startDate.toIso8601String(),
+        'p_end_date': endDate.toIso8601String(),
+        'p_is_cash_flow': isCashFlow,
+      },
+    );
+
+    if (result is! List) {
+      return const [];
+    }
+
+    return result.map((row) {
+      final map = Map<String, dynamic>.from(row as Map);
+      return PeriodDetailItem(
+        id: map['id']?.toString() ?? '',
+        documentNumber: map['document_number']?.toString() ?? '',
+        description: map['description']?.toString() ?? '',
+        secondaryText: map['account_name']?.toString() ?? '',
+        amount: _parseDouble(map['amount']) ?? 0,
+        transactionDate: _parseDate(map['transaction_date']) ?? DateTime.now(),
+        sourceType: map['source_type']?.toString() ?? '',
+        accountId: map['account_id']?.toString(),
+        accountCode: map['account_code']?.toString(),
+      );
+    }).toList();
+  }
 }

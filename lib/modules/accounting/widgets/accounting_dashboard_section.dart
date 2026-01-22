@@ -812,7 +812,7 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _IncomeExpenseCard extends StatelessWidget {
+class _IncomeExpenseCard extends StatefulWidget {
   final List<MonthlyIncomeExpensePoint> data;
   final double chartHeight;
   final _AccountingBasis basis;
@@ -836,358 +836,641 @@ class _IncomeExpenseCard extends StatelessWidget {
   });
 
   @override
+  State<_IncomeExpenseCard> createState() => _IncomeExpenseCardState();
+}
+
+class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
+  // State for detail view
+  MonthlyIncomeExpensePoint? _selectedPeriod;
+  bool _showingIncome = true; // true = income, false = expense
+  List<PeriodDetailItem>? _detailItems;
+  bool _isLoadingDetails = false;
+  bool _showDayView = false; // false = list view, true = day grouped view
+
+  @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // Data is already fetched in the correct mode (Cash or Accrual)
-    // No need for client-side accumulation logic anymore.
-    final displayData = data;
-
-    final maxValue = displayData
-        .map((point) => math.max(point.income.abs(), point.expense.abs()))
-        .fold<double>(0, (previous, value) => math.max(previous, value));
-
-    // Better chart max calculation with proper rounding
-    final chartMax = _calculateChartMax(maxValue);
-    // Use nice round intervals
-    final axisInterval = _calculateAxisInterval(chartMax);
-
-    // Calculate dynamic bar width based on data density
-    final double rodWidth =
-        displayData.length > 20 ? 6 : (displayData.length > 10 ? 10 : 16);
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 12, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Ingresos vs gastos',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: selectedPeriod,
-                    borderRadius: BorderRadius.circular(12),
-                    onChanged: onPeriodChanged,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    items: periodOptions
-                        .map(
-                          (value) => DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ],
+            // Chart View - Always present to dictate size
+            Visibility(
+              visible: _selectedPeriod == null,
+              maintainState: true,
+              maintainSize: true,
+              maintainAnimation: true,
+              child: _buildChartContent(context),
             ),
-            const SizedBox(height: 8),
-            if (onBasisChanged != null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: SegmentedButton<_AccountingBasis>(
-                  segments: const [
-                    ButtonSegment<_AccountingBasis>(
-                      value: _AccountingBasis.cash,
-                      label: Text('Efectivo'),
-                      icon: Icon(Icons.money),
-                    ),
-                    ButtonSegment<_AccountingBasis>(
-                      value: _AccountingBasis.accrual,
-                      label: Text('Devengado'),
-                      icon: Icon(Icons.receipt_long),
-                    ),
-                  ],
-                  selected: {basis},
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity(horizontal: -3, vertical: -3),
-                  ),
-                  onSelectionChanged: (selection) {
-                    if (selection.isEmpty) return;
-                    final next = selection.first;
-                    if (next != basis) {
-                      onBasisChanged?.call(next);
-                    }
-                  },
+            // Detail View - Overlays the chart when active
+            if (_selectedPeriod != null)
+              Positioned.fill(
+                child: Container(
+                  color: Theme.of(context).cardColor,
+                  child: _buildDetailView(context, _showingIncome),
                 ),
               ),
-            const SizedBox(height: 8),
-            Text(
-              basis == _AccountingBasis.cash
-                  ? (data.length > 0 &&
-                          data[0].periodStart.day == data[0].periodEnd.day
-                      ? 'Flujo de efectivo real por día'
-                      : 'Flujo de efectivo real por mes')
-                  : 'Ingresos y gastos devengados (facturados)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).hintColor),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: math.max(chartHeight * 0.6,
-                  200.0), // Reduced to 60% of total card height
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  minY: 0,
-                  maxY: chartMax,
-                  gridData: FlGridData(
-                    show: true,
-                    drawHorizontalLine: true,
-                    drawVerticalLine: true,
-                    horizontalInterval: axisInterval,
-                    verticalInterval: 1,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outlineVariant
-                          .withOpacity(0.2),
-                      strokeWidth: 1,
-                    ),
-                    getDrawingVerticalLine: (value) => FlLine(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outlineVariant
-                          .withOpacity(0.12),
-                      strokeWidth: 1,
-                      dashArray: const [4, 4],
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        interval: axisInterval,
-                        getTitlesWidget: (value, meta) {
-                          if (value < 0) {
-                            return const SizedBox.shrink();
-                          }
-                          final formatter = NumberFormat.compact(
-                            locale: 'es_CL',
-                          )
-                            ..maximumFractionDigits = 1
-                            ..minimumFractionDigits = 0;
-                          final formatted =
-                              value == 0 ? '0' : formatter.format(value);
-                          return Text(
-                            '$formatted CLP',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          );
-                        },
-                        reservedSize: 72,
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index < 0 || index >= displayData.length) {
-                            return const SizedBox.shrink();
-                          }
-
-                          final date = displayData[index].periodStart;
-                          final isSmallScreen =
-                              MediaQuery.of(context).size.width < 600;
-
-                          // Check if this is a daily view (same start and end date)
-                          final isDailyView =
-                              displayData[index].periodStart.day ==
-                                      displayData[index].periodEnd.day &&
-                                  displayData[index].periodStart.month ==
-                                      displayData[index].periodEnd.month;
-
-                          if (isDailyView) {
-                            // Daily view: show day number and weekday
-                            int skipInterval = 1;
-                            if (displayData.length > 7) {
-                              skipInterval = isSmallScreen ? 3 : 2;
-                            }
-                            // More aggressive skipping for long lists
-                            if (displayData.length > 14) skipInterval = 2;
-                            if (displayData.length > 21) skipInterval = 3;
-                            if (isSmallScreen && displayData.length > 10)
-                              skipInterval = 3;
-
-                            if (index % skipInterval != 0) {
-                              return const SizedBox.shrink();
-                            }
-
-                            final day = DateFormat('d', 'es_CL').format(date);
-                            final weekday =
-                                DateFormat('EEE', 'es_CL').format(date);
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '$weekday\n$day',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 10,
-                                    ),
-                              ),
-                            );
-                          } else {
-                            // Monthly view: show month and year
-
-                            // Logic for skipping labels to prevent overlap
-                            // For 12 months (standard view):
-                            // Desktop: Show all (skipInterval = 1)
-                            // Mobile: Show every 2nd or 3rd (skipInterval = 2 or 3)
-
-                            int skipInterval = 1;
-                            if (isSmallScreen) {
-                              if (displayData.length >= 10)
-                                skipInterval =
-                                    2; // e.g., 12 months -> show 6 labels
-                              if (displayData.length >= 20) skipInterval = 3;
-                            } else {
-                              if (displayData.length > 12) skipInterval = 2;
-                              if (displayData.length > 24) skipInterval = 3;
-                            }
-
-                            if (index % skipInterval != 0) {
-                              return const SizedBox.shrink();
-                            }
-
-                            final month = DateFormat('MMM', 'es_CL')
-                                .format(date)
-                                .toUpperCase(); // e.g. ENE
-                            final year =
-                                DateFormat('yy').format(date); // e.g. 24
-
-                            // On mobile, maybe just show Month if Year is redundant?
-                            // But Year is needed for crossover.
-                            // Let's use 'MMM\nyy' (shorter year)
-
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '$month\n$year',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 9, // Slightly smaller font
-                                    ),
-                              ),
-                            );
-                          }
-                        },
-                        reservedSize: 42,
-                      ),
-                    ),
-                  ),
-                  barGroups: [
-                    for (var i = 0; i < displayData.length; i++)
-                      BarChartGroupData(
-                        x: i,
-                        barsSpace: 4, // Reduced spacing
-                        barRods: [
-                          BarChartRodData(
-                            toY: displayData[i].income,
-                            color: const Color(0xFF4CAF50),
-                            width: rodWidth,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(4),
-                              topRight: Radius.circular(4),
-                            ),
-                          ),
-                          BarChartRodData(
-                            toY: displayData[i].expense,
-                            color: const Color(0xFFFF5252),
-                            width: rodWidth,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(4),
-                              topRight: Radius.circular(4),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      tooltipRoundedRadius: 12,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final formatter = NumberFormat.currency(
-                          locale: 'es_CL',
-                          symbol: 'CLP',
-                        );
-                        final label = rodIndex == 0 ? 'Ingresos' : 'Gastos';
-                        return BarTooltipItem(
-                          '${displayData[group.x.toInt()].periodLabel()}\n$label: ${formatter.format(rod.toY)}',
-                          const TextStyle(color: Colors.white),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                _LegendSummary(
-                  title: 'Ingresos',
-                  description: 'Total de ingresos',
-                  amount: totalIncome,
-                  color: const Color(0xFF4CAF50),
-                ),
-                _LegendSummary(
-                  title: 'Gastos',
-                  description: 'Total de gastos',
-                  amount: totalExpense,
-                  color: const Color(0xFFFF5252),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '* Los valores de ingresos y gastos que se muestran no incluyen impuestos.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                    fontStyle: FontStyle.italic,
-                  ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  /// Calculate a nice round chart maximum
+  Widget _buildChartContent(BuildContext context) {
+    final displayData = widget.data;
+
+    final maxValue = displayData
+        .map((point) => math.max(point.income.abs(), point.expense.abs()))
+        .fold<double>(0, (previous, value) => math.max(previous, value));
+
+    final chartMax = _calculateChartMax(maxValue);
+    final axisInterval = _calculateAxisInterval(chartMax);
+
+    final double rodWidth =
+        displayData.length > 20 ? 6 : (displayData.length > 10 ? 10 : 16);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Ingresos vs gastos',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: widget.selectedPeriod,
+                borderRadius: BorderRadius.circular(12),
+                onChanged: widget.onPeriodChanged,
+                style: Theme.of(context).textTheme.bodyMedium,
+                items: widget.periodOptions
+                    .map(
+                      (value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (widget.onBasisChanged != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<_AccountingBasis>(
+              segments: const [
+                ButtonSegment<_AccountingBasis>(
+                  value: _AccountingBasis.cash,
+                  label: Text('Efectivo'),
+                  icon: Icon(Icons.money),
+                ),
+                ButtonSegment<_AccountingBasis>(
+                  value: _AccountingBasis.accrual,
+                  label: Text('Devengado'),
+                  icon: Icon(Icons.receipt_long),
+                ),
+              ],
+              selected: {widget.basis},
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity(horizontal: -3, vertical: -3),
+              ),
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                final next = selection.first;
+                if (next != widget.basis) {
+                  widget.onBasisChanged?.call(next);
+                }
+              },
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          widget.basis == _AccountingBasis.cash
+              ? (widget.data.isNotEmpty &&
+                      widget.data[0].periodStart.day ==
+                          widget.data[0].periodEnd.day
+                  ? 'Flujo de efectivo real por día'
+                  : 'Flujo de efectivo real por mes')
+              : 'Ingresos y gastos devengados (facturados)',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Theme.of(context).hintColor),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Toca una barra para ver detalles',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontStyle: FontStyle.italic,
+              ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: math.max(widget.chartHeight * 0.6, 200.0),
+          child: BarChart(
+            BarChartData(
+              alignment: BarChartAlignment.spaceAround,
+              minY: 0,
+              maxY: chartMax,
+              gridData: FlGridData(
+                show: true,
+                drawHorizontalLine: true,
+                drawVerticalLine: true,
+                horizontalInterval: axisInterval,
+                verticalInterval: 1,
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withOpacity(0.2),
+                  strokeWidth: 1,
+                ),
+                getDrawingVerticalLine: (value) => FlLine(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withOpacity(0.12),
+                  strokeWidth: 1,
+                  dashArray: const [4, 4],
+                ),
+              ),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    interval: axisInterval,
+                    getTitlesWidget: (value, meta) {
+                      if (value < 0) {
+                        return const SizedBox.shrink();
+                      }
+                      final formatter = NumberFormat.compact(
+                        locale: 'es_CL',
+                      )
+                        ..maximumFractionDigits = 1
+                        ..minimumFractionDigits = 0;
+                      final formatted =
+                          value == 0 ? '0' : formatter.format(value);
+                      return Text(
+                        '$formatted CLP',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      );
+                    },
+                    reservedSize: 72,
+                  ),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) =>
+                        _buildBottomTitle(context, value, displayData),
+                    reservedSize: 42,
+                  ),
+                ),
+              ),
+              barGroups: [
+                for (var i = 0; i < displayData.length; i++)
+                  BarChartGroupData(
+                    x: i,
+                    barsSpace: 4,
+                    barRods: [
+                      BarChartRodData(
+                        toY: displayData[i].income,
+                        color: const Color(0xFF4CAF50),
+                        width: rodWidth,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                        ),
+                      ),
+                      BarChartRodData(
+                        toY: displayData[i].expense,
+                        color: const Color(0xFFFF5252),
+                        width: rodWidth,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+              barTouchData: BarTouchData(
+                enabled: true,
+                touchTooltipData: BarTouchTooltipData(
+                  tooltipRoundedRadius: 12,
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    final formatter = NumberFormat.currency(
+                      locale: 'es_CL',
+                      symbol: 'CLP',
+                    );
+                    final label = rodIndex == 0 ? 'Ingresos' : 'Gastos';
+                    return BarTooltipItem(
+                      '${displayData[group.x.toInt()].periodLabel()}\n$label: ${formatter.format(rod.toY)}\n(Toca para ver detalles)',
+                      const TextStyle(color: Colors.white, fontSize: 12),
+                    );
+                  },
+                ),
+                touchCallback: (FlTouchEvent event, barTouchResponse) {
+                  if (event is FlTapUpEvent && barTouchResponse?.spot != null) {
+                    final groupIndex =
+                        barTouchResponse!.spot!.touchedBarGroupIndex;
+                    final rodIndex = barTouchResponse.spot!.touchedRodDataIndex;
+                    if (groupIndex >= 0 && groupIndex < displayData.length) {
+                      _onBarTapped(
+                        displayData[groupIndex],
+                        rodIndex == 0, // 0 = income, 1 = expense
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            _LegendSummary(
+              title: 'Ingresos',
+              description: 'Total de ingresos',
+              amount: widget.totalIncome,
+              color: const Color(0xFF4CAF50),
+            ),
+            _LegendSummary(
+              title: 'Gastos',
+              description: 'Total de gastos',
+              amount: widget.totalExpense,
+              color: const Color(0xFFFF5252),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '* Los valores de ingresos y gastos que se muestran no incluyen impuestos.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).hintColor,
+                fontStyle: FontStyle.italic,
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailView(BuildContext context, bool isIncome) {
+    if (_selectedPeriod == null) return const SizedBox.shrink();
+
+    final period = _selectedPeriod!;
+    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
+    final totalAmount = isIncome ? period.income : period.expense;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with back button, title, toggle, and total
+        Row(
+          children: [
+            IconButton(
+              onPressed: _closeDetailView,
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Volver al gráfico',
+            ),
+            const SizedBox(width: 4),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isIncome ? 'Ingresos' : 'Gastos',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                Text(
+                  period.periodLabel(),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const Spacer(),
+            // Compact toggle buttons
+            if (_detailItems != null && _detailItems!.isNotEmpty) ...[
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color:
+                        Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ToggleIconButton(
+                      icon: Icons.list,
+                      isSelected: !_showDayView,
+                      onPressed: () => setState(() => _showDayView = false),
+                      tooltip: 'Detalle',
+                    ),
+                    _ToggleIconButton(
+                      icon: Icons.calendar_view_day,
+                      isSelected: _showDayView,
+                      onPressed: () => setState(() => _showDayView = true),
+                      tooltip: 'Por día',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    NumberFormat.currency(locale: 'es_CL', symbol: 'CLP')
+                        .format(totalAmount),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  if (_detailItems != null && _detailItems!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Builder(
+                      builder: (context) {
+                        double average = 0;
+                        String label = '';
+
+                        if (_showDayView) {
+                          // Calculate daily average
+                          final uniqueDays = _detailItems!
+                              .map((i) => DateTime(
+                                    i.transactionDate.year,
+                                    i.transactionDate.month,
+                                    i.transactionDate.day,
+                                  ))
+                              .toSet()
+                              .length;
+                          if (uniqueDays > 0) {
+                            average = totalAmount / uniqueDays;
+                            label = 'prom. diario';
+                          }
+                        } else {
+                          // Calculate per-transaction average
+                          average = totalAmount / _detailItems!.length;
+                          label = 'prom. tx';
+                        }
+
+                        return Text(
+                          '${NumberFormat.currency(locale: 'es_CL', symbol: '', decimalDigits: 0).format(average)} / $label',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: color.withOpacity(0.8),
+                                    fontSize: 10,
+                                  ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Divider(),
+        // Detail list
+        Expanded(
+          child: _isLoadingDetails
+              ? const Center(child: CircularProgressIndicator())
+              : _detailItems == null || _detailItems!.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No hay transacciones para este período',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).hintColor,
+                            ),
+                      ),
+                    )
+                  : _showDayView
+                      ? _buildDayGroupedView(context, isIncome)
+                      : _buildDetailListView(context, isIncome),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailListView(BuildContext context, bool isIncome) {
+    return ListView.separated(
+      itemCount: _detailItems!.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = _detailItems![index];
+        return _PeriodDetailTile(item: item, isIncome: isIncome);
+      },
+    );
+  }
+
+  Widget _buildDayGroupedView(BuildContext context, bool isIncome) {
+    // Group items by day
+    final groupedByDay = <DateTime, List<PeriodDetailItem>>{};
+    for (final item in _detailItems!) {
+      final day = DateTime(
+        item.transactionDate.year,
+        item.transactionDate.month,
+        item.transactionDate.day,
+      );
+      groupedByDay.putIfAbsent(day, () => []).add(item);
+    }
+
+    // Sort by date descending
+    final sortedDays = groupedByDay.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
+    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
+
+    return ListView.separated(
+      itemCount: sortedDays.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final day = sortedDays[index];
+        final items = groupedByDay[day]!;
+        final dayTotal =
+            items.fold<double>(0, (sum, item) => sum + item.amount);
+        final itemCount = items.length;
+
+        return ListTile(
+          dense: true,
+          leading: CircleAvatar(
+            backgroundColor: color.withOpacity(0.1),
+            radius: 18,
+            child: Icon(Icons.calendar_today, color: color, size: 18),
+          ),
+          title: Text(
+            DateFormat('EEEE d', 'es_CL').format(day),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+          subtitle: Text(
+            '$itemCount ${itemCount == 1 ? 'transacción' : 'transacciones'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          trailing: Text(
+            formatter.format(dayTotal),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomTitle(BuildContext context, double value,
+      List<MonthlyIncomeExpensePoint> displayData) {
+    final index = value.toInt();
+    if (index < 0 || index >= displayData.length) {
+      return const SizedBox.shrink();
+    }
+
+    final date = displayData[index].periodStart;
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
+    final isDailyView = displayData[index].periodStart.day ==
+            displayData[index].periodEnd.day &&
+        displayData[index].periodStart.month ==
+            displayData[index].periodEnd.month;
+
+    if (isDailyView) {
+      int skipInterval = 1;
+      if (displayData.length > 7) skipInterval = isSmallScreen ? 3 : 2;
+      if (displayData.length > 14) skipInterval = 2;
+      if (displayData.length > 21) skipInterval = 3;
+      if (isSmallScreen && displayData.length > 10) skipInterval = 3;
+
+      if (index % skipInterval != 0) return const SizedBox.shrink();
+
+      final day = DateFormat('d', 'es_CL').format(date);
+      final weekday = DateFormat('EEE', 'es_CL').format(date);
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          '$weekday\n$day',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 10,
+              ),
+        ),
+      );
+    } else {
+      int skipInterval = 1;
+      if (isSmallScreen) {
+        if (displayData.length >= 10) skipInterval = 2;
+        if (displayData.length >= 20) skipInterval = 3;
+      } else {
+        if (displayData.length > 12) skipInterval = 2;
+        if (displayData.length > 24) skipInterval = 3;
+      }
+
+      if (index % skipInterval != 0) return const SizedBox.shrink();
+
+      final month = DateFormat('MMM', 'es_CL').format(date).toUpperCase();
+      final year = DateFormat('yy').format(date);
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          '$month\n$year',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 9,
+              ),
+        ),
+      );
+    }
+  }
+
+  void _onBarTapped(MonthlyIncomeExpensePoint period, bool isIncome) async {
+    setState(() {
+      _selectedPeriod = period;
+      _showingIncome = isIncome;
+      _isLoadingDetails = true;
+      _detailItems = null;
+    });
+
+    try {
+      final reportsService = context.read<FinancialReportsService>();
+      final isCashFlow = widget.basis == _AccountingBasis.cash;
+
+      // Calculate end date (add 1 day for daily, 1 month for monthly)
+      final isDailyView = period.periodStart.day == period.periodEnd.day &&
+          period.periodStart.month == period.periodEnd.month;
+      final endDate = isDailyView
+          ? period.periodStart.add(const Duration(days: 1))
+          : DateTime(period.periodStart.year, period.periodStart.month + 1, 1);
+
+      final items = isIncome
+          ? await reportsService.getIncomePeriodDetails(
+              startDate: period.periodStart,
+              endDate: endDate,
+              isCashFlow: isCashFlow,
+            )
+          : await reportsService.getExpensePeriodDetails(
+              startDate: period.periodStart,
+              endDate: endDate,
+              isCashFlow: isCashFlow,
+            );
+
+      if (mounted) {
+        setState(() {
+          _detailItems = items;
+          _isLoadingDetails = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingDetails = false;
+        });
+      }
+    }
+  }
+
+  void _closeDetailView() {
+    setState(() {
+      _selectedPeriod = null;
+      _detailItems = null;
+    });
+  }
+
   double _calculateChartMax(double maxValue) {
     if (maxValue == 0) return 100000.0;
 
-    // Add 15% padding
     final paddedMax = maxValue * 1.15;
-
-    // Round to nice numbers
     final magnitude = math.pow(10, (math.log(paddedMax) / math.ln10).floor());
     final normalized = paddedMax / magnitude;
 
@@ -1205,14 +1488,10 @@ class _IncomeExpenseCard extends StatelessWidget {
     return rounded * magnitude;
   }
 
-  /// Calculate nice axis intervals
   double _calculateAxisInterval(double chartMax) {
     if (chartMax <= 0) return 10000.0;
 
-    // Aim for 4-5 intervals
     final rawInterval = chartMax / 4;
-
-    // Round to nice numbers
     final magnitude = math.pow(10, (math.log(rawInterval) / math.ln10).floor());
     final normalized = rawInterval / magnitude;
 
@@ -1228,6 +1507,119 @@ class _IncomeExpenseCard extends StatelessWidget {
     }
 
     return rounded * magnitude;
+  }
+}
+
+/// Compact icon button for toggle in header
+class _ToggleIconButton extends StatelessWidget {
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  const _ToggleIconButton({
+    required this.icon,
+    required this.isSelected,
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tile for showing a single period detail item
+class _PeriodDetailTile extends StatelessWidget {
+  final PeriodDetailItem item;
+  final bool isIncome;
+
+  const _PeriodDetailTile({required this.item, required this.isIncome});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
+    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
+
+    // Icon based on source type
+    IconData icon;
+    switch (item.sourceType) {
+      case 'sales_payment':
+        icon = Icons.payments;
+        break;
+      case 'sales_invoice':
+        icon = Icons.description;
+        break;
+      case 'purchase_payment':
+        icon = Icons.shopping_cart;
+        break;
+      case 'expense':
+        icon = Icons.receipt;
+        break;
+      case 'journal_entry':
+        icon = Icons.book;
+        break;
+      default:
+        icon = Icons.attach_money;
+    }
+
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        backgroundColor: color.withOpacity(0.1),
+        radius: 18,
+        child: Icon(icon, color: color, size: 18),
+      ),
+      title: Text(
+        item.description.isNotEmpty ? item.description : item.documentNumber,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+      ),
+      subtitle: Text(
+        [
+          if (item.documentNumber.isNotEmpty && item.description.isNotEmpty)
+            item.documentNumber,
+          if (item.secondaryText.isNotEmpty) item.secondaryText,
+          DateFormat('d MMM yyyy', 'es_CL').format(item.transactionDate),
+        ].join(' • '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      trailing: Text(
+        formatter.format(item.amount),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+    );
   }
 }
 
@@ -1367,7 +1759,7 @@ class _ExpenseLegendRow extends StatelessWidget {
   }
 }
 
-class _ExpenseBreakdownCard extends StatelessWidget {
+class _ExpenseBreakdownCard extends StatefulWidget {
   final List<ExpenseBreakdownItem> items;
   final double chartHeight;
   final _ExpenseBreakdownRange breakdownRange;
@@ -1391,19 +1783,76 @@ class _ExpenseBreakdownCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final effectiveHeight =
-        chartHeight * 0.7; // Use 70% of total card height for content
-    final currency = NumberFormat.currency(
-      locale: 'es_CL',
-      symbol: 'CLP',
-      decimalDigits: 0,
-    );
+  State<_ExpenseBreakdownCard> createState() => _ExpenseBreakdownCardState();
+}
 
-    if (items.isEmpty) {
+class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
+  // State for detail view
+  ExpenseBreakdownItem? _selectedItem;
+  List<PeriodDetailItem>? _detailItems;
+  bool _isLoadingDetails = false;
+  int _touchedIndex = -1;
+
+  void _onSliceTapped(ExpenseBreakdownItem item) async {
+    setState(() {
+      _selectedItem = item;
+      _isLoadingDetails = true;
+      _detailItems = null;
+    });
+
+    try {
+      final reportsService = context.read<FinancialReportsService>();
+
+      // Always fetch Accrual (isCashFlow: false) for Pie Chart drill-down
+      // because Pie Chart data comes from Journal Entries (Accrual)
+      final allItems = await reportsService.getExpensePeriodDetails(
+        startDate: widget.rangeStart,
+        endDate: widget.rangeEnd,
+        isCashFlow: false,
+      );
+
+      // Filter by the selected account
+      final filteredItems = allItems.where((detail) {
+        // If accountId is available, use it (best precision)
+        if (detail.accountId != null && item.accountId.isNotEmpty) {
+          return detail.accountId == item.accountId;
+        }
+        // Fallback to name match if IDs missing (shouldn't happen with new SQL)
+        return detail.secondaryText == item.accountName;
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _detailItems = filteredItems;
+          _isLoadingDetails = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching pie detail: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingDetails = false;
+        });
+      }
+    }
+  }
+
+  void _closeDetailView() {
+    setState(() {
+      _selectedItem = null;
+      _detailItems = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Effective height calculation preserved from original
+    // final effectiveHeight = widget.chartHeight * 0.7;
+
+    if (widget.items.isEmpty) {
       return Card(
         child: SizedBox(
-          height: effectiveHeight,
+          height: widget.chartHeight * 0.7,
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Center(
@@ -1417,7 +1866,7 @@ class _ExpenseBreakdownCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No hay gastos registrados en ${rangeLabel.toLowerCase()}',
+                    'No hay gastos registrados en ${widget.rangeLabel.toLowerCase()}',
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -1429,169 +1878,356 @@ class _ExpenseBreakdownCard extends StatelessWidget {
       );
     }
 
-    final palette = _buildPalette(context, items.length);
-    final total = totalAmount == 0
-        ? items.fold<double>(0, (sum, item) => sum + item.displayAmount)
-        : totalAmount;
-    final startLabel = DateFormat('dd MMM', 'es_CL').format(rangeStart);
-    final endLabel = DateFormat('dd MMM yyyy', 'es_CL').format(rangeEnd);
-    final rangeDescription = '$rangeLabel · $startLabel – $endLabel';
-
     return Card(
       child: SizedBox(
-        height: chartHeight, // Fixed height for the entire card
+        height: widget.chartHeight,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Gastos principales',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<_ExpenseBreakdownRange>(
-                      value: breakdownRange,
-                      borderRadius: BorderRadius.circular(12),
-                      onChanged: (value) {
-                        if (value != null) {
-                          onRangeChanged(value);
-                        }
-                      },
-                      items: breakdownOptions
-                          .map(
-                            (option) =>
-                                DropdownMenuItem<_ExpenseBreakdownRange>(
-                              value: option,
-                              child: Text(option.label),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                ],
+              // 1. Chart Content (Always rendered to maintain size)
+              Visibility(
+                visible: _selectedItem == null,
+                maintainState: true,
+                maintainSize: true,
+                maintainAnimation: true,
+                child: _buildChartContent(context),
               ),
-              const SizedBox(height: 4),
-              Text(
-                rangeDescription,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).hintColor),
+
+              // 2. Detail View Overlay
+              if (_selectedItem != null)
+                Positioned.fill(
+                  child: Container(
+                    color: Theme.of(context).cardColor,
+                    child: _buildDetailView(context),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartContent(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'es_CL',
+      symbol: 'CLP',
+      decimalDigits: 0,
+    );
+
+    final palette = _buildPalette(context, widget.items.length);
+    final total = widget.totalAmount == 0
+        ? widget.items.fold<double>(0, (sum, item) => sum + item.displayAmount)
+        : widget.totalAmount;
+    final startLabel = DateFormat('dd MMM', 'es_CL').format(widget.rangeStart);
+    final endLabel = DateFormat('dd MMM yyyy', 'es_CL').format(widget.rangeEnd);
+    final rangeDescription = '${widget.rangeLabel} · $startLabel – $endLabel';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Gastos principales',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Pie chart section - LEFT SIDE
-                    Expanded(
-                      flex: 3,
-                      child: Center(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final size = math.min(constraints.maxWidth,
-                                    constraints.maxHeight) *
-                                0.85;
-                            return SizedBox(
-                              width: size,
-                              height: size,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  PieChart(
-                                    PieChartData(
-                                      sectionsSpace: 3,
-                                      centerSpaceRadius: size * 0.35,
-                                      sections: [
-                                        for (var i = 0; i < items.length; i++)
-                                          PieChartSectionData(
-                                            value: items[i].displayAmount,
-                                            color: palette[i],
-                                            radius: size * 0.25,
-                                            title: '',
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'GASTOS',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.5,
-                                            ),
-                                      ),
-                                      Text(
-                                        'PRINCIPALES',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color:
-                                                  Theme.of(context).hintColor,
-                                              fontSize: 10,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        currency.format(total.round()),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+            ),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<_ExpenseBreakdownRange>(
+                value: widget.breakdownRange,
+                borderRadius: BorderRadius.circular(12),
+                onChanged: (value) {
+                  if (value != null) {
+                    widget.onRangeChanged(value);
+                  }
+                },
+                items: widget.breakdownOptions
+                    .map(
+                      (option) => DropdownMenuItem<_ExpenseBreakdownRange>(
+                        value: option,
+                        child: Text(option.label),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Legend section - RIGHT SIDE
-                    Expanded(
-                      flex: 2,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          rangeDescription,
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Theme.of(context).hintColor),
+        ),
+        const SizedBox(height: 20),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Pie chart section - LEFT SIDE
+              Expanded(
+                flex: 3,
+                child: Center(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final size = math.min(
+                              constraints.maxWidth, constraints.maxHeight) *
+                          0.85;
+                      return SizedBox(
+                        width: size,
+                        height: size,
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            for (var i = 0; i < items.length; i++)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _ExpenseLegendRow(
-                                  color: palette[i],
-                                  accountCode: items[i].accountCode,
-                                  accountName: items[i].accountName,
-                                  amount: items[i].displayAmount,
-                                  total: total,
+                            PieChart(
+                              PieChartData(
+                                sectionsSpace: 3,
+                                centerSpaceRadius: size * 0.35,
+                                sections: [
+                                  for (var i = 0; i < widget.items.length; i++)
+                                    PieChartSectionData(
+                                      value: widget.items[i].displayAmount,
+                                      color: palette[i],
+                                      radius: i == _touchedIndex
+                                          ? size * 0.26
+                                          : size * 0.25,
+                                      title: '',
+                                      badgeWidget: i == _touchedIndex
+                                          ? Container(
+                                              constraints: const BoxConstraints(
+                                                  maxWidth: 100),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withOpacity(0.15),
+                                                    blurRadius: 6,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    widget.items[i].accountName,
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  Text(
+                                                    '${(widget.items[i].displayAmount / total * 100).toStringAsFixed(1)}%',
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.black54,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : null,
+                                      badgePositionPercentageOffset: 0.75,
+                                    ),
+                                ],
+                                pieTouchData: PieTouchData(
+                                  touchCallback:
+                                      (FlTouchEvent event, pieTouchResponse) {
+                                    setState(() {
+                                      if (!event.isInterestedForInteractions ||
+                                          pieTouchResponse == null ||
+                                          pieTouchResponse.touchedSection ==
+                                              null) {
+                                        _touchedIndex = -1;
+                                        return;
+                                      }
+                                      _touchedIndex = pieTouchResponse
+                                          .touchedSection!.touchedSectionIndex;
+                                    });
+
+                                    if (event is FlTapUpEvent &&
+                                        pieTouchResponse != null &&
+                                        pieTouchResponse.touchedSection !=
+                                            null) {
+                                      final index = pieTouchResponse
+                                          .touchedSection!.touchedSectionIndex;
+                                      if (index >= 0 &&
+                                          index < widget.items.length) {
+                                        _onSliceTapped(widget.items[index]);
+                                      }
+                                    }
+                                  },
                                 ),
                               ),
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'GASTOS',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                ),
+                                Text(
+                                  'PRINCIPALES',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context).hintColor,
+                                        fontSize: 10,
+                                      ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  currency.format(total.round()),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Legend section - RIGHT SIDE
+              Expanded(
+                flex: 2,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < widget.items.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _ExpenseLegendRow(
+                            color: palette[i],
+                            accountCode: widget.items[i].accountCode,
+                            accountName: widget.items[i].accountName,
+                            amount: widget.items[i].displayAmount,
+                            total: total,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildDetailView(BuildContext context) {
+    final color = const Color(0xFFFF5252); // Expense color
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          children: [
+            IconButton(
+              onPressed: _closeDetailView,
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Volver al gráfico',
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _selectedItem?.accountName ?? 'Detalle',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _selectedItem?.accountCode ?? '',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                NumberFormat.currency(locale: 'es_CL', symbol: 'CLP')
+                    .format(_selectedItem?.amount ?? 0),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Divider(),
+        // Detail list
+        Expanded(
+          child: _isLoadingDetails
+              ? const Center(child: CircularProgressIndicator())
+              : _detailItems == null || _detailItems!.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No hay transacciones disponibles',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).hintColor,
+                            ),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _detailItems!.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = _detailItems![index];
+                        return _PeriodDetailTile(item: item, isIncome: false);
+                      },
+                    ),
+        ),
+      ],
     );
   }
 

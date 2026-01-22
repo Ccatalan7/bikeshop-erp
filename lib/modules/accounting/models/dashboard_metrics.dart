@@ -19,10 +19,10 @@ class MonthlyIncomeExpensePoint {
     final formatter = DateFormat('MMM yyyy', locale);
     return formatter.format(periodStart);
   }
-  
+
   String periodLabel({String locale = 'es'}) {
     // Check if it's a daily view (same start and end date)
-    if (periodStart.day == periodEnd.day && 
+    if (periodStart.day == periodEnd.day &&
         periodStart.month == periodEnd.month &&
         periodStart.year == periodEnd.year) {
       // Daily format: "Lun 23 Oct"
@@ -50,4 +50,36 @@ class ExpenseBreakdownItem {
   });
 
   double get displayAmount => amount.abs();
+}
+
+/// Detail item for period drill-down (when clicking on a bar in the chart)
+class PeriodDetailItem {
+  final String id;
+  final String documentNumber;
+  final String description;
+  final String
+      secondaryText; // customer_name for income, account_name for expense
+  final double amount;
+  final DateTime transactionDate;
+  final String
+      sourceType; // 'sales_payment', 'purchase_payment', 'expense', 'journal_entry'
+
+  PeriodDetailItem({
+    required this.id,
+    required this.documentNumber,
+    required this.description,
+    required this.secondaryText,
+    required this.amount,
+    required this.transactionDate,
+    required this.sourceType,
+    this.accountId,
+    this.accountCode,
+  });
+
+  final String? accountId;
+  final String? accountCode;
+
+  bool get isIncome =>
+      sourceType == 'sales_payment' ||
+      (sourceType == 'journal_entry' && amount > 0);
 }
