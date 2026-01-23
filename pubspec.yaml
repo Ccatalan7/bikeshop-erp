@@ -92,6 +92,12 @@ dependencies:
   font_awesome_flutter: ^10.12.0
   desktop_drop: ^0.7.0
 
+dependency_overrides:
+  # Stub out Windows local notifications - the real plugin requires ATL headers
+  # that cause build issues. Local notifications won't work on Windows.
+  flutter_local_notifications_windows:
+    path: ./windows_notification_stub
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,0 +1,21 @@
+name: flutter_local_notifications_windows
+description: Stub package to replace flutter_local_notifications_windows without ATL dependency
+version: 1.0.3
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_notifications_platform_interface: ^9.0.0
+  plugin_platform_interface: ^2.0.0
+  timezone: ^0.10.0
+
+flutter:
+  plugin:
+    implements: flutter_local_notifications
+    platforms:
+      windows:
+        dartPluginClass: FlutterLocalNotificationsWindows
