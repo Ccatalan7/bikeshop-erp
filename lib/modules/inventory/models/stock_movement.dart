@@ -48,9 +48,9 @@ class StockMovement {
       source: json['source'] as String? ?? 'unknown',
       referenceId: json['reference_id']?.toString(),
       referenceNumber: json['reference_number'] as String?,
-      stockBefore: json['stock_before'] as int? ?? 0,
-      quantity: json['quantity'] as int? ?? 0,
-      stockAfter: json['stock_after'] as int? ?? 0,
+      stockBefore: (json['stock_before'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      stockAfter: (json['stock_after'] as num?)?.toInt() ?? 0,
       notes: json['notes'] as String?,
       createdBy: json['created_by']?.toString(),
       createdAt: json['created_at'] != null

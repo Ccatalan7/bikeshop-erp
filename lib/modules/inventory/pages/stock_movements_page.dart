@@ -301,10 +301,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
         // Filter products by search query
         final filteredProducts = inventoryService.products.where((p) {
-          final matchesSearch = _searchQuery.isEmpty ||
-              p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              p.sku.toLowerCase().contains(_searchQuery.toLowerCase());
-          return matchesSearch;
+          return _matchesTokenSearch(_searchQuery, p);
         }).toList();
 
         return Column(
@@ -659,6 +656,22 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         ),
       ],
     );
+  }
+
+  /// Token-based search: splits query into words and matches if ALL tokens found
+  bool _matchesTokenSearch(String query, Product product) {
+    if (query.isEmpty) return true;
+    final tokens = query.toLowerCase().split(RegExp(r'\s+'));
+    final searchableText = [
+      product.name.toLowerCase(),
+      product.sku.toLowerCase(),
+      product.supplierCode?.toLowerCase() ?? '',
+      product.brand?.toLowerCase() ?? '',
+      product.model?.toLowerCase() ?? '',
+      product.categoryName?.toLowerCase() ?? '',
+    ].join(' ');
+    // ALL tokens must be found in searchable text
+    return tokens.every((token) => searchableText.contains(token));
   }
 
   final ScrollController _horizontalScrollController = ScrollController();

@@ -105,11 +105,14 @@ class VeryfiAdapter {
   static String? _extractSkuFromRawText(String text) {
     if (text.isEmpty) return null;
     // Look for alphanumeric code at start of string (3+ chars)
-    // Avoids catching "10 " quantity
-    final regex = RegExp(r'^([A-Z0-9-]{3,})\s+');
+    // MUST contain at least one digit to avoid matching description words like "GRUESA", "BICICLETA"
+    final regex = RegExp(r'^([A-Z0-9-]*\d[A-Z0-9-]*)\s+');
     final match = regex.firstMatch(text.trim());
     if (match != null) {
-      return match.group(1);
+      final candidate = match.group(1)!;
+      // Filter out pure quantities if they are small digits (unlikely to be 3+ chars due to regex, but safe check)
+      if (candidate.length < 3) return null;
+      return candidate;
     }
     return null;
   }
