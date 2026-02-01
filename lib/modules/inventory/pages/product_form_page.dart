@@ -37,7 +37,8 @@ class ProductFormPage extends StatefulWidget {
   State<ProductFormPage> createState() => _ProductFormPageState();
 }
 
-class _ProductFormPageState extends State<ProductFormPage> {
+class _ProductFormPageState extends State<ProductFormPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   late inventory_services.InventoryService _inventoryService;
@@ -49,6 +50,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   final _skuController = TextEditingController();
   final _supplierCodeController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _websiteDescriptionController = TextEditingController();
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
   final _priceController = TextEditingController();
@@ -93,9 +95,12 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   StreamSubscription? _scanSubscription;
 
+  late TabController _tabController;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
         listen: false);
@@ -128,11 +133,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _scanSubscription?.cancel();
     _nameController.dispose();
     _skuController.dispose();
     _supplierCodeController.dispose();
     _descriptionController.dispose();
+    _websiteDescriptionController.dispose();
     _brandController.dispose();
     _modelController.dispose();
     _priceController
@@ -494,6 +501,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         _skuController.text = product.sku;
         _supplierCodeController.text = product.supplierCode ?? '';
         _descriptionController.text = product.description ?? '';
+        _websiteDescriptionController.text = product.websiteDescription ?? '';
         _brandController.text = product.brand ?? '';
         _selectedBrandId = product.brandId;
         _modelController.text = product.model ?? '';
@@ -742,7 +750,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
       // Use the platform-agnostic bytes and name from the state.
       // Automatically creates both original + optimized WebP version.
       if (_selectedImageBytes != null && _selectedImageName != null) {
-        final uploadResult = await ImageService.uploadProductImageWithOptimization(
+        final uploadResult =
+            await ImageService.uploadProductImageWithOptimization(
           bytes: _selectedImageBytes!,
           fileName: _selectedImageName!,
         );
@@ -758,6 +767,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       final name = _nameController.text.trim();
       final sku = _skuController.text.trim();
       final rawDescription = _descriptionController.text.trim();
+      final rawWebsiteDescription = _websiteDescriptionController.text.trim();
       final rawBrand = _brandController.text.trim();
       final rawModel = _modelController.text.trim();
       final potentialBrand = _selectedBrand ?? _matchBrandSelection();
@@ -806,6 +816,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             name: name,
             sku: sku,
             description: rawDescription.isEmpty ? null : rawDescription,
+            websiteDescription: rawWebsiteDescription,
             categoryId: _selectedCategoryId,
             categoryName: selectedCategoryName,
             supplierId: _selectedSupplierId,
@@ -834,6 +845,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         name: name,
         sku: sku,
         description: rawDescription.isEmpty ? null : rawDescription,
+        websiteDescription: rawWebsiteDescription,
         categoryId: _selectedCategoryId,
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: _selectedSupplierId,
@@ -1160,7 +1172,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 ),
               _buildHeader(theme),
               Expanded(
-                child: SingleChildScrollView(
+                child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: _buildForm(theme),
                 ),
@@ -1337,229 +1349,284 @@ class _ProductFormPageState extends State<ProductFormPage> {
   Widget _buildForm(ThemeData theme) {
     return Form(
       key: _formKey,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 1080;
+      child: Column(
+        children: [
+          Container(
+            color: theme.colorScheme.surface,
+            margin: const EdgeInsets.only(bottom: 16),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorSize: TabBarIndicatorSize.label,
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.edit_note),
+                  text: 'Detalles Generales',
+                ),
+                Tab(
+                  icon: Icon(Icons.language),
+                  text: 'Tienda Online',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return TabBarView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  controller: _tabController,
+                  children: [
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      child: _buildGeneralTab(theme, constraints),
+                    ),
+                    _buildWebsiteTab(theme),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          if (isWide) {
-            return Row(
+  Widget _buildGeneralTab(ThemeData theme, BoxConstraints constraints) {
+    // print('DEBUG: Building General Tab');
+    final isWide = constraints.maxWidth > 1080;
+
+    if (isWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Child Product Banner (Wide)
-                      if (_isChildProduct)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.tertiaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                            border:
-                                Border.all(color: theme.colorScheme.tertiary),
-                          ),
-                          child: Row(
+                // Child Product Banner (Wide)
+                if (_isChildProduct)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.colorScheme.tertiary),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.extension,
+                            color: theme.colorScheme.onTertiaryContainer),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.extension,
-                                  color: theme.colorScheme.onTertiaryContainer),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Componente de Set',
-                                      style:
-                                          theme.textTheme.titleSmall?.copyWith(
-                                        color: theme
-                                            .colorScheme.onTertiaryContainer,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color: theme
-                                            .colorScheme.onTertiaryContainer,
-                                      ),
-                                    ),
-                                  ],
+                              Text(
+                                'Componente de Set',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: theme.colorScheme.onTertiaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onTertiaryContainer,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.description_outlined,
-                        title: 'Información básica',
-                        children: _buildBasicInfoFields(theme),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.attach_money_outlined,
-                        title: 'Precios y márgenes',
-                        children: _buildPricingFields(theme),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.text_snippet_outlined,
-                        title: 'Descripción del producto',
-                        children: _buildDescriptionFields(theme),
-                      ),
-                      // Only show set configuration for products, not services AND not child products
-                      if (_selectedProductType != ProductType.service &&
-                          !_isChildProduct) ...[
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.inventory_2_outlined,
-                          title: 'Configuración de Juego/Set',
-                          children: _buildSetConfigurationFields(theme),
-                        ),
                       ],
-                    ],
+                    ),
                   ),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.description_outlined,
+                  title: 'Información básica',
+                  children: _buildBasicInfoFields(theme),
                 ),
-                const SizedBox(width: 24),
-                SizedBox(
-                  width: 360,
-                  child: Column(
-                    children: [
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.image_outlined,
-                        title: 'Imágenes',
-                        children: _buildMediaFields(theme),
-                      ),
-                      // Only show inventory for products, not services
-                      if (_selectedProductType != ProductType.service) ...[
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.inventory_outlined,
-                          title: 'Inventario',
-                          children: _buildInventoryFields(theme),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      _buildSectionCard(
-                        theme,
-                        icon: Icons.settings_outlined,
-                        title: 'Estado y visibilidad',
-                        children: _buildStatusFields(theme),
-                      ),
-                    ],
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.attach_money_outlined,
+                  title: 'Precios y márgenes',
+                  children: _buildPricingFields(theme),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.text_snippet_outlined,
+                  title: 'Descripción del producto',
+                  children: _buildDescriptionFields(theme),
+                ),
+                // Only show set configuration for products, not services AND not child products
+                if (_selectedProductType != ProductType.service &&
+                    !_isChildProduct) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Configuración de Juego/Set',
+                    children: _buildSetConfigurationFields(theme),
                   ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          SizedBox(
+            width: 360,
+            child: Column(
+              children: [
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.image_outlined,
+                  title: 'Imágenes',
+                  children: _buildMediaFields(theme),
+                ),
+                // Only show inventory for products, not services
+                if (_selectedProductType != ProductType.service) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.inventory_outlined,
+                    title: 'Inventario',
+                    children: _buildInventoryFields(theme),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.settings_outlined,
+                  title: 'Estado y visibilidad',
+                  children: _buildStatusFields(theme),
                 ),
               ],
-            );
-          }
+            ),
+          ),
+        ],
+      );
+    }
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Child Product Banner (Narrow)
-              if (_isChildProduct)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: theme.colorScheme.tertiary),
-                  ),
-                  child: Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Child Product Banner (Narrow)
+        if (_isChildProduct)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.tertiary),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.extension,
+                    color: theme.colorScheme.onTertiaryContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.extension,
-                          color: theme.colorScheme.onTertiaryContainer),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Componente de Set',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                color: theme.colorScheme.onTertiaryContainer,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onTertiaryContainer,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        'Componente de Set',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
                         ),
                       ),
                     ],
                   ),
                 ),
-              _buildSectionCard(
-                theme,
-                icon: Icons.description_outlined,
-                title: 'Información básica',
-                children: _buildBasicInfoFields(theme),
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.image_outlined,
-                title: 'Imágenes',
-                children: _buildMediaFields(theme),
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.attach_money_outlined,
-                title: 'Precios y márgenes',
-                children: _buildPricingFields(theme),
-              ),
-              const SizedBox(height: 16),
-              // Only show inventory for products, not services
-              if (_selectedProductType != ProductType.service)
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.inventory_outlined,
-                  title: 'Inventario',
-                  children: _buildInventoryFields(theme),
-                ),
-              if (_selectedProductType != ProductType.service)
-                const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.settings_outlined,
-                title: 'Estado y visibilidad',
-                children: _buildStatusFields(theme),
-              ),
-              const SizedBox(height: 16),
-              _buildSectionCard(
-                theme,
-                icon: Icons.text_snippet_outlined,
-                title: 'Descripción del producto',
-                children: _buildDescriptionFields(theme),
-              ),
-              // Only show set configuration for products, not services AND not child products
-              if (_selectedProductType != ProductType.service &&
-                  !_isChildProduct) ...[
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.inventory_2_outlined,
-                  title: 'Configuración de Juego/Set',
-                  children: _buildSetConfigurationFields(theme),
-                ),
               ],
-            ],
-          );
-        },
+            ),
+          ),
+        _buildSectionCard(
+          theme,
+          icon: Icons.description_outlined,
+          title: 'Información básica',
+          children: _buildBasicInfoFields(theme),
+        ),
+        const SizedBox(height: 16),
+        _buildSectionCard(
+          theme,
+          icon: Icons.image_outlined,
+          title: 'Imágenes',
+          children: _buildMediaFields(theme),
+        ),
+        const SizedBox(height: 16),
+        _buildSectionCard(
+          theme,
+          icon: Icons.attach_money_outlined,
+          title: 'Precios y márgenes',
+          children: _buildPricingFields(theme),
+        ),
+        const SizedBox(height: 16),
+        // Only show inventory for products, not services
+        if (_selectedProductType != ProductType.service)
+          _buildSectionCard(
+            theme,
+            icon: Icons.inventory_outlined,
+            title: 'Inventario',
+            children: _buildInventoryFields(theme),
+          ),
+        if (_selectedProductType != ProductType.service)
+          const SizedBox(height: 16),
+        _buildSectionCard(
+          theme,
+          icon: Icons.settings_outlined,
+          title: 'Estado y visibilidad',
+          children: _buildStatusFields(theme),
+        ),
+        const SizedBox(height: 16),
+        _buildSectionCard(
+          theme,
+          icon: Icons.text_snippet_outlined,
+          title: 'Descripción del producto',
+          children: _buildDescriptionFields(theme),
+        ),
+        // Only show set configuration for products, not services AND not child products
+        if (_selectedProductType != ProductType.service &&
+            !_isChildProduct) ...[
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.inventory_2_outlined,
+            title: 'Configuración de Juego/Set',
+            children: _buildSetConfigurationFields(theme),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWebsiteTab(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            theme,
+            icon: Icons.language,
+            title: 'Tienda Online',
+            children: _buildWebsiteFields(theme),
+          ),
+        ],
       ),
     );
   }
@@ -2003,9 +2070,19 @@ class _ProductFormPageState extends State<ProductFormPage> {
           });
         },
       ),
-      const SizedBox(height: 8),
+    ];
+  }
 
-      // Toggle 2: Published on Website (requires is_active)
+  List<Widget> _buildWebsiteFields(ThemeData theme) {
+    return [
+      Text(
+        'Configura la visibilidad y contenido del producto en la tienda online.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 16),
+      // Toggle: Published on Website (requires is_active)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(
@@ -2016,7 +2093,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         ),
         subtitle: Text(
           _isActive
-              ? 'Controla si este producto se muestra en la web y en el catálogo público.'
+              ? 'Muestra este producto en el catálogo web.'
               : 'Requiere que el producto esté activo.',
           style: TextStyle(
             color: _isActive ? null : theme.disabledColor,
@@ -2037,7 +2114,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       ),
       const SizedBox(height: 8),
 
-      // Toggle 3: Google Merchant Center (requires is_published)
+      // Toggle: Google Merchant Center (requires is_published)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Row(
@@ -2071,7 +2148,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ? 'Requiere que el producto esté activo.'
               : !_isPublished
                   ? 'Requiere que el producto esté publicado en la tienda.'
-                  : 'Incluye este producto en el feed de Google Shopping para aparecer en búsquedas de Google.',
+                  : 'Incluye este producto en el feed de Google Shopping.',
           style: TextStyle(
             color: (_isActive && _isPublished) ? null : theme.disabledColor,
           ),
@@ -2080,6 +2157,20 @@ class _ProductFormPageState extends State<ProductFormPage> {
         onChanged: (_isActive && _isPublished)
             ? (value) => setState(() => _isGoogleMerchant = value)
             : null,
+      ),
+      const SizedBox(height: 16),
+      const Divider(),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _websiteDescriptionController,
+        decoration: const InputDecoration(
+          labelText: 'Descripción para web',
+          hintText:
+              'Descripción optimizada para ventas online (SEO, marketing).',
+          helperText:
+              'Esta descripción se mostrará en la página del producto en la web.',
+        ),
+        maxLines: 6,
       ),
     ];
   }

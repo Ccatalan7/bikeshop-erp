@@ -30,7 +30,8 @@ class Product {
   final int minStockLevel;
   final int? maxStockLevel;
   final String? imageUrl;
-  final String? imageUrlOptimized; // WebP optimized version for fast web loading
+  final String?
+      imageUrlOptimized; // WebP optimized version for fast web loading
   final List<String> additionalImages;
   final Map<String, String> specifications;
   final List<String> tags;
@@ -48,6 +49,7 @@ class Product {
   final double? taxRate;
   final bool isActive;
   final bool isPublished;
+  final String? websiteDescription; // Defines the description for the website
   final bool isGoogleMerchant;
   final ProductType productType;
   // Set-related fields
@@ -66,6 +68,7 @@ class Product {
     required this.name,
     required this.sku,
     this.description,
+    this.websiteDescription,
     this.categoryId,
     this.categoryName,
     this.supplierId,
@@ -134,6 +137,7 @@ class Product {
       name: json['name'],
       sku: json['sku'],
       description: json['description'],
+      websiteDescription: json['website_description'],
       categoryId: json['category_id']?.toString(),
       categoryName: json['category_name'], // From JOIN query
       supplierId: json['supplier_id']?.toString(),
@@ -225,6 +229,7 @@ class Product {
       'name': name,
       'sku': sku,
       'description': description,
+      'website_description': websiteDescription,
       'category_id': categoryId,
       'supplier_id': supplierId,
       'supplier_reference': supplierReference,
@@ -299,6 +304,7 @@ class Product {
     String? name,
     String? sku,
     String? description,
+    String? websiteDescription,
     String? categoryId,
     String? categoryName,
     String? supplierId,
@@ -360,6 +366,7 @@ class Product {
       name: name ?? this.name,
       sku: sku ?? this.sku,
       description: description ?? this.description,
+      websiteDescription: websiteDescription ?? this.websiteDescription,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
       supplierId: supplierId ?? this.supplierId,

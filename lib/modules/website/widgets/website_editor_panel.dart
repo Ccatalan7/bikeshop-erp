@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -198,17 +202,20 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
             builder: (context) {
               final hasChanges = editProvider.hasUnsavedChanges;
               return ElevatedButton(
-                onPressed: hasChanges ? () async {
-                  if (widget.onSave != null) {
-                    await widget.onSave!();
-                  }
-                } : null,
+                onPressed: hasChanges
+                    ? () async {
+                        if (widget.onSave != null) {
+                          await widget.onSave!();
+                        }
+                      }
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00A09D),
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
                       const Color(0xFF00A09D).withValues(alpha: 0.5),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
@@ -5636,7 +5643,9 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
 
     try {
       // Prefer detecting route from actual URL, fallback to provider
-      var newRoute = _getSlugFromRoute() ?? widget.editProvider.currentPageSlug ?? 'inicio';
+      var newRoute = _getSlugFromRoute() ??
+          widget.editProvider.currentPageSlug ??
+          'inicio';
       if (newRoute.isEmpty) newRoute = 'inicio';
 
       debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
@@ -5691,7 +5700,13 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
       }
 
       // Policy pages at root level
-      const policySlugs = {'nosotros', 'terminos', 'privacidad', 'devoluciones', 'envios'};
+      const policySlugs = {
+        'nosotros',
+        'terminos',
+        'privacidad',
+        'devoluciones',
+        'envios'
+      };
       final rootSlug = path.substring(1);
       if (policySlugs.contains(rootSlug)) return rootSlug;
 
@@ -5722,7 +5737,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
       // Only use provider's pageId if it matches our current route
       final providerSlug = widget.editProvider.currentPageSlug ?? '';
       final providerPageId = widget.editProvider.currentPageId;
-      
+
       if (providerPageId != null && providerSlug == pageSlug) {
         page = await service.getPageById(providerPageId);
       } else {
@@ -5784,7 +5799,10 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   Widget build(BuildContext context) {
     // Check if route changed on every build (navigation might not trigger didUpdateWidget)
     final routeSlug = _getSlugFromRoute();
-    if (routeSlug != null && routeSlug != _currentRoute && !_isLoading && !_isDetecting) {
+    if (routeSlug != null &&
+        routeSlug != _currentRoute &&
+        !_isLoading &&
+        !_isDetecting) {
       // Schedule re-detection after this build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_isDetecting) _detectCurrentPage();
@@ -6600,7 +6618,8 @@ class _ThemeTabState extends State<_ThemeTab> {
 /// Widget to select which categories appear on the website navigation
 class _WebsiteCategoriesEditor extends StatefulWidget {
   @override
-  State<_WebsiteCategoriesEditor> createState() => _WebsiteCategoriesEditorState();
+  State<_WebsiteCategoriesEditor> createState() =>
+      _WebsiteCategoriesEditorState();
 }
 
 class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
@@ -6618,9 +6637,9 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
       final categoryService = context.read<CategoryService>();
       final editProvider = context.read<WebsiteEditModeProvider>();
       final pendingChanges = editProvider.pendingCategoryVisibility;
-      
+
       var categories = await categoryService.getRootCategories();
-      
+
       // Apply any pending (unsaved) visibility changes from the provider
       if (pendingChanges.isNotEmpty) {
         categories = categories.map((cat) {
@@ -6630,7 +6649,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
           return cat;
         }).toList();
       }
-      
+
       if (mounted) {
         setState(() {
           _rootCategories = categories;
@@ -6647,12 +6666,13 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
 
   Future<void> _toggleCategory(cat_models.Category category) async {
     final editProvider = context.read<WebsiteEditModeProvider>();
-    
+
     // Check current effective value (pending or from DB)
-    final currentValue = editProvider.getEffectiveCategoryVisibility(category.id!) 
-        ?? category.showOnWebsite;
+    final currentValue =
+        editProvider.getEffectiveCategoryVisibility(category.id!) ??
+            category.showOnWebsite;
     final newValue = !currentValue;
-    
+
     // Optimistic update for UI
     setState(() {
       final index = _rootCategories.indexWhere((c) => c.id == category.id);
@@ -6709,7 +6729,8 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline, color: Color(0xFF00A09D), size: 18),
+              const Icon(Icons.info_outline,
+                  color: Color(0xFF00A09D), size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -6721,7 +6742,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
           ),
         ),
         const SizedBox(height: 16),
-        
+
         // Stats
         Row(
           children: [
@@ -6748,9 +6769,11 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
           ],
         ),
         const SizedBox(height: 16),
-        
+
         // Category list
-        ..._rootCategories.map((category) => _buildCategoryTile(category)).toList(),
+        ..._rootCategories
+            .map((category) => _buildCategoryTile(category))
+            .toList(),
       ],
     );
   }
@@ -6759,12 +6782,12 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: category.showOnWebsite 
+        color: category.showOnWebsite
             ? const Color(0xFF00A09D).withValues(alpha: 0.1)
             : const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: category.showOnWebsite 
+          color: category.showOnWebsite
               ? const Color(0xFF00A09D).withValues(alpha: 0.3)
               : Colors.white10,
         ),
@@ -6773,24 +6796,27 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         leading: Icon(
           category.showOnWebsite ? Icons.visibility : Icons.visibility_off,
-          color: category.showOnWebsite ? const Color(0xFF00A09D) : Colors.white38,
+          color:
+              category.showOnWebsite ? const Color(0xFF00A09D) : Colors.white38,
           size: 20,
         ),
         title: Text(
           category.name,
           style: TextStyle(
             color: category.showOnWebsite ? Colors.white : Colors.white54,
-            fontWeight: category.showOnWebsite ? FontWeight.w500 : FontWeight.normal,
+            fontWeight:
+                category.showOnWebsite ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
-        subtitle: category.description != null && category.description!.isNotEmpty
-            ? Text(
-                category.description!,
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : null,
+        subtitle:
+            category.description != null && category.description!.isNotEmpty
+                ? Text(
+                    category.description!,
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                : null,
         trailing: Switch(
           value: category.showOnWebsite,
           onChanged: (_) => _toggleCategory(category),
@@ -8334,65 +8360,47 @@ class _ImagePickerState extends State<_ImagePicker> {
   }
 }
 
-class _ColorField extends StatelessWidget {
+class _ColorField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
+  final VoidCallback? onChanged;
 
   const _ColorField({
     required this.label,
     required this.controller,
+    this.onChanged,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: _parseColor(controller.text),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              TextFormField(
-                controller: controller,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                decoration: InputDecoration(
-                  hintText: '#RRGGBB',
-                  hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
-                  filled: true,
-                  fillColor: const Color(0xFF2D2D2D),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (_) {
-                  // Trigger rebuild to update color preview
-                  (context as Element).markNeedsBuild();
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  State<_ColorField> createState() => _ColorFieldState();
+}
+
+class _ColorFieldState extends State<_ColorField> {
+  static const List<Color> presetColors = [
+    Colors.white,
+    Color(0xFFF5F5F5),
+    Color(0xFFE0E0E0),
+    Color(0xFF9E9E9E),
+    Color(0xFF616161),
+    Color(0xFF212121),
+    Colors.black,
+    Color(0xFFEF5350), // Red
+    Color(0xFFEC407A), // Pink
+    Color(0xFFAB47BC), // Purple
+    Color(0xFF7E57C2), // Deep Purple
+    Color(0xFF5C6BC0), // Indigo
+    Color(0xFF42A5F5), // Blue
+    Color(0xFF29B6F6), // Light Blue
+    Color(0xFF26C6DA), // Cyan
+    Color(0xFF26A69A), // Teal
+    Color(0xFF66BB6A), // Green
+    Color(0xFF9CCC65), // Light Green
+    Color(0xFFD4E157), // Lime
+    Color(0xFFFFEE58), // Yellow
+    Color(0xFFFFCA28), // Amber
+    Color(0xFFFFA726), // Orange
+    Color(0xFFFF7043), // Deep Orange
+  ];
 
   Color _parseColor(String value) {
     try {
@@ -8402,6 +8410,289 @@ class _ColorField extends StatelessWidget {
       }
     } catch (_) {}
     return Colors.grey;
+  }
+
+  String _colorToHex(Color color) {
+    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentColor = _parseColor(widget.controller.text);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        // Color preview + hex input row
+        Row(
+          children: [
+            // Clickable color swatch to open FULL picker dialog
+            GestureDetector(
+              onTap: () {
+                // Open full color picker dialog
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text('Seleccionar color'),
+                      content: SingleChildScrollView(
+                        child: ColorPicker(
+                          pickerColor: currentColor,
+                          onColorChanged: (color) {
+                            widget.controller.text = _colorToHex(color);
+                            widget.onChanged?.call();
+                            // Force rebuild of parent text field to show new color
+                            setState(() {});
+                          },
+                          // Use simple picker for cleaner UI, or full for power
+                          enableAlpha: true,
+                          displayThumbColor: true,
+                          showLabel: true,
+                          paletteType: PaletteType.hsvWithHue,
+                          pickerAreaHeightPercent: 0.8,
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          child: const Text('Listo'),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: currentColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: currentColor.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.palette, // Better icon for "Open Picker"
+                  color: Colors.white70,
+                  size: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Eyedropper Button
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D2D), // Dark bg for tool button
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: IconButton(
+                icon:
+                    const Icon(Icons.colorize, size: 18, color: Colors.white70),
+                tooltip: 'Pipeta (Seleccionar de la pantalla)',
+                onPressed: () => _activateEyedropper(context),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Hex input
+            Expanded(
+              child: TextFormField(
+                controller: widget.controller,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: '#FFFFFF',
+                  hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
+                  filled: true,
+                  fillColor: const Color(0xFF2D2D2D),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) {
+                  setState(() {});
+                  widget.onChanged?.call();
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Preset colors grid
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: presetColors.map((color) {
+              final isSelected = currentColor.value == color.value;
+              return GestureDetector(
+                onTap: () {
+                  widget.controller.text = _colorToHex(color);
+                  widget.onChanged?.call();
+                  setState(() {});
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected ? Colors.blue : Colors.white24,
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: Colors.blue.withValues(alpha: 0.4),
+                              blurRadius: 6,
+                            )
+                          ]
+                        : null,
+                  ),
+                  child: isSelected
+                      ? Icon(
+                          Icons.check,
+                          size: 16,
+                          color: color.computeLuminance() > 0.5
+                              ? Colors.black
+                              : Colors.white,
+                        )
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _activateEyedropper(BuildContext context) async {
+    final provider = context.read<WebsiteEditModeProvider>();
+    final boundaryKey = provider.previewRepaintKey;
+
+    if (boundaryKey.currentContext == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'No se pudo acceder al área de vista previa. Asegúrate de estar en modo edición.')),
+      );
+      return;
+    }
+
+    OverlayEntry? entry;
+    // Create full screen overlay to capture click
+    entry = OverlayEntry(
+      builder: (context) => Positioned.fill(
+        child: MouseRegion(
+          cursor: SystemMouseCursors.precise, // Crosshair cursor
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) {
+              // Capture position and process
+              _processColorPick(details.globalPosition, boundaryKey);
+              entry?.remove();
+              entry = null;
+            },
+            child: Container(
+              color: Colors.transparent, // Transparent hit shield
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(entry!);
+
+    // Optional: visual feedback that picking started
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+            'Toca cualquier punto de la vista previa para copiar el color'),
+        duration: Duration(milliseconds: 1500),
+      ),
+    );
+  }
+
+  Future<void> _processColorPick(Offset globalPosition, GlobalKey key) async {
+    try {
+      final renderBox =
+          key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (renderBox == null) return;
+
+      // Convert global tap position to local coordinates of the boundary
+      final localPosition = renderBox.globalToLocal(globalPosition);
+
+      // Capture the image of the boundary
+      // pixelRatio 1.0 is enough for color picking and faster
+      final image = await renderBox.toImage(pixelRatio: 1.0);
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+
+      if (byteData != null) {
+        final width = image.width;
+        final height = image.height;
+
+        // Ensure coordinates are within bounds
+        final x = localPosition.dx.round().clamp(0, width - 1);
+        final y = localPosition.dy.round().clamp(0, height - 1);
+
+        // RGBA is 4 bytes per pixel
+        final offset = (y * width + x) * 4;
+
+        final r = byteData.getUint8(offset);
+        final g = byteData.getUint8(offset + 1);
+        final b = byteData.getUint8(offset + 2);
+        // We ignore alpha for the picked color effectively, forcing full opacity for the background setting
+        // or we could read it: final a = byteData.getUint8(offset + 3);
+
+        final color = Color.fromARGB(255, r, g, b);
+
+        if (mounted) {
+          widget.controller.text = _colorToHex(color);
+          widget.onChanged?.call();
+          setState(() {});
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(children: [
+                Container(width: 20, height: 20, color: color),
+                const SizedBox(width: 8),
+                Text('Color copiado: ${_colorToHex(color)}')
+              ]),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Eyedropper error: $e');
+    }
   }
 }
 
@@ -8438,7 +8729,8 @@ class _CategoryGridBlockControls extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.auto_awesome, color: Color(0xFF00A09D), size: 20),
+              const Icon(Icons.auto_awesome,
+                  color: Color(0xFF00A09D), size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -10020,6 +10312,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           _ColorField(
             label: 'Color de fondo',
             controller: _headerBgColorController,
+            onChanged: () => _markChanged(),
           ),
           const SizedBox(height: 16),
 

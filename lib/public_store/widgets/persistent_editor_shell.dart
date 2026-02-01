@@ -39,21 +39,30 @@ class PersistentEditorShell extends StatelessWidget {
     // Previously, switching from `child` to `Stack(children: [child, panel])`
     // would reparent the child, causing GlobalKey conflicts and framework
     // assertions like "_elements.contains(element) is not true".
-    return Stack(
-      children: [
-        // Keep router child full-width so the top command bar uses all space.
-        Positioned.fill(child: child),
-        // Persistent editor panel (fixed width on the right)
-        // Only rendered when in edit mode, but Stack structure is always present
-        if (isEditMode)
-          Positioned(
-            top: _editorTopBarHeight,
-            right: 0,
-            bottom: 0,
-            width: _editorPanelWidth,
-            child: _PersistentEditorPanel(editProvider: editProvider),
+    // Use Transform.translate to force a new stacking context on the entire
+    // editor shell. This helps isolate the editor UI from the page content's
+    // z-index fighting, ensuring the editor (bottom of Stack) always wins.
+    return Transform.translate(
+      offset: Offset.zero,
+      child: Stack(
+        children: [
+          // Keep router child full-width so the top command bar uses all space.
+          // Wrap with RepaintBoundary to allow Eyedropper to read pixels
+          Positioned.fill(
+            child: child,
           ),
-      ],
+          // Persistent editor panel (fixed width on the right)
+          // Only rendered when in edit mode, but Stack structure is always present
+          if (isEditMode)
+            Positioned(
+              top: _editorTopBarHeight,
+              right: 0,
+              bottom: 0,
+              width: _editorPanelWidth,
+              child: _PersistentEditorPanel(editProvider: editProvider),
+            ),
+        ],
+      ),
     );
   }
 }

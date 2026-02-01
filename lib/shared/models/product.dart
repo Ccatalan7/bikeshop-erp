@@ -15,6 +15,7 @@ class Product {
       imageUrlOptimized; // WebP optimized version for fast web loading
   final List<String> imageUrls;
   final String? description;
+  final String? websiteDescription;
   final ProductCategory category;
   final String? categoryId; // Custom category reference
   final String? categoryName; // Resolved category name (if available)
@@ -81,6 +82,7 @@ class Product {
     this.imageUrlOptimized,
     this.imageUrls = const [],
     this.description,
+    this.websiteDescription,
     required this.category,
     this.categoryId,
     this.categoryName,
@@ -152,6 +154,7 @@ class Product {
       imageUrlOptimized: json['image_url_optimized'] as String?,
       imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? [],
       description: json['description'] as String?,
+      websiteDescription: json['website_description'] as String?,
       category: ProductCategory.values.firstWhere(
         (c) => c.name == json['category'],
         orElse: () => ProductCategory.other,

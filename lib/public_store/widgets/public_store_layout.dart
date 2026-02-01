@@ -28,20 +28,21 @@ import '../../modules/website/widgets/website_link_value_editor.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
-import '../../shared/routes/erp_routes_barrel.dart' deferred as erp show
-  AnalyticsDashboardPage,
-  ContentManagementPage,
-  FeaturedProductsPage,
-  HierarchicalCategoryPage,
-  IntegrationsPage,
-  NavigationManagementPage,
-  OnlineOrdersPage,
-  PageManagementPage,
-  PaymentMethodsSettingsPage,
-  ProductListPage,
-  SeoSettingsPage,
-  WebsiteManagementPage,
-  WebsiteSettingsPage;
+import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
+    show
+        AnalyticsDashboardPage,
+        ContentManagementPage,
+        FeaturedProductsPage,
+        HierarchicalCategoryPage,
+        IntegrationsPage,
+        NavigationManagementPage,
+        OnlineOrdersPage,
+        PageManagementPage,
+        PaymentMethodsSettingsPage,
+        ProductListPage,
+        SeoSettingsPage,
+        WebsiteManagementPage,
+        WebsiteSettingsPage;
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
@@ -52,6 +53,7 @@ import 'customer_chat_widget.dart';
 import 'search_overlay.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'mega_menu.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
@@ -251,6 +253,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       allowAnchor: true,
       darkStyle: true,
     );
+
+    if (!context.mounted) return;
 
     if (pickedHref == null) return;
     final href = pickedHref.trim();
@@ -729,16 +733,24 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
 
     // Header settings (DJI-style customization)
-    final headerStyle = websiteService.getSetting('header_style', 'solid');
-    final headerColorMode =
-        websiteService.getSetting('header_color_mode', 'light');
+    // Header settings (DJI-style customization)
+    // In edit mode, prefer pending settings for real-time preview
+    String getHeaderSetting(String key, String def) {
+      if (isInEditorContext) {
+        return editProvider.pendingHeaderSettings[key] ??
+            websiteService.getSetting(key, def);
+      }
+      return websiteService.getSetting(key, def);
+    }
+
+    final headerStyle = getHeaderSetting('header_style', 'solid');
+    final headerColorMode = getHeaderSetting('header_color_mode', 'light');
     final showTopBannerRaw =
-        websiteService.getSetting('header_show_top_banner', 'false');
+        getHeaderSetting('header_show_top_banner', 'false');
     final showTopBanner = showTopBannerRaw == 'true';
-    final headerShadow =
-        websiteService.getSetting('header_shadow', 'true') == 'true';
+    final headerShadow = getHeaderSetting('header_shadow', 'true') == 'true';
     final headerBgColor = _resolveColor(
-      websiteService.getSetting('header_bg_color', ''),
+      getHeaderSetting('header_bg_color', ''),
       Colors.white,
     );
 
@@ -802,6 +814,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         headerBgColor: overrideBgColor ?? headerBgColor,
         navItems: navItems,
         isOverlay: isOverlay,
+        // If we are in Preview Mode (Editor), the header is shifted down by the 48px Top Bar
+        // We pass this offset to the Mega Menu so it can snap correctly.
+        topOffset: (isPreviewMode || isEditMode) ? 48.0 : 0.0,
       );
     }
 
@@ -829,13 +844,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             : const MaterialScrollBehavior(),
         child: _PublicStoreScrollView(
           key: ValueKey('scroll_transparent_home_$scrollViewMode'),
-          clipBehavior: _isCapturingScreenshot ? Clip.none : Clip.hardEdge,
+          // On Web, clip layers can end up painting above later Stack children
+          // (like the header) due to DOM stacking context quirks.
+          clipBehavior:
+              (_isCapturingScreenshot || kIsWeb) ? Clip.none : Clip.hardEdge,
           physics: _isCapturingScreenshot
               ? const NeverScrollableScrollPhysics()
               : null,
           child: RepaintBoundary(
             key: editProvider.screenshotKey,
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 // Content starts from top (behind header)
                 Column(
@@ -894,8 +913,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
         ],
       );
-    } else if (headerStyle == 'sticky' && widget.enablePageViewScrolling) {
-      // STICKY: Header stays fixed at top while scrolling
+    } else if (headerStyle == 'sticky' &&
+        isHomePage &&
+        (widget.enablePageViewScrolling || isPreviewMode || isEditMode)) {
+      // STICKY: Header stays fixed at top while scrolling (Homepage only)
+      // On inner pages, we fall back to solid/static to prevent overlap issues
       pageContent = _buildStickyHeaderLayout(
         context: context,
         storeName: storeName,
@@ -1118,12 +1140,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         child: Scaffold(
           key: const ValueKey('scaffold_edit_mode'),
           backgroundColor: backgroundColor,
-          body: Column(
+          body: Stack(
             children: [
-              // Keep the same "command center" top bar visible while editing.
-              _buildPreviewTopBar(
-                  context, editProvider, websiteService, storeName),
-              mainBody,
+              // Main Body (underneath, with padding for top bar)
+              Positioned.fill(
+                top: 48,
+                child: mainBody,
+              ),
+              // Top Bar (on top)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 48,
+                child: _buildPreviewTopBar(
+                    context, editProvider, websiteService, storeName),
+              ),
             ],
           ),
         ),
@@ -1140,13 +1172,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         child: Scaffold(
           key: const ValueKey('scaffold_preview_mode'),
           backgroundColor: backgroundColor,
-          body: Column(
+          body: Stack(
             children: [
-              // Preview top bar (Live Editor)
-              _buildPreviewTopBar(
-                  context, editProvider, websiteService, storeName),
-              // Page content
-              Expanded(
+              // Page content (underneath, with padding)
+              Positioned.fill(
+                top: 48,
                 child: Stack(
                   children: [
                     Positioned.fill(child: editorViewport),
@@ -1156,6 +1186,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       ),
                   ],
                 ),
+              ),
+              // Top Bar (on top)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 48,
+                child: _buildPreviewTopBar(
+                    context, editProvider, websiteService, storeName),
               ),
             ],
           ),
@@ -1437,7 +1476,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     );
                   }
                 },
-                activeColor: Colors.green,
+                activeThumbColor: Colors.green,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
@@ -1661,10 +1700,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(a.icon, color: Colors.white.withValues(alpha: 0.9), size: 20),
+            leading: Icon(a.icon,
+                color: Colors.white.withValues(alpha: 0.9), size: 20),
             title: Text(
               a.label!,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
             ),
           ),
         ),
@@ -2436,6 +2477,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         .eq('id', tenantId)
         .maybeSingle();
 
+    if (!context.mounted) return;
+
     final subdomain = (tenant?['subdomain'] as String?)?.trim() ?? '';
     final currentCustomDomain = (tenant?['custom_domain'] as String?)?.trim();
 
@@ -2584,7 +2627,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   color: Colors.white, // Standard frame background
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 20,
                       spreadRadius: 2,
                     )
@@ -3076,6 +3119,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     Color headerBgColor = Colors.white,
     List<WebsiteNavigation> navItems = const [],
     bool isOverlay = false, // For transparent mode when scrolled up
+    double topOffset = 0.0, // Explicit top offset for Mega Menu alignment
   }) {
     final cart = context.watch<CartProvider>();
     final modeKey = isEditMode ? 'edit' : 'normal';
@@ -3084,337 +3128,415 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         key: ValueKey(
             'header_layout_${isOverlay ? 'overlay' : 'solid'}_$modeKey'),
         builder: (context, constraints) {
-          // Determine colors based on mode
-          final isDarkMode = headerColorMode == 'dark' || isOverlay;
-          final textColor = isDarkMode ? Colors.white : Colors.black87;
-          final iconColor = isDarkMode ? Colors.white : primaryColor;
-          final bgColor = isOverlay ? Colors.transparent : headerBgColor;
+          return AnimatedBuilder(
+            animation: MegaMenuController.instance,
+            builder: (context, child) {
+              final isMenuOpen = MegaMenuController.instance.isAnyMenuOpen;
 
-          final screenWidth = constraints.maxWidth;
-          final useMobileGradient = screenWidth < 900 && isOverlay;
+              // Determine colors based on mode
+              // FORCE WHITE TEXT IF MENU IS OPEN
+              // FORCE BLACK BACKGROUND IF MENU IS OPEN (Unified Block)
+              final isDarkMode = headerColorMode == 'dark' || isOverlay;
 
-          final headerContent = Material(
-            elevation: headerShadow && !isOverlay ? 2 : 0,
-            color: bgColor,
-            child: Container(
-              decoration: useMobileGradient
-                  ? BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.55),
-                          Colors.black.withValues(alpha: 0.15),
-                        ],
-                      ),
-                    )
-                  : null,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showTopBanner && topBannerText.isNotEmpty)
-                    Container(
-                      width: double.infinity,
-                      color: isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : primaryColor,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 10),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.local_shipping_outlined,
-                              color: Colors.white, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              topBannerText,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (screenWidth >= 900) ...[
-                            if (contactPhone.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.phone_outlined,
-                                        color: Colors.white, size: 16),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      contactPhone,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            if (contactEmail.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.mail_outline,
-                                        color: Colors.white, size: 16),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      contactEmail,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ],
-                      ),
-                    ),
+              // If menu is open, we force everything to Look like the Mega Menu Panel (Black)
+              final effectiveBgColor = isMenuOpen
+                  ? const Color(0xFF000000)
+                  : (isOverlay ? Colors.transparent : headerBgColor);
 
-                  // Main header with logo
-                  Center(
+              final textColor =
+                  (isDarkMode || isMenuOpen) ? Colors.white : Colors.black87;
+              final iconColor =
+                  (isDarkMode || isMenuOpen) ? Colors.white : primaryColor;
+
+              // Remove shadow when menu is open to prevent "seam" line
+              final effectiveElevation =
+                  (isMenuOpen || isOverlay) ? 0.0 : (headerShadow ? 2.0 : 0.0);
+
+              final screenWidth = constraints.maxWidth;
+              final useMobileGradient = screenWidth < 900 && isOverlay;
+
+              // Wrap with MegaMenuHeaderWrapper to enable dark background (#111111) when menu is open
+              // Also wrap with Transform.translate to force a new stacking context on Web
+              // to prevent it from falling behind other layers (like the Carousel).
+              final headerContent = Transform.translate(
+                offset: Offset.zero,
+                child: MegaMenuHeaderWrapper(
+                  fixedTop: topOffset,
+                  child: AnimatedPhysicalModel(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    shape: BoxShape.rectangle,
+                    elevation: effectiveElevation,
+                    color: effectiveBgColor,
+                    shadowColor: Colors.black,
                     child: Container(
-                      constraints: const BoxConstraints(maxWidth: 1200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
-                      child: Row(
-                        children: [
-                          // Logo - uses URL if set, otherwise falls back to asset, then text
-                          // Logo - Force use of local asset for consistency and to fix "white block" issue
-                          // (Database logo_url might be opaque, causing white tint to fill the box)
-                          InkWell(
-                            onTap: isEditMode
-                                ? null
-                                : () {
-                                    final path =
-                                        _routeForPublicStore('/tienda');
-                                    _navigateToHref(
-                                      context,
-                                      path,
-                                      forceHomeRefresh: true,
-                                    );
-                                  },
-                            child: _buildLogo(
-                              context: context,
-                              logoUrl: logoUrl,
-                              storeName: storeName,
-                              textColor: textColor,
-                              isDarkMode: isDarkMode,
-                              height: 48,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          // Only show nav links on desktop, use Spacer on mobile
-                          if (screenWidth >= 900)
-                            Expanded(
-                              child: Row(
-                                children: navItems.isEmpty
-                                    ? [
-                                        _buildNavLink(
-                                          context,
-                                          'Inicio',
-                                          _routeForPublicStore('/tienda'),
-                                          textColor,
-                                          isEditMode: isEditMode,
-                                        ),
-                                        const SizedBox(width: 24),
-                                        _buildNavLink(
-                                          context,
-                                          'Productos',
-                                          _routeForPublicStore('/productos'),
-                                          textColor,
-                                          isEditMode: isEditMode,
-                                        ),
-                                      ]
-                                    : [
-                                        ...navItems
-                                            .where((n) => n.showOnDesktop)
-                                            .map((nav) {
-                                          final children = nav.children
-                                              .where((c) => c.isVisible)
-                                              .where((c) => c.showOnDesktop)
-                                              .toList()
-                                            ..sort((a, b) => a.orderIndex
-                                                .compareTo(b.orderIndex));
-
-                                          if (children.isNotEmpty) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                  right: 24),
-                                              child: _buildNavDropdown(
-                                                context: context,
-                                                parent: nav,
-                                                children: children,
-                                                isEditMode: isEditMode,
-                                              ),
-                                            );
-                                          }
-
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                                right: 24),
-                                            child: _buildNavItemLink(
-                                              context,
-                                              nav,
-                                              textColor,
-                                              isEditMode: isEditMode,
-                                            ),
-                                          );
-                                        }),
-                                      ],
-                              ),
-                            )
-                          else
-                            const Spacer(),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.search),
-                                color: iconColor,
-                                onPressed: () => SearchOverlay.show(context),
-                                tooltip: 'Buscar',
-                              ),
-                              const SizedBox(width: 8),
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                        Icons.shopping_cart_outlined),
-                                    color: iconColor,
-                                    onPressed: () => _navigateToHref(
-                                      context,
-                                      _routeForPublicStore('/tienda/carrito'),
-                                    ),
-                                    tooltip: 'Carrito',
-                                  ),
-                                  if (cart.itemCount > 0)
-                                    Positioned(
-                                      right: 0,
-                                      top: 0,
-                                      child: IgnorePointer(
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: accentColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 18,
-                                            minHeight: 18,
-                                          ),
-                                          child: Text(
-                                            '${cart.itemCount}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                      decoration: useMobileGradient
+                          ? BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.55),
+                                  Colors.black.withValues(alpha: 0.15),
                                 ],
                               ),
-                              if (screenWidth >= 900) ...[
-                                const SizedBox(width: 16),
-                                CustomerAccountMenu(textColor: textColor),
-                              ] else ...[
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.menu),
-                                  color: iconColor,
-                                  onPressed: () =>
-                                      _showMobileMenu(context, navItems),
-                                  tooltip: 'Menú',
-                                ),
-                              ]
-                            ],
+                            )
+                          : null,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showTopBanner && topBannerText.isNotEmpty)
+                            Container(
+                              width: double.infinity,
+                              color: isDarkMode
+                                  ? Colors.black.withValues(alpha: 0.3)
+                                  : primaryColor,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 10),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.local_shipping_outlined,
+                                      color: Colors.white, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      topBannerText,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (screenWidth >= 900) ...[
+                                    if (contactPhone.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 16),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.phone_outlined,
+                                                color: Colors.white, size: 16),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              contactPhone,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (contactEmail.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 16),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.mail_outline,
+                                                color: Colors.white, size: 16),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              contactEmail,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                          // Main header with logo
+                          Center(
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 1200),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 16),
+                              child: Row(
+                                children: [
+                                  // Logo - uses URL if set, otherwise falls back to asset, then text
+                                  // Logo - Force use of local asset for consistency and to fix "white block" issue
+                                  // (Database logo_url might be opaque, causing white tint to fill the box)
+                                  InkWell(
+                                    onTap: isEditMode
+                                        ? null
+                                        : () {
+                                            final path =
+                                                _routeForPublicStore('/tienda');
+                                            _navigateToHref(
+                                              context,
+                                              path,
+                                              forceHomeRefresh: true,
+                                            );
+                                          },
+                                    child: _buildLogo(
+                                      context: context,
+                                      logoUrl: logoUrl,
+                                      storeName: storeName,
+                                      textColor: textColor,
+                                      isDarkMode: isDarkMode,
+                                      height: 48,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  // Only show nav links on desktop, use Spacer on mobile
+                                  if (screenWidth >= 900)
+                                    Expanded(
+                                      child: Row(
+                                        children: navItems.isEmpty
+                                            ? [
+                                                _buildNavLink(
+                                                  context,
+                                                  'Inicio',
+                                                  _routeForPublicStore(
+                                                      '/tienda'),
+                                                  textColor,
+                                                  isEditMode: isEditMode,
+                                                ),
+                                                const SizedBox(width: 24),
+                                                _buildNavLink(
+                                                  context,
+                                                  'Productos',
+                                                  _routeForPublicStore(
+                                                      '/productos'),
+                                                  textColor,
+                                                  isEditMode: isEditMode,
+                                                ),
+                                              ]
+                                            : [
+                                                ...navItems
+                                                    .where(
+                                                        (n) => n.showOnDesktop)
+                                                    .map((nav) {
+                                                  final children = nav.children
+                                                      .where((c) => c.isVisible)
+                                                      .where((c) =>
+                                                          c.showOnDesktop)
+                                                      .toList()
+                                                    ..sort((a, b) =>
+                                                        a.orderIndex.compareTo(
+                                                            b.orderIndex));
+
+                                                  if (children.isNotEmpty) {
+                                                    // Upgrade to MegaMenu if deep nesting is detected
+                                                    final isMega = children.any(
+                                                        (c) => c.children
+                                                            .isNotEmpty);
+
+                                                    if (isMega) {
+                                                      return Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                                right: 24),
+                                                        child: MegaMenuButton(
+                                                          parent: nav,
+                                                          children: children,
+                                                          isEditMode:
+                                                              isEditMode,
+                                                          textColor: textColor,
+                                                          onNavigate: (href,
+                                                                  newTab) =>
+                                                              _navigateToHref(
+                                                                  context, href,
+                                                                  openInNewTab:
+                                                                      newTab),
+                                                        ),
+                                                      );
+                                                    }
+
+                                                    return Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              right: 24),
+                                                      child: _buildNavDropdown(
+                                                        context: context,
+                                                        parent: nav,
+                                                        children: children,
+                                                        isEditMode: isEditMode,
+                                                        textColor: textColor,
+                                                      ),
+                                                    );
+                                                  }
+
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            right: 24),
+                                                    child: _buildNavItemLink(
+                                                      context,
+                                                      nav,
+                                                      textColor,
+                                                      isEditMode: isEditMode,
+                                                    ),
+                                                  );
+                                                }),
+                                              ],
+                                      ),
+                                    )
+                                  else
+                                    const Spacer(),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.search),
+                                        color: iconColor,
+                                        onPressed: () =>
+                                            SearchOverlay.show(context),
+                                        tooltip: 'Buscar',
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.shopping_cart_outlined),
+                                            color: iconColor,
+                                            onPressed: () => _navigateToHref(
+                                              context,
+                                              _routeForPublicStore(
+                                                  '/tienda/carrito'),
+                                            ),
+                                            tooltip: 'Carrito',
+                                          ),
+                                          if (cart.itemCount > 0)
+                                            Positioned(
+                                              right: 0,
+                                              top: 0,
+                                              child: IgnorePointer(
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: accentColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 18,
+                                                    minHeight: 18,
+                                                  ),
+                                                  child: Text(
+                                                    '${cart.itemCount}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      if (screenWidth >= 900) ...[
+                                        const SizedBox(width: 16),
+                                        CustomerAccountMenu(
+                                            textColor: textColor),
+                                      ] else ...[
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.menu),
+                                          color: iconColor,
+                                          onPressed: () => _showMobileMenu(
+                                              context, navItems),
+                                          tooltip: 'Menú',
+                                        ),
+                                      ]
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          );
+                ),
+              );
 
-          // Wrap with edit mode indicator if in edit mode
-          if (isEditMode) {
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                // Select header for editing in the "Editar" tab
-                final editProvider = context.read<WebsiteEditModeProvider>();
-                editProvider.selectBlock('header');
-              },
-              child: Stack(
-                children: [
-                  headerContent,
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.blue.withOpacity(0.5),
-                            width: 2,
-                          ),
-                        ),
-                        child: Align(
-                          alignment: Alignment.topLeft,
+              // Wrap with edit mode indicator if in edit mode
+              if (isEditMode) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    // Select header for editing in the "Editar" tab
+                    final editProvider =
+                        context.read<WebsiteEditModeProvider>();
+                    editProvider.selectBlock('header');
+                  },
+                  child: Stack(
+                    children: [
+                      headerContent,
+                      Positioned.fill(
+                        child: IgnorePointer(
                           child: Container(
-                            margin: const EdgeInsets.all(4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.5),
+                                width: 2,
+                              ),
                             ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.edit, color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Header',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Container(
+                                margin: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                              ],
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.edit,
+                                        color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Header',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
+                );
+              }
 
-          return headerContent;
+              return headerContent;
+            },
+          );
         });
   }
 
@@ -4466,7 +4588,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: Colors.green.withOpacity(0.5),
+                            color: Colors.green.withValues(alpha: 0.5),
                             width: 2,
                           ),
                         ),
@@ -5196,7 +5318,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? primaryColor : PublicStoreTheme.textPrimary,
+                color: isActive
+                    ? primaryColor
+                    : (primaryColor == Colors.white
+                        ? Colors.white
+                        : PublicStoreTheme.textPrimary),
               ),
         ),
       ),
@@ -5250,6 +5376,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
       // If not found in memory, try a direct lookup (covers stale caches).
       final resolvedPage = page ?? await websiteService.getPageById(uuid);
+      if (!context.mounted) return;
+
       final slug = (resolvedPage != null &&
               (tenantId == null || resolvedPage.tenantId == tenantId))
           ? resolvedPage.slug
@@ -5344,8 +5472,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // frames). Keep push() for detail routes like product pages.
     final targetPath = Uri.tryParse(target)?.path ?? target;
     final isHomeTarget = targetPath == '/' ||
-      targetPath == '/tienda' ||
-      targetPath == '/tienda/';
+        targetPath == '/tienda' ||
+        targetPath == '/tienda/';
     final shouldReplace = _shouldReplaceForPublicStoreNav(targetPath);
 
     // Web-only: if the user explicitly asked for a "home refresh" (logo/Inicio)
@@ -5493,7 +5621,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           nav.label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? primaryColor : PublicStoreTheme.textPrimary,
+                color: isActive
+                    ? primaryColor
+                    : (primaryColor == Colors.white
+                        ? Colors.white
+                        : PublicStoreTheme.textPrimary),
               ),
         ),
       ),
@@ -5505,6 +5637,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required WebsiteNavigation parent,
     required List<WebsiteNavigation> children,
     bool isEditMode = false,
+    Color textColor = Colors.black87,
   }) {
     return PopupMenuButton<WebsiteNavigation>(
       enabled: !isEditMode,
@@ -5539,12 +5672,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             parent.label,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.normal,
-                  color: PublicStoreTheme.textPrimary,
+                  color: textColor,
                 ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down,
-              size: 18, color: PublicStoreTheme.textPrimary),
+          Icon(Icons.keyboard_arrow_down, size: 18, color: textColor),
         ],
       ),
     );
@@ -6753,6 +6885,10 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
         : widget.headerBgColor.withValues(alpha: headerOpacity);
 
     return Stack(
+      // On Flutter Web (HTML renderer especially), clipping can create DOM
+      // stacking contexts that end up painting *above* later Stack children.
+      // We keep this Stack unclipped so the sticky header reliably stays on top.
+      clipBehavior: Clip.none,
       children: [
         // Main scrollable content
         // Main scrollable content
@@ -6762,6 +6898,8 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
               : const MaterialScrollBehavior(),
           child: SingleChildScrollView(
             controller: _scrollController,
+            // Avoid clip-induced z-order issues on Web where the scroll viewport
+            // can end up above the sticky header.
             clipBehavior: kIsWeb ? Clip.none : Clip.hardEdge,
             child: Column(
               children: [

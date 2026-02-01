@@ -42,6 +42,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   // Pending header settings (to be saved with main save button)
   Map<String, String> _pendingHeaderSettings = {};
 
+  // Key for capturing the preview area for color picking
+  final GlobalKey previewRepaintKey = GlobalKey();
+
   // Pending site-wide settings (to be saved with main save button)
   // Example: site_published, store_name, store_description, etc.
   Map<String, String> _pendingSiteSettings = {};
@@ -336,7 +339,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void updateCategoryVisibility(String categoryId, bool showOnWebsite) {
     _pendingCategoryVisibility[categoryId] = showOnWebsite;
     _hasCategoryChanges = true;
-    debugPrint('📁 [EditProvider] Category visibility updated: $categoryId = $showOnWebsite');
+    debugPrint(
+        '📁 [EditProvider] Category visibility updated: $categoryId = $showOnWebsite');
     notifyListeners();
   }
 

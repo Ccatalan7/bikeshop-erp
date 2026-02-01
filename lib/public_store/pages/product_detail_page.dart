@@ -957,8 +957,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Description
-              if (_product!.description != null &&
-                  _product!.description!.isNotEmpty) ...[
+              if ((_product!.websiteDescription?.isNotEmpty ?? false) ||
+                  (_product!.description?.isNotEmpty ?? false)) ...[
                 const Text(
                   'Descripción',
                   style: TextStyle(
@@ -969,7 +969,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _product!.description!,
+                  _product!.websiteDescription?.isNotEmpty == true
+                      ? _product!.websiteDescription!
+                      : _product!.description!,
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey.shade700,

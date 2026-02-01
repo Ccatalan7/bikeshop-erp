@@ -708,6 +708,12 @@ class WebsiteBlockRenderer {
         image: NetworkImage(imageUrl),
         fit: BoxFit.cover,
         alignment: imageAlignment,
+        // on top of everything. Applying a color filter forces rasterization.
+        // We use a slightly off-white (FEFEFE) to prevent the engine from
+        // optimizing it away as a no-op identity filter.
+        colorFilter: kIsWeb
+            ? const ColorFilter.mode(Color(0xFFFEFEFE), BlendMode.modulate)
+            : null,
       );
     }
 
@@ -3321,8 +3327,8 @@ class WebsiteBlockRenderer {
                 ? DecorationImage(
                     image: NetworkImage(imageUrl),
                     fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.7),
+                    colorFilter: const ColorFilter.mode(
+                      Colors.black54,
                       BlendMode.darken,
                     ),
                   )
@@ -3857,7 +3863,7 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
 
     // Use categories (either manual from block or fetched from DB)
     List<Map<String, dynamic>> categories = _categories ?? [];
-    
+
     // If auto-fetch returned empty and not using manual, fall back to block data
     if (categories.isEmpty && !_isLoading && !_useManualCategories) {
       final rawCategories = widget.data['categories'];
@@ -4143,110 +4149,108 @@ class _CategoryCard extends StatelessWidget {
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
-    return RepaintBoundary(
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: const Color(0xFF2a2a2a),
-          image: hasImage
-              ? DecorationImage(
-                  image: NetworkImage(imageUrl),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.35),
-                    BlendMode.darken,
-                  ),
-                )
-              : null,
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Placeholder gradient for cards without images
-            if (!hasImage)
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFF3a3a3a),
-                      const Color(0xFF1a1a1a),
-                    ],
-                  ),
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF2a2a2a),
+        image: hasImage
+            ? DecorationImage(
+                image: NetworkImage(imageUrl),
+                fit: BoxFit.cover,
+                colorFilter: const ColorFilter.mode(
+                  Colors.black38,
+                  BlendMode.darken,
                 ),
-              ),
-            // Material + InkWell for interaction and hover effect
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: previewMode ? null : () => onNavigate?.call(href),
-                hoverColor: Colors.black.withOpacity(0.2),
-                splashColor: Colors.white.withOpacity(0.1),
-                highlightColor: Colors.white.withOpacity(0.05),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        title.toUpperCase(),
-                        style: TextStyle(
-                          fontFamily: bodyFont,
-                          color: Colors.white,
-                          fontSize: height > 300 ? 28 : 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black.withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            subtitle,
-                            style: TextStyle(
-                              fontFamily: bodyFont,
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      // Commencal-style black button with white text
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          border:
-                              Border.all(color: Colors.white.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          ctaText.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              )
+            : null,
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Placeholder gradient for cards without images
+          if (!hasImage)
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF3a3a3a),
+                    const Color(0xFF1a1a1a),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          // Material + InkWell for interaction and hover effect
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: previewMode ? null : () => onNavigate?.call(href),
+              hoverColor: Colors.black.withOpacity(0.2),
+              splashColor: Colors.white.withOpacity(0.1),
+              highlightColor: Colors.white.withOpacity(0.05),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        fontFamily: bodyFont,
+                        color: Colors.white,
+                        fontSize: height > 300 ? 28 : 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontFamily: bodyFont,
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    // Commencal-style black button with white text
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        ctaText.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5381,6 +5385,11 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                 ? DecorationImage(
                     image: NetworkImage(widget.imageUrl!),
                     fit: BoxFit.cover,
+                    // Force rasterization on Web with identity modulate
+                    colorFilter: kIsWeb
+                        ? const ColorFilter.mode(
+                            Color(0xFFFEFEFE), BlendMode.modulate)
+                        : null,
                   )
                 : null,
           ),
