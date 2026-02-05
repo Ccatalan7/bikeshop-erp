@@ -1135,10 +1135,152 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               ),
             ),
             ..._buildRowCells(invoice, isFullWidth),
+            // 3-dot menu for actions
+            SizedBox(
+              width: 48,
+              height: 38,
+              child: PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[600]),
+                padding: EdgeInsets.zero,
+                tooltip: 'Acciones',
+                offset: const Offset(0, 38),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 18),
+                        SizedBox(width: 12),
+                        Text('Ver detalle'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 12),
+                        Text('Editar'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline,
+                            size: 18, color: Colors.red[700]),
+                        const SizedBox(width: 12),
+                        Text('Eliminar',
+                            style: TextStyle(color: Colors.red[700])),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (value) => _handleRowAction(value, invoice),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _handleRowAction(String action, PurchaseInvoice invoice) async {
+    switch (action) {
+      case 'view':
+        context.push('/purchases/${invoice.id}');
+        break;
+      case 'edit':
+        context.push('/purchases/${invoice.id}');
+        break;
+      case 'delete':
+        await _confirmDeleteInvoice(invoice);
+        break;
+    }
+  }
+
+  Future<void> _confirmDeleteInvoice(PurchaseInvoice invoice) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded,
+            color: Colors.red, size: 48),
+        title: const Text('Eliminar factura'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                '¿Estás seguro de eliminar la factura "${invoice.invoiceNumber}"?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Proveedor: ${invoice.supplierName ?? "Sin proveedor"}'),
+                  Text('Total: ${ChileanUtils.formatCurrency(invoice.total)}'),
+                  Text('Estado: ${invoice.status.name}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Esta acción no se puede deshacer.',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final purchaseService = context.read<PurchaseService>();
+        await purchaseService.deletePurchaseInvoice(invoice.id!);
+
+        // Clear selection if this invoice was selected
+        if (_selectedInvoice?.id == invoice.id) {
+          setState(() => _selectedInvoice = null);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Factura "${invoice.invoiceNumber}" eliminada'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   List<Widget> _buildRowCells(PurchaseInvoice invoice, bool isFullWidth) {

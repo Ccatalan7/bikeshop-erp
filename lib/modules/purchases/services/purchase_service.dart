@@ -274,6 +274,39 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
+  /// Check if an invoice number already exists (for duplicate detection)
+  /// Returns the existing invoice if found, null otherwise
+  /// [excludeId] - Exclude this invoice ID from the check (for editing existing invoices)
+  Future<PurchaseInvoice?> checkInvoiceNumberExists(
+    String invoiceNumber, {
+    String? excludeId,
+  }) async {
+    if (invoiceNumber.isEmpty) return null;
+
+    try {
+      // Ensure cache is loaded
+      if (!_invoicesLoaded || _invoiceCache.isEmpty) {
+        await getPurchaseInvoices(forceRefresh: true);
+      }
+
+      // Check cached invoices for duplicate
+      final normalizedNumber = invoiceNumber.trim().toLowerCase();
+      for (final invoice in _invoiceCache) {
+        if (invoice.id == excludeId) continue; // Skip the invoice being edited
+        if (invoice.invoiceNumber.trim().toLowerCase() == normalizedNumber) {
+          debugPrint(
+              '⚠️ Duplicate invoice number found: $invoiceNumber (ID: ${invoice.id})');
+          return invoice;
+        }
+      }
+
+      return null; // No duplicate found
+    } catch (e) {
+      debugPrint('Error checking invoice number: $e');
+      return null;
+    }
+  }
+
   Future<PurchaseInvoice> savePurchaseInvoice(PurchaseInvoice invoice) async {
     try {
       PurchaseInvoice saved;

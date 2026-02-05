@@ -938,7 +938,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
 
     final items = _lineEntries
-        .where((entry) => entry.line.quantity > 0)
+        .where((entry) => entry.line.quantity > 0 && entry.hasValidProduct)
         .map((entry) => entry.toInvoiceItem())
         .toList();
 
@@ -2518,19 +2518,62 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   String? _cachedLogoUrl;
   bool _isGeneratingPdf = false;
 
-  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+  /// Build a fresh Invoice object from current form values
+  /// This ensures PDF always has the latest data
+  Invoice _buildCurrentInvoice() {
+    // Build items from current line entries (excluding empty ones)
+    final items = _lineEntries
+        .where((entry) => entry.line.quantity > 0 && entry.hasValidProduct)
+        .map((entry) => entry.toInvoiceItem())
+        .toList();
+
+    // Use paidAmount and balance from loaded invoice if available (payments are external)
+    final paidAmount = _loadedInvoice?.paidAmount ?? 0;
+    final balance = _total - paidAmount;
+
+    return Invoice(
+      id: _loadedInvoice?.id,
+      tenantId: _loadedInvoice?.tenantId ?? '',
+      invoiceNumber: _invoiceNumberController.text.trim(),
+      customerId: _selectedCustomer?.id,
+      customerName: _selectedCustomer?.name,
+      customerRut: _selectedCustomer?.rut,
+      date: _issueDate,
+      dueDate: _dueDate,
+      reference: _referenceController.text.trim().isEmpty
+          ? null
+          : _referenceController.text.trim(),
+      status: _loadedInvoice?.status ?? InvoiceStatus.draft,
+      subtotal: _subtotal,
+      ivaAmount: _iva,
+      total: _total,
+      paidAmount: paidAmount,
+      balance: balance,
+      taxTreatment: _taxTreatment,
+      netAmount: _netAmount,
+      items: items,
+      createdAt: _loadedInvoice?.createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _downloadInvoicePDF(Invoice _) async {
     if (_isGeneratingPdf) return;
 
     setState(() => _isGeneratingPdf = true);
 
     try {
-      final pdf = await _generateInvoicePDF(invoice);
+      // CRITICAL: Build fresh invoice from current form values
+      // The passed invoice parameter is ignored - we always use current form state
+      final currentInvoice = _buildCurrentInvoice();
+
+      final pdf = await _generateInvoicePDF(currentInvoice);
       final bytes = await pdf.save();
 
       // Use printing package for cross-platform PDF download/share
       await Printing.sharePdf(
         bytes: bytes,
-        filename: 'factura_${invoice.invoiceNumber}.pdf',
+        filename: 'factura_${currentInvoice.invoiceNumber}.pdf',
       );
     } catch (e) {
       debugPrint('Error generating PDF: $e');
@@ -2915,20 +2958,33 @@ class _InvoiceLineEntry {
   }
 
   InvoiceItem toInvoiceItem() {
+    // Use controller values (which are current) rather than line values (which may be stale)
+    // The controllers are updated when product changes, but line object isn't
+    final currentName = productNameController.text.trim();
+    final currentSku = productSkuController.text.trim();
+    final currentProductId =
+        product?.id ?? line.productId; // Use current product if available
+
     return InvoiceItem(
-      productId: line.productId, // Nullable - null for ad-hoc items
-      productName: line.name,
-      productSku: line.sku,
+      productId: currentProductId, // Nullable - null for ad-hoc items
+      productName: currentName.isNotEmpty ? currentName : line.name,
+      productSku: currentSku.isNotEmpty ? currentSku : line.sku,
       description: descriptionController.text.trim().isEmpty
           ? null
           : descriptionController.text.trim(),
-      isCatalogProduct: line.isCatalogProduct,
+      isCatalogProduct: product != null || line.isCatalogProduct,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       discount: line.discount,
       lineTotal: line.netAmount,
-      cost: line.cost,
+      cost: product?.cost ?? line.cost,
     );
+  }
+
+  /// Check if this line entry has valid product data
+  bool get hasValidProduct {
+    final name = productNameController.text.trim();
+    return name.isNotEmpty && name != 'Producto' && name != 'producto';
   }
 
   void _onQuantityChanged() {

@@ -1689,13 +1689,21 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     setState(() => _isGeneratingPdf = true);
 
     try {
-      final pdf = await _generateInvoicePDF(invoice);
+      // CRITICAL: Refresh invoice from database to get latest totals/payments
+      final salesService = context.read<SalesService>();
+      await salesService.fetchInvoice(invoice.id!, refresh: true);
+      final freshInvoice = salesService.invoices.firstWhere(
+        (i) => i.id == invoice.id,
+        orElse: () => invoice,
+      );
+
+      final pdf = await _generateInvoicePDF(freshInvoice);
       final bytes = await pdf.save();
 
       // Use printing package for cross-platform PDF download/share
       await Printing.sharePdf(
         bytes: bytes,
-        filename: 'factura_${invoice.invoiceNumber}.pdf',
+        filename: 'factura_${freshInvoice.invoiceNumber}.pdf',
       );
     } catch (e) {
       debugPrint('Error generating PDF: $e');
@@ -1717,12 +1725,20 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     setState(() => _isGeneratingPdf = true);
 
     try {
-      final pdf = await _generateInvoicePDF(invoice);
+      // CRITICAL: Refresh invoice from database to get latest totals/payments
+      final salesService = context.read<SalesService>();
+      await salesService.fetchInvoice(invoice.id!, refresh: true);
+      final freshInvoice = salesService.invoices.firstWhere(
+        (i) => i.id == invoice.id,
+        orElse: () => invoice,
+      );
+
+      final pdf = await _generateInvoicePDF(freshInvoice);
 
       // Use printing package for cross-platform printing
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: 'factura_${invoice.invoiceNumber}',
+        name: 'factura_${freshInvoice.invoiceNumber}',
       );
     } catch (e) {
       debugPrint('Error printing PDF: $e');
@@ -1740,7 +1756,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   Future<void> _previewInvoicePDF(Invoice invoice) async {
     try {
-      final pdf = await _generateInvoicePDF(invoice);
+      // CRITICAL: Refresh invoice from database to get latest totals/payments
+      final salesService = context.read<SalesService>();
+      await salesService.fetchInvoice(invoice.id!, refresh: true);
+      final freshInvoice = salesService.invoices.firstWhere(
+        (i) => i.id == invoice.id,
+        orElse: () => invoice,
+      );
+
+      final pdf = await _generateInvoicePDF(freshInvoice);
 
       // Show PDF preview dialog
       await showDialog(
@@ -1765,7 +1789,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Vista previa: ${invoice.invoiceNumber}',
+                          'Vista previa: ${freshInvoice.invoiceNumber}',
                           style: const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.bold),
                         ),
@@ -1785,7 +1809,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     canChangePageFormat: false,
                     allowPrinting: true,
                     allowSharing: true,
-                    pdfFileName: 'factura_${invoice.invoiceNumber}.pdf',
+                    pdfFileName: 'factura_${freshInvoice.invoiceNumber}.pdf',
                   ),
                 ),
               ],

@@ -1701,23 +1701,26 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         }
       }
 
-      // PRIORITY 2: Fall back to searching by description/name
+      // PRIORITY 3: Fall back to searching by name (EXACT MATCH ONLY)
+      // Only matches if product name exactly equals OCR description (case-insensitive)
       if (matchedProduct == null && item.description.isNotEmpty) {
         try {
-          // Extract meaningful search terms from description
-          // Remove common words and size codes for better matching
-          final searchTerms = _extractSearchTerms(item.description);
+          final normalizedDescription = item.description.trim().toLowerCase();
+          final allProducts = await inventoryService.getProducts();
 
-          if (searchTerms.isNotEmpty) {
-            final searchResults =
-                await inventoryService.searchProducts(searchTerms);
-
-            if (searchResults.isNotEmpty) {
-              // Use first match (most relevant)
-              matchedProduct = searchResults.first;
+          // Find product with exact name match (case-insensitive)
+          for (final product in allProducts) {
+            final normalizedProductName = product.name.trim().toLowerCase();
+            if (normalizedProductName == normalizedDescription) {
+              matchedProduct = product;
               debugPrint(
-                  '   ✓ Found by name: ${matchedProduct.name} (search: "$searchTerms")');
+                  '   ✓ Found by EXACT name match: ${matchedProduct.name}');
+              break;
             }
+          }
+
+          if (matchedProduct == null) {
+            debugPrint('   ⚠ No exact name match for: "${item.description}"');
           }
         } catch (e) {
           debugPrint('   ❌ Error searching by name: $e');
@@ -1749,39 +1752,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       lineItems: verifiedItems,
       rawText: invoice.rawText,
     );
-  }
-
-  /// Extract meaningful search terms from a product description.
-  /// Removes size codes, common words, and noise to improve matching.
-  String _extractSearchTerms(String description) {
-    var terms = description.toUpperCase();
-
-    // Remove size codes like "273MM", "180MMX14G", "700X28C"
-    terms = terms.replaceAll(RegExp(r'\b\d+(?:MM|CM|X\d+[A-Z]*)\b'), '');
-
-    // Remove common noise words in Spanish
-    const noiseWords = [
-      'DE',
-      'LA',
-      'EL',
-      'LOS',
-      'LAS',
-      'PARA',
-      'CON',
-      'SIN',
-      'Y',
-      'O'
-    ];
-    for (final word in noiseWords) {
-      terms = terms.replaceAll(RegExp('\\b$word\\b'), '');
-    }
-
-    // Clean up extra spaces
-    terms = terms.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-    // Take first 3-4 meaningful words for search
-    final words = terms.split(' ').where((w) => w.length > 2).take(4);
-    return words.join(' ');
   }
 
   /// Format error message for display

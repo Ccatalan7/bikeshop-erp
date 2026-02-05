@@ -875,19 +875,29 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   String? _cachedLogoUrl;
   bool _isGeneratingPdf = false;
 
-  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+  Future<void> _downloadInvoicePDF(Invoice _) async {
     if (_isGeneratingPdf) return;
 
     setState(() => _isGeneratingPdf = true);
 
     try {
-      final pdf = await _generateInvoicePDF(invoice);
+      // CRITICAL: Refresh invoice from database to get latest totals/payments
+      final salesService = context.read<SalesService>();
+      await salesService.fetchInvoice(widget.invoiceId, refresh: true);
+
+      // Get the refreshed invoice
+      final freshInvoice = _findInvoice(salesService);
+      if (freshInvoice == null) {
+        throw Exception('No se pudo cargar la factura');
+      }
+
+      final pdf = await _generateInvoicePDF(freshInvoice);
       final bytes = await pdf.save();
 
       // Use printing package for cross-platform PDF download/share
       await Printing.sharePdf(
         bytes: bytes,
-        filename: 'factura_${invoice.invoiceNumber}.pdf',
+        filename: 'factura_${freshInvoice.invoiceNumber}.pdf',
       );
     } catch (e) {
       debugPrint('Error generating PDF: $e');
