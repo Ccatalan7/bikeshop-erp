@@ -22,7 +22,7 @@
 		{
 			"label": "🚀 Deploy to Firebase (Both Sites)",
 			"type": "shell",
-			"command": "./scripts/sync_seo_index.sh && flutter build web --release --dart-define=STORE_PERF_LOGS=true -t lib/main_store.dart -o build/web_store && dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl && echo '📦 Store bundle:' && ls -lh build/web_store/main.dart.js && flutter build web --release --dart-define=STORE_PERF_LOGS=true -t lib/main.dart -o build/web_erp && echo '📦 ERP bundle:' && ls -lh build/web_erp/main.dart.js && firebase deploy --only hosting",
+			"command": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
 			"problemMatcher": [],
 			"group": "build"
 		}

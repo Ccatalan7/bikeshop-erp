@@ -33,8 +33,8 @@ flutter build web --release -t lib/main_store.dart -o build/web_store
 ```
 
 **⚠️ VERIFY after build:**
-```bash
-ls -lh build/web_store/main.dart.js
+```powershell
+Get-Item build/web_store/main.dart.js | Select-Object Name, @{N='Size(MB)';E={[math]::Round($_.Length/1MB,2)}}
 # MUST be ~4MB! If it's ~9MB, you used the WRONG entry point!
 ```
 
@@ -50,8 +50,8 @@ dart run scripts/generate_product_seo_snapshots.dart \
 ```
 
 **Quick sanity check:**
-```bash
-ls -lah build/web_store/productos | head
+```powershell
+Get-ChildItem build/web_store/productos | Select-Object -First 5
 ```
 
 Notes:

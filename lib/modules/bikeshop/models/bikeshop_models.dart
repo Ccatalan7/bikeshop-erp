@@ -4,6 +4,9 @@ import 'dart:ui' show Color;
 
 import '../../../shared/models/tax_treatment.dart';
 
+/// Sentinel object used in copyWith to distinguish between "not provided" and "explicitly null"
+const Object _sentinel = Object();
+
 DateTime _parseDate(dynamic value) {
   if (value is DateTime) return value;
   if (value is String) {
@@ -971,9 +974,10 @@ class MechanicJob {
     String? bikeId,
     String? servicePackageId,
     DateTime? arrivalDate,
-    DateTime? diagnosticDeadline,
-    DateTime? deliveryDeadline,
-    DateTime? diagnosticSentAt,
+    // Use Object? to allow explicitly passing null (sentinel pattern)
+    Object? diagnosticDeadline = _sentinel,
+    Object? deliveryDeadline = _sentinel,
+    Object? diagnosticSentAt = _sentinel,
     DateTime? startedAt,
     DateTime? completedAt,
     DateTime? deliveredAt,
@@ -1015,9 +1019,16 @@ class MechanicJob {
       bikeId: bikeId ?? this.bikeId,
       servicePackageId: servicePackageId ?? this.servicePackageId,
       arrivalDate: arrivalDate ?? this.arrivalDate,
-      diagnosticDeadline: diagnosticDeadline ?? this.diagnosticDeadline,
-      deliveryDeadline: deliveryDeadline ?? this.deliveryDeadline,
-      diagnosticSentAt: diagnosticSentAt ?? this.diagnosticSentAt,
+      // Handle sentinel: if sentinel, keep old value; if null, set to null; if DateTime, use it
+      diagnosticDeadline: diagnosticDeadline == _sentinel
+          ? this.diagnosticDeadline
+          : diagnosticDeadline as DateTime?,
+      deliveryDeadline: deliveryDeadline == _sentinel
+          ? this.deliveryDeadline
+          : deliveryDeadline as DateTime?,
+      diagnosticSentAt: diagnosticSentAt == _sentinel
+          ? this.diagnosticSentAt
+          : diagnosticSentAt as DateTime?,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
