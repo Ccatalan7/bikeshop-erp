@@ -471,9 +471,9 @@ class BikeModel {
 
 /// Phase grouping for job statuses (Notion-style)
 enum StatusPhase {
-  todo,       // Not started yet
+  todo, // Not started yet
   inProgress, // Work in progress
-  complete;   // Finished
+  complete; // Finished
 
   String get displayName {
     switch (this) {
@@ -599,7 +599,9 @@ class JobStatusCustom {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is JobStatusCustom && runtimeType == other.runtimeType && id == other.id;
+      other is JobStatusCustom &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -752,6 +754,7 @@ class MechanicJob {
   final JobStatus status; // Legacy enum (for backwards compatibility)
   final String? statusId; // New: UUID reference to job_statuses table
   final JobStatusCustom? customStatus; // Loaded from job_statuses join
+  final DateTime? statusUpdatedAt; // Timestamp of last status change
   final JobPriority priority;
   final String? clientRequest;
   final String? diagnosis;
@@ -778,7 +781,7 @@ class MechanicJob {
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   // Soft delete fields
   final DateTime? deletedAt;
   final String? deletedBy;
@@ -798,6 +801,7 @@ class MechanicJob {
     this.status = JobStatus.pendiente,
     this.statusId,
     this.customStatus,
+    this.statusUpdatedAt,
     this.priority = JobPriority.normal,
     this.clientRequest,
     this.diagnosis,
@@ -834,9 +838,10 @@ class MechanicJob {
     // Parse custom status if joined
     JobStatusCustom? customStatus;
     if (json['job_status'] != null && json['job_status'] is Map) {
-      customStatus = JobStatusCustom.fromJson(json['job_status'] as Map<String, dynamic>);
+      customStatus =
+          JobStatusCustom.fromJson(json['job_status'] as Map<String, dynamic>);
     }
-    
+
     return MechanicJob(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
@@ -852,6 +857,7 @@ class MechanicJob {
       status: JobStatus.fromDbValue(json['status'] as String?),
       statusId: json['status_id']?.toString(),
       customStatus: customStatus,
+      statusUpdatedAt: _parseDateNullable(json['status_updated_at']),
       priority: JobPriority.fromDbValue(json['priority'] as String?),
       clientRequest: json['client_request'] as String?,
       diagnosis: json['diagnosis'] as String?,
@@ -890,8 +896,8 @@ class MechanicJob {
   }
 
   /// Converts this job to a JSON map for database operations.
-  /// 
-  /// When [forUpdate] is true, excludes immutable fields like created_at 
+  ///
+  /// When [forUpdate] is true, excludes immutable fields like created_at
   /// that should never be overwritten on updates.
   Map<String, dynamic> toJson({bool forUpdate = false}) {
     final json = <String, dynamic>{
@@ -903,13 +909,15 @@ class MechanicJob {
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
-      'arrival_date': arrivalDate.toIso8601String(), // Always include (editable)
+      'arrival_date':
+          arrivalDate.toIso8601String(), // Always include (editable)
       'deadline': deadline?.toIso8601String(),
       'started_at': startedAt?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'delivered_at': deliveredAt?.toIso8601String(),
       'status': status.dbValue,
-      if (statusId != null) 'status_id': statusId, // New: custom status reference
+      if (statusId != null)
+        'status_id': statusId, // New: custom status reference
       'priority': priority.dbValue,
       'client_request': clientRequest,
       'diagnosis': diagnosis,
@@ -933,15 +941,15 @@ class MechanicJob {
       'approved_at': approvedAt?.toIso8601String(),
       'image_urls': imageUrls,
     };
-    
+
     // Only include created_at for CREATE, not UPDATE
     if (!forUpdate) {
       json['created_at'] = createdAt.toIso8601String();
     }
-    
+
     // updated_at is always set by database trigger, but include it for reference
     json['updated_at'] = DateTime.now().toIso8601String();
-    
+
     return json;
   }
 
@@ -985,6 +993,7 @@ class MechanicJob {
     DateTime? updatedAt,
     String? statusId,
     JobStatusCustom? customStatus,
+    DateTime? statusUpdatedAt,
   }) {
     return MechanicJob(
       id: id ?? this.id,
@@ -1001,6 +1010,7 @@ class MechanicJob {
       status: status ?? this.status,
       statusId: statusId ?? this.statusId,
       customStatus: customStatus ?? this.customStatus,
+      statusUpdatedAt: statusUpdatedAt ?? this.statusUpdatedAt,
       priority: priority ?? this.priority,
       clientRequest: clientRequest ?? this.clientRequest,
       diagnosis: diagnosis ?? this.diagnosis,
@@ -1029,13 +1039,13 @@ class MechanicJob {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-  
+
   /// Get the display name for the status (prefers custom status if available)
   String get statusDisplayName => customStatus?.name ?? status.displayName;
-  
+
   /// Get the color for the status (prefers custom status if available)
   String get statusColor => customStatus?.color ?? _defaultStatusColor;
-  
+
   String get _defaultStatusColor {
     switch (status) {
       case JobStatus.pendiente:
@@ -1088,34 +1098,35 @@ class MechanicJobBike {
   final String jobId;
   final String bikeId;
   final int orderIndex;
-  
+
   // Per-bike status (each bike can have independent status)
   final String? statusId;
-  JobStatusCustom? customStatus; // Runtime: loaded status data (not persisted directly)
-  
+  JobStatusCustom?
+      customStatus; // Runtime: loaded status data (not persisted directly)
+
   // Per-bike work details
   final String? diagnosis;
-  final String? workRequested;     // Solicitud del cliente
-  final String? workPerformed;     // Lo que se hizo
-  final String? technicianNotes;   // Notas del técnico
-  
+  final String? workRequested; // Solicitud del cliente
+  final String? workPerformed; // Lo que se hizo
+  final String? technicianNotes; // Notas del técnico
+
   // Per-bike costs (calculated from items)
   final double partsCost;
   final double laborCost;
   final double subtotal;
-  
+
   // Per-bike flags
   final bool isWarrantyWork;
   final bool requiresApproval;
   final bool approvedByCustomer;
   final DateTime? approvedAt;
-  
+
   // Images for this specific bike work
   final List<String> imageUrls;
-  
+
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   // Runtime: loaded bike data (not persisted)
   Bike? bike;
 
@@ -1151,13 +1162,14 @@ class MechanicJobBike {
     if (json['bike'] != null && json['bike'] is Map) {
       bike = Bike.fromJson(json['bike'] as Map<String, dynamic>);
     }
-    
+
     // Parse nested status if available (from join)
     JobStatusCustom? customStatus;
     if (json['status'] != null && json['status'] is Map) {
-      customStatus = JobStatusCustom.fromJson(json['status'] as Map<String, dynamic>);
+      customStatus =
+          JobStatusCustom.fromJson(json['status'] as Map<String, dynamic>);
     }
-    
+
     return MechanicJobBike(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
@@ -1252,7 +1264,7 @@ class MechanicJobBike {
       bike: bike ?? this.bike,
     );
   }
-  
+
   /// Display name for this bike entry
   String get displayName => bike?.displayName ?? 'Bicicleta';
 }
@@ -1265,7 +1277,8 @@ class MechanicJobItem {
   final String? id;
   final String tenantId;
   final String jobId;
-  final String? jobBikeId;  // ✅ NEW: Links item to specific bike in multi-bike jobs
+  final String?
+      jobBikeId; // ✅ NEW: Links item to specific bike in multi-bike jobs
   final String? productId;
   final String? serviceProductId; // Links services to product catalog
   final String productName;
@@ -1281,7 +1294,7 @@ class MechanicJobItem {
     this.id,
     required this.tenantId,
     required this.jobId,
-    this.jobBikeId,  // ✅ NEW
+    this.jobBikeId, // ✅ NEW
     this.productId,
     this.serviceProductId,
     required this.productName,
@@ -1299,7 +1312,7 @@ class MechanicJobItem {
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       jobId: json['job_id']?.toString() ?? '',
-      jobBikeId: json['job_bike_id']?.toString(),  // ✅ NEW
+      jobBikeId: json['job_bike_id']?.toString(), // ✅ NEW
       productId: json['product_id']?.toString(),
       serviceProductId: json['service_product_id']?.toString(),
       productName: json['product_name']?.toString() ?? '',
@@ -1318,7 +1331,7 @@ class MechanicJobItem {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'job_id': jobId,
-      if (jobBikeId != null) 'job_bike_id': jobBikeId,  // ✅ NEW
+      if (jobBikeId != null) 'job_bike_id': jobBikeId, // ✅ NEW
       'product_id': productId,
       'service_product_id': serviceProductId,
       'product_name': productName,
@@ -1331,7 +1344,7 @@ class MechanicJobItem {
       'created_at': createdAt.toIso8601String(),
     };
   }
-  
+
   MechanicJobItem copyWith({
     String? id,
     String? tenantId,

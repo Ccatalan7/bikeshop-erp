@@ -3321,10 +3321,11 @@ class _PegasTablePageState extends State<PegasTablePage>
         // Single bike job: show job-level status
         final statusColor = _getJobStatusColor(job);
         final statusName = job.statusDisplayName;
+        final statusUpdatedAt = job.statusUpdatedAt;
         return InkWell(
           onTap: () => _showStatusMenu(job),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
@@ -3333,27 +3334,43 @@ class _PegasTablePageState extends State<PegasTablePage>
                 width: 1,
               ),
             ),
-            child: Row(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      statusName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  statusName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
+                if (statusUpdatedAt != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatStatusTimestamp(statusUpdatedAt),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: statusColor.withOpacity(0.7),
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ],
               ],
             ),
           ),
@@ -3527,6 +3544,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               completedAt: job.completedAt,
               deliveredAt: job.deliveredAt,
               status: job.status,
+              statusId: job.statusId,
+              customStatus: job.customStatus,
+              statusUpdatedAt: job.statusUpdatedAt,
               priority: job.priority,
               clientRequest: resolveField(clientRequest, job.clientRequest),
               diagnosis: resolveField(diagnosis, job.diagnosis),
@@ -5259,6 +5279,40 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
+  /// Formats a status timestamp into a compact, localized string
+  /// Examples: "hace 2h", "hace 3d", "15 ene"
+  String _formatStatusTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inMinutes < 1) {
+      return 'ahora';
+    } else if (diff.inMinutes < 60) {
+      return 'hace ${diff.inMinutes}m';
+    } else if (diff.inHours < 24) {
+      return 'hace ${diff.inHours}h';
+    } else if (diff.inDays < 7) {
+      return 'hace ${diff.inDays}d';
+    } else {
+      // For older dates, show day and month
+      final months = [
+        'ene',
+        'feb',
+        'mar',
+        'abr',
+        'may',
+        'jun',
+        'jul',
+        'ago',
+        'sep',
+        'oct',
+        'nov',
+        'dic'
+      ];
+      return '${timestamp.day} ${months[timestamp.month - 1]}';
+    }
+  }
+
   /// Gets status color - prefers custom status color, falls back to legacy
   Color _getJobStatusColor(MechanicJob job) {
     // Use custom status color if available
@@ -5270,47 +5324,32 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   /// Legacy status color mapping (for backward compatibility)
+  /// Colors match the database seeded values in DEPLOY_JOB_STATUSES.sql
   Color _getLegacyStatusColor(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:
-        return Colors.grey.shade600;
+        return const Color(0xFF6B7280); // Gray - matches DB
       case JobStatus.diagnostico:
-        return Colors.blue.shade600;
+        return const Color(0xFF3B82F6); // Blue - matches DB
       case JobStatus.esperandoAprobacion:
-        return Colors.amber.shade700;
-      case JobStatus.enCurso:
-        return Colors.orange.shade600;
+        return const Color(0xFFF59E0B); // Amber - matches DB
       case JobStatus.esperandoRepuestos:
-        return Colors.purple.shade600;
+        return const Color(0xFFF97316); // Orange - matches DB (was purple)
+      case JobStatus.enCurso:
+        return const Color(0xFF8B5CF6); // Purple - matches DB (was orange)
       case JobStatus.finalizado:
-        return Colors.green.shade600;
+        return const Color(0xFF10B981); // Green - matches DB
       case JobStatus.entregado:
-        return Colors.teal.shade600;
+        return const Color(0xFF06B6D4); // Cyan - matches DB
       case JobStatus.cancelado:
-        return Colors.red.shade600;
+        return const Color(0xFFEF4444); // Red - matches DB
     }
   }
 
   // ignore: unused_element
   Color _getStatusColor(JobStatus status) {
-    switch (status) {
-      case JobStatus.pendiente:
-        return Colors.grey.shade600;
-      case JobStatus.diagnostico:
-        return Colors.blue.shade600;
-      case JobStatus.esperandoAprobacion:
-        return Colors.amber.shade700;
-      case JobStatus.enCurso:
-        return Colors.orange.shade600;
-      case JobStatus.esperandoRepuestos:
-        return Colors.purple.shade600;
-      case JobStatus.finalizado:
-        return Colors.green.shade600;
-      case JobStatus.entregado:
-        return Colors.teal.shade600;
-      case JobStatus.cancelado:
-        return Colors.red.shade600;
-    }
+    // Delegate to the corrected legacy color mapping
+    return _getLegacyStatusColor(status);
   }
 
   Color _getPriorityColor(JobPriority priority) {
