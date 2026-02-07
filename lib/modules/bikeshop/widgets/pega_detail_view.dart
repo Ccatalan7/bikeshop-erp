@@ -190,8 +190,9 @@ class _PegaDetailViewState extends State<PegaDetailView>
               Expanded(
                 child: _buildInfoCard(
                   'Plazo de Entrega',
-                  widget.job.deadline != null
-                      ? DateFormat('dd/MM/yyyy').format(widget.job.deadline!)
+                  widget.job.deliveryDeadline != null
+                      ? DateFormat('dd/MM/yyyy')
+                          .format(widget.job.deliveryDeadline!)
                       : 'Sin plazo',
                   widget.job.isOverdue ? Icons.warning : Icons.event,
                   widget.job.isOverdue ? Colors.red : Colors.grey,

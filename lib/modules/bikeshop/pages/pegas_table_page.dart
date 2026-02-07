@@ -754,8 +754,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             comparison = a.arrivalDate.compareTo(b.arrivalDate);
             break;
           case 'deadline':
-            comparison = (a.deadline ?? DateTime(2100))
-                .compareTo(b.deadline ?? DateTime(2100));
+            comparison = (a.deliveryDeadline ?? DateTime(2100))
+                .compareTo(b.deliveryDeadline ?? DateTime(2100));
             break;
           case 'total':
             comparison = a.totalCost.compareTo(b.totalCost);
@@ -1427,7 +1427,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                         status: newStatus,
                         priority: job.priority,
                         arrivalDate: job.arrivalDate,
-                        deadline: job.deadline,
+                        diagnosticDeadline: job.diagnosticDeadline,
+                        deliveryDeadline: job.deliveryDeadline,
+                        diagnosticSentAt: job.diagnosticSentAt,
                         startedAt: job.startedAt,
                         completedAt: job.completedAt,
                         deliveredAt: job.deliveredAt,
@@ -2084,8 +2086,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
 
-    final isOverdue = job.deadline != null &&
-        job.deadline!.isBefore(DateTime.now()) &&
+    final isOverdue = job.deliveryDeadline != null &&
+        job.deliveryDeadline!.isBefore(DateTime.now()) &&
         job.status != JobStatus.finalizado &&
         job.status != JobStatus.entregado; // Also exclude delivered
 
@@ -2204,14 +2206,15 @@ class _PegasTablePageState extends State<PegasTablePage>
                     DateFormat('dd/MM', 'es_CL').format(job.arrivalDate),
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
-                  if (job.deadline != null) ...[
+                  if (job.deliveryDeadline != null) ...[
                     const SizedBox(width: 12),
                     Icon(job.isOverdue ? Icons.warning : Icons.event_available,
                         size: 14,
                         color: isOverdue ? Colors.red : Colors.grey[500]),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('dd/MM', 'es_CL').format(job.deadline!),
+                      DateFormat('dd/MM', 'es_CL')
+                          .format(job.deliveryDeadline!),
                       style: TextStyle(
                           fontSize: 12,
                           color: isOverdue ? Colors.red : Colors.grey[600],
@@ -3238,32 +3241,136 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'deadline':
-        // Clickable deadline with overdue indicator
-        final isOverdue = job.deadline != null &&
-            job.deadline!.isBefore(DateTime.now()) &&
+        // Dual deadline display: Diagnóstico + Entrega
+        final isDiagOverdue = job.diagnosticDeadline != null &&
+            job.diagnosticDeadline!.isBefore(DateTime.now()) &&
+            job.diagnosticSentAt == null &&
             job.status != JobStatus.entregado;
+        final isDeliveryOverdue = job.deliveryDeadline != null &&
+            job.deliveryDeadline!.isBefore(DateTime.now()) &&
+            job.status != JobStatus.entregado;
+
+        final hasDiagnostic = job.diagnosticDeadline != null;
+        final hasDelivery = job.deliveryDeadline != null;
+
+        // If neither deadline is set, show "Sin plazo"
+        if (!hasDiagnostic && !hasDelivery) {
+          return InkWell(
+            onTap: () => _showDualDeadlineDialog(job),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_busy, size: 14, color: Colors.grey.shade400),
+                const SizedBox(width: 4),
+                Text(
+                  'Sin plazo',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          );
+        }
+
         return InkWell(
-          onTap: () => _editDeadline(job),
+          onTap: () => _showDualDeadlineDialog(job),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                isOverdue
-                    ? Icons.warning_amber_rounded
-                    : job.deadline != null
-                        ? Icons.calendar_today
-                        : Icons.event_busy,
-                size: 14,
-                color: isOverdue ? Colors.red.shade700 : Colors.grey.shade600,
+              // Diagnostic deadline (🔍)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDiagOverdue
+                      ? Colors.red.shade50
+                      : hasDiagnostic
+                          ? Colors.blue.shade50
+                          : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isDiagOverdue
+                        ? Colors.red.shade200
+                        : hasDiagnostic
+                            ? Colors.blue.shade200
+                            : Colors.grey.shade300,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.search,
+                      size: 12,
+                      color: isDiagOverdue
+                          ? Colors.red.shade700
+                          : hasDiagnostic
+                              ? Colors.blue.shade700
+                              : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      hasDiagnostic
+                          ? DateFormat('dd/MM').format(job.diagnosticDeadline!)
+                          : '---',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDiagOverdue
+                            ? Colors.red.shade700
+                            : hasDiagnostic
+                                ? Colors.blue.shade700
+                                : Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 4),
-              Text(
-                job.deadline != null
-                    ? DateFormat('dd/MM/yy').format(job.deadline!)
-                    : 'Sin plazo',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isOverdue ? Colors.red.shade700 : null,
+              // Delivery deadline (📦)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDeliveryOverdue
+                      ? Colors.red.shade50
+                      : hasDelivery
+                          ? Colors.green.shade50
+                          : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isDeliveryOverdue
+                        ? Colors.red.shade200
+                        : hasDelivery
+                            ? Colors.green.shade200
+                            : Colors.grey.shade300,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_shipping_outlined,
+                      size: 12,
+                      color: isDeliveryOverdue
+                          ? Colors.red.shade700
+                          : hasDelivery
+                              ? Colors.green.shade700
+                              : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      hasDelivery
+                          ? DateFormat('dd/MM').format(job.deliveryDeadline!)
+                          : '---',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDeliveryOverdue
+                            ? Colors.red.shade700
+                            : hasDelivery
+                                ? Colors.green.shade700
+                                : Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -3539,7 +3646,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               bikeId: job.bikeId,
               servicePackageId: job.servicePackageId,
               arrivalDate: job.arrivalDate,
-              deadline: job.deadline,
+              diagnosticDeadline: job.diagnosticDeadline,
+              deliveryDeadline: job.deliveryDeadline,
+              diagnosticSentAt: job.diagnosticSentAt,
               startedAt: job.startedAt,
               completedAt: job.completedAt,
               deliveredAt: job.deliveredAt,
@@ -4402,7 +4511,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             status: JobStatus.finalizado,
             priority: updatedJob.priority,
             arrivalDate: updatedJob.arrivalDate,
-            deadline: updatedJob.deadline,
+            diagnosticDeadline: updatedJob.diagnosticDeadline,
+            deliveryDeadline: updatedJob.deliveryDeadline,
+            diagnosticSentAt: updatedJob.diagnosticSentAt,
             startedAt: updatedJob.startedAt,
             completedAt: DateTime.now(),
             deliveredAt: updatedJob.deliveredAt,
@@ -4903,7 +5014,12 @@ class _PegasTablePageState extends State<PegasTablePage>
                                           customerId: job.customerId,
                                           bikeId: bike.id!,
                                           arrivalDate: job.arrivalDate,
-                                          deadline: job.deadline,
+                                          diagnosticDeadline:
+                                              job.diagnosticDeadline,
+                                          deliveryDeadline:
+                                              job.deliveryDeadline,
+                                          diagnosticSentAt:
+                                              job.diagnosticSentAt,
                                           status: job.status,
                                           priority: job.priority,
                                           clientRequest: job.clientRequest,
@@ -5089,151 +5205,57 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Future<void> _editDeadline(MechanicJob job) async {
-    bool clearDeadline = false;
+  /// Shows dialog to edit both diagnostic and delivery deadlines
+  Future<void> _showDualDeadlineDialog(MechanicJob job) async {
+    DateTime? diagnosticDeadline = job.diagnosticDeadline;
+    DateTime? deliveryDeadline = job.deliveryDeadline;
 
-    final DateTime? picked = await showDatePicker(
+    final result = await showDialog<Map<String, DateTime?>>(
       context: context,
-      initialDate: job.deadline ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Seleccionar fecha límite',
-      cancelText: job.deadline != null ? 'SIN PLAZO' : 'CANCELAR',
-      confirmText: 'ACEPTAR',
+      builder: (ctx) => _DualDeadlineDialog(
+        diagnosticDeadline: diagnosticDeadline,
+        deliveryDeadline: deliveryDeadline,
+      ),
     );
 
-    // If user pressed "SIN PLAZO" (cancel) when there was a deadline, clear it
-    if (picked == null && job.deadline != null) {
-      // Show confirmation since cancel could mean "nevermind" or "clear deadline"
-      final clear = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: const Text('¿Quitar el plazo de entrega?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('No'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sí, quitar'),
-            ),
-          ],
-        ),
-      );
-      if (clear == true) {
-        clearDeadline = true;
-      }
-    }
-
-    final newDeadline = clearDeadline ? null : picked;
-    if (!clearDeadline && picked == null) return;
+    if (result == null) return;
     if (!mounted) return;
 
-    // Start local operation to suppress reload from service notification
+    final newDiagnostic = result['diagnostic'];
+    final newDelivery = result['delivery'];
+
+    // Check if anything changed
+    if (newDiagnostic == job.diagnosticDeadline &&
+        newDelivery == job.deliveryDeadline) return;
+
+    // Start local operation to suppress reload
     _startLocalOperation();
 
-    // Optimistic update - update UI immediately
+    // Optimistic update
     setState(() {
       final index = _jobs.indexWhere((j) => j.id == job.id);
       if (index != -1) {
-        _jobs[index] = MechanicJob(
-          id: job.id,
-          tenantId: job.tenantId,
-          jobNumber: job.jobNumber,
-          customerId: job.customerId,
-          bikeId: job.bikeId,
-          arrivalDate: job.arrivalDate,
-          deadline: newDeadline, // NEW DEADLINE (or null)
-          startedAt: job.startedAt,
-          completedAt: job.completedAt,
-          deliveredAt: job.deliveredAt,
-          status: job.status,
-          priority: job.priority,
-          clientRequest: job.clientRequest,
-          diagnosis: job.diagnosis,
-          workPerformed: job.workPerformed,
-          notes: job.notes,
-          assignedTo: job.assignedTo,
-          assignedTechnicianName: job.assignedTechnicianName,
-          servicePackageId: job.servicePackageId,
-          estimatedCost: job.estimatedCost,
-          finalCost: job.finalCost,
-          partsCost: job.partsCost,
-          laborCost: job.laborCost,
-          discountAmount: job.discountAmount,
-          taxAmount: job.taxAmount,
-          totalCost: job.totalCost,
-          taxTreatment: job.taxTreatment,
-          invoiceId: job.invoiceId,
-          isInvoiced: job.isInvoiced,
-          isPaid: job.isPaid,
-          isWarrantyJob: job.isWarrantyJob,
-          warrantyNotes: job.warrantyNotes,
-          requiresApproval: job.requiresApproval,
-          approvedByCustomer: job.approvedByCustomer,
-          approvedAt: job.approvedAt,
-          imageUrls: job.imageUrls,
-          createdAt: job.createdAt,
+        _jobs[index] = job.copyWith(
+          diagnosticDeadline: newDiagnostic,
+          deliveryDeadline: newDelivery,
           updatedAt: DateTime.now(),
-          deletedAt: job.deletedAt,
-          deletedBy: job.deletedBy,
         );
       }
-      _applyFiltersAndSort(); // Refresh filtered view
+      _applyFiltersAndSort();
     });
 
     // Save in background
     try {
-      final updatedJob = MechanicJob(
-        id: job.id,
-        tenantId: job.tenantId,
-        jobNumber: job.jobNumber,
-        customerId: job.customerId,
-        bikeId: job.bikeId,
-        arrivalDate: job.arrivalDate,
-        deadline: newDeadline,
-        startedAt: job.startedAt,
-        completedAt: job.completedAt,
-        deliveredAt: job.deliveredAt,
-        status: job.status,
-        priority: job.priority,
-        clientRequest: job.clientRequest,
-        diagnosis: job.diagnosis,
-        workPerformed: job.workPerformed,
-        notes: job.notes,
-        assignedTo: job.assignedTo,
-        assignedTechnicianName: job.assignedTechnicianName,
-        servicePackageId: job.servicePackageId,
-        estimatedCost: job.estimatedCost,
-        finalCost: job.finalCost,
-        partsCost: job.partsCost,
-        laborCost: job.laborCost,
-        discountAmount: job.discountAmount,
-        taxAmount: job.taxAmount,
-        totalCost: job.totalCost,
-        taxTreatment: job.taxTreatment,
-        invoiceId: job.invoiceId,
-        isInvoiced: job.isInvoiced,
-        isPaid: job.isPaid,
-        isWarrantyJob: job.isWarrantyJob,
-        warrantyNotes: job.warrantyNotes,
-        requiresApproval: job.requiresApproval,
-        approvedByCustomer: job.approvedByCustomer,
-        approvedAt: job.approvedAt,
-        imageUrls: job.imageUrls,
-        createdAt: job.createdAt,
+      final updatedJob = job.copyWith(
+        diagnosticDeadline: newDiagnostic,
+        deliveryDeadline: newDelivery,
         updatedAt: DateTime.now(),
-        deletedAt: job.deletedAt,
-        deletedBy: job.deletedBy,
       );
       await _bikeshopService.updateJob(updatedJob);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newDeadline != null
-                ? 'Plazo: ${DateFormat('dd/MM/yyyy').format(newDeadline)}'
-                : 'Plazo eliminado'),
+            content: Text('Plazos actualizados'),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -5244,7 +5266,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         setState(() {
           final index = _jobs.indexWhere((j) => j.id == job.id);
           if (index != -1) {
-            _jobs[index] = job; // Restore original
+            _jobs[index] = job;
           }
           _applyFiltersAndSort();
         });
@@ -5421,8 +5443,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         customer?.name ?? 'Sin cliente',
         bike?.displayName ?? 'Sin bicicleta',
         DateFormat('dd/MM/yyyy').format(job.arrivalDate),
-        job.deadline != null
-            ? DateFormat('dd/MM/yyyy').format(job.deadline!)
+        job.deliveryDeadline != null
+            ? DateFormat('dd/MM/yyyy').format(job.deliveryDeadline!)
             : 'Sin plazo',
         job.status.displayName,
         job.priority.displayName,
@@ -5923,8 +5945,8 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildBoardCard(MechanicJob job) {
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
-    final isOverdue =
-        job.deadline != null && job.deadline!.isBefore(DateTime.now());
+    final isOverdue = job.deliveryDeadline != null &&
+        job.deliveryDeadline!.isBefore(DateTime.now());
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -6001,7 +6023,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (job.deadline != null) ...[
+              if (job.deliveryDeadline != null) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -6012,7 +6034,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('dd/MM/yy').format(job.deadline!),
+                      DateFormat('dd/MM/yy').format(job.deliveryDeadline!),
                       style: TextStyle(
                         fontSize: 11,
                         color: isOverdue ? Colors.red[700] : Colors.grey[700],
@@ -6290,7 +6312,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Calculate bar position
     final jobStart = job.arrivalDate;
-    final jobEnd = job.deadline ?? job.arrivalDate.add(const Duration(days: 1));
+    final jobEnd =
+        job.deliveryDeadline ?? job.arrivalDate.add(const Duration(days: 1));
 
     // Check if job is visible in current view
     final isVisible =
@@ -6318,8 +6341,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     final barWidth = (clampedEnd - clampedStart) * dayWidth;
 
     // Determine bar color - use custom status color if available
-    final isOverdue =
-        job.deadline != null && job.deadline!.isBefore(DateTime.now());
+    final isOverdue = job.deliveryDeadline != null &&
+        job.deliveryDeadline!.isBefore(DateTime.now());
     final isCompleted =
         job.status == JobStatus.entregado || job.status == JobStatus.finalizado;
 
@@ -7932,7 +7955,6 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
             color: Colors.white,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
@@ -8843,6 +8865,190 @@ class _HoverScrollbarState extends State<_HoverScrollbar> {
                   },
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog widget for editing both diagnostic and delivery deadlines
+class _DualDeadlineDialog extends StatefulWidget {
+  final DateTime? diagnosticDeadline;
+  final DateTime? deliveryDeadline;
+
+  const _DualDeadlineDialog({
+    this.diagnosticDeadline,
+    this.deliveryDeadline,
+  });
+
+  @override
+  State<_DualDeadlineDialog> createState() => _DualDeadlineDialogState();
+}
+
+class _DualDeadlineDialogState extends State<_DualDeadlineDialog> {
+  DateTime? _diagnosticDeadline;
+  DateTime? _deliveryDeadline;
+
+  @override
+  void initState() {
+    super.initState();
+    _diagnosticDeadline = widget.diagnosticDeadline;
+    _deliveryDeadline = widget.deliveryDeadline;
+  }
+
+  Future<void> _pickDate({required bool isDiagnostic}) async {
+    final current = isDiagnostic ? _diagnosticDeadline : _deliveryDeadline;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: isDiagnostic ? 'Plazo Diagnóstico' : 'Plazo Entrega',
+      cancelText: current != null ? 'QUITAR' : 'CANCELAR',
+      confirmText: 'ACEPTAR',
+    );
+
+    if (picked == null && current != null) {
+      // User wants to clear the deadline
+      final clear = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: Text(isDiagnostic
+              ? '¿Quitar el plazo de diagnóstico?'
+              : '¿Quitar el plazo de entrega?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, quitar'),
+            ),
+          ],
+        ),
+      );
+      if (clear == true) {
+        setState(() {
+          if (isDiagnostic) {
+            _diagnosticDeadline = null;
+          } else {
+            _deliveryDeadline = null;
+          }
+        });
+      }
+    } else if (picked != null) {
+      setState(() {
+        if (isDiagnostic) {
+          _diagnosticDeadline = picked;
+        } else {
+          _deliveryDeadline = picked;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Plazos'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Diagnostic deadline row
+          _buildDeadlineRow(
+            icon: Icons.search,
+            label: 'Diagnóstico',
+            color: Colors.blue,
+            deadline: _diagnosticDeadline,
+            onTap: () => _pickDate(isDiagnostic: true),
+          ),
+          const SizedBox(height: 16),
+          // Delivery deadline row
+          _buildDeadlineRow(
+            icon: Icons.local_shipping_outlined,
+            label: 'Entrega',
+            color: Colors.green,
+            deadline: _deliveryDeadline,
+            onTap: () => _pickDate(isDiagnostic: false),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('CANCELAR'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context, {
+              'diagnostic': _diagnosticDeadline,
+              'delivery': _deliveryDeadline,
+            });
+          },
+          child: const Text('GUARDAR'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeadlineRow({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required DateTime? deadline,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: deadline != null
+              ? color.withValues(alpha: 0.1)
+              : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: deadline != null
+                ? color.withValues(alpha: 0.3)
+                : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: deadline != null ? color : Colors.grey.shade400),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  Text(
+                    deadline != null
+                        ? DateFormat('dd/MM/yyyy').format(deadline)
+                        : 'Sin plazo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: deadline != null ? color : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.edit_calendar,
+              size: 20,
+              color: Colors.grey.shade400,
+            ),
           ],
         ),
       ),

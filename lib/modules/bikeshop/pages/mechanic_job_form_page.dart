@@ -438,7 +438,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             }
           }
 
-          _selectedDeadline = job.deadline;
+          _selectedDeadline = job.deliveryDeadline;
           _selectedArrivalDate = job.arrivalDate;
           _taxTreatment = loadedTaxTreatment;
           _discountController.text = job.discountAmount.toString();
@@ -921,7 +921,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         notes: firstTab.technicianNotesController.text.trim().isEmpty
             ? null
             : firstTab.technicianNotesController.text.trim(),
-        deadline: _selectedDeadline,
+        deliveryDeadline: _selectedDeadline,
         requiresApproval: firstTab.requiresApproval,
         isWarrantyJob: firstTab.isWarrantyWork,
         discountAmount: _discountAmount,

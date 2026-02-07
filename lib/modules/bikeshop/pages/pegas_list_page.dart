@@ -287,14 +287,14 @@ class _PegasListPageState extends State<PegasListPage> {
           comparison = customerA.compareTo(customerB);
           break;
         case 'deadline':
-          if (a.deadline == null && b.deadline == null) {
+          if (a.deliveryDeadline == null && b.deliveryDeadline == null) {
             comparison = 0;
-          } else if (a.deadline == null) {
+          } else if (a.deliveryDeadline == null) {
             comparison = 1;
-          } else if (b.deadline == null) {
+          } else if (b.deliveryDeadline == null) {
             comparison = -1;
           } else {
-            comparison = a.deadline!.compareTo(b.deadline!);
+            comparison = a.deliveryDeadline!.compareTo(b.deliveryDeadline!);
           }
           break;
         case 'priority':
@@ -911,7 +911,7 @@ class _PegasListPageState extends State<PegasListPage> {
                   ),
 
                   // Deadline
-                  if (job.deadline != null) ...[
+                  if (job.deliveryDeadline != null) ...[
                     const SizedBox(width: 10),
                     Icon(
                       Icons.timer,
@@ -920,7 +920,7 @@ class _PegasListPageState extends State<PegasListPage> {
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      _formatDate(job.deadline!),
+                      _formatDate(job.deliveryDeadline!),
                       style: TextStyle(
                         fontSize: 11,
                         color: isOverdue ? Colors.red : theme.hintColor,
@@ -1503,8 +1503,8 @@ class _PegasListPageState extends State<PegasListPage> {
   }
 
   Widget _buildJobCard(MechanicJob job, Customer? customer, Bike? bike) {
-    final isOverdue = job.deadline != null &&
-        job.deadline!.isBefore(DateTime.now()) &&
+    final isOverdue = job.deliveryDeadline != null &&
+        job.deliveryDeadline!.isBefore(DateTime.now()) &&
         job.status != JobStatus.finalizado;
 
     return Card(
@@ -1657,7 +1657,7 @@ class _PegasListPageState extends State<PegasListPage> {
                             ),
                           ],
                         ),
-                        if (job.deadline != null) ...[
+                        if (job.deliveryDeadline != null) ...[
                           const SizedBox(height: 2),
                           Row(
                             children: [
@@ -1670,7 +1670,7 @@ class _PegasListPageState extends State<PegasListPage> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                _formatDate(job.deadline!),
+                                _formatDate(job.deliveryDeadline!),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: job.isOverdue
@@ -1990,8 +1990,8 @@ class _PegasListPageState extends State<PegasListPage> {
                   rows: pageJobs.map((job) {
                     final customer = _customers[job.customerId];
                     final bike = _bikes[job.bikeId];
-                    final isOverdue = job.deadline != null &&
-                        job.deadline!.isBefore(DateTime.now()) &&
+                    final isOverdue = job.deliveryDeadline != null &&
+                        job.deliveryDeadline!.isBefore(DateTime.now()) &&
                         job.status != JobStatus.finalizado;
 
                     return DataRow(
@@ -2052,8 +2052,8 @@ class _PegasListPageState extends State<PegasListPage> {
                           Row(
                             children: [
                               Text(
-                                job.deadline != null
-                                    ? _formatDate(job.deadline!)
+                                job.deliveryDeadline != null
+                                    ? _formatDate(job.deliveryDeadline!)
                                     : 'Sin plazo',
                                 style: TextStyle(
                                   color: isOverdue ? Colors.red : null,

@@ -24,17 +24,17 @@ class WhatsAppService {
   String _formatPhoneNumber(String phone) {
     // Remove all non-numeric characters
     String cleaned = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    
+
     // Remove leading 56 if present (Chile country code)
     if (cleaned.startsWith('56') && cleaned.length > 9) {
       cleaned = cleaned.substring(2);
     }
-    
+
     // Ensure it starts with 9 (Chilean mobile format)
     if (!cleaned.startsWith('9')) {
       cleaned = '9$cleaned';
     }
-    
+
     // Return with country code
     return '56$cleaned';
   }
@@ -49,7 +49,7 @@ class WhatsAppService {
   ) async {
     try {
       final formattedPhone = _formatPhoneNumber(phoneNumber);
-      
+
       // Open WhatsApp Web in WebView (desktop) or app (mobile)
       await Navigator.push(
         context,
@@ -60,7 +60,7 @@ class WhatsAppService {
           ),
         ),
       );
-      
+
       return true;
     } catch (e) {
       print('❌ Error opening WhatsApp: $e');
@@ -69,7 +69,7 @@ class WhatsAppService {
         final formattedPhone = _formatPhoneNumber(phoneNumber);
         final encodedMessage = Uri.encodeComponent(message);
         final url = 'https://wa.me/$formattedPhone?text=$encodedMessage';
-        
+
         final uri = Uri.parse(url);
         if (await canLaunchUrl(uri)) {
           return await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -160,7 +160,7 @@ ${invoice.balance <= 0 ? '🎉 ¡Factura pagada completamente!' : '⚠️ Saldo 
   }) async {
     final statusEmoji = _getStatusEmoji(job.status);
     final statusText = job.status.displayName;
-    
+
     final message = '''
 Hola $customerName! 👋
 
@@ -172,7 +172,7 @@ $statusEmoji *Actualización de tu bicicleta*
 
 ${_getStatusMessage(job.status)}
 
-${job.deadline != null ? '⏰ Fecha estimada: ${_dateFormat.format(job.deadline!)}\n' : ''}${job.notes != null && job.notes!.isNotEmpty ? '📝 Notas: ${job.notes}\n' : ''}
+${job.deliveryDeadline != null ? '⏰ Fecha estimada: ${_dateFormat.format(job.deliveryDeadline!)}\n' : ''}${job.notes != null && job.notes!.isNotEmpty ? '📝 Notas: ${job.notes}\n' : ''}
 ¿Alguna duda? ¡Escríbenos! 📞
 
 Viña Bike - Tu taller de confianza 🔧

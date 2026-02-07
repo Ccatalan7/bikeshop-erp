@@ -197,7 +197,9 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                   text: 'New',
                   icon: Icons.add,
                   onPressed: () {
-                    context.push('/taller/pegas/nueva').then((_) => _loadData());
+                    context
+                        .push('/taller/pegas/nueva')
+                        .then((_) => _loadData());
                   },
                 ),
               ],
@@ -302,7 +304,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   }) {
     final isSelected = _viewMode == mode;
     final theme = Theme.of(context);
-    
+
     return InkWell(
       onTap: () {
         setState(() {
@@ -345,13 +347,13 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   Widget _buildBoardView() {
     // Group customers by status of their latest job
     final Map<JobStatus?, List<Customer>> customersByStatus = {};
-    
+
     for (final customer in _filteredCustomers) {
       final latestJob = _latestJobs[customer.id];
       final status = latestJob?.status;
       customersByStatus.putIfAbsent(status, () => []).add(customer);
     }
-    
+
     final statuses = [
       JobStatus.pendiente,
       JobStatus.diagnostico,
@@ -360,7 +362,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
       JobStatus.esperandoRepuestos,
       JobStatus.finalizado,
     ];
-    
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -408,7 +410,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                       final customer = customers[index];
                       final bikes = _customerBikes[customer.id] ?? [];
                       final latestJob = _latestJobs[customer.id];
-                      
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: InkWell(
@@ -432,7 +434,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                     customer.phone!,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.6),
                                     ),
                                   ),
                                 ],
@@ -449,7 +454,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                     'Pega: ${latestJob.jobNumber}',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.6),
                                     ),
                                   ),
                                 ],
@@ -503,7 +511,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
 
   Widget _buildCalendarHeader() {
     final monthFormat = DateFormat('MMMM yyyy', 'es');
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -511,7 +519,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
             setState(() {
-              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+              _focusedMonth =
+                  DateTime(_focusedMonth.year, _focusedMonth.month - 1);
             });
           },
         ),
@@ -537,7 +546,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
               icon: const Icon(Icons.chevron_right),
               onPressed: () {
                 setState(() {
-                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                  _focusedMonth =
+                      DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                 });
               },
             ),
@@ -548,8 +558,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
   }
 
   Widget _buildCalendarGrid() {
-    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final firstDayOfMonth =
+        DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDayOfMonth =
+        DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
     final firstWeekday = firstDayOfMonth.weekday % 7;
 
@@ -565,7 +577,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.6),
                         ),
                       ),
                     ),
@@ -576,16 +591,19 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
         // Calendar days
         Expanded(
           child: Column(
-            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
+            children: List.generate((daysInMonth + firstWeekday + 6) ~/ 7,
+                (weekIndex) {
               return Expanded(
                 child: Row(
                   children: List.generate(7, (dayIndex) {
-                    final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
+                    final dayNumber =
+                        weekIndex * 7 + dayIndex - firstWeekday + 1;
                     if (dayNumber < 1 || dayNumber > daysInMonth) {
                       return const Expanded(child: SizedBox());
                     }
 
-                    final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayNumber);
+                    final date = DateTime(
+                        _focusedMonth.year, _focusedMonth.month, dayNumber);
                     final isSelected = _selectedDate.year == date.year &&
                         _selectedDate.month == date.month &&
                         _selectedDate.day == date.day;
@@ -605,7 +623,9 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                           margin: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Theme.of(context).primaryColor.withOpacity(0.1)
+                                ? Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.1)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: isToday
@@ -629,10 +649,14 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                   '$dayNumber',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight: isToday
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                     color: isSelected
                                         ? Theme.of(context).primaryColor
-                                        : Theme.of(context).colorScheme.onSurface,
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
                                   ),
                                 ),
                               ),
@@ -640,28 +664,35 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                               if (jobsOnDay.isNotEmpty)
                                 Expanded(
                                   child: ListView.builder(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                                    itemCount: jobsOnDay.length > 3 ? 3 : jobsOnDay.length,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
+                                    itemCount: jobsOnDay.length > 3
+                                        ? 3
+                                        : jobsOnDay.length,
                                     itemBuilder: (context, index) {
                                       final job = jobsOnDay[index];
                                       final customerName = _customers
-                                          .firstWhere((c) => c.id == job.customerId,
+                                          .firstWhere(
+                                              (c) => c.id == job.customerId,
                                               orElse: () => Customer(
-                                                name: 'Unknown',
-                                                tenantId: '',
-                                                rut: '',
-                                              ))
+                                                    name: 'Unknown',
+                                                    tenantId: '',
+                                                    rut: '',
+                                                  ))
                                           .name;
-                                      
+
                                       return Container(
-                                        margin: const EdgeInsets.only(bottom: 2),
+                                        margin:
+                                            const EdgeInsets.only(bottom: 2),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 4,
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _getStatusColor(job.status).withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: _getStatusColor(job.status)
+                                              .withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: Text(
                                           customerName,
@@ -675,12 +706,16 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                 ),
                               if (jobsOnDay.length > 3)
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 2),
                                   child: Text(
                                     '+${jobsOnDay.length - 3} more',
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.6),
                                     ),
                                   ),
                                 ),
@@ -739,7 +774,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 '${jobsForDate.length} trabajo${jobsForDate.length != 1 ? 's' : ''}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
             ],
@@ -751,7 +787,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                   child: Text(
                     'No hay trabajos para esta fecha',
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.6),
                     ),
                   ),
                 )
@@ -772,7 +811,8 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
 
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: _getStatusColor(job.status).withOpacity(0.2),
+                        backgroundColor:
+                            _getStatusColor(job.status).withOpacity(0.2),
                         child: Icon(
                           Icons.build,
                           color: _getStatusColor(job.status),
@@ -1061,7 +1101,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                         color: Colors.grey[600],
                       ),
                     ),
-                    if (latestJob.deadline != null) ...[
+                    if (latestJob.deliveryDeadline != null) ...[
                       const SizedBox(width: 12),
                       Icon(
                         latestJob.isOverdue ? Icons.warning : Icons.schedule,
@@ -1071,7 +1111,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Plazo: ${_formatDate(latestJob.deadline!)}',
+                        'Plazo: ${_formatDate(latestJob.deliveryDeadline!)}',
                         style: TextStyle(
                           fontSize: 12,
                           color: latestJob.isOverdue

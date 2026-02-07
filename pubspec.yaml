@@ -45,7 +45,7 @@ dependencies:
   printing: ^5.13.2
   
   # Localization
-  intl: ^0.19.0
+  intl: ^0.20.2
 
   # Time zone conversions (for showing attendances in Chile vs local)
   timezone: ^0.10.0

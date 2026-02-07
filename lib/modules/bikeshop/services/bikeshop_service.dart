@@ -375,7 +375,7 @@ class BikeshopService extends ChangeNotifier {
       customerId: invoice.customerId ?? '',
       bikeId: invoice.bikeId ?? '',
       arrivalDate: invoice.entryDate ?? invoice.date,
-      deadline: invoice.dueDate,
+      deliveryDeadline: invoice.dueDate,
       status: _invoiceStatusToJobStatus(invoice.status),
       clientRequest: invoice.workDescription,
       diagnosis: invoice.workDescription,

@@ -190,14 +190,15 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       if (kDebugMode) {
         print('📋 Loading timeline for ${jobs.length} jobs...');
       }
-      
+
       for (final job in jobs) {
         if (job.id == null) continue;
-        
+
         try {
           final jobTimeline = await bikeshopService.getJobTimeline(job.id!);
           if (kDebugMode) {
-            print('📋 Job ${job.jobNumber}: ${jobTimeline.length} timeline events');
+            print(
+                '📋 Job ${job.jobNumber}: ${jobTimeline.length} timeline events');
           }
           allTimeline.addAll(jobTimeline);
         } catch (e) {
@@ -1897,7 +1898,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                     'Ingreso: ${DateFormat('dd/MM/yyyy').format(job.arrivalDate)}',
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
-                  if (job.deadline != null) ...[
+                  if (job.deliveryDeadline != null) ...[
                     const SizedBox(width: 16),
                     Icon(
                       Icons.event,
@@ -1906,7 +1907,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'Entrega: ${DateFormat('dd/MM/yyyy').format(job.deadline!)}',
+                      'Entrega: ${DateFormat('dd/MM/yyyy').format(job.deliveryDeadline!)}',
                       style: TextStyle(
                         fontSize: 12,
                         color: job.isOverdue ? Colors.red : Colors.grey[600],

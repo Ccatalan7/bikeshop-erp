@@ -267,8 +267,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   List<MechanicJob> _getJobsForDate(DateTime date) {
     return _jobs.where((job) {
-      if (job.deadline == null) return false;
-      final jobDate = job.deadline!;
+      if (job.deliveryDeadline == null) return false;
+      final jobDate = job.deliveryDeadline!;
       return jobDate.year == date.year &&
           jobDate.month == date.month &&
           jobDate.day == date.day;
@@ -791,7 +791,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (job.deadline != null) ...[
+              if (job.deliveryDeadline != null) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -805,7 +805,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('HH:mm').format(job.deadline!),
+                      DateFormat('HH:mm').format(job.deliveryDeadline!),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -1002,7 +1002,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           ],
 
           // Deadline - Editable
-          if (job.deadline != null) ...[
+          if (job.deliveryDeadline != null) ...[
             InkWell(
               onTap: () => _editDeadline(job),
               child: Row(
@@ -1010,7 +1010,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   Icon(Icons.event, size: 18, color: Colors.red.shade700),
                   const SizedBox(width: 8),
                   Text(
-                    'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deadline!)}',
+                    'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deliveryDeadline!)}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Colors.red.shade700,
@@ -1144,7 +1144,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   Future<void> _editDeadline(MechanicJob job) async {
     final selectedDate = await showDatePicker(
       context: context,
-      initialDate: job.deadline!,
+      initialDate: job.deliveryDeadline!,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       locale: const Locale('es', 'CL'),
@@ -1153,7 +1153,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
     final selectedTime = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(job.deadline!),
+      initialTime: TimeOfDay.fromDateTime(job.deliveryDeadline!),
     );
     if (selectedTime == null) return;
 
@@ -1167,7 +1167,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
     try {
       final bikeshopService = context.read<BikeshopService>();
-      final updatedJob = job.copyWith(deadline: newDeadline);
+      final updatedJob = job.copyWith(deliveryDeadline: newDeadline);
       await bikeshopService.updateJob(updatedJob);
 
       // Refresh data

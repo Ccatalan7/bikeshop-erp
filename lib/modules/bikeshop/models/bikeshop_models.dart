@@ -747,7 +747,9 @@ class MechanicJob {
   final String bikeId;
   final String? servicePackageId;
   final DateTime arrivalDate;
-  final DateTime? deadline;
+  final DateTime? diagnosticDeadline; // Target date to send diagnostic
+  final DateTime? deliveryDeadline; // Target date to deliver bike
+  final DateTime? diagnosticSentAt; // Actual timestamp when diagnostic was sent
   final DateTime? startedAt;
   final DateTime? completedAt;
   final DateTime? deliveredAt;
@@ -794,7 +796,9 @@ class MechanicJob {
     required this.bikeId,
     this.servicePackageId,
     DateTime? arrivalDate,
-    this.deadline,
+    this.diagnosticDeadline,
+    this.deliveryDeadline,
+    this.diagnosticSentAt,
     this.startedAt,
     this.completedAt,
     this.deliveredAt,
@@ -850,7 +854,10 @@ class MechanicJob {
       bikeId: json['bike_id']?.toString() ?? '',
       servicePackageId: json['service_package_id']?.toString(),
       arrivalDate: _parseDate(json['arrival_date']),
-      deadline: _parseDateNullable(json['deadline']),
+      diagnosticDeadline: _parseDateNullable(json['diagnostic_deadline']),
+      deliveryDeadline: _parseDateNullable(
+          json['deadline']), // Read from existing 'deadline' column
+      diagnosticSentAt: _parseDateNullable(json['diagnostic_sent_at']),
       startedAt: _parseDateNullable(json['started_at']),
       completedAt: _parseDateNullable(json['completed_at']),
       deliveredAt: _parseDateNullable(json['delivered_at']),
@@ -911,7 +918,10 @@ class MechanicJob {
       'service_package_id': servicePackageId,
       'arrival_date':
           arrivalDate.toIso8601String(), // Always include (editable)
-      'deadline': deadline?.toIso8601String(),
+      'diagnostic_deadline': diagnosticDeadline?.toIso8601String(),
+      'deadline': deliveryDeadline
+          ?.toIso8601String(), // Write to existing 'deadline' column
+      'diagnostic_sent_at': diagnosticSentAt?.toIso8601String(),
       'started_at': startedAt?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'delivered_at': deliveredAt?.toIso8601String(),
@@ -961,7 +971,9 @@ class MechanicJob {
     String? bikeId,
     String? servicePackageId,
     DateTime? arrivalDate,
-    DateTime? deadline,
+    DateTime? diagnosticDeadline,
+    DateTime? deliveryDeadline,
+    DateTime? diagnosticSentAt,
     DateTime? startedAt,
     DateTime? completedAt,
     DateTime? deliveredAt,
@@ -1003,7 +1015,9 @@ class MechanicJob {
       bikeId: bikeId ?? this.bikeId,
       servicePackageId: servicePackageId ?? this.servicePackageId,
       arrivalDate: arrivalDate ?? this.arrivalDate,
-      deadline: deadline ?? this.deadline,
+      diagnosticDeadline: diagnosticDeadline ?? this.diagnosticDeadline,
+      deliveryDeadline: deliveryDeadline ?? this.deliveryDeadline,
+      diagnosticSentAt: diagnosticSentAt ?? this.diagnosticSentAt,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
@@ -1067,14 +1081,34 @@ class MechanicJob {
     }
   }
 
+  /// Time remaining until delivery deadline (primary deadline for display)
   Duration? get timeRemaining {
-    if (deadline == null) return null;
-    return deadline!.difference(DateTime.now());
+    if (deliveryDeadline == null) return null;
+    return deliveryDeadline!.difference(DateTime.now());
   }
 
+  /// Check if delivery deadline is overdue
   bool get isOverdue {
-    if (deadline == null) return false;
-    return DateTime.now().isAfter(deadline!);
+    if (deliveryDeadline == null) return false;
+    return DateTime.now().isAfter(deliveryDeadline!);
+  }
+
+  /// Check if diagnostic deadline is overdue
+  bool get isDiagnosticOverdue {
+    if (diagnosticDeadline == null) return false;
+    return DateTime.now().isAfter(diagnosticDeadline!);
+  }
+
+  /// Calculate diagnostic time in days (actual)
+  int? get diagnosticTimeDays {
+    if (diagnosticSentAt == null) return null;
+    return diagnosticSentAt!.difference(arrivalDate).inDays;
+  }
+
+  /// Calculate total time from arrival to delivery in days
+  int? get totalTimeDays {
+    if (deliveredAt == null) return null;
+    return deliveredAt!.difference(arrivalDate).inDays;
   }
 
   bool get isActive {
