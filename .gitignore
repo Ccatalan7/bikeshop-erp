@@ -63,3 +63,5 @@ scripts/zoho_import/temp_zoho_images/
 # Keep documentation and README
 !scripts/zoho_import/README.md
 !scripts/zoho_import/.gitkeep
+flutter.zip
+flutter.zip

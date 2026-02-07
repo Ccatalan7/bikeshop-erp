@@ -1476,7 +1476,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     );
                   }
                 },
-                activeThumbColor: Colors.green,
+                activeColor: Colors.green,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],

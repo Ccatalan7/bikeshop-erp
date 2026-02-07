@@ -7763,7 +7763,7 @@ class _EditorToggle extends StatelessWidget {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeThumbColor: Colors.white,
+          activeColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -9035,7 +9035,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
               value: widget.data['showCta'] != false,
               onChanged: (v) => _updateField('showCta', v),
               // ON state: bright teal color (highlighted)
-              activeThumbColor: Colors.white,
+              activeColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               // OFF state: dim/dark (muted)
               inactiveThumbColor: Colors.grey.shade400,
@@ -10560,7 +10560,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeThumbColor: Colors.white,
+          activeColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -11901,7 +11901,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                     linkValueController.text = '';
                                   }
                                 }),
-                                activeThumbColor: Colors.white,
+                                activeColor: Colors.white,
                                 activeTrackColor: const Color(0xFF00A09D),
                                 inactiveThumbColor: Colors.grey.shade400,
                                 inactiveTrackColor: Colors.grey.shade700,
@@ -13391,7 +13391,7 @@ class _FullPaddingControl extends StatelessWidget {
             Switch(
               value: linked,
               onChanged: onLinkedChanged,
-              activeThumbColor: Colors.white,
+              activeColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               inactiveThumbColor: Colors.grey.shade400,
               inactiveTrackColor: Colors.grey.shade700,

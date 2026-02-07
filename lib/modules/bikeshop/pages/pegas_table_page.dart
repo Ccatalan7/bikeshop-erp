@@ -7932,7 +7932,7 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
             color: Colors.white,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          constraints: const BoxConstraints(maxWidth: 280),
+
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
