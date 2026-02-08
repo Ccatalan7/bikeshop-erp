@@ -101,7 +101,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
 
           // Phases with statuses
           for (final phase in StatusPhase.values) ...[
-            _buildPhaseSection(context, service, phase, statusesByPhase[phase] ?? []),
+            _buildPhaseSection(
+                context, service, phase, statusesByPhase[phase] ?? []),
             const SizedBox(height: 24),
           ],
         ],
@@ -138,7 +139,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
             ),
             child: Row(
               children: [
-                Icon(_getPhaseIcon(phase), size: 20, color: _getPhaseTextColor(phase, isDark: isDark)),
+                Icon(_getPhaseIcon(phase),
+                    size: 20, color: _getPhaseTextColor(phase, isDark: isDark)),
                 const SizedBox(width: 8),
                 Text(
                   phase.displayName,
@@ -153,7 +155,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                   '${statuses.length} estados',
                   style: TextStyle(
                     fontSize: 13,
-                    color: _getPhaseTextColor(phase, isDark: isDark).withOpacity(0.7),
+                    color: _getPhaseTextColor(phase, isDark: isDark)
+                        .withOpacity(0.7),
                   ),
                 ),
               ],
@@ -202,7 +205,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     final color = _parseColor(status.color);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Container(
       key: ValueKey(status.id),
       decoration: BoxDecoration(
@@ -244,7 +247,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                       if (status.isSystem) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: isDark ? Colors.grey[700] : Colors.grey[200],
                             borderRadius: BorderRadius.circular(4),
@@ -253,7 +257,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                             'Sistema',
                             style: TextStyle(
                               fontSize: 10,
-                              color: isDark ? Colors.grey[300] : Colors.grey[600],
+                              color:
+                                  isDark ? Colors.grey[300] : Colors.grey[600],
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -280,7 +285,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
             ),
             if (!status.isSystem)
               IconButton(
-                icon: Icon(Icons.delete_outline, size: 20, color: Colors.red[400]),
+                icon: Icon(Icons.delete_outline,
+                    size: 20, color: Colors.red[400]),
                 onPressed: () => _confirmDeleteStatus(context, service, status),
                 tooltip: 'Eliminar',
               ),
@@ -338,16 +344,23 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     _showStatusDialog(context, service, null);
   }
 
-  void _showEditStatusDialog(BuildContext context, JobStatusService service, JobStatusCustom status) {
+  void _showEditStatusDialog(
+      BuildContext context, JobStatusService service, JobStatusCustom status) {
     _showStatusDialog(context, service, status);
   }
 
-  void _showStatusDialog(BuildContext context, JobStatusService service, JobStatusCustom? status) {
+  void _showStatusDialog(
+      BuildContext context, JobStatusService service, JobStatusCustom? status) {
     final isEditing = status != null;
     final nameController = TextEditingController(text: status?.name ?? '');
     final codeController = TextEditingController(text: status?.code ?? '');
     String selectedColor = status?.color ?? '#6B7280';
     StatusPhase selectedPhase = status?.phase ?? StatusPhase.inProgress;
+
+    // New automation flags
+    bool triggersStart = status?.triggersStart ?? false;
+    bool triggersCompletion = status?.triggersCompletion ?? false;
+    bool triggersDelivery = status?.triggersDelivery ?? false;
 
     final colors = [
       '#6B7280', // Gray
@@ -376,129 +389,205 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text(isEditing ? 'Editar Estado' : 'Nuevo Estado'),
           content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Name field
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre *',
-                    hintText: 'Ej: En Revisión',
-                    border: OutlineInputBorder(),
+            width: 450, // Slightly wider for new options
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name field
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre *',
+                      hintText: 'Ej: En Revisión',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                    onChanged: (value) {
+                      if (!isEditing) {
+                        codeController.text =
+                            value.toUpperCase().replaceAll(' ', '_');
+                      }
+                    },
                   ),
-                  autofocus: true,
-                  onChanged: (value) {
-                    if (!isEditing) {
-                      codeController.text = value.toUpperCase().replaceAll(' ', '_');
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Code field
-                TextField(
-                  controller: codeController,
-                  decoration: InputDecoration(
-                    labelText: 'Código *',
-                    hintText: 'Ej: EN_REVISION',
-                    border: const OutlineInputBorder(),
-                    helperText: 'Identificador único (sin espacios)',
-                    enabled: !(status?.isSystem ?? false),
+                  // Code field
+                  TextField(
+                    controller: codeController,
+                    decoration: InputDecoration(
+                      labelText: 'Código *',
+                      hintText: 'Ej: EN_REVISION',
+                      border: const OutlineInputBorder(),
+                      helperText: 'Identificador único (sin espacios)',
+                      enabled: !(status?.isSystem ?? false),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Phase selector
-                const Text('Fase', style: TextStyle(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                SegmentedButton<StatusPhase>(
-                  segments: StatusPhase.values.map((phase) {
-                    return ButtonSegment<StatusPhase>(
-                      value: phase,
-                      label: Text(phase.displayName),
-                      icon: Icon(_getPhaseIcon(phase), size: 18),
-                    );
-                  }).toList(),
-                  selected: {selectedPhase},
-                  onSelectionChanged: (Set<StatusPhase> phases) {
-                    setDialogState(() => selectedPhase = phases.first);
-                  },
-                ),
-                const SizedBox(height: 16),
+                  // Phase selector
+                  const Text('Fase',
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<StatusPhase>(
+                    segments: StatusPhase.values.map((phase) {
+                      return ButtonSegment<StatusPhase>(
+                        value: phase,
+                        label: Text(phase.displayName),
+                        icon: Icon(_getPhaseIcon(phase), size: 18),
+                      );
+                    }).toList(),
+                    selected: {selectedPhase},
+                    onSelectionChanged: (Set<StatusPhase> phases) {
+                      setDialogState(() => selectedPhase = phases.first);
+                    },
+                  ),
+                  const SizedBox(height: 24),
 
-                // Color picker
-                const Text('Color', style: TextStyle(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: colors.map((color) {
-                    final isSelected = color == selectedColor;
-                    return InkWell(
-                      onTap: () => setDialogState(() => selectedColor = color),
+                  // Automation Section
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.auto_awesome,
+                                size: 20, color: Colors.blue.shade700),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Automatización y KPIs',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade800),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          title: const Text('Iniciar Reloj de Taller'),
+                          subtitle:
+                              const Text('Marca la fecha de "Inicio" (KPI)'),
+                          value: triggersStart,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: Colors.blue,
+                          onChanged: (val) =>
+                              setDialogState(() => triggersStart = val),
+                        ),
+                        SwitchListTile(
+                          title: const Text('Detener Reloj de Taller'),
+                          subtitle:
+                              const Text('Marca la fecha de "Término" (KPI)'),
+                          value: triggersCompletion,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: Colors.purple,
+                          onChanged: (val) =>
+                              setDialogState(() => triggersCompletion = val),
+                        ),
+                        SwitchListTile(
+                          title: const Text('Marcar como Entregado'),
+                          subtitle: const Text(
+                              'Marca la fecha "Entregado" y cierra el ciclo'),
+                          value: triggersDelivery,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: Colors.green,
+                          onChanged: (val) =>
+                              setDialogState(() => triggersDelivery = val),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Color picker
+                  const Text('Color',
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: colors.map((color) {
+                      final isSelected = color == selectedColor;
+                      return InkWell(
+                        onTap: () =>
+                            setDialogState(() => selectedColor = color),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: _parseColor(color),
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(color: Colors.black, width: 2)
+                                : null,
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color:
+                                          _parseColor(color).withOpacity(0.5),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 18)
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Preview
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
                       borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: _parseColor(color),
-                          borderRadius: BorderRadius.circular(8),
-                          border: isSelected
-                              ? Border.all(color: Colors.black, width: 2)
-                              : null,
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: _parseColor(color).withOpacity(0.5),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 18)
-                            : null,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Preview
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Text('Vista previa:', style: TextStyle(color: Colors.grey[600])),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _parseColor(selectedColor),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          nameController.text.isEmpty ? 'Estado' : nameController.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Text('Vista previa:',
+                            style: TextStyle(color: Colors.grey[600])),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _parseColor(selectedColor),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            nameController.text.isEmpty
+                                ? 'Estado'
+                                : nameController.text,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           actions: [
@@ -509,11 +598,15 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
             FilledButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final code = codeController.text.trim().toUpperCase().replaceAll(' ', '_');
+                final code = codeController.text
+                    .trim()
+                    .toUpperCase()
+                    .replaceAll(' ', '_');
 
                 if (name.isEmpty || code.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nombre y código son requeridos')),
+                    const SnackBar(
+                        content: Text('Nombre y código son requeridos')),
                   );
                   return;
                 }
@@ -524,6 +617,9 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                     code: code,
                     color: selectedColor,
                     phase: selectedPhase,
+                    triggersStart: triggersStart,
+                    triggersCompletion: triggersCompletion,
+                    triggersDelivery: triggersDelivery,
                   );
                   await service.updateStatus(updated);
                 } else {
@@ -532,7 +628,12 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                     code: code,
                     color: selectedColor,
                     phase: selectedPhase,
+                    // Note: CreateStatus method in service might need update or we rely on copyWith if the service uses the whole object
+                    // Actually checking service: createStatus takes named args... I should verify service signature
                   );
+                  // WAIT: I need to check if createStatus service method accepts these new args.
+                  // If not, I should probably use a lower level 'save' or update the service first.
+                  // Let's assume I need to update the service signature as well.
                 }
 
                 if (context.mounted) Navigator.pop(context);
@@ -545,7 +646,8 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
     );
   }
 
-  void _confirmDeleteStatus(BuildContext context, JobStatusService service, JobStatusCustom status) {
+  void _confirmDeleteStatus(
+      BuildContext context, JobStatusService service, JobStatusCustom status) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

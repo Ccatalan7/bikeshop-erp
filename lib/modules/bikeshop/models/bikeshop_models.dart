@@ -525,6 +525,9 @@ class JobStatusCustom {
   final int sortOrder;
   final bool isSystem; // System statuses can't be deleted
   final bool isActive;
+  final bool triggersStart; // Sets startedAt
+  final bool triggersCompletion; // Sets completedAt
+  final bool triggersDelivery; // Sets deliveredAt
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -538,6 +541,9 @@ class JobStatusCustom {
     this.sortOrder = 0,
     this.isSystem = false,
     this.isActive = true,
+    this.triggersStart = false,
+    this.triggersCompletion = false,
+    this.triggersDelivery = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -554,6 +560,9 @@ class JobStatusCustom {
       sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
       isSystem: json['is_system'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
+      triggersStart: json['triggers_start'] as bool? ?? false,
+      triggersCompletion: json['triggers_completion'] as bool? ?? false,
+      triggersDelivery: json['triggers_delivery'] as bool? ?? false,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -570,6 +579,9 @@ class JobStatusCustom {
       'sort_order': sortOrder,
       'is_system': isSystem,
       'is_active': isActive,
+      'triggers_start': triggersStart,
+      'triggers_completion': triggersCompletion,
+      'triggers_delivery': triggersDelivery,
     };
   }
 
@@ -583,6 +595,9 @@ class JobStatusCustom {
     int? sortOrder,
     bool? isSystem,
     bool? isActive,
+    bool? triggersStart,
+    bool? triggersCompletion,
+    bool? triggersDelivery,
   }) {
     return JobStatusCustom(
       id: id ?? this.id,
@@ -594,6 +609,9 @@ class JobStatusCustom {
       sortOrder: sortOrder ?? this.sortOrder,
       isSystem: isSystem ?? this.isSystem,
       isActive: isActive ?? this.isActive,
+      triggersStart: triggersStart ?? this.triggersStart,
+      triggersCompletion: triggersCompletion ?? this.triggersCompletion,
+      triggersDelivery: triggersDelivery ?? this.triggersDelivery,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

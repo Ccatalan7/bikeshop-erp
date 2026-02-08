@@ -265,13 +265,16 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     }
   }
 
+  bool _isSameDay(DateTime? a, DateTime b) {
+    if (a == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   List<MechanicJob> _getJobsForDate(DateTime date) {
     return _jobs.where((job) {
-      if (job.deliveryDeadline == null) return false;
-      final jobDate = job.deliveryDeadline!;
-      return jobDate.year == date.year &&
-          jobDate.month == date.month &&
-          jobDate.day == date.day;
+      final matchesDelivery = _isSameDay(job.deliveryDeadline, date);
+      final matchesDiagnostic = _isSameDay(job.diagnosticDeadline, date);
+      return matchesDelivery || matchesDiagnostic;
     }).toList();
   }
 
@@ -568,6 +571,15 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                               'Cliente';
                                       final statusColor = _getJobColor(job);
 
+                                      // Determine which deadline matches current cell date
+                                      final isDiagnostic = _isSameDay(
+                                          job.diagnosticDeadline, date);
+                                      // If both match, delivery takes precedence for icon, or we could show both?
+                                      // Let's use specific icons.
+                                      final icon = isDiagnostic
+                                          ? Icons.search
+                                          : Icons.local_shipping_outlined;
+
                                       return InkWell(
                                         onTap: () async {
                                           setState(() {
@@ -588,15 +600,27 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                             borderRadius:
                                                 BorderRadius.circular(4),
                                           ),
-                                          child: Text(
-                                            customerName,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color:
-                                                  statusColor.withOpacity(0.9),
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                          child: Row(
+                                            children: [
+                                              Icon(icon,
+                                                  size: 10,
+                                                  color: statusColor
+                                                      .withOpacity(0.9)),
+                                              const SizedBox(width: 2),
+                                              Expanded(
+                                                child: Text(
+                                                  customerName,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: statusColor
+                                                        .withOpacity(0.9),
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       );
@@ -791,35 +815,75 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
+              // Diagnostic Deadline
+              if (job.diagnosticDeadline != null) ...[
+                const SizedBox(height: 4),
+                _buildDeadlineRow(
+                  icon: Icons.search,
+                  label: 'Diagnóstico',
+                  date: job.diagnosticDeadline!,
+                  isHighlighted:
+                      _isSameDay(job.diagnosticDeadline, _selectedDate),
+                  isOverdue: job.diagnosticDeadline!.isBefore(DateTime.now()) &&
+                      job.diagnosticSentAt == null,
+                ),
+              ],
+
+              // Delivery Deadline
               if (job.deliveryDeadline != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.6),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      DateFormat('HH:mm').format(job.deliveryDeadline!),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withOpacity(0.6),
-                          ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                _buildDeadlineRow(
+                  icon: Icons.local_shipping_outlined,
+                  label: 'Entrega',
+                  date: job.deliveryDeadline!,
+                  isHighlighted:
+                      _isSameDay(job.deliveryDeadline, _selectedDate),
+                  isOverdue: job.deliveryDeadline!.isBefore(DateTime.now()) &&
+                      job.status != JobStatus.entregado,
                 ),
               ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDeadlineRow({
+    required IconData icon,
+    required String label,
+    required DateTime date,
+    required bool isHighlighted,
+    required bool isOverdue,
+  }) {
+    final theme = Theme.of(context);
+    final baseColor = isHighlighted
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withOpacity(0.6);
+    final color = isOverdue ? Colors.red : baseColor;
+    final fontWeight =
+        isHighlighted || isOverdue ? FontWeight.bold : FontWeight.normal;
+
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '$label: ${DateFormat('dd/MM HH:mm').format(date)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: color,
+            fontWeight: fontWeight,
+          ),
+        ),
+        if (isHighlighted) ...[
+          const SizedBox(width: 4),
+          Icon(Icons.arrow_back, size: 12, color: color),
+        ],
+      ],
     );
   }
 
@@ -1001,13 +1065,40 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
             const SizedBox(height: 8),
           ],
 
-          // Deadline - Editable
-          if (job.deliveryDeadline != null) ...[
+          // Diagnostic Deadline
+          if (job.diagnosticDeadline != null) ...[
             InkWell(
-              onTap: () => _editDeadline(job),
+              onTap: () => _editDeadline(job, isDiagnostic: true),
               child: Row(
                 children: [
-                  Icon(Icons.event, size: 18, color: Colors.red.shade700),
+                  Icon(Icons.search, size: 18, color: Colors.blue.shade700),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Diagnóstico: ${DateFormat('dd/MM/yyyy HH:mm').format(job.diagnosticDeadline!)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                          decoration: TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dashed,
+                        ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.edit,
+                      size: 14, color: Colors.blue.shade700.withAlpha(153)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // Delivery Deadline
+          if (job.deliveryDeadline != null) ...[
+            InkWell(
+              onTap: () => _editDeadline(job, isDiagnostic: false),
+              child: Row(
+                children: [
+                  Icon(Icons.local_shipping_outlined,
+                      size: 18, color: Colors.red.shade700),
                   const SizedBox(width: 8),
                   Text(
                     'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deliveryDeadline!)}',
@@ -1141,10 +1232,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Future<void> _editDeadline(MechanicJob job) async {
+  Future<void> _editDeadline(MechanicJob job,
+      {bool isDiagnostic = false}) async {
+    final currentDeadline =
+        isDiagnostic ? job.diagnosticDeadline : job.deliveryDeadline;
+
     final selectedDate = await showDatePicker(
       context: context,
-      initialDate: job.deliveryDeadline!,
+      initialDate: currentDeadline ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       locale: const Locale('es', 'CL'),
@@ -1153,7 +1248,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
     final selectedTime = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(job.deliveryDeadline!),
+      initialTime: TimeOfDay.fromDateTime(currentDeadline ?? DateTime.now()),
     );
     if (selectedTime == null) return;
 
@@ -1167,7 +1262,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
     try {
       final bikeshopService = context.read<BikeshopService>();
-      final updatedJob = job.copyWith(deliveryDeadline: newDeadline);
+      final updatedJob = isDiagnostic
+          ? job.copyWith(diagnosticDeadline: newDeadline)
+          : job.copyWith(deliveryDeadline: newDeadline);
+
       await bikeshopService.updateJob(updatedJob);
 
       // Refresh data
@@ -1179,8 +1277,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Fecha de entrega actualizada'),
+          SnackBar(
+              content: Text(
+                  'Fecha de ${isDiagnostic ? 'diagnóstico' : 'entrega'} actualizada'),
               backgroundColor: Colors.green),
         );
       }
