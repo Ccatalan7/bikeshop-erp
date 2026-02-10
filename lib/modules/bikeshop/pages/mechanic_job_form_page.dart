@@ -23,6 +23,7 @@ import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/smart_task_service.dart';
+import '../../../shared/services/image_service.dart'; // Add ImageService import
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
 import '../../messaging/widgets/entity_chat_sidebar.dart';
@@ -151,6 +152,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Loading states
   bool _isLoading = false;
   bool _isSaving = false;
+
+  // Image handling
+  List<String> _imageUrls = [];
+  List<({Uint8List bytes, String name})> _newImages = [];
+  bool _isUploadingImage = false;
 
   // Edit mode
   MechanicJob? _existingJob;
@@ -467,6 +473,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Clear legacy items (now per-bike)
           _partItems.clear();
           _serviceItems.clear();
+
+          // Image URLs
+          _imageUrls = List.from(job.imageUrls);
         });
       }
     } catch (e) {
@@ -881,6 +890,32 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
 
+      // Upload new images
+      List<String> uploadedUrls = List.from(_imageUrls);
+
+      if (_newImages.isNotEmpty) {
+        for (var imageData in _newImages) {
+          try {
+            final timestamp = DateTime.now().millisecondsSinceEpoch;
+            final fileName = 'job_${_selectedCustomer!.id}_$timestamp.jpg';
+
+            final url = await ImageService.uploadBytes(
+              bytes: imageData.bytes,
+              fileName: fileName,
+              bucket: 'vinabike-assets', // Using existing public bucket
+              folder: 'mechanic_jobs/${_selectedCustomer!.id!}',
+            );
+
+            if (url != null) {
+              uploadedUrls.add(url);
+            }
+          } catch (e) {
+            debugPrint('Error uploading image: $e');
+            // Continue with other images even if one fails
+          }
+        }
+      }
+
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('User does not have a tenant_id. Cannot proceed.');
@@ -935,6 +970,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         invoiceId: _existingJob?.invoiceId,
         isInvoiced: _existingJob?.isInvoiced ?? false,
         isPaid: _existingJob?.isPaid ?? false,
+        imageUrls: uploadedUrls,
       );
 
       String jobId;
@@ -1610,6 +1646,247 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
+  Future<void> _pickAttachment() async {
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      final result = await ImageService.pickFile();
+
+      setState(() {
+        _isUploadingImage = false;
+      });
+
+      if (result != null) {
+        setState(() {
+          _newImages.add((bytes: result.bytes, name: result.name));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al adjuntar archivo: $e')),
+        );
+      }
+    }
+  }
+
+  bool _isImage(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].contains(ext);
+  }
+
+  void _removeImage(int index, bool isNew) {
+    setState(() {
+      if (isNew) {
+        _newImages.removeAt(index);
+      } else {
+        _imageUrls.removeAt(index);
+      }
+    });
+  }
+
+  Widget _buildAttachmentsSection() {
+    if (_imageUrls.isEmpty && _newImages.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _isUploadingImage ? null : _pickAttachment,
+            icon: _isUploadingImage
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.attach_file),
+            label: const Text('Adjuntar archivo'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sin adjuntos',
+            style:
+                TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate item width based on available width
+            final crossAxisCount =
+                (constraints.maxWidth / 120).floor().clamp(2, 6);
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1,
+              ),
+              itemCount: _imageUrls.length +
+                  _newImages.length +
+                  1, // +1 for add button
+              itemBuilder: (context, index) {
+                // Add button is always last
+                if (index == _imageUrls.length + _newImages.length) {
+                  return InkWell(
+                    onTap: _isUploadingImage ? null : _pickAttachment,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey[50], // Sutil background
+                      ),
+                      child: Center(
+                        child: _isUploadingImage
+                            ? const CircularProgressIndicator()
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.attach_file,
+                                      color: Colors.grey[600]),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Agregar',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  );
+                }
+
+                // Determine if it's an existing URL or a new local image
+                final isNew = index >= _imageUrls.length;
+                final relativeIndex = isNew ? index - _imageUrls.length : index;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Image thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: isNew
+                          ? (_isImage(_newImages[relativeIndex].name)
+                              ? Image.memory(
+                                  _newImages[relativeIndex].bytes,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  color: Colors.grey[100],
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.insert_drive_file,
+                                          color: Colors.blueGrey, size: 32),
+                                      const SizedBox(height: 4),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4),
+                                        child: Text(
+                                          _newImages[relativeIndex].name,
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.black87,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ))
+                          : (_isImage(_imageUrls[relativeIndex])
+                              ? Image.network(
+                                  _imageUrls[relativeIndex],
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[200],
+                                      child: const Center(
+                                        child: Icon(Icons.broken_image,
+                                            color: Colors.grey),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  color: Colors.grey[100],
+                                  child: const Center(
+                                    child: Icon(Icons.insert_drive_file,
+                                        color: Colors.blueGrey, size: 32),
+                                  ),
+                                )),
+                    ),
+                    // Delete button overlay
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () => _removeImage(relativeIndex, isNew),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // "New" badge for local images
+                    if (isNew)
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).primaryColor.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'NUEVO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _buildForm(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1640,6 +1917,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           icon: Icons.shopping_basket_outlined,
                           title: 'Productos y Servicios',
                           child: _buildPartsSection(),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSectionCard(
+                          theme,
+                          icon: Icons.attach_file,
+                          title: 'Adjuntos',
+                          child: _buildAttachmentsSection(),
                         ),
                       ],
                     ),
@@ -1717,6 +2001,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   icon: Icons.shopping_basket_outlined,
                   title: 'Productos y Servicios',
                   child: _buildPartsSection(),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  theme,
+                  icon: Icons.attach_file,
+                  title: 'Adjuntos',
+                  child: _buildAttachmentsSection(),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(

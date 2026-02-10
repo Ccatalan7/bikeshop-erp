@@ -20,13 +20,18 @@ import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:cross_file/cross_file.dart';
+
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/hover_zoom_image.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../settings/services/appearance_service.dart';
+import '../../../shared/services/image_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
@@ -73,6 +78,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Expanded rows (multi-bike display)
   final Set<String> _expandedJobIds = {};
+  String? _draggingJobId; // To track which row is being dragged over
 
   bool _isLoading = true;
   bool _needsRefresh = false;
@@ -412,6 +418,16 @@ class _PegasTablePageState extends State<PegasTablePage>
         sortable: false,
       ),
       ColumnConfig(
+        id: 'attachments',
+        label: 'Adjuntos',
+        width: 60,
+        minWidth: 50,
+        maxWidth: 70,
+        visible: true,
+        sortable: false,
+        resizable: false,
+      ),
+      ColumnConfig(
         id: 'actions',
         label: 'Acciones',
         width: 120,
@@ -600,7 +616,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Future<void> _loadColumnOrder() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedOrder = prefs.getStringList('pegas_column_order');
+      final savedOrder = prefs.getStringList('pegas_column_order_v2');
 
       if (savedOrder != null && savedOrder.isNotEmpty && mounted) {
         setState(() {
@@ -634,7 +650,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final prefs = await SharedPreferences.getInstance();
       final columnIds = _columns.map((col) => col.id).toList();
-      await prefs.setStringList('pegas_column_order', columnIds);
+      await prefs.setStringList('pegas_column_order_v2', columnIds);
     } catch (e) {
       debugPrint('Error saving column order: $e');
     }
@@ -2773,6 +2789,146 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  Future<void> _handleDrop(MechanicJob job, DropDoneDetails details) async {
+    if (details.files.isEmpty) return;
+    await _uploadFilesForJob(job, details.files);
+  }
+
+  Future<void> _pickFileForJob(MechanicJob job) async {
+    try {
+      final result = await ImageService.pickFile();
+      if (result != null) {
+        // pickFile returns bytes/name, but we need XFile for _uploadFilesForJob if we want to reuse it directly.
+        // However, ImageService.pickFile returns a record.
+        // Let's adjust _uploadFilesForJob to take bytes/name or use ImageService.uploadBytes directly here.
+        // Actually, let's just implement the upload here reusing logic or make _uploadFilesForJob flexible.
+        // Better: standardize on bytes/name for the helper.
+
+        await _uploadFileBytesForJob(job, result.bytes, result.name);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al seleccionar archivo: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadFilesForJob(MechanicJob job, List<XFile> files) async {
+    if (job.customerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Error: No se puede adjuntar archivos a un trabajo sin cliente asignado')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Subiendo archivos...')),
+    );
+
+    final newUrls = <String>[];
+    int successCount = 0;
+
+    try {
+      for (final file in files) {
+        final bytes = await file.readAsBytes();
+        final name = file.name;
+
+        final url = await ImageService.uploadBytes(
+          bytes: bytes,
+          fileName: name,
+          bucket: 'vinabike-assets',
+          folder: 'mechanic_jobs/${job.customerId}/',
+        );
+
+        if (url != null) {
+          newUrls.add(url);
+          successCount++;
+        }
+      }
+
+      await _updateJobImages(job, newUrls, successCount);
+    } catch (e) {
+      _handleUploadError(e);
+    }
+  }
+
+  Future<void> _uploadFileBytesForJob(
+      MechanicJob job, Uint8List bytes, String name) async {
+    if (job.customerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Error: No se puede adjuntar archivos a un trabajo sin cliente asignado')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Subiendo archivo...')),
+    );
+
+    try {
+      final url = await ImageService.uploadBytes(
+        bytes: bytes,
+        fileName: name,
+        bucket: 'vinabike-assets',
+        folder: 'mechanic_jobs/${job.customerId}/',
+      );
+
+      if (url != null) {
+        await _updateJobImages(job, [url], 1);
+      }
+    } catch (e) {
+      _handleUploadError(e);
+    }
+  }
+
+  Future<void> _updateJobImages(
+      MechanicJob job, List<String> newUrls, int successCount) async {
+    if (newUrls.isNotEmpty) {
+      final updatedImageUrls = [...job.imageUrls, ...newUrls];
+
+      // Optimistic update
+      setState(() {
+        final index = _jobs.indexWhere((j) => j.id == job.id);
+        if (index != -1) {
+          _jobs[index] = job.copyWith(imageUrls: updatedImageUrls);
+        }
+      });
+
+      await _bikeshopService
+          .updateJob(job.copyWith(imageUrls: updatedImageUrls));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('$successCount archivos subidos exitosamente')),
+        );
+      }
+    }
+  }
+
+  void _handleUploadError(dynamic e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Error al subir archivos: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+    // Revert optimistic update if needed or just reload
+    _loadData();
+  }
+
+  bool _isImage(String nameOrUrl) {
+    final ext = nameOrUrl.split('.').last.split('?').first.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].contains(ext);
+  }
+
   /// Apply column reorder using display indices (for live preview drag)
   void _applyColumnReorder(String sourceId, int targetDisplayIndex) {
     final visibleColumns = _columns.where((col) => col.visible).toList();
@@ -3831,6 +3987,88 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                 ),
               ],
+            ),
+          ),
+        );
+
+      case 'attachments':
+        final imageUrl = job.imageUrls.isNotEmpty ? job.imageUrls.first : null;
+        final count = job.imageUrls.length;
+        final isImg = imageUrl != null ? _isImage(imageUrl) : false;
+        final isDroppingOnThis = _draggingJobId == job.id;
+
+        return DropTarget(
+          onDragDone: (details) => _handleDrop(job, details),
+          onDragEntered: (_) => setState(() => _draggingJobId = job.id),
+          onDragExited: (_) => setState(() {
+            if (_draggingJobId == job.id) _draggingJobId = null;
+          }),
+          child: InkWell(
+            onTap: () => _pickFileForJob(job),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              decoration: isDroppingOnThis
+                  ? BoxDecoration(
+                      color: Colors.blue.withOpacity(0.2),
+                      border: Border.all(color: Colors.blue, width: 2),
+                      borderRadius: BorderRadius.circular(4),
+                    )
+                  : null,
+              padding: const EdgeInsets.all(2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (imageUrl != null) ...[
+                    isImg
+                        ? HoverZoomImage(imageUrl: imageUrl, size: 32)
+                        : Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: const Icon(Icons.insert_drive_file,
+                                size: 16, color: Colors.blueGrey),
+                          ),
+                    if (count > 1) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '+${count - 1}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: Colors.grey.shade300,
+                            style: BorderStyle.solid),
+                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.grey.shade50,
+                      ),
+                      child: Center(
+                        child: Icon(Icons.add,
+                            size: 16, color: Colors.grey.shade400),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );

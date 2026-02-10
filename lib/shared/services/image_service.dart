@@ -9,6 +9,8 @@ import 'error_reporting_service.dart';
 import '../constants/storage_constants.dart';
 
 // Conditional import: use web implementation on web, mobile on other platforms
+import 'package:file_picker/file_picker.dart';
+
 import 'image_service_mobile.dart'
     if (dart.library.html) 'image_service_web.dart';
 
@@ -96,16 +98,16 @@ class ImageService {
   // ============================================================
   // IMAGE OPTIMIZATION - Auto-create WebP versions
   // ============================================================
-  
+
   /// Optimization settings
   static const int _maxOptimizedWidth = 1200;
   static const int _optimizedQuality = 80;
 
   /// Upload product image with automatic optimization.
-  /// 
+  ///
   /// Returns both URLs: original (full quality) and optimized (compressed).
   /// The optimized version is resized to max 1200px width and compressed to JPEG.
-  /// 
+  ///
   /// Usage:
   /// ```dart
   /// final result = await ImageService.uploadProductImageWithOptimization(
@@ -115,7 +117,8 @@ class ImageService {
   /// // result.originalUrl - Full quality image
   /// // result.optimizedUrl - Compressed version for web
   /// ```
-  static Future<({String originalUrl, String? optimizedUrl})> uploadProductImageWithOptimization({
+  static Future<({String originalUrl, String? optimizedUrl})>
+      uploadProductImageWithOptimization({
     required Uint8List bytes,
     required String fileName,
   }) async {
@@ -140,7 +143,7 @@ class ImageService {
           // Generate optimized filename with .jpg extension
           final baseName = fileName.replaceAll(RegExp(r'\.[^.]+$'), '');
           final optimizedFileName = '${baseName}_optimized.jpg';
-          
+
           optimizedUrl = await uploadBytes(
             bytes: optimizedBytes,
             fileName: optimizedFileName,
@@ -148,12 +151,15 @@ class ImageService {
             folder: StorageFolders.productOptimized,
             contentType: 'image/jpeg',
           );
-          
+
           if (optimizedUrl != null) {
             final originalKB = (bytes.length / 1024).toStringAsFixed(1);
-            final optimizedKB = (optimizedBytes.length / 1024).toStringAsFixed(1);
-            final reduction = ((1 - optimizedBytes.length / bytes.length) * 100).toStringAsFixed(0);
-            debugPrint('📸 Image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
+            final optimizedKB =
+                (optimizedBytes.length / 1024).toStringAsFixed(1);
+            final reduction = ((1 - optimizedBytes.length / bytes.length) * 100)
+                .toStringAsFixed(0);
+            debugPrint(
+                '📸 Image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
           }
         }
       } catch (e) {
@@ -163,14 +169,16 @@ class ImageService {
 
       return (originalUrl: originalUrl, optimizedUrl: optimizedUrl);
     } catch (e, stackTrace) {
-      ErrorReportingService.report('Product image upload failed: $e', stackTrace);
+      ErrorReportingService.report(
+          'Product image upload failed: $e', stackTrace);
       rethrow;
     }
   }
 
   /// Create an optimized version of the image.
   /// Resizes to max width and compresses as JPEG.
-  static Future<Uint8List?> _createOptimizedImage(Uint8List bytes, String fileName) async {
+  static Future<Uint8List?> _createOptimizedImage(
+      Uint8List bytes, String fileName) async {
     try {
       // Decode the image
       final originalImage = img.decodeImage(bytes);
@@ -183,12 +191,14 @@ class ImageService {
       img.Image optimized = originalImage;
       if (originalImage.width > _maxOptimizedWidth) {
         optimized = img.copyResize(originalImage, width: _maxOptimizedWidth);
-        debugPrint('📐 Resized: ${originalImage.width}x${originalImage.height} → ${optimized.width}x${optimized.height}');
+        debugPrint(
+            '📐 Resized: ${originalImage.width}x${originalImage.height} → ${optimized.width}x${optimized.height}');
       }
 
       // Encode as compressed JPEG
-      final compressedBytes = img.encodeJpg(optimized, quality: _optimizedQuality);
-      
+      final compressedBytes =
+          img.encodeJpg(optimized, quality: _optimizedQuality);
+
       return Uint8List.fromList(compressedBytes);
     } catch (e) {
       debugPrint('⚠️ Image optimization error: $e');
@@ -197,10 +207,10 @@ class ImageService {
   }
 
   /// Upload website block image with automatic optimization.
-  /// 
+  ///
   /// For banners, heroes, and other website blocks.
   /// Returns optimized URL (falls back to original if optimization fails).
-  /// 
+  ///
   /// Unlike product images, we only return the optimized URL since
   /// website blocks don't need dual storage tracking.
   static Future<String?> uploadWebsiteImageWithOptimization({
@@ -213,7 +223,7 @@ class ImageService {
       String uploadFileName = fileName;
       String folder = 'website/blocks';
       String? contentType;
-      
+
       try {
         final optimizedBytes = await _createOptimizedImage(bytes, fileName);
         if (optimizedBytes != null && optimizedBytes.length < bytes.length) {
@@ -223,11 +233,13 @@ class ImageService {
           uploadFileName = '${baseName}_optimized.jpg';
           folder = 'website/blocks/optimized';
           contentType = 'image/jpeg';
-          
+
           final originalKB = (bytes.length / 1024).toStringAsFixed(1);
           final optimizedKB = (optimizedBytes.length / 1024).toStringAsFixed(1);
-          final reduction = ((1 - optimizedBytes.length / bytes.length) * 100).toStringAsFixed(0);
-          debugPrint('🌐 Website image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
+          final reduction = ((1 - optimizedBytes.length / bytes.length) * 100)
+              .toStringAsFixed(0);
+          debugPrint(
+              '🌐 Website image optimized: $originalKB KB → $optimizedKB KB ($reduction% smaller)');
         }
       } catch (e) {
         debugPrint('⚠️ Website image optimization failed (using original): $e');
@@ -244,7 +256,8 @@ class ImageService {
 
       return url;
     } catch (e, stackTrace) {
-      ErrorReportingService.report('Website image upload failed: $e', stackTrace);
+      ErrorReportingService.report(
+          'Website image upload failed: $e', stackTrace);
       rethrow;
     }
   }
@@ -252,6 +265,28 @@ class ImageService {
   /// Pick image from file system - delegates to platform-specific implementation
   static Future<({Uint8List bytes, String name})?> pickImage() async {
     return ImageServicePlatform.pickImagePlatform();
+  }
+
+  /// Pick any file from file system
+  static Future<({Uint8List bytes, String name})?> pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData:
+            true, // Needed for web and some platforms to get bytes immediately
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          return (bytes: file.bytes!, name: file.name);
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error picking file: $e');
+      return null;
+    }
   }
 
   // Widget for displaying cached network images with fallback
@@ -270,13 +305,12 @@ class ImageService {
       imageWidget = errorWidget ?? _buildDefaultPlaceholder();
     } else {
       // Calculate optimal cache dimensions (scale down large images)
-      final cacheWidth = width != null && width.isFinite 
-          ? (width * 2).toInt()  // 2x for retina displays
-          : 800;  // Default max width for lists
-      final cacheHeight = height != null && height.isFinite
-          ? (height * 2).toInt()
-          : 800;
-      
+      final cacheWidth = width != null && width.isFinite
+          ? (width * 2).toInt() // 2x for retina displays
+          : 800; // Default max width for lists
+      final cacheHeight =
+          height != null && height.isFinite ? (height * 2).toInt() : 800;
+
       imageWidget = CachedNetworkImage(
         imageUrl: imageUrl,
         width: width,
@@ -343,7 +377,8 @@ class ImageService {
       imageUrl: imageUrl,
       width: containerSize,
       height: containerSize,
-      fit: BoxFit.contain, // Changed from cover to contain - shows full image without cropping
+      fit: BoxFit
+          .contain, // Changed from cover to contain - shows full image without cropping
       errorWidget: Container(
         width: containerSize,
         height: containerSize,
