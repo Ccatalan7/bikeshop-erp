@@ -214,6 +214,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             quantity: 1,
             unitCost: product.cost,
             discount: 0,
+            description:
+                product.description, // Initialize with product description
           );
           final newEntry = _PurchaseLineEntry(line: newLine);
           newEntry.attachListeners(() {
@@ -495,6 +497,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   matchedProduct
                       .cost, // Use OCR price if available, else product cost
               discount: 0,
+              description: matchedProduct
+                  .description, // Initialize with product description
             );
 
             final newEntry = _PurchaseLineEntry(line: newLine);
@@ -682,6 +686,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     unitCost: product.cost > 0 ? product.cost : product.price,
                     discount: 0,
                     ivaRate: _ivaRate,
+                    description: product
+                        .description, // Initialize with product description
                   ),
                 );
                 entry.attachListeners(_recalculateTotals);
@@ -699,6 +705,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       unitCost: 0, // User will fill this
                       discount: 0,
                       ivaRate: _ivaRate,
+                      description:
+                          item['notes'] as String?, // Map notes to description
                     ),
                   );
                   entry.attachListeners(_recalculateTotals);
@@ -716,6 +724,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   unitCost: 0, // User will fill this
                   discount: 0,
                   ivaRate: _ivaRate,
+                  description:
+                      item['notes'] as String?, // Map notes to description
                 ),
               );
               entry.attachListeners(_recalculateTotals);
@@ -821,6 +831,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           unitCost: item.unitCost,
           discount: item.discount,
           ivaRate: item.ivaRate,
+          description: item.description, // Added description
         ),
       );
       entry.attachListeners(_recalculateTotals);
@@ -3008,7 +3019,8 @@ class _PurchaseLineEntry {
             TextEditingController(text: line.productName ?? ''),
         productSkuController =
             TextEditingController(text: line.productSku ?? ''),
-        descriptionController = TextEditingController(),
+        descriptionController = TextEditingController(
+            text: line.description ?? ''), // Initialize with description
         productNameFocusNode = FocusNode();
 
   PurchaseInvoiceItem line;
@@ -3085,6 +3097,11 @@ class _PurchaseLineEntry {
     // Product name is updated ONLY when onProductSelected is called in ProductAutocompleteField
     productSkuController.addListener(() {
       line = line.copyWith(productSku: productSkuController.text);
+      onChanged();
+    });
+    // Add listener for description updates
+    descriptionController.addListener(() {
+      line = line.copyWith(description: descriptionController.text);
       onChanged();
     });
   }

@@ -2594,6 +2594,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
 
       return Container(
+        key: ValueKey(col.id),
         width: col.width,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Checkbox(
@@ -2718,12 +2719,14 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (col.maxWidth != null && col.maxWidth == col.width) {
       return Container(
+        key: ValueKey(col.id),
         width: col.width,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: baseContent,
       );
     } else {
       return Expanded(
+        key: ValueKey(col.id),
         flex: (col.width ~/ 10).clamp(1, 100),
         child: Container(
           constraints: BoxConstraints(minWidth: col.minWidth),
@@ -2790,6 +2793,9 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _handleDrop(MechanicJob job, DropDoneDetails details) async {
+    setState(() {
+      _draggingJobId = null;
+    });
     if (details.files.isEmpty) return;
     await _uploadFilesForJob(job, details.files);
   }
@@ -4628,49 +4634,54 @@ class _PegasTablePageState extends State<PegasTablePage>
   void _showColumnCustomizer() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Personalizar Columnas'),
-        content: SizedBox(
-          width: 400,
-          child: ReorderableListView(
-            shrinkWrap: true,
-            onReorder: (oldIndex, newIndex) {
-              setState(() {
-                if (newIndex > oldIndex) newIndex--;
-                final item = _columns.removeAt(oldIndex);
-                _columns.insert(newIndex, item);
-              });
-              _saveColumnOrder(); // Save the new column order
-            },
-            children: _columns.map((col) {
-              return CheckboxListTile(
-                key: ValueKey(col.id),
-                title: Row(
-                  children: [
-                    const Icon(Icons.drag_handle, size: 20),
-                    const SizedBox(width: 8),
-                    Text(col.label),
-                  ],
-                ),
-                value: col.visible,
-                onChanged:
-                    col.id == 'job_number' // Always keep job number visible
-                        ? null
-                        : (value) {
-                            setState(() => col.visible = value ?? true);
-                            Navigator.pop(context);
-                            _showColumnCustomizer();
-                          },
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Personalizar Columnas'),
+            content: SizedBox(
+              width: 400,
+              child: ReorderableListView(
+                shrinkWrap: true,
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex--;
+                    final item = _columns.removeAt(oldIndex);
+                    _columns.insert(newIndex, item);
+                  });
+                  setDialogState(() {});
+                  _saveColumnOrder(); // Save the new column order
+                },
+                children: _columns.map((col) {
+                  return CheckboxListTile(
+                    key: ValueKey(col.id),
+                    title: Row(
+                      children: [
+                        const Icon(Icons.drag_handle, size: 20),
+                        const SizedBox(width: 8),
+                        Text(col.label),
+                      ],
+                    ),
+                    value: col.visible,
+                    onChanged:
+                        col.id == 'job_number' // Always keep job number visible
+                            ? null
+                            : (value) {
+                                setState(() => col.visible = value ?? true);
+                                setDialogState(() {});
+                                _saveColumnOrder();
+                              },
+                  );
+                }).toList(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

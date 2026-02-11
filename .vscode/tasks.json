@@ -22,7 +22,10 @@
 		{
 			"label": "🚀 Deploy to Firebase (Both Sites)",
 			"type": "shell",
-			"command": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
+			"command": "bash scripts/deploy.sh",
+			"windows": {
+				"command": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1"
+			},
 			"problemMatcher": [],
 			"group": "build"
 		}

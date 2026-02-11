@@ -56,7 +56,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   final TextEditingController _descriptionController = TextEditingController();
 
   DateTime _date = DateTime.now();
-  ExpenseDocumentType _documentType = ExpenseDocumentType.invoice;
+  ExpenseDocumentType _documentType = ExpenseDocumentType.receipt;
   Account? _selectedAccount;
   PaymentMethod? _selectedPaymentMethod;
   shared_supplier.Supplier? _selectedSupplier;
@@ -151,7 +151,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
 
         if (_expenseAccounts.isNotEmpty) {
           _selectedAccount = _expenseAccounts.firstWhere(
-            (a) => a.code == '5200',
+            (a) => a.code == '6801' || a.code == '680100',
             orElse: () => _expenseAccounts.first,
           );
         }

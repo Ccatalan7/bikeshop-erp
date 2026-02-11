@@ -39,7 +39,8 @@ class PurchaseInvoice {
   final double ivaAmount;
   final double total;
   final TaxTreatment taxTreatment; // actual tax choice for this purchase
-  final double netAmount; // net amount before IVA (total÷1.19 when tax_included)
+  final double
+      netAmount; // net amount before IVA (total÷1.19 when tax_included)
   final List<PurchaseInvoiceItem> items;
   final List<PurchaseAdditionalCost> additionalCosts;
   final DateTime createdAt;
@@ -271,6 +272,7 @@ class PurchaseInvoiceItem {
   final String productId;
   final String? productName;
   final String? productSku;
+  final String? description; // Add description field
   final double quantity;
   final double unitCost;
   final double discount;
@@ -281,6 +283,7 @@ class PurchaseInvoiceItem {
     required this.productId,
     this.productName,
     this.productSku,
+    this.description,
     this.quantity = 1,
     required this.unitCost,
     this.discount = 0,
@@ -292,6 +295,7 @@ class PurchaseInvoiceItem {
     String? productId,
     String? productName,
     String? productSku,
+    String? description,
     double? quantity,
     double? unitCost,
     double? discount,
@@ -302,6 +306,7 @@ class PurchaseInvoiceItem {
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
+      description: description ?? this.description,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
       discount: discount ?? this.discount,
@@ -315,6 +320,7 @@ class PurchaseInvoiceItem {
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] as String?,
       productSku: json['product_sku'] as String?,
+      description: json['description'] as String?,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
@@ -328,6 +334,7 @@ class PurchaseInvoiceItem {
       'product_id': productId,
       'product_name': productName,
       'product_sku': productSku,
+      'description': description,
       'quantity': quantity,
       'unit_cost': unitCost,
       'discount': discount,
