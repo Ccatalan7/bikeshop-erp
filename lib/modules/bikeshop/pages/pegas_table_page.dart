@@ -6861,10 +6861,99 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
     _textController.text = _getCurrentFieldValue();
     _isOpen = true;
 
+    // Calculate position to prevent clipping
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    final viewInsets = MediaQuery.of(context).viewInsets; // For keyboard
+    final globalPosition = renderBox.localToGlobal(Offset.zero);
+
+    // Fixed Dimensions
+    const double maxPopupHeight = 330.0;
+
+    // Logic moved inside builder to be reactive
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
+
+        // RECALCULATE POSITION ON EVERY BUILD (Reactive to Keyboard/Resize)
+        final size = MediaQuery.of(context).size;
+        final padding = MediaQuery.of(context).padding;
+        final viewInsets = MediaQuery.of(context).viewInsets; // For keyboard
+
+        final globalPosition = renderBox.localToGlobal(Offset.zero);
+
+        // Fixed Dimensions
+        const double popupWidth = 420.0;
+        const double maxPopupHeight = 330.0;
+
+        // ---- 1. VERTICAL DECISION ----
+        final double cellHeight = renderBox.size.height;
+        final double cellBottomY = globalPosition.dy + cellHeight;
+        // Space below: Screen height - bottom safe area - keyboard - cell bottom - margin
+        // Aggressive margin: 50px to absolutely avoid browser/system bars
+        final double spaceBelow =
+            size.height - padding.bottom - viewInsets.bottom - 50 - cellBottomY;
+        // Space above: Top of cell - top safe area - margin
+        final double spaceAbove = globalPosition.dy - padding.top - 50;
+
+        // DECISION LOGIC:
+        // Eagerly flip up if we are getting "cramped" below.
+        // We define "cramped" as having less than max height + 100px buffer.
+
+        bool fitsBelowComfortably = spaceBelow > (maxPopupHeight + 100);
+        bool showAbove;
+
+        if (fitsBelowComfortably) {
+          showAbove = false;
+        } else {
+          // If tight below, prefer above if it offers MORE space (or equal)
+          showAbove = spaceAbove >= spaceBelow;
+        }
+
+        // Calculate available space based on decision
+        double availableHeight = showAbove ? spaceAbove : spaceBelow;
+
+        // Constrain height to available space, but cap at maxPopupHeight
+        double constrainedHeight =
+            availableHeight > maxPopupHeight ? maxPopupHeight : availableHeight;
+        // ensure min usability
+        if (constrainedHeight < 150) constrainedHeight = 150;
+
+        // ---- 2. HORIZONTAL DECISION ----
+        final bool isRightSide = globalPosition.dx > (size.width / 2);
+
+        // ---- 3. CONFIGURE ANCHORS ----
+        Alignment targetAnchor;
+        Alignment followerAnchor;
+        Offset offset;
+
+        if (showAbove) {
+          if (isRightSide) {
+            // Bottom-Right of Popup to Top-Right of Cell
+            targetAnchor = Alignment.topRight;
+            followerAnchor = Alignment.bottomRight;
+            offset = const Offset(0, -5);
+          } else {
+            targetAnchor = Alignment.topLeft;
+            followerAnchor = Alignment.bottomLeft;
+            offset = const Offset(0, -5);
+          }
+        } else {
+          // Show Below
+          if (isRightSide) {
+            targetAnchor = Alignment.bottomRight;
+            followerAnchor = Alignment.topRight;
+            offset = const Offset(0, 5);
+          } else {
+            targetAnchor = Alignment.bottomLeft;
+            followerAnchor = Alignment.topLeft;
+            offset = const Offset(0, 5);
+          }
+        }
 
         return Stack(
           children: [
@@ -6878,16 +6967,18 @@ class _JobDetailsCellState extends State<_JobDetailsCell> {
             ),
             // Popup content
             Positioned(
-              width: 420,
+              width: popupWidth,
               child: CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
-                offset: const Offset(0, 30),
+                targetAnchor: targetAnchor,
+                followerAnchor: followerAnchor,
+                offset: offset,
                 child: Material(
                   elevation: 8,
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    constraints: const BoxConstraints(maxHeight: 320),
+                    constraints: BoxConstraints(maxHeight: constrainedHeight),
                     decoration: BoxDecoration(
                       color: isDark ? Colors.grey[850] : Colors.white,
                       borderRadius: BorderRadius.circular(8),
