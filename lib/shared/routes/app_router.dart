@@ -21,6 +21,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         BikeBrandsPage,
         BikeEncyclopediaPage,
         BluetoothScannerPage,
+        BugListPage,
         BrandFormPage,
         BrandListPage,
         CategoryFormPage,
@@ -2217,6 +2218,17 @@ class AppRouter {
               title: 'Liquidaciones',
               child: Center(child: Text('Próximamente')),
             ),
+          ),
+        ),
+
+        // Debug Module (Bug Tracking)
+        GoRoute(
+          path: '/debug',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.BugListPage(),
           ),
         ),
 

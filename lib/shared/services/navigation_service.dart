@@ -17,6 +17,7 @@ const List<String> defaultModuleOrder = [
   'pos',
   'hr',
   'tools',
+  'debug',
 ];
 
 /// Service to manage navigation drawer visibility state

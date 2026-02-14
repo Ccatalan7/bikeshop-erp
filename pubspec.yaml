@@ -91,6 +91,7 @@ dependencies:
   flutter_widget_from_html: ^0.15.0
   font_awesome_flutter: ^10.7.0
   desktop_drop: ^0.7.0
+  super_drag_and_drop: ^0.9.1
 
 dependency_overrides:
   # Stub out Windows local notifications - the real plugin requires ATL headers

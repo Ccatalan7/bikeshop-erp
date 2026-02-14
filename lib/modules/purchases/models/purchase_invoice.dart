@@ -41,6 +41,11 @@ class PurchaseInvoice {
   final TaxTreatment taxTreatment; // actual tax choice for this purchase
   final double
       netAmount; // net amount before IVA (total÷1.19 when tax_included)
+  final String discountType; // 'percentage' or 'amount'
+  final double discountValue; // raw input (e.g. 10 for 10%, or 5000 for $5000)
+  final double discountAmount; // computed discount in CLP
+  final bool
+      isDiscountBeforeTax; // true = reduces tax base, false = reduces total
   final List<PurchaseInvoiceItem> items;
   final List<PurchaseAdditionalCost> additionalCosts;
   final DateTime createdAt;
@@ -74,6 +79,10 @@ class PurchaseInvoice {
     this.total = 0,
     this.taxTreatment = TaxTreatment.noTax,
     this.netAmount = 0,
+    this.discountType = 'percentage',
+    this.discountValue = 0,
+    this.discountAmount = 0,
+    this.isDiscountBeforeTax = true,
     this.items = const [],
     this.additionalCosts = const [],
     DateTime? createdAt,
@@ -108,6 +117,10 @@ class PurchaseInvoice {
     double? total,
     TaxTreatment? taxTreatment,
     double? netAmount,
+    String? discountType,
+    double? discountValue,
+    double? discountAmount,
+    bool? isDiscountBeforeTax,
     List<PurchaseInvoiceItem>? items,
     List<PurchaseAdditionalCost>? additionalCosts,
     DateTime? createdAt,
@@ -139,6 +152,10 @@ class PurchaseInvoice {
       total: total ?? this.total,
       taxTreatment: taxTreatment ?? this.taxTreatment,
       netAmount: netAmount ?? this.netAmount,
+      discountType: discountType ?? this.discountType,
+      discountValue: discountValue ?? this.discountValue,
+      discountAmount: discountAmount ?? this.discountAmount,
+      isDiscountBeforeTax: isDiscountBeforeTax ?? this.isDiscountBeforeTax,
       items: items ?? this.items,
       additionalCosts: additionalCosts ?? this.additionalCosts,
       createdAt: createdAt ?? this.createdAt,
@@ -178,6 +195,10 @@ class PurchaseInvoice {
       total: (json['total'] as num?)?.toDouble() ?? 0,
       taxTreatment: TaxTreatment.fromString(json['tax_treatment']?.toString()),
       netAmount: (json['net_amount'] as num?)?.toDouble() ?? 0,
+      discountType: json['discount_type'] as String? ?? 'percentage',
+      discountValue: (json['discount_value'] as num?)?.toDouble() ?? 0,
+      discountAmount: (json['discount_amount'] as num?)?.toDouble() ?? 0,
+      isDiscountBeforeTax: json['is_discount_before_tax'] as bool? ?? true,
       items: items
           .map((item) => PurchaseInvoiceItem.fromJson(_ensureMap(item)))
           .toList(),
@@ -224,6 +245,10 @@ class PurchaseInvoice {
       'total': total,
       'tax_treatment': taxTreatment.toValue(),
       'net_amount': netAmount,
+      'discount_type': discountType,
+      'discount_value': discountValue,
+      'discount_amount': discountAmount,
+      'is_discount_before_tax': isDiscountBeforeTax,
       'items': items.map((item) => item.toJson()).toList(),
       'additional_costs': additionalCosts.map((cost) => cost.toJson()).toList(),
       'prepayment_model': prepaymentModel,

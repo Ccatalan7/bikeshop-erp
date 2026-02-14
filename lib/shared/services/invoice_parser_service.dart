@@ -20,6 +20,26 @@ class ParsedInvoice {
     required this.rawText,
   });
 
+  ParsedInvoice copyWith({
+    String? rut,
+    String? invoiceNumber,
+    DateTime? date,
+    double? total,
+    String? supplierName,
+    List<ParsedLineItem>? lineItems,
+    String? rawText,
+  }) {
+    return ParsedInvoice(
+      rut: rut ?? this.rut,
+      invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      date: date ?? this.date,
+      total: total ?? this.total,
+      supplierName: supplierName ?? this.supplierName,
+      lineItems: lineItems ?? this.lineItems,
+      rawText: rawText ?? this.rawText,
+    );
+  }
+
   @override
   String toString() {
     return 'ParsedInvoice(rut: $rut, number: $invoiceNumber, date: $date, total: $total, supplier: $supplierName, items: $lineItems)';

@@ -8892,6 +8892,7 @@ begin
             
             -- Record Stock Movement for Component
             insert into public.stock_movements (
+              tenant_id,
               product_id,
               quantity,
               movement_type,
@@ -8902,6 +8903,7 @@ begin
               created_at,
               updated_at
             ) values (
+              p_invoice.tenant_id,
               v_child.component_product_id,
               v_child_qty,
               'purchase_invoice',
@@ -8924,6 +8926,7 @@ begin
 
         -- Record stock movement
         insert into public.stock_movements (
+          tenant_id,
           product_id,
           quantity,
           movement_type,
@@ -8934,6 +8937,7 @@ begin
           created_at,
           updated_at
         ) values (
+          p_invoice.tenant_id,
           v_resolved_product_id,
           v_quantity_int,
           'purchase_invoice',

@@ -25,14 +25,24 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
   void initState() {
     super.initState();
     _paymentMethodService = context.read<PaymentMethodService>();
+    // Load payment methods to display names correctly
+    _paymentMethodService.loadPaymentMethods();
+    _paymentMethodService.addListener(_onPaymentMethodsChanged);
     _loadPayments();
     _searchController.addListener(_filterPayments);
   }
 
   @override
   void dispose() {
+    _paymentMethodService.removeListener(_onPaymentMethodsChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onPaymentMethodsChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadPayments({bool refresh = false}) async {

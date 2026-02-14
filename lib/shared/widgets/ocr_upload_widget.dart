@@ -475,11 +475,27 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           ),
           child: Column(
             children: [
-              _buildDetailRow(
-                Icons.store,
-                'Proveedor',
-                _ocrSupplierName ?? data.supplierName ?? 'No detectado',
-                isBold: true,
+              InkWell(
+                onTap: _showSupplierSelectionDialog,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildDetailRow(
+                        Icons.store,
+                        'Proveedor',
+                        _ocrSupplierName ??
+                            data.supplierName ??
+                            'No detectado (Toca para seleccionar)',
+                        isBold: true,
+                        valueColor:
+                            (_ocrSupplierName ?? data.supplierName) == null
+                                ? Colors.orange
+                                : null,
+                      ),
+                    ),
+                    const Icon(Icons.edit, size: 16, color: Colors.grey),
+                  ],
+                ),
               ),
               const Divider(height: 24),
               Row(
@@ -833,6 +849,72 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         .toList();
 
     setState(() => _showBulkCreate = true);
+  }
+
+  Future<void> _showSupplierSelectionDialog() async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final dbService = DatabaseService();
+      final suppliers = await dbService.select('suppliers');
+      final supplierList = suppliers
+          .map((s) => shared_supplier.Supplier.fromJson(s))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading start
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Seleccionar Proveedor'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: ListView.builder(
+                itemCount: supplierList.length,
+                itemBuilder: (context, index) {
+                  final supplier = supplierList[index];
+                  return ListTile(
+                    title: Text(supplier.name),
+                    subtitle: supplier.rut != null ? Text(supplier.rut!) : null,
+                    onTap: () {
+                      setState(() {
+                        _ocrSupplierName = supplier.name;
+                        _supplierIdForNewProducts = supplier.id;
+
+                        // Update parsed data to reflect manually selected supplier
+                        if (_parsedData != null) {
+                          _parsedData = _parsedData!.copyWith(
+                            supplierName: supplier.name,
+                          );
+                        }
+                      });
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading on error
+      debugPrint('Error loading suppliers: $e');
+    }
   }
 
   /// Build the bulk product creation screen
@@ -1499,6 +1581,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           matchedSupplierName = supplier.name;
           matchedSupplierId = supplier.id;
           debugPrint('✅ OCR matched supplier: ${supplier.name}');
+        } else {
+          // If supplier not found in DB, clear it to avoid phantom suppliers
+          // forcing user to select a valid one later
+          matchedSupplierName = null;
+          debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+          parsedData = ParsedInvoice(
+            rut: parsedData!.rut,
+            invoiceNumber: parsedData!.invoiceNumber,
+            date: parsedData!.date,
+            total: parsedData!.total,
+            supplierName: null, // Clear supplier name
+            lineItems: parsedData!.lineItems,
+            rawText: parsedData!.rawText,
+          );
         }
       }
 
@@ -1597,6 +1693,19 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           matchedSupplierName = supplier.name;
           matchedSupplierId = supplier.id;
           debugPrint('✅ OCR matched supplier: ${supplier.name}');
+        } else {
+          // If supplier not found in DB, clear it to avoid phantom suppliers
+          matchedSupplierName = null;
+          debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+          parsedData = ParsedInvoice(
+            rut: parsedData!.rut,
+            invoiceNumber: parsedData!.invoiceNumber,
+            date: parsedData!.date,
+            total: parsedData!.total,
+            supplierName: null, // Clear supplier name
+            lineItems: parsedData!.lineItems,
+            rawText: parsedData!.rawText,
+          );
         }
       }
 

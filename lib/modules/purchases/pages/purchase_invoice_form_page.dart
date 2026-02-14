@@ -94,6 +94,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   RemoteScannerService? _remoteScannerService; // Lazy init to avoid blocking
   bool _scannerEnabled = false;
 
+  // Global invoice-level discount
+  String _discountType = 'percentage'; // 'percentage' or 'amount'
+  bool _isDiscountBeforeTax = true;
+  final TextEditingController _discountValueController =
+      TextEditingController(text: '0');
+
   @override
   void initState() {
     super.initState();
@@ -122,6 +128,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _invoiceNumberController.dispose();
     _referenceController.dispose();
     _notesController.dispose();
+    _discountValueController.dispose();
     for (final entry in _lineEntries) {
       entry.dispose();
     }
@@ -217,7 +224,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             description:
                 product.description, // Initialize with product description
           );
-          final newEntry = _PurchaseLineEntry(line: newLine);
+          final newEntry = _PurchaseLineEntry(line: newLine, product: product);
           newEntry.attachListeners(() {
             setState(() {});
           });
@@ -689,6 +696,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     description: product
                         .description, // Initialize with product description
                   ),
+                  product: product, // Pass full product for image access
                 );
                 entry.attachListeners(_recalculateTotals);
                 _lineEntries.add(entry);
@@ -784,6 +792,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _isPrepaymentModel =
         invoice.prepaymentModel; // Load payment model from invoice
 
+    // Load discount
+    _discountType = invoice.discountType;
+    _isDiscountBeforeTax = invoice.isDiscountBeforeTax;
+    _discountValueController.text = invoice.discountValue > 0
+        ? invoice.discountValue.toStringAsFixed(0)
+        : '0';
+
     _selectedSupplier = _supplierCache.firstWhere(
       (supplier) => supplier.id == invoice.supplierId,
       orElse: () => shared_supplier.Supplier(
@@ -833,6 +848,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ivaRate: item.ivaRate,
           description: item.description, // Added description
         ),
+        product: product, // Pass full product for image access
       );
       entry.attachListeners(_recalculateTotals);
       _lineEntries.add(entry);
@@ -873,8 +889,43 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
-  double get _subtotal => _lineEntries.fold<double>(
+  double get _subtotalBeforeDiscount => _lineEntries.fold<double>(
       0, (sum, entry) => sum + entry.line.netAmountClamped);
+
+  double get _discountAmount {
+    final rawValue =
+        double.tryParse(_discountValueController.text.replaceAll(',', '.')) ??
+            0;
+    if (rawValue <= 0) return 0;
+
+    // Base amount for percentage calculation
+    double baseAmount = _subtotalBeforeDiscount;
+    // If calculating AFTER tax (and tax is included), base should be Total-ish
+    // But strictly speaking, if we just want "10% off the final bill", we apply it to the total.
+    // If tax is included (19%), the Net is Subtotal. The Gross is Subtotal * 1.19.
+    if (!_isDiscountBeforeTax && _taxTreatment == TaxTreatment.taxIncluded) {
+      baseAmount = _subtotalBeforeDiscount * 1.19;
+    }
+
+    double calculatedAmount;
+    if (_discountType == 'percentage') {
+      calculatedAmount = baseAmount * rawValue / 100;
+    } else {
+      calculatedAmount = rawValue;
+    }
+
+    // Clamp to ensure we don't discount more than the available amount
+    return calculatedAmount.clamp(0, baseAmount);
+  }
+
+  double get _subtotal {
+    if (_isDiscountBeforeTax) {
+      return _subtotalBeforeDiscount - _discountAmount;
+    } else {
+      // If after tax, the "subtotal" (tax base) remains the full amount
+      return _subtotalBeforeDiscount;
+    }
+  }
 
   // Tax calculations for PURCHASES (tax is ADDED, not included)
   // Opposite to sales where tax is included in price
@@ -884,18 +935,25 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   double get _iva {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
-      return _subtotal * 0.19; // Add 19% tax
+      return _subtotal * 0.19; // Add 19% tax on (possibly discounted) subtotal
     } else {
       return 0; // No tax
     }
   }
 
   double get _total {
+    double t;
     if (_taxTreatment == TaxTreatment.taxIncluded) {
-      return _subtotal + _iva; // Subtotal + 19% tax
+      t = _subtotal + _iva;
     } else {
-      return _subtotal; // No tax added
+      t = _subtotal;
     }
+
+    // If discount is AFTER tax, subtract it from the total here
+    if (!_isDiscountBeforeTax) {
+      t -= _discountAmount;
+    }
+    return t;
   }
 
   void _recalculateTotals() {
@@ -1155,6 +1213,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       total: _total,
       taxTreatment: _taxTreatment,
       netAmount: _netAmount,
+      discountType: _discountType,
+      discountValue:
+          double.tryParse(_discountValueController.text.replaceAll(',', '.')) ??
+              0,
+      discountAmount: _discountAmount,
+      isDiscountBeforeTax: _isDiscountBeforeTax,
       items: items,
       // Use the form's payment model state
       prepaymentModel: _isPrepaymentModel,
@@ -2963,32 +3027,90 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildSummary(ThemeData theme) {
     final textStyle =
         theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
-    return Column(
-      children: [
-        // For purchases: Always show subtotal (net amount)
-        _buildSummaryRow('Subtotal (Neto)',
-            ChileanUtils.formatCurrency(_subtotal), textStyle, theme),
-        // Show IVA row when tax is included
-        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
-          const SizedBox(height: 8),
-          _buildSummaryRow(
-              'IVA (19%)',
-              ChileanUtils.formatCurrency(_iva),
-              textStyle?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              theme),
-        ],
-        const Divider(height: 24),
-        _buildSummaryRow(
-          'Total',
-          ChileanUtils.formatCurrency(_total),
-          theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: theme.colorScheme.primary,
-          ),
-          theme,
-        ),
-      ],
-    );
+    final discountAmt = _discountAmount;
+    // ignore: unused_local_variable
+    final hasDiscount = discountAmt > 0;
+
+    // Build rows dynamically based on timing
+    final List<Widget> rows = [];
+
+    // 1. Base Subtotal
+    rows.add(_buildSummaryRow(
+        // If discount is Pre-Tax, this is Bruto (before discount).
+        // If discount is Post-Tax, this is *already* Net (because discount applies later).
+        (_isDiscountBeforeTax && discountAmt > 0)
+            ? 'Subtotal (Bruto)'
+            : 'Subtotal (Neto)',
+        ChileanUtils.formatCurrency(_subtotalBeforeDiscount),
+        textStyle,
+        theme));
+
+    // 2. Pre-Tax Discount Section
+    if (_isDiscountBeforeTax) {
+      if (discountAmt > 0) {
+        // Show discount input
+        rows.add(const SizedBox(height: 12));
+        rows.add(
+            _buildDiscountRow(theme, textStyle, discountAmt, discountAmt > 0));
+
+        // Show Net after discount
+        rows.add(const SizedBox(height: 8));
+        rows.add(_buildSummaryRow(
+            'Neto con Descuento',
+            ChileanUtils.formatCurrency(_subtotal),
+            textStyle?.copyWith(fontWeight: FontWeight.w700),
+            theme));
+      } else {
+        // Even if 0, show input here for "Pre-Tax" mode
+        rows.add(const SizedBox(height: 12));
+        rows.add(
+            _buildDiscountRow(theme, textStyle, discountAmt, discountAmt > 0));
+      }
+    }
+
+    // 3. IVA Section
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      rows.add(const SizedBox(height: 8));
+      rows.add(_buildSummaryRow(
+          'IVA (19%)',
+          ChileanUtils.formatCurrency(_iva),
+          textStyle?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          theme));
+    }
+
+    // 4. Post-Tax Discount Section
+    if (!_isDiscountBeforeTax) {
+      // Create a visual break before Total
+      rows.add(const SizedBox(height: 8));
+
+      // Calculate "Total Pre-Discount" if needed for clarity
+      if (discountAmt > 0 && _taxTreatment == TaxTreatment.taxIncluded) {
+        rows.add(_buildSummaryRow(
+            'Total Pre-Descuento',
+            ChileanUtils.formatCurrency(_subtotalBeforeDiscount + _iva),
+            textStyle?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+            theme));
+      }
+
+      rows.add(const SizedBox(height: 8));
+      rows.add(
+          _buildDiscountRow(theme, textStyle, discountAmt, discountAmt > 0));
+    }
+
+    // 5. Final Total
+    rows.add(const Divider(height: 24));
+    rows.add(_buildSummaryRow(
+      'Total',
+      ChileanUtils.formatCurrency(_total),
+      theme.textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: theme.colorScheme.primary,
+      ),
+      theme,
+    ));
+
+    return Column(children: rows);
   }
 
   Widget _buildSummaryRow(
@@ -3001,13 +3123,171 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ],
     );
   }
+
+  Widget _buildDiscountRow(ThemeData theme, TextStyle? textStyle,
+      double discountAmt, bool hasDiscount) {
+    final isPercent = _discountType == 'percentage';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Descuento',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: hasDiscount
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Timing Toggle
+              _buildDiscountTimingToggle(theme),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Custom condensed input container
+              Container(
+                width: 90,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _discountValueController,
+                        enabled: _canEditFields,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          height: 1.0,
+                        ),
+                        cursorHeight: 16,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.only(left: 4, bottom: 8),
+                        ),
+                        onChanged: (_) => _recalculateTotals(),
+                      ),
+                    ),
+                    // Toggle Unit
+                    GestureDetector(
+                      onTap: _canEditFields
+                          ? () => setState(() {
+                                _discountType =
+                                    isPercent ? 'amount' : 'percentage';
+                              })
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        margin: const EdgeInsets.all(2),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isPercent ? '%' : '\u0024',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: theme.colorScheme.primary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Computed discount display
+              SizedBox(
+                width: 80, // Fixed width for alignment
+                child: Text(
+                  hasDiscount
+                      ? '-${ChileanUtils.formatCurrency(discountAmt)}'
+                      : ChileanUtils.formatCurrency(0),
+                  textAlign: TextAlign.right,
+                  style: textStyle?.copyWith(
+                    color: hasDiscount
+                        ? Colors.red.shade700
+                        : theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.5),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiscountTimingToggle(ThemeData theme) {
+    return PopupMenuButton<bool>(
+      tooltip: 'Momento del descuento',
+      initialValue: _isDiscountBeforeTax,
+      onSelected: (bool isBefore) {
+        if (_canEditFields) {
+          setState(() => _isDiscountBeforeTax = isBefore);
+        }
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<bool>>[
+        const PopupMenuItem<bool>(
+          value: true,
+          child: Text('Antes de IVA (Reduce base imponible)'),
+        ),
+        const PopupMenuItem<bool>(
+          value: false,
+          child: Text('Después de IVA (Descuento al total)'),
+        ),
+      ],
+      offset: const Offset(0, 30),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(
+          _isDiscountBeforeTax ? Icons.call_received : Icons.call_made,
+          size: 14,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
 }
 
 enum DiscountType { amount, percentage }
 
 class _PurchaseLineEntry {
   _PurchaseLineEntry(
-      {required PurchaseInvoiceItem line, this.shouldAutoFocus = false})
+      {required PurchaseInvoiceItem line,
+      this.product,
+      this.shouldAutoFocus = false})
       : line = line,
         quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),

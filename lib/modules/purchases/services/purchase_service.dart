@@ -550,9 +550,29 @@ class PurchaseService extends ChangeNotifier {
       final result = await _db.insert('purchase_payments', payload);
       final created = PurchasePayment.fromJson(result);
 
-      // Refresh caches
+      // Check if invoice should be marked as paid
+      final invoice = await getPurchaseInvoice(payment.invoiceId);
+      if (invoice != null) {
+        // Calculate new balance considering this payment
+        // Note: The database trigger 'recalculate_purchase_invoice_payments' runs AFTER insert
+        // but might not be reflected immediately in 'invoice'.
+        // However, we can check the current balance - payment amount.
+        // Better yet, since we refresh the invoice cache below, let's fetch it again properly.
+      }
+
+      // Refresh caches to get updated invoice balance from DB triggers
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
+
+      // Verify balance and update status if needed
+      final updatedInvoice = await getPurchaseInvoice(payment.invoiceId);
+      if (updatedInvoice != null &&
+          updatedInvoice.balance <= 0 &&
+          updatedInvoice.status != PurchaseInvoiceStatus.paid) {
+        debugPrint(
+            '💰 Invoice ${updatedInvoice.invoiceNumber} fully paid. Updating status to PAID.');
+        await markAsPaid(updatedInvoice.id!);
+      }
 
       notifyListeners();
       return created;

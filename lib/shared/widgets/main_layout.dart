@@ -320,6 +320,7 @@ String _getTitleFromRoute(String route) {
     '/hr/employees': 'Trabajadores',
     '/website': 'Sitio Web',
     '/settings': 'Configuración',
+    '/debug': 'Debug',
   };
 
   return routeTitles[route] ?? route.split('/').last.capitalize();
@@ -402,6 +403,17 @@ const List<MenuSubItem> _toolsMenuItems = [
 ];
 
 const String _toolsSectionKey = 'tools';
+
+// ─── Debug (Bug Tracking) module ─────────────────────────────────
+const List<MenuSubItem> _debugMenuItems = [
+  MenuSubItem(
+    icon: Icons.bug_report_outlined,
+    title: 'Lista de bugs',
+    route: '/debug',
+  ),
+];
+
+const String _debugSectionKey = 'debug';
 
 /// Shows the sidebar options menu with live-updating zoom controls
 void _showSidebarOptionsMenu(
@@ -1083,6 +1095,18 @@ class _AppSidebarState extends State<AppSidebar> {
           onExpansionChanged: (expand) =>
               _handleExpansionChange(_toolsSectionKey, expand, navService),
         );
+      case 'debug':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.bug_report_outlined,
+          activeIcon: Icons.bug_report,
+          title: 'Debug',
+          currentLocation: currentLocation,
+          subItems: _debugMenuItems,
+          isExpanded: expandedSection == _debugSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_debugSectionKey, expand, navService),
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -1164,6 +1188,9 @@ class _AppSidebarState extends State<AppSidebar> {
     }
     if (_matchesLocation(location, _hrMenuItems)) {
       return _hrSectionKey;
+    }
+    if (_matchesLocation(location, _debugMenuItems)) {
+      return _debugSectionKey;
     }
     return null;
   }
