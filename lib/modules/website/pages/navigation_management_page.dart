@@ -660,6 +660,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   late NavLinkType _linkType;
   late bool _isVisible;
   late bool _openInNewTab;
+  late bool _isMegaMenu;
   String? _selectedParentId;
   bool _isSaving = false;
 
@@ -684,6 +685,8 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _isVisible = widget.link?.isVisible ?? true;
     _openInNewTab = widget.link?.openInNewTab ?? false;
     _selectedParentId = widget.link?.parentId ?? widget.parentId;
+    _isMegaMenu =
+        widget.link?.cssClass?.toLowerCase().contains('megamenu') ?? false;
 
     // Detect if we should offer Bulk Add
     _checkForBulkAddOpportunity();
@@ -1089,18 +1092,27 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
-                      if (_linkType == NavLinkType.external)
+                      if (_linkType == NavLinkType.category ||
+                          _linkType == NavLinkType.page)
                         Expanded(
                           child: SwitchListTile(
-                            title: const Text('Nueva Pestaña'),
-                            subtitle: const Text('Abrir en nueva ventana'),
-                            value: _openInNewTab,
-                            onChanged: (v) => setState(() => _openInNewTab = v),
+                            title: const Text('Mega Menú'),
+                            subtitle: const Text('Forzar despliegue ancho'),
+                            value: _isMegaMenu,
+                            onChanged: (v) => setState(() => _isMegaMenu = v),
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
                     ],
                   ),
+                  if (_linkType == NavLinkType.external)
+                    SwitchListTile(
+                      title: const Text('Nueva Pestaña'),
+                      subtitle: const Text('Abrir en nueva ventana'),
+                      value: _openInNewTab,
+                      onChanged: (v) => setState(() => _openInNewTab = v),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                 ],
               ],
             ),
@@ -1325,6 +1337,8 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         isVisible: _isVisible,
         openInNewTab: _openInNewTab,
         parentId: _selectedParentId,
+        // Append 'megamenu' class if selected
+        cssClass: _isMegaMenu ? 'megamenu' : null,
         createdAt: widget.link?.createdAt ?? DateTime.now(),
         updatedAt: widget.link?.updatedAt ?? DateTime.now(),
       );

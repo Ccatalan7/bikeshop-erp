@@ -54,7 +54,7 @@ class _PublicHomePageState extends State<PublicHomePage>
   static const List<String> _responsiveBreakpoints = [
     'desktop',
     'tablet',
-    'mobile'
+    'mobile',
   ];
 
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
@@ -65,6 +65,7 @@ class _PublicHomePageState extends State<PublicHomePage>
   @override
   void initState() {
     super.initState();
+
     _progressiveBlockLimit = _initialBlockRenderLimit;
     // Debug: initState
     // Load featured products once
@@ -217,6 +218,8 @@ class _PublicHomePageState extends State<PublicHomePage>
 
   /// Check edit mode using GoRouter state (called from build method)
   void _checkEditModeFromRouter(BuildContext context) {
+    if (_editModeChecked) return;
+
     // Get query parameters from GoRouter
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
@@ -274,6 +277,7 @@ class _PublicHomePageState extends State<PublicHomePage>
     required WebsiteService websiteService,
   }) {
     if (_syncedEditorContextForHome) return;
+
     // Home is kept alive in the shell. Never let an offstage home instance
     // overwrite the editor provider while the user is viewing another page.
     if (!TickerMode.of(context)) return;
@@ -307,12 +311,23 @@ class _PublicHomePageState extends State<PublicHomePage>
       final settings = Map<String, dynamic>.from(websiteService.settings);
 
       debugPrint(
-          '🔄 [PublicHomePage] Sync editor context: ${editProvider.currentPageSlug} → home (${blocks.length} blocks)');
+        '🔄 [PublicHomePage] Sync editor context: ${editProvider.currentPageSlug} → home (${blocks.length} blocks)',
+      );
 
       if (editProvider.isEditMode) {
-        editProvider.enterEditMode(blocks, settings, pageId: null, pageSlug: null);
+        editProvider.enterEditMode(
+          blocks,
+          settings,
+          pageId: null,
+          pageSlug: null,
+        );
       } else {
-        editProvider.enterPreviewMode(blocks, settings, pageId: null, pageSlug: null);
+        editProvider.enterPreviewMode(
+          blocks,
+          settings,
+          pageId: null,
+          pageSlug: null,
+        );
       }
 
       _syncedEditorContextForHome = true;
@@ -322,9 +337,10 @@ class _PublicHomePageState extends State<PublicHomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     // Reset edit mode check on navigation
-    _editModeChecked = false;
-    _syncedEditorContextForHome = false;
+    // _editModeChecked = false; // DISABLED: Causes infinite loop with provider updates
+    // _syncedEditorContextForHome = false; // DISABLED: Causes infinite loop with provider updates
 
     final nextScrollState = context.read<PublicStoreScrollState>();
     if (_scrollState != nextScrollState) {
@@ -521,17 +537,25 @@ class _PublicHomePageState extends State<PublicHomePage>
 
     final primarySetting = websiteService.getSetting('theme_primary_color', '');
     final accentSetting = websiteService.getSetting('theme_accent_color', '');
-    final headingFontSetting =
-        websiteService.getSetting('theme_heading_font', '');
+    final headingFontSetting = websiteService.getSetting(
+      'theme_heading_font',
+      '',
+    );
     final bodyFontSetting = websiteService.getSetting('theme_body_font', '');
-    final headingSizeSetting =
-        websiteService.getSetting('theme_heading_size', '');
+    final headingSizeSetting = websiteService.getSetting(
+      'theme_heading_size',
+      '',
+    );
     final bodySizeSetting = websiteService.getSetting('theme_body_size', '');
     final textColorSetting = websiteService.getSetting('theme_text_color', '');
-    final sectionSpacingSetting =
-        websiteService.getSetting('theme_section_spacing', '');
-    final containerPaddingSetting =
-        websiteService.getSetting('theme_container_padding', '');
+    final sectionSpacingSetting = websiteService.getSetting(
+      'theme_section_spacing',
+      '',
+    );
+    final containerPaddingSetting = websiteService.getSetting(
+      'theme_container_padding',
+      '',
+    );
 
     final primaryColor = _resolveColor(
       eff('theme_primary_color', primarySetting),
@@ -576,13 +600,16 @@ class _PublicHomePageState extends State<PublicHomePage>
     if (editProvider.isInEditorContext &&
         (editProvider.pendingThemeSettings.containsKey('theme_heading_font') ||
             editProvider.pendingThemeSettings.containsKey('theme_body_font') ||
-            editProvider.pendingThemeSettings
-                .containsKey('theme_heading_size') ||
+            editProvider.pendingThemeSettings.containsKey(
+              'theme_heading_size',
+            ) ||
             editProvider.pendingThemeSettings.containsKey('theme_body_size'))) {
       debugPrint(
-          '🧪 [ThemePreview] effective headingFont="$headingFont" bodyFont="$bodyFont" headingSize=$headingSize bodySize=$bodySize');
+        '🧪 [ThemePreview] effective headingFont="$headingFont" bodyFont="$bodyFont" headingSize=$headingSize bodySize=$bodySize',
+      );
       debugPrint(
-          '🧪 [ThemePreview] pendingThemeSettings=${editProvider.pendingThemeSettings}');
+        '🧪 [ThemePreview] pendingThemeSettings=${editProvider.pendingThemeSettings}',
+      );
     }
 
     // Use blocks from WebsiteService (loaded by main.dart progressively)
@@ -596,9 +623,7 @@ class _PublicHomePageState extends State<PublicHomePage>
 
       return SizedBox(
         height: minHeight > 400 ? minHeight : 400,
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -646,7 +671,7 @@ class _PublicHomePageState extends State<PublicHomePage>
           bool isEditMode,
           bool isPreviewMode,
           bool isInEditorContext,
-          List<String> blockIds
+          List<String> blockIds,
         })>(
       selector: (_, provider) {
         final blocks =
@@ -700,13 +725,18 @@ class _PublicHomePageState extends State<PublicHomePage>
               return false;
             }
 
-            final data = Map<String, dynamic>.from(block['block_data'] ?? {});
-            final visibility = _normalizeBlockVisibility(data['visibility']);
+            final data = Map<String, dynamic>.from(
+              block['block_data'] ?? {},
+            );
+            final visibility = _normalizeBlockVisibility(
+              data['visibility'],
+            );
             return visibility[currentBreakpoint] ?? true;
           }),
         )..sort(
-            (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0)
-                .compareTo(b['sort_order'] ?? b['order_index'] ?? 0),
+            (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0).compareTo(
+              b['sort_order'] ?? b['order_index'] ?? 0,
+            ),
           );
 
         // Build the page content (blocks)
@@ -780,8 +810,9 @@ class _PublicHomePageState extends State<PublicHomePage>
             // Use _BlockDataSelector to read block data from provider
             // This ensures each block only rebuilds when ITS data changes
             _BlockDataSelector(
-              key:
-                  ValueKey('${blocksToBuild[i]['id']}_${tenantId}_$isEditMode'),
+              key: ValueKey(
+                '${blocksToBuild[i]['id']}_${tenantId}_$isEditMode',
+              ),
               blockId: blocksToBuild[i]['id']?.toString() ?? '',
               fallbackBlockData: blocksToBuild[i],
               isInEditorContext: isEditMode,
@@ -805,7 +836,8 @@ class _PublicHomePageState extends State<PublicHomePage>
               _buildBlockSpacer(
                 blockId: blocksToBuild[i]['id']?.toString() ?? '',
                 blockData: Map<String, dynamic>.from(
-                    blocksToBuild[i]['block_data'] ?? {}),
+                  blocksToBuild[i]['block_data'] ?? {},
+                ),
                 defaultSpacing: sectionSpacing,
                 isEditMode: isEditMode,
                 editProvider: editProvider,
@@ -832,24 +864,20 @@ class _PublicHomePageState extends State<PublicHomePage>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.web,
-                  size: 80,
-                  color: Colors.grey[400],
-                ),
+                Icon(Icons.web, size: 80, color: Colors.grey[400]),
                 const SizedBox(height: 24),
                 Text(
                   'Tu sitio web está vacío',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.grey[600],
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'Agrega bloques para construir tu página',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey[500],
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey[500]),
                 ),
                 const SizedBox(height: 32),
                 _AddBlockButtonLarge(
@@ -885,9 +913,9 @@ class _PublicHomePageState extends State<PublicHomePage>
               const SizedBox(height: 16),
               Text(
                 'Estamos preparando algo increíble para ti',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -956,7 +984,8 @@ class _PublicHomePageState extends State<PublicHomePage>
       debugPrint('🎨 [_buildBlockFromData] Hero data.style=$style');
       if (style is Map) {
         debugPrint(
-            '🎨 [_buildBlockFromData] backgroundType=${style['backgroundType']}, gradientColor1=${style['gradientColor1']}');
+          '🎨 [_buildBlockFromData] backgroundType=${style['backgroundType']}, gradientColor1=${style['gradientColor1']}',
+        );
       }
     }
 
@@ -1002,7 +1031,8 @@ class _PublicHomePageState extends State<PublicHomePage>
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -1019,7 +1049,8 @@ class _PublicHomePageState extends State<PublicHomePage>
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
 
@@ -1042,8 +1073,9 @@ class _PublicHomePageState extends State<PublicHomePage>
         'brandlogos',
         'partnersbanner',
       };
-      final isDynamicContent =
-          dynamicContentBlocks.contains(blockTypeNormalized);
+      final isDynamicContent = dynamicContentBlocks.contains(
+        blockTypeNormalized,
+      );
 
       if (!isDynamicContent) {
         // Only apply fixed height for blocks that support it (hero, carousel, canvas, etc.)
@@ -1167,11 +1199,7 @@ class _AddBlockButtonLarge extends StatelessWidget {
                     color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(50),
                   ),
-                  child: const Icon(
-                    Icons.add,
-                    color: Colors.blue,
-                    size: 32,
-                  ),
+                  child: const Icon(Icons.add, color: Colors.blue, size: 32),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -1185,10 +1213,7 @@ class _AddBlockButtonLarge extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Haz clic para agregar contenido a tu página',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
               ],
             ),

@@ -1091,47 +1091,43 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       if (widget.useExternalEditorPanel) {
         // Editor panel is rendered externally by PersistentEditorShell.
         // Overlay can cover the full viewport, but must avoid the reserved panel width.
-        mainBody = Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(child: editorViewport),
-              if (_isConfigHubOpen)
-                Positioned.fill(
-                  child: overlayLayer,
-                ),
-            ],
-          ),
+        mainBody = Stack(
+          children: [
+            Positioned.fill(child: editorViewport),
+            if (_isConfigHubOpen)
+              Positioned.fill(
+                child: overlayLayer,
+              ),
+          ],
         );
       } else {
         // Legacy: render editor panel inline. Ensure overlay only covers the viewport
         // (left) and never sits behind the right editor panel.
-        mainBody = Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: editorViewport),
-                    if (_isConfigHubOpen)
-                      Positioned.fill(
-                        child: overlayLayer,
-                      ),
-                  ],
-                ),
+        mainBody = Row(
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: editorViewport),
+                  if (_isConfigHubOpen)
+                    Positioned.fill(
+                      child: overlayLayer,
+                    ),
+                ],
               ),
-              DeferredWebsiteEditorPanel(
-                onSave: () async {
-                  await _saveChanges(context, editProvider, websiteService);
-                  if (context.mounted) {
-                    editProvider.switchToPreviewMode();
-                  }
-                },
-                onDiscard: () {
+            ),
+            DeferredWebsiteEditorPanel(
+              onSave: () async {
+                await _saveChanges(context, editProvider, websiteService);
+                if (context.mounted) {
                   editProvider.switchToPreviewMode();
-                },
-              ),
-            ],
-          ),
+                }
+              },
+              onDiscard: () {
+                editProvider.switchToPreviewMode();
+              },
+            ),
+          ],
         );
       }
 
@@ -3335,10 +3331,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                             b.orderIndex));
 
                                                   if (children.isNotEmpty) {
-                                                    // Upgrade to MegaMenu if deep nesting is detected
+                                                    // Upgrade to MegaMenu if deep nesting is detected OR explicitly requested
                                                     final isMega = children.any(
-                                                        (c) => c.children
-                                                            .isNotEmpty);
+                                                            (c) => c.children
+                                                                .isNotEmpty) ||
+                                                        (nav.cssClass
+                                                                ?.toLowerCase()
+                                                                .contains(
+                                                                    'megamenu') ??
+                                                            false) ||
+                                                        (nav.cssClass
+                                                                ?.toLowerCase()
+                                                                .contains(
+                                                                    'mega-menu') ??
+                                                            false);
 
                                                     if (isMega) {
                                                       return Padding(

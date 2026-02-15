@@ -444,6 +444,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
+  WebsiteNavigation? _currentHoveredCategory;
 
   @override
   void initState() {
@@ -457,6 +458,11 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
       curve: Curves.easeOut,
     );
     _controller.forward();
+
+    // Initialize with first category if available
+    if (widget.children.isNotEmpty) {
+      _currentHoveredCategory = widget.children.first;
+    }
   }
 
   @override
@@ -488,8 +494,6 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
         ),
 
         // PANEL POSITIONED
-        // Positioned at [panelTop - bridgeHeight] so the mouse region starts
-        // right at the button bottom, bridging the gap.
         Positioned(
           top: widget.panelTop - widget.bridgeHeight,
           left: 0,
@@ -507,7 +511,6 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                   animation: _controller,
                   builder: (context, child) {
                     return Transform.translate(
-                      // Visual offset -2px (increased from -1) to FORCE overlap and kill gap
                       offset: const Offset(0, -2.0),
                       child: Opacity(
                         opacity: _opacity.value,
@@ -519,11 +522,12 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                     color: kMegaMenuPanelColor,
                     child: Container(
                       width: widget.screenWidth,
+                      constraints: const BoxConstraints(minHeight: 300),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 40,
                         vertical: 40,
                       ),
-                      child: _buildColumnsLayout(context),
+                      child: _buildMasterDetailLayout(context),
                     ),
                   ),
                 ),
@@ -535,58 +539,140 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     );
   }
 
-  Widget _buildColumnsLayout(BuildContext context) {
-    List<WebsiteNavigation> displayColumns = widget.children;
-
-    if (displayColumns.length == 1 &&
-        displayColumns.first.children.isNotEmpty) {
-      displayColumns = displayColumns.first.children;
+  Widget _buildMasterDetailLayout(BuildContext context) {
+    // If only one top-level item with children, unwrap it (legacy behavior support)
+    List<WebsiteNavigation> masterItems = widget.children;
+    if (masterItems.length == 1 && masterItems.first.children.isNotEmpty) {
+      masterItems = masterItems.first.children;
+      // Re-init hover if needed
+      if (_currentHoveredCategory == widget.children.first) {
+        _currentHoveredCategory = masterItems.firstOrNull;
+      }
     }
 
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
-        child: Wrap(
-          spacing: 48,
-          runSpacing: 32,
-          alignment: WrapAlignment.start,
-          children: displayColumns.map((column) {
-            return SizedBox(
-              width: 180,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left Column: Master Categories
+            SizedBox(
+              width: 250,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _MegaMenuColumnHeader(
-                    label: column.label,
-                    onTap: () => widget.onNavigate(
-                        column.href ?? '/', column.openInNewTab),
-                  ),
-                  const SizedBox(height: 16),
-                  if (column.children.isNotEmpty) ...[
-                    ...column.children.map((child) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _MegaMenuLink(
-                            label: child.label.toUpperCase(),
-                            isAccent: true,
-                            onTap: () => widget.onNavigate(
-                                child.href ?? '/', child.openInNewTab),
-                          ),
-                        )),
-                  ] else ...[
-                    _MegaMenuLink(
-                      label: 'VER ${column.label.toUpperCase()}',
-                      isAccent: true,
-                      onTap: () => widget.onNavigate(
-                          column.href ?? '/', column.openInNewTab),
+                children: masterItems.map((category) {
+                  final isHovered = _currentHoveredCategory == category;
+                  return MouseRegion(
+                    onEnter: (_) {
+                      setState(() {
+                        _currentHoveredCategory = category;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: _MegaMenuColumnHeader(
+                        label: category.label,
+                        isActive: isHovered,
+                        onTap: () => widget.onNavigate(
+                            category.href ?? '/', category.openInNewTab),
+                      ),
                     ),
-                  ],
-                ],
+                  );
+                }).toList(),
               ),
-            );
-          }).toList(),
+            ),
+
+            // Vertical Divider
+            Container(
+              width: 1,
+              height: 300,
+              color: Colors.white.withOpacity(0.1),
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+            ),
+
+            // Right Column: Detail (Subcategories)
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.05, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey(_currentHoveredCategory?.id ?? 'empty'),
+                  child: _buildSubCategories(_currentHoveredCategory),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSubCategories(WebsiteNavigation? category) {
+    if (category == null || category.children.isEmpty) {
+      if (category != null) {
+        // Show "View All" if no subcategories
+        return Align(
+          alignment: Alignment.topLeft,
+          child: _MegaMenuLink(
+            label: 'VER TODO ${category.label.toUpperCase()}',
+            isAccent: true,
+            onTap: () =>
+                widget.onNavigate(category.href ?? '/', category.openInNewTab),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    // Grid layout for subcategories
+    return Wrap(
+      spacing: 48,
+      runSpacing: 24,
+      children: category.children.map((sub) {
+        return SizedBox(
+          width: 200, // Fixed width for columns
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MegaMenuLink(
+                label: sub.label,
+                isAccent: true,
+                onTap: () =>
+                    widget.onNavigate(sub.href ?? '/', sub.openInNewTab),
+              ),
+              // If there are 3rd level items (grandchildren), show them small
+              if (sub.children.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...sub.children.map((grandChild) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _MegaMenuLink(
+                        label: grandChild.label,
+                        fontSize: 13,
+                        color: Colors.white70,
+                        onTap: () => widget.onNavigate(
+                            grandChild.href ?? '/', grandChild.openInNewTab),
+                      ),
+                    )),
+              ]
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -595,42 +681,32 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
 // COLUMN HEADER & LINK (Helper Widgets)
 // ============================================================================
 
-class _MegaMenuColumnHeader extends StatefulWidget {
+class _MegaMenuColumnHeader extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
+  final bool isActive;
 
   const _MegaMenuColumnHeader({
     required this.label,
     required this.onTap,
+    this.isActive = false,
   });
-
-  @override
-  State<_MegaMenuColumnHeader> createState() => _MegaMenuColumnHeaderState();
-}
-
-class _MegaMenuColumnHeaderState extends State<_MegaMenuColumnHeader> {
-  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 150),
-          style: TextStyle(
-            color: _isHovered ? primaryColor : Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.0,
-          ),
-          child: Text(widget.label.toUpperCase()),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 150),
+        style: TextStyle(
+          color: isActive ? primaryColor : Colors.white,
+          fontSize: 15, // Slightly larger for master list
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.0,
         ),
+        child: Text(label.toUpperCase()),
       ),
     );
   }
@@ -640,11 +716,15 @@ class _MegaMenuLink extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool isAccent;
+  final double? fontSize;
+  final Color? color;
 
   const _MegaMenuLink({
     required this.label,
     required this.onTap,
     this.isAccent = false,
+    this.fontSize,
+    this.color,
   });
 
   @override
@@ -657,8 +737,8 @@ class _MegaMenuLinkState extends State<_MegaMenuLink> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor =
-        widget.isAccent ? theme.primaryColor : const Color(0xFF888888);
+    final accentColor = widget.color ??
+        (widget.isAccent ? theme.primaryColor : const Color(0xFF888888));
     final hoverColor =
         widget.isAccent ? theme.colorScheme.primaryContainer : Colors.white;
 
@@ -672,7 +752,7 @@ class _MegaMenuLinkState extends State<_MegaMenuLink> {
           duration: const Duration(milliseconds: 150),
           style: TextStyle(
             color: _isHovered ? hoverColor : accentColor,
-            fontSize: 13,
+            fontSize: widget.fontSize ?? 13,
             fontWeight: widget.isAccent ? FontWeight.w600 : FontWeight.normal,
             height: 1.4,
           ),

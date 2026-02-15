@@ -4321,6 +4321,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   late bool _showIndicators;
   late bool _showArrows;
   late Duration _interval;
+  late Duration _transitionDuration;
   late _CarouselAnimation _animation;
   Timer? _timer;
 
@@ -4357,6 +4358,19 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     _showArrows = (widget.data['showArrows'] ?? true) == true;
     _interval =
         Duration(seconds: _parseInterval(widget.data['intervalSeconds']));
+
+    // Parse transition duration (default 600ms)
+    int durationMs = 600;
+    if (widget.data['transitionDuration'] != null) {
+      final val = widget.data['transitionDuration'];
+      if (val is num) {
+        durationMs = val.toInt();
+      } else if (val is String) {
+        durationMs = int.tryParse(val) ?? 600;
+      }
+    }
+    _transitionDuration = Duration(milliseconds: durationMs);
+
     _animation = _parseAnimation(widget.data['animation']);
 
     _restartTimer();
@@ -4380,7 +4394,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
             fit: StackFit.expand,
             children: [
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
+                duration: _transitionDuration,
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: _buildTransition,

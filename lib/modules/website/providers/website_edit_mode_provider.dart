@@ -19,6 +19,11 @@ enum DevicePreviewMode {
 /// - Preview mode: Shows the top bar (isPreviewMode = true)
 /// - Edit mode: Shows the side panel (isEditMode = true)
 class WebsiteEditModeProvider extends ChangeNotifier {
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+  }
+
   bool _isPreviewMode = false; // Preview with top bar
   bool _isEditMode = false; // Full edit with side panel
   DevicePreviewMode _devicePreviewMode =
@@ -456,6 +461,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     String? pageId,
     String? pageSlug,
   }) {
+    debugPrint(
+        '🥶 [FREEZE_DEBUG] WebsiteEditModeProvider.enterEditMode START path=${pageSlug ?? "home"}');
     _isPreviewMode = false;
     _isEditMode = true;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();

@@ -2582,6 +2582,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildHeaderCell(
       ColumnConfig col, int displayIndex, int totalColumns) {
     final theme = Theme.of(context);
+    Widget content;
 
     if (col.id == 'checkbox') {
       bool? checkboxValue;
@@ -2593,136 +2594,146 @@ class _PegasTablePageState extends State<PegasTablePage>
         checkboxValue = null;
       }
 
-      return Container(
-        key: ValueKey(col.id),
-        width: col.width,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Checkbox(
-          value: checkboxValue,
-          onChanged: (checked) {
-            setState(() {
-              if (checked == true) {
-                _selectedJobIds
-                  ..clear()
-                  ..addAll(_filteredJobs.map((j) => j.id).whereType<String>());
-              } else {
-                _selectedJobIds.clear();
-              }
-            });
-          },
-          tristate: true,
-        ),
+      content = Checkbox(
+        value: checkboxValue,
+        onChanged: (checked) {
+          setState(() {
+            if (checked == true) {
+              _selectedJobIds
+                ..clear()
+                ..addAll(_filteredJobs.map((j) => j.id).whereType<String>());
+            } else {
+              _selectedJobIds.clear();
+            }
+          });
+        },
+        tristate: true,
       );
+    } else {
+      content = _buildHeaderContent(col);
     }
 
-    Widget buildContent() => _buildHeaderContent(col);
-    Widget baseContent;
+    // Always wrap content in padding container (interactive area)
+    // This container is the visual representation of the column header
+    Widget headerWidget = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: content,
+    );
+
+    // Determine if this specific column is being dragged
     final isDragging = _draggingColumnId == col.id;
 
+    // Wrap in Draggable ONLY if allowed, but ALWAYS wrap in DragTarget
+    // This allows dropping ONTO non-reorderable columns (like checkbox/status)
+    // effectively allowing insertion before/after them.
+    Widget draggableCell;
     if (col.reorderable) {
-      baseContent = DragTarget<String>(
-        onWillAcceptWithDetails: (details) {
-          if (details.data == col.id) return false;
-          // Update target index for live preview
-          if (_dragTargetIndex != displayIndex) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _draggingColumnId != null) {
-                setState(() {
-                  _dragTargetIndex = displayIndex;
-                });
-              }
-            });
-          }
-          return true;
+      draggableCell = Draggable<String>(
+        data: col.id,
+        axis: Axis.horizontal,
+        feedback: Material(
+          color: Colors.transparent,
+          child: Opacity(
+            opacity: 0.85,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.drag_indicator,
+                      size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    col.label,
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        onDragStarted: () {
+          setState(() {
+            _draggingColumnId = col.id;
+            _dragTargetIndex = displayIndex;
+          });
         },
-        onLeave: (_) {
-          // Don't clear target when leaving - it causes flickering
-        },
-        onAcceptWithDetails: (details) {
-          // Apply the reorder using the tracked target index
-          final sourceId = details.data;
-          if (_dragTargetIndex != null) {
-            _applyColumnReorder(sourceId, _dragTargetIndex!);
-          }
+        onDragEnd: (_) {
           setState(() {
             _draggingColumnId = null;
             _dragTargetIndex = null;
           });
         },
-        builder: (context, candidateData, rejectedData) {
-          return Draggable<String>(
-            data: col.id,
-            axis: Axis.horizontal,
-            feedback: Material(
-              color: Colors.transparent,
-              child: Opacity(
-                opacity: 0.85,
-                child: Container(
-                  height: 48,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.drag_indicator,
-                          size: 16, color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text(
-                        col.label,
-                        style: theme.textTheme.labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            onDragStarted: () {
-              setState(() {
-                _draggingColumnId = col.id;
-                _dragTargetIndex = displayIndex;
-              });
-            },
-            onDragEnd: (_) {
-              setState(() {
-                _draggingColumnId = null;
-                _dragTargetIndex = null;
-              });
-            },
-            onDraggableCanceled: (_, __) {
-              setState(() {
-                _draggingColumnId = null;
-                _dragTargetIndex = null;
-              });
-            },
-            child: Opacity(
-              opacity: isDragging ? 0.3 : 1.0,
-              child: buildContent(),
-            ),
-          );
+        onDraggableCanceled: (_, __) {
+          setState(() {
+            _draggingColumnId = null;
+            _dragTargetIndex = null;
+          });
         },
+        child: Opacity(
+          opacity: isDragging ? 0.3 : 1.0,
+          child: headerWidget,
+        ),
       );
     } else {
-      baseContent = buildContent();
+      draggableCell = headerWidget;
     }
 
+    // UNIVERSAL DROP TARGET
+    // Even non-reorderable columns (checkbox, actions) can receive drops
+    Widget dropTarget = DragTarget<String>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data == col.id) return false;
+        // Update target index for live preview
+        if (_dragTargetIndex != displayIndex) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _draggingColumnId != null) {
+              setState(() {
+                _dragTargetIndex = displayIndex;
+              });
+            }
+          });
+        }
+        return true;
+      },
+      onLeave: (_) {
+        // Don't clear target when leaving - it causes flickering
+      },
+      onAcceptWithDetails: (details) {
+        final sourceId = details.data;
+        if (_dragTargetIndex != null) {
+          _applyColumnReorder(sourceId, _dragTargetIndex!);
+        }
+        setState(() {
+          _draggingColumnId = null;
+          _dragTargetIndex = null;
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        return draggableCell;
+      },
+    );
+
+    // Final layout container (Fixed width vs Expanded)
     if (col.maxWidth != null && col.maxWidth == col.width) {
       return Container(
         key: ValueKey(col.id),
         width: col.width,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: baseContent,
+        // No padding here - it's inside headerWidget
+        child: dropTarget,
       );
     } else {
       return Expanded(
@@ -2730,8 +2741,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         flex: (col.width ~/ 10).clamp(1, 100),
         child: Container(
           constraints: BoxConstraints(minWidth: col.minWidth),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: baseContent,
+          // No padding here - it's inside headerWidget
+          child: dropTarget,
         ),
       );
     }

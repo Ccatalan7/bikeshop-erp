@@ -175,7 +175,7 @@ class _PublicStoreNavObserver extends NavigatorObserver {
 /// Generates a unique page key that includes the edit/preview mode.
 /// This forces Flutter to create a NEW page when mode changes,
 /// avoiding element reactivation conflicts during layout passes.
-/// 
+///
 /// NUCLEAR FIX: We now use UniqueKey when mode changes to completely prevent
 /// element reactivation. The _lastMode tracking ensures we only generate new
 /// UniqueKeys when the mode actually changes, not on every rebuild.
@@ -188,16 +188,17 @@ LocalKey _modeAwarePageKey(GoRouterState state) {
   final isPreview = uri.queryParameters['preview'] == 'true';
   final mode = isEdit ? 'edit' : (isPreview ? 'preview' : 'normal');
   final currentModeLocation = '${state.matchedLocation}_$mode';
-  
+
   // If mode+location changed, create a brand new UniqueKey
   // This completely prevents element reactivation by giving the widget
   // a new identity that can't possibly match any cached elements.
   if (_lastModeForKey != currentModeLocation) {
     _lastModeForKey = currentModeLocation;
     _cachedModeKey = UniqueKey();
-    debugPrint('🔑 [Router] NEW UniqueKey for mode change: $currentModeLocation');
+    debugPrint(
+        '🔑 [Router] NEW UniqueKey for mode change: $currentModeLocation');
   }
-  
+
   return _cachedModeKey!;
 }
 
@@ -259,10 +260,12 @@ Page<dynamic> _buildPage(
     name: state.uri.toString(),
     child: pageChild,
     // Mobile: a more obvious, native-feeling slide+fade.
-    transitionDuration:
-      isSmallScreen ? const Duration(milliseconds: 420) : const Duration(milliseconds: 300),
-    reverseTransitionDuration:
-      isSmallScreen ? const Duration(milliseconds: 380) : const Duration(milliseconds: 260),
+    transitionDuration: isSmallScreen
+        ? const Duration(milliseconds: 420)
+        : const Duration(milliseconds: 300),
+    reverseTransitionDuration: isSmallScreen
+        ? const Duration(milliseconds: 380)
+        : const Duration(milliseconds: 260),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       _attachTransitionDebugOnce(
         animation,
@@ -347,10 +350,12 @@ Page<dynamic> _buildPageNoScroll(
     key: pageKey,
     name: state.uri.toString(),
     child: pageChild,
-    transitionDuration:
-      isSmallScreen ? const Duration(milliseconds: 420) : const Duration(milliseconds: 300),
-    reverseTransitionDuration:
-      isSmallScreen ? const Duration(milliseconds: 380) : const Duration(milliseconds: 260),
+    transitionDuration: isSmallScreen
+        ? const Duration(milliseconds: 420)
+        : const Duration(milliseconds: 300),
+    reverseTransitionDuration: isSmallScreen
+        ? const Duration(milliseconds: 380)
+        : const Duration(milliseconds: 260),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       _attachTransitionDebugOnce(
         animation,

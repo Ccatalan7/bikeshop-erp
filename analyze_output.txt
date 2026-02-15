@@ -1,0 +1,73 @@
+Analyzing pegas_table_page.dart...                              
+
+   info • The import of 'dart:io' is unnecessary because all of the used elements are also provided by the import of 'dart:io' • lib/modules/bikeshop/pages/pegas_table_page.dart:3:8 • unnecessary_import
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' • lib/modules/bikeshop/pages/pegas_table_page.dart:4:8 • unnecessary_import
+   info • Statements in an if should be enclosed in a block • lib/modules/bikeshop/pages/pegas_table_page.dart:684:13 • curly_braces_in_flow_control_structures
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:970:54 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:989:41 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/modules/bikeshop/pages/pegas_table_page.dart:1335:40 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/modules/bikeshop/pages/pegas_table_page.dart:1341:40 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/modules/bikeshop/pages/pegas_table_page.dart:1535:44 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/modules/bikeshop/pages/pegas_table_page.dart:1541:44 • use_build_context_synchronously
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2016:20 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2320:22 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2322:41 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2364:22 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2405:22 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2407:41 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2446:22 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2466:55 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2566:14 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:2646:41 • deprecated_member_use
+   info • Use a 'SizedBox' to add whitespace to a layout • lib/modules/bikeshop/pages/pegas_table_page.dart:2732:14 • sized_box_for_whitespace
+warning • The operand can't be 'null', so the condition is always 'false' • lib/modules/bikeshop/pages/pegas_table_page.dart:2836:24 • unnecessary_null_comparison
+warning • The operand can't be 'null', so the condition is always 'false' • lib/modules/bikeshop/pages/pegas_table_page.dart:2878:24 • unnecessary_null_comparison
+   info • Statements in an if should be enclosed in a block • lib/modules/bikeshop/pages/pegas_table_page.dart:2955:7 • curly_braces_in_flow_control_structures
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3013:24 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3017:57 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3106:36 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3241:30 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3265:63 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3331:64 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3391:63 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3443:64 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3535:36 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3538:38 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3578:34 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3581:36 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3618:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3640:34 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:3643:36 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/modules/bikeshop/pages/pegas_table_page.dart:3740:40 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/modules/bikeshop/pages/pegas_table_page.dart:3845:38 • use_build_context_synchronously
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:4029:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:4187:64 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:4191:53 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/modules/bikeshop/pages/pegas_table_page.dart:4418:38 • prefer_const_constructors
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/modules/bikeshop/pages/pegas_table_page.dart:5305:66 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/modules/bikeshop/pages/pegas_table_page.dart:5319:66 • use_build_context_synchronously
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:5391:43 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/modules/bikeshop/pages/pegas_table_page.dart:5457:46 • curly_braces_in_flow_control_structures
+   info • Use 'const' with the constructor to improve performance • lib/modules/bikeshop/pages/pegas_table_page.dart:5485:11 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/modules/bikeshop/pages/pegas_table_page.dart:5486:22 • prefer_const_constructors
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:6008:53 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:6636:45 • deprecated_member_use
+warning • The value of the local variable 'size' isn't used • lib/modules/bikeshop/pages/pegas_table_page.dart:6878:11 • unused_local_variable
+warning • The value of the local variable 'padding' isn't used • lib/modules/bikeshop/pages/pegas_table_page.dart:6879:11 • unused_local_variable
+warning • The value of the local variable 'viewInsets' isn't used • lib/modules/bikeshop/pages/pegas_table_page.dart:6880:11 • unused_local_variable
+warning • The value of the local variable 'globalPosition' isn't used • lib/modules/bikeshop/pages/pegas_table_page.dart:6881:11 • unused_local_variable
+warning • The value of the local variable 'maxPopupHeight' isn't used • lib/modules/bikeshop/pages/pegas_table_page.dart:6884:18 • unused_local_variable
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:7300:43 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:7498:49 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:7645:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:7646:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:7653:35 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/modules/bikeshop/pages/pegas_table_page.dart:8180:22 • prefer_const_constructors
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8324:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8345:46 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8716:51 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8735:50 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8738:54 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/modules/bikeshop/pages/pegas_table_page.dart:8983:64 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/modules/bikeshop/pages/pegas_table_page.dart:9234:9 • use_build_context_synchronously
+
