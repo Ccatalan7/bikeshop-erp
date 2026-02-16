@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For WhatsApp icon
 
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
@@ -10,6 +12,9 @@ import '../models/bikeshop_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../sales/widgets/sales_invoice_editor.dart'; // Import Invoice Editor
+import '../widgets/tasks_tab_view.dart'; // Import Tasks Tab
+import 'smart_job_details_editor.dart'; // Import Smart Editor
 
 /// Shared calendar widget for displaying mechanic jobs
 /// Used by both WorkshopCalendarPage and PegasTablePage calendar tab
@@ -48,6 +53,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   MechanicJob? _selectedJob;
   List<MechanicJobItem> _selectedJobItems = [];
   Map<String, String> _productImages = {};
+  Customer?
+      _selectedCustomerRel; // Full customer object for details (renamed to avoid confusion if any)
   String? _customerName;
   String? _bikeBrand;
   String? _bikeModel;
@@ -191,13 +198,22 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       // Load job items
       final items = await bikeshopService.getJobItems(job.id!);
 
-      // Get customer name
+      // Get customer info
       String? customerName;
+      Customer? customerRel;
+
       if (_useExternalData && widget.customers != null) {
-        customerName =
-            widget.customers![job.customerId]?.name ?? 'Cliente no encontrado';
+        customerRel = widget.customers![job.customerId];
+        customerName = customerRel?.name ?? 'Cliente no encontrado';
       } else {
-        customerName =
+        try {
+          final customerService = context.read<CustomerService>();
+          customerRel = await customerService.getCustomerById(job.customerId);
+          customerName = customerRel?.name;
+        } catch (e) {
+          debugPrint('Error fetching customer: $e');
+        }
+        customerName ??=
             _customerNames[job.customerId] ?? 'Cliente no encontrado';
       }
 
@@ -248,6 +264,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
       setState(() {
         _selectedJobItems = items;
+        _selectedCustomerRel = customerRel;
         _customerName = customerName;
         _bikeBrand = bikeBrand;
         _bikeModel = bikeModel;
@@ -888,17 +905,119 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   }
 
   Widget _buildJobDetails(MechanicJob job) {
+    // Determine initial index based on what we want to focus on
+    // Default to details (0)
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          // SMART HEADER (Always visible)
+          _buildSmartHeader(job),
+
+          // TABS
+          const TabBar(
+            labelColor: Color(0xFF1A3A5C), // VinaBike Navy
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Color(0xFFE65100), // VinaBike Orange
+            tabs: [
+              Tab(text: 'Info', icon: Icon(Icons.info_outline, size: 18)),
+              Tab(text: 'Tareas', icon: Icon(Icons.checklist, size: 18)),
+              Tab(text: 'Factura', icon: Icon(Icons.receipt_long, size: 18)),
+            ],
+          ),
+
+          // CONTENT
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildInfoTab(job),
+                _buildTasksTab(job),
+                _buildInvoiceTab(job),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmartHeader(MechanicJob job) {
     final statusColor = _getJobColor(job);
     final statusText = _getJobStatusText(job);
 
-    return SingleChildScrollView(
+    // Determine "Next Action" based on status
+    // Logic:
+    // Pendiente -> Diagnosticar
+    // Diagnostico -> Enviar Presupuesto (Whatsapp)
+    // Esperando Aprobacion -> Aprobar (Starts job)
+    // En Curso -> Terminar
+    // Finalizado -> Entregar
+
+    String actionLabel = '';
+    IconData actionIcon = Icons.arrow_forward;
+    VoidCallback? onAction;
+    Color actionColor = const Color(0xFFE65100); // Default Orange
+
+    // Smart Action Logic
+    if (job.status == JobStatus.pendiente) {
+      actionLabel = 'Comenzar Diagnóstico';
+      actionIcon = Icons.search;
+      onAction = () => _changeJobStatus(
+          job,
+          _findStatusByCode('DIAGNOSTICO') ??
+              JobStatusCustom(
+                  tenantId: '',
+                  name: 'Diagnóstico',
+                  code: 'DIAGNOSTICO',
+                  id: ''));
+    } else if (job.status == JobStatus.diagnostico) {
+      actionLabel = 'Enviar Presupuesto';
+      actionIcon = Icons.send; // WhatsApp icon ideally
+      actionColor = const Color(0xFF25D366); // WhatsApp Green
+      // Action: Send message (implemented later)
+    } else if (job.status == JobStatus.esperandoAprobacion) {
+      actionLabel = 'Aprobar y Comenzar';
+      actionIcon = Icons.play_arrow;
+      actionColor = Colors.green;
+      onAction = () => _changeJobStatus(
+          job,
+          _findStatusByCode('EN_CURSO') ??
+              JobStatusCustom(
+                  tenantId: '', name: 'En Curso', code: 'EN_CURSO', id: ''));
+    } else if (job.status == JobStatus.enCurso) {
+      actionLabel = 'Terminar Trabajo';
+      actionIcon = Icons.check_circle;
+      actionColor = Colors.blue;
+      onAction = () => _changeJobStatus(
+          job,
+          _findStatusByCode('FINALIZADO') ??
+              JobStatusCustom(
+                  tenantId: '',
+                  name: 'Finalizado',
+                  code: 'FINALIZADO',
+                  id: ''));
+    } else if (job.status == JobStatus.finalizado) {
+      actionLabel = 'Entregar Bicicleta';
+      actionIcon = Icons.handshake;
+      actionColor = Colors.purple;
+      onAction = () => _changeJobStatus(
+          job,
+          _findStatusByCode('ENTREGADO') ??
+              JobStatusCustom(
+                  tenantId: '', name: 'Entregado', code: 'ENTREGADO', id: ''));
+    }
+
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.1),
+        border: Border(bottom: BorderSide(color: statusColor.withOpacity(0.3))),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status Badge & Bike Info
           Row(
             children: [
+              // STATUS DROPDOWN
               PopupMenuButton<JobStatusCustom>(
                 onSelected: (newStatus) => _changeJobStatus(job, newStatus),
                 itemBuilder: (ctx) {
@@ -929,9 +1048,6 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                               ),
                             ),
                           ),
-                          if (isSelected)
-                            Icon(Icons.check,
-                                size: 16, color: status.colorValue),
                         ],
                       ),
                     );
@@ -939,209 +1055,363 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 },
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor, width: 1.5),
                   ),
-                  child: Column(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            statusText,
-                            style: TextStyle(
-                              color: statusColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.arrow_drop_down,
-                              size: 16, color: statusColor),
-                        ],
-                      ),
-                      if (job.statusUpdatedAt != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          _formatStatusTimestamp(job.statusUpdatedAt!),
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: statusColor.withOpacity(0.7),
-                          ),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusText.toUpperCase(),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_drop_down, size: 18, color: statusColor),
                     ],
                   ),
                 ),
               ),
+              if (job.statusUpdatedAt != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: Text(
+                    _formatStatusTimestamp(job.statusUpdatedAt!),
+                    style: TextStyle(fontSize: 9, color: Colors.grey.shade500),
+                  ),
+                ),
               const Spacer(),
+              // JOB ID
               Text(
-                _bikeBrand != null || _bikeModel != null
-                    ? '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim()
-                    : job.jobNumber ?? 'Sin #',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                job.jobNumber ?? 'Sin #',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
                     ),
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Customer Name
-          if (_customerName != null) ...[
-            Row(
-              children: [
-                Icon(Icons.person,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _customerName!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
+          if (actionLabel.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onAction, // Can be null if implemented later
+                icon: Icon(actionIcon, size: 18),
+                label: Text(actionLabel),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: actionColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
           ],
+        ],
+      ),
+    );
+  }
 
-          // Bike Info - Clickable to view bike details in-panel
-          if (_bikeBrand != null && _bikeBrand!.isNotEmpty) ...[
+  // Helper to find status by code
+  JobStatusCustom? _findStatusByCode(String code) {
+    try {
+      final jobStatusService = context.read<JobStatusService>();
+      return jobStatusService.statuses.firstWhere((s) => s.code == code);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Widget _buildInfoTab(MechanicJob job) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Bike Info - Large and prominent
+          if (_bikeBrand != null || _bikeModel != null)
             InkWell(
               onTap: () {
                 if (_selectedBike != null) {
                   setState(() => _showingBikeDetails = true);
                 }
               },
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
                 child: Row(
                   children: [
                     Icon(Icons.pedal_bike,
-                        size: 18, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 8),
+                        size: 28, color: Colors.blue.shade800),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        _bikeModel != null && _bikeModel!.isNotEmpty
-                            ? '$_bikeBrand $_bikeModel'
-                            : _bikeBrand!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              decoration: TextDecoration.underline,
-                              decorationStyle: TextDecorationStyle.dashed,
-                            ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Bicicleta',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim(),
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87),
+                          ),
+                          if (_selectedBike?.serialNumber != null)
+                            Text('Serie: ${_selectedBike!.serialNumber}',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey.shade600)),
+                        ],
                       ),
                     ),
-                    Icon(Icons.info_outline,
-                        size: 14,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withOpacity(0.6)),
+                    const Icon(Icons.chevron_right, color: Colors.grey),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-          ],
 
-          // Diagnostic Deadline
-          if (job.diagnosticDeadline != null) ...[
-            InkWell(
-              onTap: () => _editDeadline(job, isDiagnostic: true),
+          const SizedBox(height: 16),
+
+          // Customer Card with WhatsApp
+          if (_customerName != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
               child: Row(
                 children: [
-                  Icon(Icons.search, size: 18, color: Colors.blue.shade700),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Diagnóstico: ${DateFormat('dd/MM/yyyy HH:mm').format(job.diagnosticDeadline!)}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade700,
-                          decoration: TextDecoration.underline,
-                          decorationStyle: TextDecorationStyle.dashed,
-                        ),
+                  CircleAvatar(
+                    backgroundColor: Colors.blue.shade100,
+                    child: Text(_customerName![0].toUpperCase(),
+                        style: TextStyle(color: Colors.blue.shade800)),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.edit,
-                      size: 14, color: Colors.blue.shade700.withAlpha(153)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cliente',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _customerName!,
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                        // Phone would go here if available in local map
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const FaIcon(FontAwesomeIcons.whatsapp,
+                        size: 20, color: Color(0xFF25D366)),
+                    onPressed: () {
+                      if (_selectedCustomerRel?.phone != null) {
+                        _openWhatsApp(context, _selectedCustomerRel!.phone!);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Sin teléfono registrado')));
+                      }
+                    },
+                    tooltip: 'Contactar por WhatsApp',
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-          ],
 
-          // Delivery Deadline
-          if (job.deliveryDeadline != null) ...[
-            InkWell(
-              onTap: () => _editDeadline(job, isDiagnostic: false),
-              child: Row(
-                children: [
-                  Icon(Icons.local_shipping_outlined,
-                      size: 18, color: Colors.red.shade700),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Entrega: ${DateFormat('dd/MM/yyyy HH:mm').format(job.deliveryDeadline!)}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.red.shade700,
-                          decoration: TextDecoration.underline,
-                          decorationStyle: TextDecorationStyle.dashed,
-                        ),
+          const SizedBox(height: 24),
+
+          // Deadlines Row
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => _editDeadline(job, isDiagnostic: true),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('DIAGNÓSTICO',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade600)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.search,
+                              size: 16, color: Colors.blue.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            job.diagnosticDeadline != null
+                                ? DateFormat('dd/MM HH:mm')
+                                    .format(job.diagnosticDeadline!)
+                                : 'Sin fecha',
+                            style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.edit,
-                      size: 14, color: Colors.red.shade700.withAlpha(153)),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
+              Expanded(
+                child: InkWell(
+                  onTap: () => _editDeadline(job, isDiagnostic: false),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ENTREGA',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade600)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.local_shipping_outlined,
+                              size: 16, color: Colors.red.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            job.deliveryDeadline != null
+                                ? DateFormat('dd/MM HH:mm')
+                                    .format(job.deliveryDeadline!)
+                                : 'Sin fecha',
+                            style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
 
-          // Items Section
+          const Divider(height: 32),
+
+          // Request & Notes
+          // SMART EDITOR for Request, Diagnosis, Work, Notes
+          SmartJobDetailsEditor(
+            isInline: true,
+            job: job,
+            invoice:
+                null, // Calendar doesn't load full invoice usually, or we can fetch it if needed
+            customerName: _customerName,
+            bikeName: '$_bikeBrand $_bikeModel',
+            clientRequest: job.clientRequest,
+            diagnosis: job.diagnosis,
+            workPerformed: job.workPerformed,
+            notes: job.notes,
+            onSave: ({clientRequest, diagnosis, workPerformed, notes}) async {
+              try {
+                // Create updated job copy
+                final updatedJob = job.copyWith(
+                  clientRequest: clientRequest,
+                  diagnosis: diagnosis,
+                  workPerformed: workPerformed,
+                  notes: notes,
+                );
+
+                // Update via service
+                await context.read<BikeshopService>().updateJob(updatedJob);
+
+                // Update local state if needed (usually provider handles it, but for safety)
+                setState(() {
+                  _selectedJob = updatedJob;
+                  // Update internal list if using internal data
+                  if (!_useExternalData) {
+                    final index =
+                        _internalJobs.indexWhere((j) => j.id == job.id);
+                    if (index != -1) {
+                      _internalJobs[index] = updatedJob;
+                    }
+                  }
+                });
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cambios guardados'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Error al guardar: $e'),
+                        backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+          ),
+
+          const SizedBox(height: 100), // Bottom padding for scrolling
+
+          // Items Section (ReadOnly Summary)
           if (_selectedJobItems.isNotEmpty) ...[
-            const SizedBox(height: 20),
             const Divider(),
             const SizedBox(height: 12),
             Row(
               children: [
                 Icon(Icons.shopping_cart,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
+                    size: 16, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Repuestos y Servicios',
+                  'Repuestos y Servicios (Resumen)',
                   style: Theme.of(context)
                       .textTheme
                       .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             ..._selectedJobItems.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (item.productId != null &&
                           _productImages.containsKey(item.productId))
@@ -1149,86 +1419,75 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           padding: const EdgeInsets.only(right: 8),
                           child: _HoverImageWidget(
                             imageUrl: _productImages[item.productId]!,
-                            size: 40,
+                            size: 32,
                           ),
                         ),
-                      Text('• ',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.bold)),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.productName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w500),
-                            ),
-                            Text(
-                              'Cantidad: ${item.quantity.toStringAsFixed(0)} × \$${item.unitPrice.toStringAsFixed(0)} = \$${item.totalPrice.toStringAsFixed(0)}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withOpacity(0.6),
-                                  ),
-                            ),
-                          ],
-                        ),
+                          child: Text('• ${item.productName}',
+                              style: const TextStyle(fontSize: 13))),
+                      Text(
+                        '\$${item.totalPrice.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
                 )),
           ],
 
-          // Loading indicator
-          if (_loadingDetails) ...[
-            const SizedBox(height: 12),
+          if (_loadingDetails)
             const Center(
                 child: Padding(
-                    padding: EdgeInsets.all(16), child: BrandedLoading())),
-          ],
-
-          // Notes section
-          if (job.clientRequest != null ||
-              job.diagnosis != null ||
-              job.workPerformed != null ||
-              (job.notes != null && job.notes!.isNotEmpty)) ...[
-            const Divider(height: 24),
-            if (job.clientRequest != null) ...[
-              _buildDetailRow(
-                  icon: Icons.description,
-                  label: 'Solicitud',
-                  value: job.clientRequest!),
-              const SizedBox(height: 12),
-            ],
-            if (job.diagnosis != null) ...[
-              _buildDetailRow(
-                  icon: Icons.medical_services,
-                  label: 'Diagnóstico',
-                  value: job.diagnosis!),
-              const SizedBox(height: 12),
-            ],
-            if (job.workPerformed != null) ...[
-              _buildDetailRow(
-                  icon: Icons.build,
-                  label: 'Trabajo Realizado',
-                  value: job.workPerformed!),
-              const SizedBox(height: 12),
-            ],
-            if (job.notes != null && job.notes!.isNotEmpty) ...[
-              _buildDetailRow(
-                  icon: Icons.note, label: 'Notas', value: job.notes!),
-            ],
-          ],
+                    padding: EdgeInsets.all(8.0),
+                    child: BrandedLoading(size: 20))),
         ],
       ),
+    );
+  }
+
+  // Placeholder for Tasks Tab - we need to import TasksTabView
+  Widget _buildTasksTab(MechanicJob job) {
+    if (job.id == null)
+      return const Center(child: Text('Error: Job ID is null'));
+
+    return TasksTabView(
+      jobId: job.id!,
+      readOnly: false,
+      onItemAdded: (item) {
+        // Refresh items if needed
+        if (!_useExternalData) {
+          _loadJobDetails(job); // Reload details to update local state
+        }
+      },
+      onItemRemoved: (itemId) {
+        if (!_useExternalData) {
+          _loadJobDetails(job);
+        }
+      },
+    );
+  }
+
+  // Placeholder for Invoice Tab - we need to import SalesInvoiceEditor
+  Widget _buildInvoiceTab(MechanicJob job) {
+    if (job.id == null) return const SizedBox.shrink();
+
+    return SalesInvoiceEditor(
+      invoiceId: job.invoiceId,
+      preselectedJobId: job.id,
+      preselectedCustomerId: job.customerId,
+      isCompact: true,
+      onSaved: () {
+        // Refresh job to get the new invoice link
+        if (_useExternalData) {
+          widget.onRefreshNeeded?.call();
+        } else {
+          _loadJobs(); // Reloads the calendar list
+          // Also reload details to get the invoiceId
+          _loadJobDetails(job);
+        }
+      },
     );
   }
 
@@ -1818,37 +2077,29 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Widget _buildDetailRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.6),
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.only(left: 24),
-          child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
-        ),
-      ],
-    );
+  Future<void> _openWhatsApp(BuildContext context, String phone) async {
+    // Clean phone number
+    String cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
+
+    // Check if it has country code, if not assume Chile (+56)
+    // This is a naive assumption, but works for most local cases
+    if (!cleanPhone.startsWith('+')) {
+      if (cleanPhone.length == 9) {
+        cleanPhone = '56$cleanPhone';
+      }
+    }
+
+    final url = 'https://wa.me/$cleanPhone';
+
+    if (await canLaunchUrlString(url)) {
+      await launchUrlString(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir WhatsApp: $url')),
+        );
+      }
+    }
   }
 }
 
