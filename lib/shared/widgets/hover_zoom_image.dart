@@ -21,7 +21,7 @@ class _HoverZoomImageState extends State<HoverZoomImage> {
   OverlayEntry? _overlayEntry;
   Timer? _hoverTimer;
 
-  static const _hoverDelay = Duration(milliseconds: 400);
+  static const _hoverDelay = Duration(milliseconds: 600);
   static const double _zoomSize = 450;
 
   void _onHoverStart() {

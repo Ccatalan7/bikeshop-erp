@@ -16,6 +16,14 @@ class AuthService extends ChangeNotifier {
       _currentUser = data.session?.user;
       _isInitializing = false; // Now we can set it to false
 
+      // CRITICAL: Only notify listeners on MEANINGFUL auth changes.
+      // Token refreshes should NOT trigger GoRouter rebuilds, as that
+      // destroys form state (e.g., sales invoice being edited for >5 min).
+      final isSignificantEvent = data.event == AuthChangeEvent.signedIn ||
+          data.event == AuthChangeEvent.signedOut ||
+          data.event == AuthChangeEvent.passwordRecovery ||
+          data.event == AuthChangeEvent.userUpdated;
+
       // Check staff profile on sign in
       if (data.event == AuthChangeEvent.signedIn && _currentUser != null) {
         await _loadStaffProfile();
@@ -23,7 +31,14 @@ class AuthService extends ChangeNotifier {
         _staffProfile = null;
       }
 
-      notifyListeners();
+      // Only notify (and thus trigger GoRouter redirect) on real auth changes
+      if (isSignificantEvent) {
+        debugPrint('🔐 [AuthService] Significant auth event: ${data.event}');
+        notifyListeners();
+      } else {
+        debugPrint(
+            '🔄 [AuthService] Background auth event (no rebuild): ${data.event}');
+      }
     });
 
     // If currentSession exists on initialization, set isInitializing to false immediately
