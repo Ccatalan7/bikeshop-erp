@@ -942,6 +942,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         status: _selectedStatus,
         statusId: _selectedCustomStatus?.id, // Custom status ID
         arrivalDate: _selectedArrivalDate,
+        diagnosticDeadline: _existingJob?.diagnosticDeadline, // ✅ Preserve
+        servicePackageId: _existingJob?.servicePackageId, // ✅ Preserve
+        warrantyNotes: _existingJob?.warrantyNotes, // ✅ Preserve
+        assignedTo: _existingJob?.assignedTo, // ✅ Preserve
+        assignedTechnicianName:
+            _existingJob?.assignedTechnicianName, // ✅ Preserve
+        diagnosticSentAt: _existingJob?.diagnosticSentAt, // ✅ Preserve
+        startedAt: _existingJob?.startedAt, // ✅ Preserve
+        completedAt: _existingJob?.completedAt, // ✅ Preserve
+        deliveredAt: _existingJob?.deliveredAt, // ✅ Preserve
         createdAt: _existingJob?.createdAt ?? DateTime.now(),
         // Store first bike's data in legacy fields for backward compat
         clientRequest: firstTab.clientRequestController.text.trim().isEmpty
@@ -1064,6 +1074,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             unitPrice: unitPrice,
             totalPrice: quantity * unitPrice,
             itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+            notes: item.notes, // ✅ Save the description!
           );
           final created = await bikeshopService.createJobItem(jobItem);
 
@@ -2141,8 +2152,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildInlineBikeTabs(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(10),
       ),
       padding: const EdgeInsets.all(4),
       child: SingleChildScrollView(
@@ -2156,18 +2167,37 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               final isSelected = index == _selectedBikeTabIndex;
 
               return Padding(
-                padding: const EdgeInsets.only(right: 2),
+                padding: const EdgeInsets.only(right: 6),
                 child: Material(
-                  color: isSelected
-                      ? theme.colorScheme.surface
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
+                  color: Colors.transparent,
                   child: InkWell(
                     onTap: () => setState(() => _selectedBikeTabIndex = index),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.colorScheme.surface
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected
+                            ? Border(
+                                top: BorderSide(
+                                    color: theme.colorScheme.primary, width: 3),
+                              )
+                            : Border.all(color: Colors.transparent, width: 0),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -2178,29 +2208,41 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
                             tab.bike?.displayName ?? 'Bici ${index + 1}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: isSelected
                                   ? FontWeight.w600
-                                  : FontWeight.w400,
+                                  : FontWeight.w500,
                               color: isSelected
                                   ? theme.colorScheme.primary
                                   : theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           if (_bikeTabs.length > 1) ...[
-                            const SizedBox(width: 4),
-                            InkWell(
-                              onTap: () => _removeBikeTab(index),
-                              borderRadius: BorderRadius.circular(10),
-                              child: Icon(
-                                Icons.close,
-                                size: 14,
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withOpacity(0.6),
+                            const SizedBox(width: 8),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () =>
+                                    _confirmRemoveBike(index, tab.displayName),
+                                borderRadius: BorderRadius.circular(12),
+                                hoverColor:
+                                    theme.colorScheme.error.withOpacity(0.1),
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withOpacity(0.6),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -2214,22 +2256,54 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             // Add bike button
             Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 onTap: _showAddBikeSelector,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
+                hoverColor: theme.colorScheme.primary.withOpacity(0.1),
                 child: Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(7),
                   child: Icon(
                     Icons.add,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    size: 18,
+                    color: theme.colorScheme.primary,
                   ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CONFIRMATION DIALOGS
+  // ============================================================
+  void _confirmRemoveBike(int index, String bikeName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover bicicleta'),
+        content: Text(
+            '¿Estás seguro de que deseas quitar la bicicleta "$bikeName" de este trabajo?\n\nSe perderán los datos ingresados en esta pestaña.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _removeBikeTab(index);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Quitar'),
+          ),
+        ],
       ),
     );
   }
@@ -2259,8 +2333,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 label: tab.displayName,
                 isSelected: isSelected,
                 onTap: () => setState(() => _selectedBikeTabIndex = index),
-                onClose:
-                    _bikeTabs.length > 1 ? () => _removeBikeTab(index) : null,
+                onClose: _bikeTabs.length > 1
+                    ? () => _confirmRemoveBike(index, tab.displayName)
+                    : null,
               );
             }),
             // Add new tab button
@@ -4990,17 +5065,20 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
           decoration: BoxDecoration(
             color: widget.isSelected
                 ? theme.colorScheme.surface
-                : _isHovered
-                    ? theme.colorScheme.surfaceContainerHigh
-                    : Colors.transparent,
+                : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             border: widget.isSelected
                 ? Border(
-                    left: BorderSide(color: theme.dividerColor, width: 1),
-                    top: BorderSide(color: theme.dividerColor, width: 1),
-                    right: BorderSide(color: theme.dividerColor, width: 1),
+                    top: BorderSide(color: theme.colorScheme.primary, width: 3),
+                    left:
+                        BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+                    right:
+                        BorderSide(color: theme.dividerColor.withOpacity(0.5)),
                   )
-                : null,
+                : Border(
+                    bottom: BorderSide(
+                        color: theme.dividerColor.withOpacity(0.5), width: 1),
+                  ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -5033,13 +5111,20 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                 InkWell(
                   onTap: widget.onClose,
                   borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _isHovered
+                          ? theme.colorScheme.error.withOpacity(0.1)
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.close,
                       size: 14,
-                      color:
-                          theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      color: _isHovered
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
                     ),
                   ),
                 ),

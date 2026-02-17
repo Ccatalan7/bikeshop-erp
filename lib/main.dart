@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'shared/services/notification_service.dart';
 
@@ -139,6 +140,9 @@ Future<void> main() async {
     // Use clean URLs (no hash #) for web
     usePathUrlStrategy();
     _logTiming('URL_STRATEGY');
+
+    // Load environment variables
+    await dotenv.load(fileName: ".env");
 
     final isPublicStoreHost = _detectPublicStoreHost();
 

@@ -11987,7 +11987,7 @@ begin
       case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
       v_unit_price,
       v_line_total,
-      'Synced from invoice',
+      coalesce(v_item->>'description', ''),
       case when v_product_id is null or v_product_type = 'service' then 'service' else 'product' end,
       case when v_product_id is null or v_product_type = 'service' then v_product_id else null end,
       now(),

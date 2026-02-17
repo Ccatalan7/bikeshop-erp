@@ -262,7 +262,13 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         debugPrint('Error loading product images: $e');
       }
 
+      // Load fresh job data to get updated invoice_id
+      final freshJob = await bikeshopService.getJobById(job.id!);
+
       setState(() {
+        if (freshJob != null) {
+          _selectedJob = freshJob;
+        }
         _selectedJobItems = items;
         _selectedCustomerRel = customerRel;
         _customerName = customerName;
@@ -1423,8 +1429,24 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           ),
                         ),
                       Expanded(
-                          child: Text('• ${item.productName}',
-                              style: const TextStyle(fontSize: 13))),
+                          child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('• ${item.productName}',
+                              style: const TextStyle(fontSize: 13)),
+                          if (item.notes != null && item.notes!.isNotEmpty)
+                            Text(
+                              item.notes!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      )),
                       Text(
                         '\$${item.totalPrice.toStringAsFixed(0)}',
                         style: TextStyle(

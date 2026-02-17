@@ -874,6 +874,24 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
 
     try {
       final saved = await _salesService.saveInvoice(invoice);
+
+      // FIX: Link new invoice to the job if we have a preselectedJobId
+      // and we just created a NEW invoice (widget.invoiceId was null)
+      if (widget.preselectedJobId != null && widget.invoiceId == null) {
+        try {
+          debugPrint(
+              '🔗 Linking new invoice ${saved.id} to job ${widget.preselectedJobId}...');
+          final db = Provider.of<DatabaseService>(context, listen: false);
+          await db.update('mechanic_jobs', widget.preselectedJobId!, {
+            'invoice_id': saved.id,
+          });
+          debugPrint('✅ Job linked successfully.');
+        } catch (e) {
+          debugPrint('❌ Failed to link invoice to job: $e');
+          // Don't block the success message, but log it
+        }
+      }
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(

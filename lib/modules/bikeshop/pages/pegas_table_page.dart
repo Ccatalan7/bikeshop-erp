@@ -32,6 +32,7 @@ import '../widgets/pegas_calendar_widget.dart';
 import '../widgets/deadline_cell.dart';
 import '../widgets/smart_job_details_editor.dart';
 import 'bike_form_dialog.dart';
+import '../../ai_assistant/widgets/ai_chat_bubble.dart';
 
 /// Modern, professional Pegas management with advanced data table
 class PegasTablePage extends StatefulWidget {
@@ -484,7 +485,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         _isLoading = false;
       });
       _applyFiltersAndSort();
-    } else {
+    } else if (_jobs.isEmpty) {
       setState(() => _isLoading = true);
     }
 
@@ -835,12 +836,21 @@ class _PegasTablePageState extends State<PegasTablePage>
               ? const Center(child: BrandedLoading())
               : _selectedJob != null
                   ? _buildSplitView()
-                  : Column(
+                  : Stack(
                       children: [
-                        _buildModernHeader(),
-                        _buildToolbar(),
-                        if (_showColumnPanel) _buildColumnVisibilityPanel(),
-                        Expanded(child: _buildViewContent()),
+                        Column(
+                          children: [
+                            _buildModernHeader(),
+                            _buildToolbar(),
+                            if (_showColumnPanel) _buildColumnVisibilityPanel(),
+                            Expanded(child: _buildViewContent()),
+                          ],
+                        ),
+                        Positioned(
+                          bottom: 24,
+                          right: 24,
+                          child: AIAssistantButton(jobs: _filteredJobs),
+                        ),
                       ],
                     ),
     );

@@ -624,6 +624,19 @@ class _PegaDetailViewState extends State<PegaDetailView>
                     color: Colors.black87,
                   ),
                 ),
+                if (item.notes != null && item.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.notes!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Row(
                   children: [
