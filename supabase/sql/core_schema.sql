@@ -6038,6 +6038,14 @@ declare
 begin
   raise notice 'handle_sales_invoice_change: TG_OP=%', TG_OP;
 
+  -- 🔄 CIRCULAR SYNC GUARD: Skip if already syncing in either direction
+  if current_setting('app.syncing_job_to_invoice', true) = 'true' or 
+     current_setting('app.syncing_invoice_to_job', true) = 'true' then
+    raise notice 'handle_sales_invoice_change: skipping due to active sync';
+    if TG_OP = 'DELETE' then return OLD; end if;
+    return NEW;
+  end if;
+
   -- Prevent infinite recursion
   if pg_trigger_depth() > 1 then
     raise notice 'handle_sales_invoice_change: trigger depth > 1, returning';
@@ -11313,6 +11321,11 @@ declare
   v_labor_cost numeric;
   v_total_cost numeric;
 begin
+  -- 🔄 CIRCULAR SYNC GUARD
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' or
+     current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    return coalesce(NEW, OLD);
+  end if;
   -- Calculate parts cost (everything except service-type items)
   select coalesce(sum(total_price), 0)
   into v_parts_cost
@@ -11540,6 +11553,12 @@ declare
   v_total numeric(12,2) := 0;
   v_tax_rate numeric(5,4) := 0.19; -- 19% IVA in Chile
 begin
+  -- 🔄 CIRCULAR SYNC GUARD: Skip if already syncing in either direction
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' or
+     current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    return;
+  end if;
+
   if p_job_id is null then
     return;
   end if;
@@ -11971,6 +11990,7 @@ begin
       job_id,
       product_id,
       product_name,
+      product_sku,
       quantity,
       unit_price,
       total_price,
@@ -11984,6 +12004,7 @@ begin
       v_job_id,
       case when v_product_type = 'service' then null else v_product_id end,
       coalesce(v_product_name, v_item->>'product_name'),
+      coalesce(v_item->>'product_sku', ''),
       case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
       v_unit_price,
       v_line_total,
@@ -12030,6 +12051,12 @@ declare
   v_invoice record;
   v_is_paid boolean;
 begin
+  -- 🔄 CIRCULAR SYNC GUARD: Skip if already syncing in either direction
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' or
+     current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    return;
+  end if;
+
   -- Find the job linked to this invoice
   select id into v_job_id
   from mechanic_jobs
@@ -12141,6 +12168,10 @@ begin
                          else v_item.product_id::text
                     end,
       'product_name', v_item.product_name,
+      'product_sku', coalesce(v_item.product_sku, ''),
+      'description', coalesce(v_item.notes, ''),
+      'item_type', coalesce(v_item.item_type, 'product'),
+      'is_catalog_product', case when v_item.item_type = 'adhoc' then false else true end,
       'quantity', v_item.quantity,
       'unit_price', v_item.unit_price,
       'line_total', coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0)
@@ -12671,8 +12702,16 @@ begin
         NEW.delivered_at := now();
       end if;
 
-      -- AWESOME: Sync invoice status with job status
+      -- AWESOME: Sync invoice status and data with job status
       if NEW.invoice_id is not null then
+        -- NEW: If link was just established, sync items from invoice to job
+        -- This prevents the race condition where new invoices are overwritten by stale job items
+        if OLD.invoice_id is null then
+          raise notice 'handle_mechanic_job_change: Link established, triggering forward sync';
+          perform public.sync_invoice_items_to_job(NEW.invoice_id);
+          perform public.sync_invoice_status_to_job(NEW.invoice_id);
+        end if;
+
         if v_new_status = 'ENTREGADO' then
           -- Job delivered → mark invoice as sent/issued
           update public.sales_invoices
@@ -17246,6 +17285,11 @@ declare
   v_parts_cost numeric(12,2);
   v_labor_cost numeric(12,2);
 begin
+  -- 🔄 CIRCULAR SYNC GUARD
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' or
+     current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    return coalesce(NEW, OLD);
+  end if;
   -- Get the job_bike_id from the changed item
   if TG_OP = 'DELETE' then
     v_job_bike_id := OLD.job_bike_id;

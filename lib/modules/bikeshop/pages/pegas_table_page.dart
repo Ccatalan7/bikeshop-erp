@@ -259,10 +259,32 @@ class _PegasTablePageState extends State<PegasTablePage>
   void _refreshFromCache() {
     if (!mounted) return;
 
+    MechanicJob? jobToRefresh;
+
     setState(() {
       _jobs = _bikeshopService.cachedJobs;
+
+      // Update selected job if it exists in the new list (to get fresh totals/status)
+      if (_selectedJob != null) {
+        try {
+          final freshJob = _jobs.firstWhere((j) => j.id == _selectedJob!.id);
+          // Always update reference to get latest totals/status
+          if (freshJob != _selectedJob) {
+            _selectedJob = freshJob;
+            jobToRefresh = freshJob;
+          }
+        } catch (_) {
+          // Job no longer in cache - ignore
+        }
+      }
     });
     _applyFiltersAndSort();
+
+    // If selected job was updated, we MUST refresh its items (details)
+    // because invoice changes likely modified the items list too
+    if (jobToRefresh != null) {
+      _loadJobDetails(jobToRefresh!);
+    }
   }
 
   /// Mark that we're starting a local operation (to suppress unnecessary reloads)

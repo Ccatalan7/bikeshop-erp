@@ -102,6 +102,23 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     super.didUpdateWidget(oldWidget);
     if (_useExternalData) {
       _buildLookupMaps();
+
+      // If we have a selected job, check if it was updated in the new jobs list
+      if (_selectedJob != null && widget.jobs != null) {
+        try {
+          final freshJob =
+              widget.jobs!.firstWhere((j) => j.id == _selectedJob!.id);
+          if (freshJob != _selectedJob) {
+            setState(() {
+              _selectedJob = freshJob;
+            });
+            // Refresh details (items) as they might have changed too
+            _loadJobDetails(freshJob);
+          }
+        } catch (_) {
+          // Job might have been removed from the list - ignore
+        }
+      }
     }
   }
 
@@ -1474,9 +1491,15 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     if (job.id == null)
       return const Center(child: Text('Error: Job ID is null'));
 
+    // If we are viewing the selected job, pass the already loaded items to avoid re-fetching
+    // This also ensures that when an invoice is saved (and _selectedJobItems refreshed), the tasks tab updates immediately.
+    final List<MechanicJobItem>? jobItems =
+        (job.id == _selectedJob?.id) ? _selectedJobItems : null;
+
     return TasksTabView(
       jobId: job.id!,
       readOnly: false,
+      externalItems: jobItems,
       onItemAdded: (item) {
         // Refresh items if needed
         if (!_useExternalData) {

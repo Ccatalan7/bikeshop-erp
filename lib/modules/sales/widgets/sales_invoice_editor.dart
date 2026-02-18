@@ -47,7 +47,8 @@ class SalesInvoiceEditor extends StatefulWidget {
   State<SalesInvoiceEditor> createState() => _SalesInvoiceEditorState();
 }
 
-class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
+class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
+    with AutomaticKeepAliveClientMixin {
   // Column widths for table alignment
   static const double _colIndexWidth = 40.0;
   static const double _colQuantityWidth = 120.0;
@@ -55,6 +56,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   static const double _colDiscountWidth = 130.0;
   static const double _colTotalWidth = 130.0;
   static const double _colActionsWidth = 48.0;
+
+  @override
+  bool get wantKeepAlive => true;
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _invoiceNumberController =
@@ -123,7 +127,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   @override
   void didUpdateWidget(SalesInvoiceEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.invoiceId != oldWidget.invoiceId ||
+    if ((widget.invoiceId != oldWidget.invoiceId &&
+            widget.invoiceId != _loadedInvoice?.id) ||
         widget.preselectedJobId != oldWidget.preselectedJobId ||
         widget.preselectedCustomerId != oldWidget.preselectedCustomerId) {
       _resetAndReload();
@@ -306,11 +311,14 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
       }
 
       if (widget.invoiceId != null) {
-        final invoice =
-            await _salesService.fetchInvoice(widget.invoiceId!, refresh: true);
-        if (invoice != null) {
-          _loadedInvoice = invoice;
-          _applyInvoice(invoice);
+        // Only fetch if we don't already have it or if it's a different one
+        if (_loadedInvoice?.id != widget.invoiceId) {
+          final invoice = await _salesService.fetchInvoice(widget.invoiceId!,
+              refresh: true);
+          if (invoice != null) {
+            _loadedInvoice = invoice;
+            _applyInvoice(invoice);
+          }
         }
       } else {
         if (_invoiceNumberController.text.isEmpty) {
@@ -342,6 +350,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
 
   void _applyInvoice(Invoice invoice) {
     if (!mounted) return;
+    debugPrint(
+        '🐛 [InvoiceEditor] Applying invoice: ${invoice.id}. Items: ${invoice.items.length}');
+    // Log items for detail
+    for (var item in invoice.items) {
+      debugPrint('   - Item: ${item.productName} (Qty: ${item.quantity})');
+    }
 
     _invoiceNumberController.text = invoice.invoiceNumber.isNotEmpty
         ? invoice.invoiceNumber
@@ -480,14 +494,14 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   void _markDirty() {
     if (!_isDirty && _isEditing) {
       _isDirty = true;
-      debugPrint('🟡 [InvoiceEditor] Marked as dirty (unsaved changes)');
+      // debugPrint('🟡 [InvoiceEditor] Marked as dirty (unsaved changes)');
     }
   }
 
   /// Clear dirty state (after save or discard)
   void _clearDirty() {
     _isDirty = false;
-    debugPrint('✅ [InvoiceEditor] Dirty state cleared');
+    // debugPrint('✅ [InvoiceEditor] Dirty state cleared');
   }
 
   void _startEditing() {
@@ -829,7 +843,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
     }
 
     final items = _lineEntries
-        .where((entry) => entry.line.quantity > 0)
+        .where((entry) =>
+            entry.productNameController.text.trim().isNotEmpty ||
+            entry.product != null)
         .map((entry) => entry.toInvoiceItem())
         .toList();
 
@@ -879,16 +895,18 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
       // and we just created a NEW invoice (widget.invoiceId was null)
       if (widget.preselectedJobId != null && widget.invoiceId == null) {
         try {
-          debugPrint(
-              '🔗 Linking new invoice ${saved.id} to job ${widget.preselectedJobId}...');
           final db = Provider.of<DatabaseService>(context, listen: false);
           await db.update('mechanic_jobs', widget.preselectedJobId!, {
             'invoice_id': saved.id,
           });
-          debugPrint('✅ Job linked successfully.');
+
+          // FORCE SYNC: Now that the job is linked, ensure items are synced
+          // This fixes the race condition where the trigger fired BEFORE the link existed
+          if (saved.id != null) {
+            await _salesService.triggerInvoiceSync(saved.id!);
+          }
         } catch (e) {
-          debugPrint('❌ Failed to link invoice to job: $e');
-          // Don't block the success message, but log it
+          debugPrint('❌ Failed to link/sync invoice to job: $e');
         }
       }
 
@@ -901,12 +919,22 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
         ),
       );
 
+      // ALWAYS apply saved invoice to local state to ensure UI reflects latest data
+      _applyInvoice(saved);
+      _clearDirty(); // Save successful - clear dirty state
+
+      // FORCE SYNC: Ensure items are synced to any linked job (New OR Existing)
+      // This is safe to call even if no job is linked (the DB function just returns)
+      if (saved.id != null) {
+        // Don't await this to keep UI snappy, let it run in background
+        _salesService.triggerInvoiceSync(saved.id!).catchError((e) {
+          debugPrint('⚠️ [InvoiceEditor] Sync trigger warning: $e');
+        });
+      }
+
       if (widget.onSaved != null) {
         widget.onSaved!();
-      } else {
-        _applyInvoice(saved);
       }
-      _clearDirty(); // Save successful - clear dirty state
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -949,7 +977,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
         filename: 'factura_${_loadedInvoice!.invoiceNumber}.pdf',
       );
     } catch (e) {
-      debugPrint('Error generating PDF: $e');
+      // debugPrint('Error generating PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -985,7 +1013,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
         }
       }
     } catch (e) {
-      debugPrint('Error loading logo for PDF: $e');
+      // debugPrint('Error loading logo for PDF: $e');
     }
 
     pdf.addPage(
@@ -1317,6 +1345,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required by AutomaticKeepAliveClientMixin
     final theme = Theme.of(context);
 
     // If compact, don't use MainLayout, just the form content
@@ -1385,7 +1414,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+          color: theme.colorScheme.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
@@ -1789,7 +1818,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
   Widget _buildReadOnlyNotice(ThemeData theme) {
     if (widget.isCompact) return const SizedBox.shrink();
     return Card(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
       child: ListTile(
         leading:
             Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
@@ -1835,8 +1864,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -1877,8 +1905,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
           leading: widget.isCompact
               ? null
               : CircleAvatar(
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.15),
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
                   child: Icon(
                     Icons.person,
                     color: theme.colorScheme.primary,
@@ -1949,7 +1976,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1976,8 +2003,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
         // Header
         Container(
           decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.3)),
+              color:
+                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.3)),
           child: const Row(children: [
             SizedBox(width: _colIndexWidth, child: Center(child: Text('#'))),
             Expanded(
@@ -1997,7 +2024,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
         Divider(
             height: 1,
             thickness: 1,
-            color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+            color: theme.colorScheme.outline.withOpacity(0.2)),
         Column(children: [
           ..._lineEntries.asMap().entries.map((entry) =>
               _buildCompactLineRow(theme, entry.key + 1, entry.value)),
@@ -2428,9 +2455,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Text(
         _getLocalizedStatus(_status).toUpperCase(),
@@ -2517,20 +2544,27 @@ class _InvoiceLineEntry {
   }
 
   InvoiceItem toInvoiceItem() {
-    return InvoiceItem(
-      productId: line.productId,
-      productName: line.name,
-      productSku: line.sku,
+    final item = InvoiceItem(
+      productId: product?.id ?? line.productId,
+      productName: productNameController.text.trim().isEmpty
+          ? line.name
+          : productNameController.text.trim(),
+      productSku: productSkuController.text.trim().isEmpty
+          ? line.sku
+          : productSkuController.text.trim(),
       description: descriptionController.text.trim().isEmpty
-          ? null
+          ? line.description
           : descriptionController.text.trim(),
-      isCatalogProduct: line.isCatalogProduct,
+      isCatalogProduct: product != null || line.isCatalogProduct,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       discount: line.discount,
       lineTotal: line.netAmount,
-      cost: line.cost,
+      cost: product?.cost ?? line.cost,
     );
+    debugPrint(
+        '🐛 [InvoiceLineEntry] Converting item: ${item.productName}. ProductId: ${item.productId}');
+    return item;
   }
 
   void _onQuantityChanged() {

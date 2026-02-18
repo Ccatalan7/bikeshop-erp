@@ -1247,6 +1247,31 @@ class BikeshopService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
+              // 1. Try to find if this invoice serves a cached job and update it surgically
+              // This is critical because invoice updates change job totals via DB triggers
+              try {
+                final newRecord = payload.newRecord;
+                if (newRecord != null && _cachedJobs != null) {
+                  final invoiceId = newRecord['id']?.toString();
+                  if (invoiceId != null) {
+                    final jobIndex = _cachedJobs!
+                        .indexWhere((j) => j.invoiceId == invoiceId);
+                    if (jobIndex != -1) {
+                      final jobId = _cachedJobs![jobIndex].id;
+                      if (jobId != null) {
+                        debugPrint(
+                            '🔗 [BikeshopService] Invoice update linked to job $jobId - refreshing job...');
+                        // Fetch fresh job data immediately to reflect DB trigger updates
+                        _fetchAndUpdateJob(jobId);
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                debugPrint(
+                    '⚠️ [BikeshopService] Error linking invoice to job: $e');
+              }
+
               // For invoice changes, we use a longer debounce since these are less critical
               // The Pegas table will still show correct data on next user interaction
               _debouncedNotifyInvoiceChange();

@@ -32,6 +32,7 @@ class SalesService extends ChangeNotifier {
   String? _invoiceError;
   String? _paymentError;
   Timer? _realtimeNotifyDebounce; // Debounce realtime notifications
+  final Map<String, DateTime> _justSavedInvoiceIds = {}; // ID -> Timestamp
 
   // ============================================================
   // CACHING - Avoid refetching on every page navigation
@@ -177,6 +178,14 @@ class SalesService extends ChangeNotifier {
       final savedInvoice = Invoice.fromJson(result);
       _upsertInvoice(savedInvoice);
 
+      // GUARD: Mark this invoice as "just saved" to ignore stale realtime updates for 5s
+      if (savedInvoice.id != null) {
+        _justSavedInvoiceIds[savedInvoice.id!] = DateTime.now();
+        // Clean up old entries
+        _justSavedInvoiceIds.removeWhere((key, value) =>
+            DateTime.now().difference(value) > const Duration(seconds: 10));
+      }
+
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
 
@@ -185,7 +194,6 @@ class SalesService extends ChangeNotifier {
       notifyListeners();
       return savedInvoice;
     } catch (e) {
-      debugPrint('SalesService.saveInvoice error: $e');
       // Re-throw the exception with the original message if it's already formatted
       if (e.toString().contains('Ya existe una factura')) {
         rethrow;
@@ -202,7 +210,6 @@ class SalesService extends ChangeNotifier {
       AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
-      debugPrint('SalesService.deleteInvoice error: $e');
       throw Exception('No se pudo eliminar la factura.');
     }
   }
@@ -214,8 +221,6 @@ class SalesService extends ChangeNotifier {
         _isCacheValid(_paymentsCacheTime) &&
         _payments.isNotEmpty &&
         invoiceId == null) {
-      debugPrint(
-          '📦 [SalesService] Using cached payments (${_payments.length} items)');
       return;
     }
 
@@ -235,13 +240,11 @@ class SalesService extends ChangeNotifier {
         ..clear()
         ..addAll(payments);
       _paymentsCacheTime = DateTime.now();
-      debugPrint('✅ [SalesService] Cached ${payments.length} payments');
       if (invoiceId != null) {
         // Mantener caché completa; las vistas filtrarán por factura según sea necesario.
       }
       _ensureRealtimeSubscriptions();
     } catch (e) {
-      debugPrint('SalesService.loadPayments error: $e');
       _paymentError = 'No se pudieron cargar los pagos.';
     } finally {
       _isLoadingPayments = false;
@@ -249,22 +252,34 @@ class SalesService extends ChangeNotifier {
     }
   }
 
+  /// Manually trigger synchronization of invoice items to a linked job
+  /// Useful when linking a job AFTER an invoice has been created/saved
+  Future<void> triggerInvoiceSync(String invoiceId) async {
+    try {
+      await _databaseService.rpc(
+        'sync_invoice_items_to_job',
+        params: {'p_invoice_id': invoiceId},
+      );
+      // debugPrint('✅ Manually triggered invoice sync for $invoiceId');
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Failed to trigger invoice sync: $e');
+      }
+      // Don't rethrow - this is a maintenance op
+    }
+  }
+
   Future<Payment> registerPayment(Payment payment) async {
     try {
       final payload = payment.toFirestoreMap();
-      debugPrint('📝 [SalesService] Registering payment: $payload');
       final isNew = payment.id == null;
       Map<String, dynamic> result;
 
       if (isNew) {
-        debugPrint('📝 [SalesService] Inserting new payment...');
         result = await _databaseService.insert(_paymentsCollection, payload);
-        debugPrint('✅ [SalesService] Payment inserted: ${result['id']}');
       } else {
-        debugPrint('📝 [SalesService] Updating payment ${payment.id}...');
         result = await _databaseService.update(
             _paymentsCollection, payment.id!, payload);
-        debugPrint('✅ [SalesService] Payment updated: ${result['id']}');
       }
 
       final savedPayment = Payment.fromJson(result);
@@ -281,7 +296,6 @@ class SalesService extends ChangeNotifier {
       notifyListeners();
       return savedPayment;
     } catch (e) {
-      debugPrint('SalesService.registerPayment error: $e');
       // Propagate actual error for debugging
       rethrow;
     }
@@ -298,7 +312,6 @@ class SalesService extends ChangeNotifier {
       AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
-      debugPrint('SalesService.deletePayment error: $e');
       throw Exception('No se pudo eliminar el pago.');
     }
   }
@@ -325,7 +338,6 @@ class SalesService extends ChangeNotifier {
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
-        debugPrint('SalesService.getPendingInvoices: No tenant ID available');
         return [];
       }
 
@@ -351,7 +363,6 @@ class SalesService extends ChangeNotifier {
           .map((data) => Invoice.fromJson(data as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('SalesService.getPendingInvoices error: $e');
       return [];
     }
   }
@@ -384,7 +395,6 @@ class SalesService extends ChangeNotifier {
       notifyListeners();
       return refreshed ?? updated;
     } catch (e) {
-      debugPrint('SalesService.updateInvoiceStatus error: $e');
       rethrow;
     }
   }
@@ -393,7 +403,6 @@ class SalesService extends ChangeNotifier {
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
-        debugPrint('⚠️ [SalesService] Cannot setup realtime: no tenant_id');
         return;
       }
 
@@ -433,13 +442,9 @@ class SalesService extends ChangeNotifier {
           )
           .subscribe();
 
-      if (!kReleaseMode) {
-        debugPrint('✅ [SalesService] Realtime subscriptions active');
-      }
+      if (!kReleaseMode) {}
     } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('❌ [SalesService] Failed to setup realtime: $e');
-      }
+      if (!kReleaseMode) {}
     }
   }
 
@@ -450,10 +455,23 @@ class SalesService extends ChangeNotifier {
         case PostgresChangeEvent.update:
           final dynamic rawNew = payload.newRecord;
           if (rawNew is Map) {
-            final invoice = Invoice.fromJson(
-                Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
-            _upsertInvoice(invoice);
-            _debouncedNotify(); // Debounced to prevent spam
+            final id = rawNew['id']?.toString();
+            if (id != null) {
+              // Fetch full invoice with all fields (especially items JSONB)
+
+              // GUARD: Skip if this invoice was just saved locally (within 5 seconds)
+              // to avoid partial updates overwriting cache with missing data
+
+              // GUARD: Skip if this invoice was just saved locally (within 5 seconds)
+              final lastSaved = _justSavedInvoiceIds[id];
+              if (lastSaved != null &&
+                  DateTime.now().difference(lastSaved) <
+                      const Duration(seconds: 5)) {
+                return;
+              }
+
+              _fetchAndUpdateInvoice(id);
+            }
           }
           break;
         case PostgresChangeEvent.delete:
@@ -467,9 +485,7 @@ class SalesService extends ChangeNotifier {
         default:
           break;
       }
-    } catch (e) {
-      debugPrint('SalesService._handleInvoiceChange error: $e');
-    }
+    } catch (e) {}
   }
 
   /// Debounced notifyListeners - prevents excessive UI rebuilds from realtime
@@ -487,10 +503,10 @@ class SalesService extends ChangeNotifier {
         case PostgresChangeEvent.update:
           final dynamic rawNew = payload.newRecord;
           if (rawNew is Map) {
-            final payment = Payment.fromJson(
-                Map<String, dynamic>.from(rawNew.cast<String, dynamic>()));
-            _upsertPayment(payment);
-            _debouncedNotify(); // Debounced to prevent spam
+            final id = rawNew['id']?.toString();
+            if (id != null) {
+              _fetchAndUpdatePayment(id);
+            }
           }
           break;
         case PostgresChangeEvent.delete:
@@ -504,9 +520,7 @@ class SalesService extends ChangeNotifier {
         default:
           break;
       }
-    } catch (e) {
-      debugPrint('SalesService._handlePaymentChange error: $e');
-    }
+    } catch (e) {}
   }
 
   @override
@@ -521,6 +535,28 @@ class SalesService extends ChangeNotifier {
     _invoices.clear();
     _payments.clear();
     notifyListeners();
+  }
+
+  Future<void> _fetchAndUpdateInvoice(String id) async {
+    try {
+      final data = await _databaseService.selectById(_invoicesCollection, id);
+      if (data != null) {
+        final invoice = Invoice.fromJson(data);
+        _upsertInvoice(invoice);
+        _debouncedNotify();
+      }
+    } catch (e) {}
+  }
+
+  Future<void> _fetchAndUpdatePayment(String id) async {
+    try {
+      final data = await _databaseService.selectById(_paymentsCollection, id);
+      if (data != null) {
+        final payment = Payment.fromJson(data);
+        _upsertPayment(payment);
+        _debouncedNotify();
+      }
+    } catch (e) {}
   }
 
   void _upsertInvoice(Invoice invoice) {

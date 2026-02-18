@@ -724,15 +724,14 @@ class _PegaDetailViewState extends State<PegaDetailView>
 
   Widget _buildTasksTab() {
     // Use new TasksTabView with SmartTaskService
-    // Key forces rebuild when job details change (e.g., after item deletion)
+    // We pass externalItems to avoid re-fetching and to ensure immediate updates without destroying state
     return TasksTabView(
-      key: ValueKey(
-          'tasks_${widget.job.id}_${widget.job.updatedAt.millisecondsSinceEpoch}'),
       jobId: widget.job.id!,
       readOnly: false,
+      externalItems: widget.items,
       onItemAdded: widget.onItemAdded,
       onItemRemoved: widget.onItemRemoved,
-      onAddItemPressed: widget.onAddItemPressed, // NEW: Pass callback
+      onAddItemPressed: widget.onAddItemPressed,
     );
   }
 

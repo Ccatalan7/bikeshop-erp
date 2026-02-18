@@ -366,7 +366,8 @@ class InvoiceItem {
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
       lineTotal: lineTotal,
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
-      isService: json['is_service'] as bool? ?? false,
+      isService:
+          json['is_service'] as bool? ?? (json['item_type'] == 'service'),
       hours: (json['hours'] as num?)?.toDouble(),
       hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
     );
