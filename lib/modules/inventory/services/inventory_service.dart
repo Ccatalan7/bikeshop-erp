@@ -151,21 +151,42 @@ class InventoryService extends ChangeNotifier {
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
-        // Search by name, SKU, or brand with JOIN to get category name
-        final nameResults =
-            await _db.searchRecords('products', 'name', searchTerm);
-        final skuResults =
-            await _db.searchRecords('products', 'sku', searchTerm);
-        final brandResults =
-            await _db.searchRecords('products', 'brand', searchTerm);
+        // 1. Fetch all products (leveraging existing pagination/caching)
+        data = await _db.select('products', fetchAll: true);
 
-        // Combine and deduplicate results
-        final Set<String> ids = {};
-        data = [...nameResults, ...skuResults, ...brandResults].where((item) {
-          final id = item['id']?.toString();
-          if (id == null) return true;
-          return ids.add(id);
-        }).toList();
+        // 2. Client-side fuzzy search for better flexibility
+        // This is acceptable because product count is usually < 5000 for a bike shop
+        // and we want to match "Cassette Shimano" even if name is "Shimano Cassette"
+        final searchTerms =
+            searchTerm.toLowerCase().trim().split(RegExp(r'\s+'));
+
+        List<Map<String, dynamic>> filteredData = [];
+
+        for (final item in data) {
+          final name = (item['name'] as String? ?? '').toLowerCase();
+          final sku = (item['sku'] as String? ?? '').toLowerCase();
+          final brand = (item['brand'] as String? ?? '').toLowerCase();
+          final category =
+              (item['category_name'] as String? ?? '').toLowerCase();
+          final model = (item['model'] as String? ?? '').toLowerCase();
+          final tags = (item['tags'] as List?)?.join(' ').toLowerCase() ?? '';
+
+          final searchableText = '$name $sku $brand $category $model $tags';
+
+          // Check if ALL keywords exist in the searchable text
+          bool matchesAll = true;
+          for (final term in searchTerms) {
+            if (!searchableText.contains(term)) {
+              matchesAll = false;
+              break;
+            }
+          }
+
+          if (matchesAll) {
+            filteredData.add(item);
+          }
+        }
+        data = filteredData;
       } else {
         // Select with JOIN to get category name - fetch ALL products with pagination
         data = await _db.select('products', fetchAll: true);

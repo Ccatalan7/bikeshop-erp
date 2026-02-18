@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import 'package:provider/provider.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
+import '../../inventory/services/inventory_service.dart';
 import '../services/ai_service.dart';
 
 class AIAssistantButton extends StatelessWidget {
@@ -64,7 +66,12 @@ class _AIChatDialogState extends State<AIChatDialog> {
 
     _scrollToBottom();
 
-    final response = await _aiService.sendMessage(text, widget.jobs);
+    final inventoryService = context.read<InventoryService>();
+    final response = await _aiService.sendMessage(
+      text,
+      jobs: widget.jobs,
+      inventoryService: inventoryService,
+    );
 
     if (mounted) {
       setState(() {

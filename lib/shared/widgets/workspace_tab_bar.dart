@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/workspace_manager.dart';
+import '../../modules/ai_assistant/widgets/global_ai_button.dart';
 
 /// Tab bar UI for switching between workspaces
 class WorkspaceTabBar extends StatelessWidget {
@@ -56,6 +57,10 @@ class WorkspaceTabBar extends StatelessWidget {
           if (workspaceManager.workspaces.length <
               WorkspaceManager.maxWorkspaces)
             const _NewTabDropdown(),
+
+          // Global AI Assistant
+          const GlobalAIFloatingButton(),
+
           // Tab counter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
