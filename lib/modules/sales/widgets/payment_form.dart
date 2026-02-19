@@ -37,11 +37,20 @@ class _PaymentFormState extends State<PaymentForm> {
   bool _isLoadingMethods = true;
   bool _includesIva = false; // Payment-level IVA toggle
 
+  /// Effective balance: use DB balance when > 0; fall back to total - paidAmount.
+  /// Guards against cases where the DB `balance` trigger hasn't updated yet.
+  double get _effectiveBalance {
+    final b = widget.invoice.balance;
+    if (b > 0) return b;
+    return (widget.invoice.total - widget.invoice.paidAmount)
+        .clamp(0.0, widget.invoice.total);
+  }
+
   @override
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: widget.invoice.balance.toStringAsFixed(0),
+      text: _effectiveBalance.toStringAsFixed(0),
     );
     _loadPaymentMethods();
   }
@@ -105,7 +114,7 @@ class _PaymentFormState extends State<PaymentForm> {
       return;
     }
 
-    final balance = widget.invoice.balance;
+    final balance = _effectiveBalance;
     final amountInt = amount.round();
     final balanceInt = balance.round();
     if (amountInt - balanceInt > 1) {
@@ -222,7 +231,7 @@ class _PaymentFormState extends State<PaymentForm> {
                   const SizedBox(height: 4),
                   _buildBreakdownRow(
                     'Saldo pendiente:',
-                    ChileanUtils.formatCurrency(invoice.balance),
+                    ChileanUtils.formatCurrency(_effectiveBalance),
                     context,
                     isBold: true,
                     color: Theme.of(context).colorScheme.primary,
@@ -250,7 +259,7 @@ class _PaymentFormState extends State<PaymentForm> {
                 return 'Monto inválido';
               }
               final parsedInt = parsed.round();
-              final balanceInt = invoice.balance.round();
+              final balanceInt = _effectiveBalance.round();
               if (parsedInt - balanceInt > 1) {
                 return 'No puede superar el saldo';
               }
