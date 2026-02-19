@@ -21,6 +21,7 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
+import '../../../shared/widgets/ocr_cleanup_page.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
@@ -306,9 +307,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     showPreview: true,
                     supplierId: _selectedSupplier?.id,
                     supplierName: _selectedSupplier?.name,
-                    onComplete: (parsedInvoice) {
+                    onComplete: (parsedInvoice) async {
                       // Close dialog
                       Navigator.of(context).pop();
+
+                      // Reload products to get any new ones created in OCR
+                      await _loadProducts();
 
                       // Apply extracted data to form
                       _applyOCRData(parsedInvoice);
@@ -618,11 +622,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _supplierCache = results[0] as List<shared_supplier.Supplier>;
       debugPrint('✅ Loaded ${_supplierCache.length} suppliers');
 
-      final allProducts = results[1] as List<Product>;
-      // Filter out child products (components) as they should not be purchased directly
-      _productCache = allProducts.where((p) => p.parentSetId == null).toList();
-      debugPrint(
-          '✅ Loaded ${_productCache.length} products (filtered from ${allProducts.length})');
+      // Helper to process loaded products
+      void processProducts(List<Product> products) {
+        // Filter out child products (components) as they should not be purchased directly
+        _productCache = products.where((p) => p.parentSetId == null).toList();
+        debugPrint(
+            '✅ Loaded ${_productCache.length} products (filtered from ${products.length})');
+      }
+
+      processProducts(results[1] as List<Product>);
 
       if (!mounted) {
         debugPrint('⚠️ Widget not mounted after loading data');
@@ -852,6 +860,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       );
       entry.attachListeners(_recalculateTotals);
       _lineEntries.add(entry);
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      debugPrint('🔄 Reloading products...');
+      await _inventoryService.getProducts(forceRefresh: true);
+      final products = await _inventoryService.getProducts();
+      _productCache = products.where((p) => p.parentSetId == null).toList();
+      debugPrint('✅ Reloaded ${_productCache.length} products');
+    } catch (e) {
+      debugPrint('❌ Error reloading products: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -1602,6 +1626,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           tooltip: 'Escanear Factura (OCR)',
           style: IconButton.styleFrom(
             backgroundColor: Colors.blue.withOpacity(0.1),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // OCR Cleanup Tool (Temporary)
+        IconButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const OCRCleanupPage()),
+          ),
+          icon: const Icon(Icons.build_circle_outlined, color: Colors.orange),
+          tooltip: 'Reparar Datos OCR',
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.orange.withOpacity(0.1),
           ),
         ),
         const SizedBox(width: 8),

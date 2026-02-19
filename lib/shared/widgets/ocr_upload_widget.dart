@@ -501,19 +501,43 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildDetailRow(
-                      Icons.receipt,
-                      'N° Factura',
-                      data.invoiceNumber ?? '---',
+                    child: InkWell(
+                      onTap: () =>
+                          _showEditInvoiceNumberDialog(data.invoiceNumber),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailRow(
+                              Icons.receipt,
+                              'N° Factura',
+                              data.invoiceNumber ?? '---',
+                            ),
+                          ),
+                          const Icon(Icons.edit, size: 16, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _buildDetailRow(
-                      Icons.calendar_today,
-                      'Fecha',
-                      data.date != null
-                          ? '${data.date!.day}/${data.date!.month}/${data.date!.year}'
-                          : '---',
+                    child: InkWell(
+                      onTap: () => _showEditDateDialog(data.date),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailRow(
+                              Icons.calendar_today,
+                              'Fecha',
+                              data.date != null
+                                  ? '${data.date!.day}/${data.date!.month}/${data.date!.year}'
+                                  : '---',
+                            ),
+                          ),
+                          const Icon(Icons.edit, size: 16, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1393,7 +1417,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           sku: entry.sku,
           price: entry.price!,
           cost: entry.cost,
-          inventoryQty: (entry.originalItem.quantity ?? 0).toInt(),
+          inventoryQty:
+              0, // Always 0 for new products (stock added via invoice)
           minStockLevel: 5,
           maxStockLevel: 100,
           categoryId: entry.selectedCategory?.id,
@@ -1421,6 +1446,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       // Re-verify products after creation
       if (_parsedData != null && created > 0) {
+        // Refresh shared inventory cache to ensure newly created products are found
+        await Provider.of<InventoryService>(context, listen: false).refresh();
+
         final verifiedInvoice = await _verifyProductsInDatabase(_parsedData!);
         setState(() {
           _parsedData = verifiedInvoice;
@@ -1454,6 +1482,57 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
     } finally {
       setState(() => _creatingProducts = false);
+    }
+  }
+
+  Future<void> _showEditInvoiceNumberDialog(String? currentNumber) async {
+    final controller = TextEditingController(text: currentNumber);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar N° Factura'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Número de Factura',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && _parsedData != null) {
+      setState(() {
+        _parsedData = _parsedData!.copyWith(invoiceNumber: result);
+      });
+    }
+    controller.dispose();
+  }
+
+  Future<void> _showEditDateDialog(DateTime? currentDate) async {
+    final now = DateTime.now();
+    final result = await showDatePicker(
+      context: context,
+      initialDate: currentDate ?? now,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+
+    if (result != null && _parsedData != null) {
+      setState(() {
+        _parsedData = _parsedData!.copyWith(date: result);
+      });
     }
   }
 
@@ -1937,8 +2016,9 @@ class _NewProductEntry {
       cost = item.total! / (qty > 0 ? qty : 1);
     }
     if (cost <= 0) return '';
-    // 2x cost, rounded to nearest 100
-    final price = (cost * 2 / 100).round() * 100;
+    // Cost + IVA (19%) * 2, rounded to nearest 100
+    // Formula: Cost * 1.19 * 2
+    final price = (cost * 1.19 * 2 / 100).round() * 100;
     return price.toString();
   }
 
