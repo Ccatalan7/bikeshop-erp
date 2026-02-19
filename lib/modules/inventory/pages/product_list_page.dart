@@ -172,6 +172,13 @@ class _ProductListPageState extends State<ProductListPage> {
 
   StreamSubscription? _scanSubscription;
   bool _shouldRestoreState = false; // Local flag for this page instance
+
+  // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
   DateTime?
       _lastVisibleTime; // Track when page was last visible for state timeout
 
@@ -220,13 +227,18 @@ class _ProductListPageState extends State<ProductListPage> {
 
     _loadColumnPreferences();
 
-    // Listen for unified barcode scans (Physical + Mobile via Bridge)
+    // Listen for barcode scans from remote/phone scanner
     _scanSubscription =
         context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
       if (mounted && _isScannerEnabled) {
         _handleBarcodeScan(barcode);
       }
     });
+
+    // Register hardware handler for USB/Bluetooth keyboard-emulating scanners.
+    // HardwareKeyboard bypasses the focus system so it works even when
+    // the search bar is focused.
+    HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
 
     // Check for initial filters from widget arguments (override saved state)
     if (widget.initialCategoryId != null) {
@@ -406,7 +418,50 @@ class _ProductListPageState extends State<ProductListPage> {
     _searchController.dispose();
     _tableScrollController.dispose();
     _scanSubscription?.cancel();
+    HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+    _hwScanTimer?.cancel();
     super.dispose();
+  }
+
+  /// Hardware keyboard handler for USB/Bluetooth barcode scanners.
+  /// Returns false so key events still reach focused widgets (e.g. search bar).
+  bool _hardwareKeyHandler(KeyEvent event) {
+    if (!_isScannerEnabled || !mounted) return false;
+    if (!ModalRoute.of(context)!.isCurrent) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    if (_lastScanKeyTime != null &&
+        now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
+      _scanBuffer.clear();
+    }
+    _lastScanKeyTime = now;
+    _hwScanTimer?.cancel();
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final barcode = _scanBuffer.toString().trim();
+      _scanBuffer.clear();
+      if (barcode.length >= _minBarcodeLen) {
+        _handleBarcodeScan(barcode);
+      }
+      return false;
+    }
+
+    final char = event.character;
+    if (char != null && char.isNotEmpty) {
+      _scanBuffer.write(char);
+      _hwScanTimer = Timer(_scanKeyTimeout, () {
+        final barcode = _scanBuffer.toString().trim();
+        _scanBuffer.clear();
+        if (barcode.length >= _minBarcodeLen && mounted) {
+          _handleBarcodeScan(barcode);
+        }
+      });
+    }
+
+    return false; // Never consume — let events reach text fields normally
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
@@ -414,9 +469,11 @@ class _ProductListPageState extends State<ProductListPage> {
     if (!_isScannerEnabled || !mounted || !ModalRoute.of(context)!.isCurrent)
       return;
 
-    // Search for product by SKU
+    // Search for product by SKU or barcode field
     final product = _products.cast<Product?>().firstWhere(
-          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+          (p) =>
+              p!.sku.toLowerCase() == barcode.toLowerCase() ||
+              (p.barcode?.toLowerCase() == barcode.toLowerCase()),
           orElse: () => null,
         );
 

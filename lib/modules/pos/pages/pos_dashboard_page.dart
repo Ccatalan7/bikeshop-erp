@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -41,6 +42,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   ProductType? _selectedProductType;
   StreamSubscription? _scanSubscription;
 
+  // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
+
   @override
   void initState() {
     super.initState();
@@ -58,20 +66,67 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       _loadCategories(categoryService);
     });
 
-    // Listen for unified barcode scans
+    // Listen for barcode scans from remote/phone scanner
     _scanSubscription =
         context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
       if (mounted) {
         _handleBarcodeScan(barcode);
       }
     });
+
+    // Register hardware handler for USB/Bluetooth keyboard-emulating scanners.
+    // HardwareKeyboard bypasses the focus system so it works even when
+    // the search bar or customer field is focused.
+    HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _scanSubscription?.cancel();
+    HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+    _hwScanTimer?.cancel();
     super.dispose();
+  }
+
+  /// Hardware keyboard handler for USB/Bluetooth barcode scanners.
+  /// Returns false so key events still reach focused widgets (text fields).
+  bool _hardwareKeyHandler(KeyEvent event) {
+    if (!mounted) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    if (_lastScanKeyTime != null &&
+        now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
+      _scanBuffer.clear();
+    }
+    _lastScanKeyTime = now;
+    _hwScanTimer?.cancel();
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final barcode = _scanBuffer.toString().trim();
+      _scanBuffer.clear();
+      if (barcode.length >= _minBarcodeLen) {
+        _handleBarcodeScan(barcode);
+      }
+      return false;
+    }
+
+    final char = event.character;
+    if (char != null && char.isNotEmpty) {
+      _scanBuffer.write(char);
+      _hwScanTimer = Timer(_scanKeyTimeout, () {
+        final barcode = _scanBuffer.toString().trim();
+        _scanBuffer.clear();
+        if (barcode.length >= _minBarcodeLen && mounted) {
+          _handleBarcodeScan(barcode);
+        }
+      });
+    }
+
+    return false; // Never consume — let events reach text fields normally
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
@@ -1168,6 +1223,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       ],
     );
   }
+
   void _showMobileCheckout() {
     showModalBottomSheet(
       context: context,
@@ -3171,12 +3227,13 @@ class _MobileCartSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Consumer<POSService>(
       builder: (context, posService, _) {
-        final itemCount = posService.cartItems.fold(0, (sum, item) => sum + item.quantity);
+        final itemCount =
+            posService.cartItems.fold(0, (sum, item) => sum + item.quantity);
         final total = posService.cartTotal;
-        
+
         return Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,

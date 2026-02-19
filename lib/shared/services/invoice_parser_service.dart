@@ -60,6 +60,7 @@ class ParsedLineItem {
   final bool? existsInDatabase;
   final String? matchedProductId;
   final String? matchedProductName;
+  final int? currentStock;
 
   ParsedLineItem({
     required this.description,
@@ -72,6 +73,7 @@ class ParsedLineItem {
     this.existsInDatabase,
     this.matchedProductId,
     this.matchedProductName,
+    this.currentStock,
   });
 
   /// Create a copy with updated verification fields
@@ -86,6 +88,7 @@ class ParsedLineItem {
     bool? existsInDatabase,
     String? matchedProductId,
     String? matchedProductName,
+    int? currentStock,
   }) {
     return ParsedLineItem(
       description: description ?? this.description,
@@ -98,6 +101,7 @@ class ParsedLineItem {
       existsInDatabase: existsInDatabase ?? this.existsInDatabase,
       matchedProductId: matchedProductId ?? this.matchedProductId,
       matchedProductName: matchedProductName ?? this.matchedProductName,
+      currentStock: currentStock ?? this.currentStock,
     );
   }
 

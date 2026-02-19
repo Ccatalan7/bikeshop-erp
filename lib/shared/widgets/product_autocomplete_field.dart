@@ -429,6 +429,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         _filteredProducts = _allProducts.where((product) {
           return product.name.toLowerCase().contains(searchLower) ||
               product.sku.toLowerCase().contains(searchLower) ||
+              (product.barcode?.toLowerCase().contains(searchLower) ?? false) ||
               (product.supplierCode?.toLowerCase().contains(searchLower) ??
                   false) ||
               (product.brand?.toLowerCase().contains(searchLower) ?? false);
@@ -467,16 +468,24 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   void _onSubmitted(String value) {
     final trimmedValue = value.trim();
+    if (trimmedValue.isEmpty) return;
 
-    // If user typed something and presses Enter, ALWAYS create ad-hoc item
-    // Don't auto-select from search results - user must click to select a product
-    if (widget.allowCustomItems &&
-        _selectedProduct == null &&
-        trimmedValue.isNotEmpty) {
+    // First: try exact match by SKU or barcode (handles barcode scanner input)
+    final exactMatch = _allProducts.cast<Product?>().firstWhere(
+          (p) =>
+              p!.sku.toLowerCase() == trimmedValue.toLowerCase() ||
+              (p.barcode?.toLowerCase() == trimmedValue.toLowerCase()),
+          orElse: () => null,
+        );
+    if (exactMatch != null) {
+      _selectProduct(exactMatch);
+      return;
+    }
+
+    // Fallback: create ad-hoc item if allowed
+    if (widget.allowCustomItems && _selectedProduct == null) {
       _selectCustomItem(trimmedValue);
     }
-    // If no text and there are results, do nothing (user should click to select)
-    // If custom items not allowed and no selection, do nothing
   }
 
   void _onTap() {

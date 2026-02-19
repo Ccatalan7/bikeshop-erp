@@ -118,6 +118,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _creatingProducts = false;
   String? _supplierIdForNewProducts; // For potential future use
   String? _ocrSupplierName; // Supplier detected by OCR
+  bool _showStock = false; // Toggle to show/hide stock column
 
   @override
   void initState() {
@@ -559,12 +560,28 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         const SizedBox(height: 24),
 
         // Products Section
-        Text(
-          'Productos Detectados (${data.lineItems.length})',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Productos Detectados (${data.lineItems.length})',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => setState(() => _showStock = !_showStock),
+              icon: Icon(
+                _showStock ? Icons.visibility_off : Icons.visibility,
+                size: 16,
+              ),
+              label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -615,7 +632,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           const SizedBox(width: 32), // Status icon width
                           const SizedBox(width: 12),
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: Text('SKU',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -623,15 +640,26 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                     fontSize: 12)),
                           ),
                           Expanded(
-                            flex: 6, // Give description most space
+                            flex: _showStock
+                                ? 8
+                                : 10, // Give description most space
                             child: Text('Descripción',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.grey.shade700,
                                     fontSize: 12)),
                           ),
+                          if (_showStock)
+                            Expanded(
+                              flex: 2,
+                              child: Text('Stock',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
                           Expanded(
-                            flex: 1,
+                            flex: 2,
                             child: Text('Cant.',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -639,7 +667,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                     fontSize: 12)),
                           ),
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: Text('Precio',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -648,6 +676,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           ),
                           Expanded(
                             flex: 2,
+                            child: Text('Dscto',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700,
+                                    fontSize: 12)),
+                          ),
+                          Expanded(
+                            flex: 3,
                             child: Text('Total',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -699,7 +735,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    flex: 2,
+                                    flex: 3,
                                     child: Text(
                                       item.sku ?? '-',
                                       style: TextStyle(
@@ -712,7 +748,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                     ),
                                   ),
                                   Expanded(
-                                    flex: 6,
+                                    flex: _showStock ? 8 : 10,
                                     child: Text(
                                       item.description,
                                       maxLines: 2,
@@ -720,15 +756,24 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
+                                  if (_showStock)
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                          item.currentStock?.toString() ?? '-',
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.blueGrey)),
+                                    ),
                                   Expanded(
-                                    flex: 1,
+                                    flex: 2,
                                     child: Text(
                                         item.quantity?.toStringAsFixed(0) ??
                                             '1',
                                         style: const TextStyle(fontSize: 13)),
                                   ),
                                   Expanded(
-                                    flex: 2,
+                                    flex: 3,
                                     child: Text(
                                         item.unitPrice != null
                                             ? '\$${item.unitPrice!.toStringAsFixed(0)}'
@@ -737,6 +782,19 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   ),
                                   Expanded(
                                     flex: 2,
+                                    child: Text(
+                                        item.discountRate != null
+                                            ? '${item.discountRate!.toStringAsFixed(0)}%'
+                                            : (item.discount != null &&
+                                                    item.discount! > 0)
+                                                ? '\$${item.discount!.toStringAsFixed(0)}'
+                                                : '-',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.orange.shade800)),
+                                  ),
+                                  Expanded(
+                                    flex: 3,
                                     child: Text(
                                         item.total != null
                                             ? '\$${item.total!.toStringAsFixed(0)}'
@@ -886,7 +944,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     try {
       final dbService = DatabaseService();
       final suppliers = await dbService.select('suppliers');
-      final supplierList = suppliers
+      final allSuppliers = suppliers
           .map((s) => shared_supplier.Supplier.fromJson(s))
           .toList()
         ..sort((a, b) => a.name.compareTo(b.name));
@@ -894,49 +952,100 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (mounted) {
         Navigator.pop(context); // Close loading start
 
-        showDialog(
+        await showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Seleccionar Proveedor'),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child: ListView.builder(
-                itemCount: supplierList.length,
-                itemBuilder: (context, index) {
-                  final supplier = supplierList[index];
-                  return ListTile(
-                    title: Text(supplier.name),
-                    subtitle: supplier.rut != null ? Text(supplier.rut!) : null,
-                    onTap: () {
-                      setState(() {
-                        _ocrSupplierName = supplier.name;
-                        _supplierIdForNewProducts = supplier.id;
+          builder: (context) {
+            String searchQuery = '';
+            List<shared_supplier.Supplier> filteredSuppliers = allSuppliers;
 
-                        // Update parsed data to reflect manually selected supplier
-                        if (_parsedData != null) {
-                          _parsedData = _parsedData!.copyWith(
-                            supplierName: supplier.name,
-                          );
-                        }
-                      });
-                      Navigator.pop(context);
-                    },
-                  );
-                },
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
-              ),
-            ],
-          ),
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  title: const Text('Seleccionar Proveedor'),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    height: 500, // Increased height for search bar
+                    child: Column(
+                      children: [
+                        // Search Bar
+                        TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Buscar proveedor',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              searchQuery = value.toLowerCase();
+                              filteredSuppliers = allSuppliers
+                                  .where((s) =>
+                                      s.name
+                                          .toLowerCase()
+                                          .contains(searchQuery) ||
+                                      (s.rut != null &&
+                                          s.rut!
+                                              .toLowerCase()
+                                              .contains(searchQuery)))
+                                  .toList();
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        // Supplier List
+                        Expanded(
+                          child: filteredSuppliers.isEmpty
+                              ? const Center(
+                                  child: Text('No se encontraron proveedores'),
+                                )
+                              : ListView.builder(
+                                  itemCount: filteredSuppliers.length,
+                                  itemBuilder: (context, index) {
+                                    final supplier = filteredSuppliers[index];
+                                    return ListTile(
+                                      title: Text(supplier.name),
+                                      subtitle: supplier.rut != null
+                                          ? Text(supplier.rut!)
+                                          : null,
+                                      onTap: () {
+                                        this.setState(() {
+                                          _ocrSupplierName = supplier.name;
+                                          _supplierIdForNewProducts =
+                                              supplier.id;
+
+                                          // Update parsed data to reflect manually selected supplier
+                                          if (_parsedData != null) {
+                                            _parsedData = _parsedData!.copyWith(
+                                              supplierName: supplier.name,
+                                            );
+                                          }
+                                        });
+                                        Navigator.pop(context);
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         );
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Close loading on error
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context); // Close loading on error if still open
+      }
       debugPrint('Error loading suppliers: $e');
     }
   }
@@ -1921,6 +2030,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           existsInDatabase: true,
           matchedProductId: matchedProduct.id,
           matchedProductName: matchedProduct.name,
+          currentStock: matchedProduct.stockQuantity,
         ));
       } else {
         debugPrint('   ⚠ No match for: ${item.sku ?? item.description}');

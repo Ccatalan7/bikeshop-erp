@@ -13,6 +13,8 @@ import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import '../../settings/services/appearance_service.dart';
 import 'dart:typed_data';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 
 // Purchase Invoice List Page with Split-Pane View
 
@@ -1956,11 +1958,35 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       final pdf = await _generatePurchaseInvoicePDF(invoice);
       final bytes = await pdf.save();
 
-      // Use printing package for cross-platform PDF download/share
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'factura_compra_${invoice.invoiceNumber}.pdf',
-      );
+      // Platform-specific download
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        // Desktop: Use Save As dialog
+        final String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Guardar Factura PDF',
+          fileName: 'factura_compra_${invoice.invoiceNumber}.pdf',
+          allowedExtensions: ['pdf'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          final file = File(outputFile);
+          await file.writeAsBytes(bytes);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('PDF guardado en: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        // Use printing package for mobile/share
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'factura_compra_${invoice.invoiceNumber}.pdf',
+        );
+      }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
       if (mounted) {

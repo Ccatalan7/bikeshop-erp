@@ -382,7 +382,7 @@ class VeryfiAdapter {
 
       debugPrint('   ✅ After fix: qty=$qty, price=$price, total=$lineTotal');
 
-      // Extract discount fields
+      // Expect discount fields
       double? discount = (map['discount'] as num?)?.toDouble();
       double? discountRate = (map['discount_rate'] as num?)?.toDouble();
 
@@ -405,6 +405,98 @@ class VeryfiAdapter {
           debugPrint(
               '💡 Heuristic: Mapped "tax" field ($potentialRate) to discount_rate');
           discountRate = potentialRate;
+        }
+      }
+
+      // Fix Zero Quantity: If quantity is 0 or missing, try to calculate it from Total and Price
+      if ((qty == null || qty <= 0.01) &&
+          (lineTotal != null && lineTotal > 0) &&
+          (price != null && price > 0)) {
+        debugPrint(
+            '   🔧 Attempting to recover zero quantity from Total ($lineTotal) and Price ($price)...');
+
+        // 1. Try simple division (Total / Price) - assumes no discount
+        double calculatedQty = lineTotal / price;
+
+        // 2. If valid integer match (tolerance 0.05), use it
+        if ((calculatedQty - calculatedQty.round()).abs() < 0.05) {
+          qty = calculatedQty.roundToDouble();
+          debugPrint('   ✅ Recovered quantity (simple): $qty');
+        } else {
+          // 3. Try to find a standard discount that makes it an integer
+          // Common discounts: 5%, 10%, 15%, 20%, 25%, 30%, 35%, 40%, 50%
+          // formula: qty = total / (price * (1 - rate))
+          bool found = false;
+          // Try existing discount rate first if available
+          final ratesToTry = <int>[];
+          if (discountRate != null && discountRate > 0) {
+            ratesToTry.add(discountRate.round());
+          }
+          // Add standard rates
+          ratesToTry.addAll([5, 10, 15, 20, 25, 30, 35, 40, 50]);
+
+          for (final rate in ratesToTry) {
+            double factor = 1.0 - (rate / 100.0);
+            if (factor <= 0) continue; // Avoid division by zero
+
+            double q = lineTotal / (price * factor);
+            if ((q - q.round()).abs() < 0.05) {
+              qty = q.roundToDouble();
+              // If we didn't have a discount rate, we can infer it too!
+              if (discountRate == null) {
+                discountRate = rate.toDouble();
+                debugPrint('   💡 Inferred discount rate: $discountRate%');
+              }
+              debugPrint('   ✅ Recovered quantity (w/ $rate% discount): $qty');
+              found = true;
+              break;
+            }
+          }
+
+          // 4. Fallback: just use the raw ratio if no integer match found
+          if (!found) {
+            // Only if the result is reasonable (e.g. not 0.001)
+            if (calculatedQty > 0.01) {
+              qty = double.parse(calculatedQty.toStringAsFixed(2));
+              debugPrint('   ⚠️ Recovered quantity (raw ratio): $qty');
+            }
+          }
+        }
+      }
+
+      // GLOBAL DISCOUNT INFERENCE:
+      // Check ALL items (even if qty was present) for missing discounts.
+      // If Total is significantly less than Qty * Price, infer the discount.
+      if (discount == null &&
+          discountRate == null &&
+          qty != null &&
+          qty > 0 &&
+          price != null &&
+          price > 0 &&
+          lineTotal != null &&
+          lineTotal > 0) {
+        final expected = qty * price;
+        // Check if Total is less than Expected (allowing for small tolerance)
+        // e.g. Total 85, Expected 100 -> 15% discount
+        if (lineTotal < (expected * 0.99)) {
+          final ratio = lineTotal / expected;
+          final impliedRate = (1.0 - ratio) * 100;
+
+          // Check if it's close to a whole number discount (tolerance 1%)
+          if ((impliedRate - impliedRate.round()).abs() < 1.0) {
+            discountRate = impliedRate.roundToDouble();
+            discount = expected - lineTotal;
+            debugPrint(
+                '   💡 Inferred missing discount: $discountRate% ($discount)');
+          } else {
+            // Also accept if it's explicitly close to X.5% (e.g. 12.5%)
+            if ((impliedRate * 2 - (impliedRate * 2).round()).abs() < 1.0) {
+              discountRate = double.parse(impliedRate.toStringAsFixed(1));
+              discount = expected - lineTotal;
+              debugPrint(
+                  '   💡 Inferred missing discount: $discountRate% ($discount)');
+            }
+          }
         }
       }
 

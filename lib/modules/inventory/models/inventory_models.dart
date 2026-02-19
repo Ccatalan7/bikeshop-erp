@@ -18,6 +18,7 @@ class Product {
   final String? manufacturer;
   final String? manufacturerSku;
   final String? gtin;
+  final String? barcode;
   final String? hsCode;
   final String? countryOfOrigin;
   final String? color;
@@ -81,6 +82,7 @@ class Product {
     this.manufacturer,
     this.manufacturerSku,
     this.gtin,
+    this.barcode,
     this.hsCode,
     this.countryOfOrigin,
     this.color,
@@ -150,6 +152,7 @@ class Product {
       manufacturer: json['manufacturer'],
       manufacturerSku: json['manufacturer_sku'],
       gtin: json['gtin'],
+      barcode: json['barcode'],
       hsCode: json['hs_code'],
       countryOfOrigin: json['country_of_origin'],
       color: json['color'],
@@ -240,6 +243,7 @@ class Product {
       'manufacturer': manufacturer,
       'manufacturer_sku': manufacturerSku,
       'gtin': gtin,
+      'barcode': barcode,
       'hs_code': hsCode,
       'country_of_origin': countryOfOrigin,
       'color': color,
@@ -319,6 +323,7 @@ class Product {
     String? manufacturer,
     String? manufacturerSku,
     String? gtin,
+    String? barcode,
     String? hsCode,
     String? countryOfOrigin,
     String? color,
@@ -379,6 +384,7 @@ class Product {
       manufacturer: manufacturer ?? this.manufacturer,
       manufacturerSku: manufacturerSku ?? this.manufacturerSku,
       gtin: gtin ?? this.gtin,
+      barcode: barcode ?? this.barcode,
       hsCode: hsCode ?? this.hsCode,
       countryOfOrigin: countryOfOrigin ?? this.countryOfOrigin,
       color: color ?? this.color,

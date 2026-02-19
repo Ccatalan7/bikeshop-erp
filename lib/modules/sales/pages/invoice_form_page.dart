@@ -12,6 +12,7 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
+import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -27,6 +28,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import 'dart:typed_data' show Uint8List;
+import 'package:file_picker/file_picker.dart';
+import 'dart:io' show Platform, File;
 
 import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
@@ -119,6 +122,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   final _remoteScannerService = RemoteScannerService();
   bool _scannerEnabled = false;
 
+  // Hardware keyboard scanner state (for USB/Bluetooth barcode scanners)
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
+
   @override
   void initState() {
     super.initState();
@@ -144,6 +154,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       entry.dispose();
     }
     _scanSubscription?.cancel();
+    HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+    _hwScanTimer?.cancel();
     super.dispose();
   }
 
@@ -158,17 +170,31 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       return;
     }
 
+    final barcodeService = context.read<BarcodeScannerService>();
+
     try {
       if (_scannerEnabled) {
         await _remoteScannerService.stopListening();
+        HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+        _hwScanTimer?.cancel();
+        _scanBuffer.clear();
         setState(() => _scannerEnabled = false);
       } else {
         await _remoteScannerService.startListening();
+        // Register hardware key handler for USB/Bluetooth keyboard scanners.
+        // HardwareKeyboard bypasses the focus system so it works even when
+        // text fields are focused.
+        HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
+        // Also subscribe to remote scanner stream (phone scanning)
+        _scanSubscription?.cancel();
+        _scanSubscription = barcodeService.barcodeStream.listen((barcode) {
+          if (mounted && _canEditFields) _handleBarcodeScan(barcode);
+        });
         setState(() => _scannerEnabled = true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('📱 Escáner remoto activado'),
+              content: Text('📱 Escáner activado'),
               duration: Duration(seconds: 2),
               backgroundColor: Colors.green,
             ),
@@ -187,10 +213,54 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
+  /// Hardware keyboard handler for USB/Bluetooth barcode scanners.
+  /// Returns false so key events still reach focused widgets (text fields).
+  bool _hardwareKeyHandler(KeyEvent event) {
+    if (!_scannerEnabled || !mounted || !_canEditFields) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    if (_lastScanKeyTime != null &&
+        now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
+      // Gap too large — human typing, reset buffer
+      _scanBuffer.clear();
+    }
+    _lastScanKeyTime = now;
+    _hwScanTimer?.cancel();
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final barcode = _scanBuffer.toString().trim();
+      _scanBuffer.clear();
+      if (barcode.length >= _minBarcodeLen) {
+        _handleBarcodeScan(barcode);
+      }
+      return false;
+    }
+
+    final char = event.character;
+    if (char != null && char.isNotEmpty) {
+      _scanBuffer.write(char);
+      // Auto-process if scanner doesn't send Enter
+      _hwScanTimer = Timer(_scanKeyTimeout, () {
+        final barcode = _scanBuffer.toString().trim();
+        _scanBuffer.clear();
+        if (barcode.length >= _minBarcodeLen && mounted && _canEditFields) {
+          _handleBarcodeScan(barcode);
+        }
+      });
+    }
+
+    return false; // Never consume — let events reach text fields normally
+  }
+
   Future<void> _handleBarcodeScan(String barcode) async {
-    // Search for product by SKU
+    // Search for product by SKU or barcode field
     final product = _cachedProducts.cast<Product?>().firstWhere(
-          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
+          (p) =>
+              p!.sku.toLowerCase() == barcode.toLowerCase() ||
+              (p.barcode?.toLowerCase() == barcode.toLowerCase()),
           orElse: () => null,
         );
 
@@ -2570,11 +2640,35 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       final pdf = await _generateInvoicePDF(currentInvoice);
       final bytes = await pdf.save();
 
-      // Use printing package for cross-platform PDF download/share
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'factura_${currentInvoice.invoiceNumber}.pdf',
-      );
+      // Platform-specific download
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        // Desktop: Use Save As dialog
+        final String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Guardar Factura PDF',
+          fileName: 'factura_${currentInvoice.invoiceNumber}.pdf',
+          allowedExtensions: ['pdf'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          final file = File(outputFile);
+          await file.writeAsBytes(bytes);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('PDF guardado en: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        // Mobile: Use share sheet
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'factura_${currentInvoice.invoiceNumber}.pdf',
+        );
+      }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
       if (mounted) {

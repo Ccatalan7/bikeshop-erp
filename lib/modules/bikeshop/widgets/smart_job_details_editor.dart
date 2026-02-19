@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../models/bikeshop_models.dart';
 import '../../sales/models/sales_models.dart';
@@ -1419,7 +1420,30 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
       final fileName =
           'pega_${job.jobNumber ?? job.id}_${includeInvoice ? "con_factura" : "detalles"}.pdf';
 
-      await Printing.sharePdf(bytes: bytes, filename: fileName);
+      if (!kIsWeb &&
+          (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+        final String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Exportar PDF',
+          fileName: fileName,
+          allowedExtensions: ['pdf'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          final file = File(outputFile);
+          await file.writeAsBytes(bytes);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('PDF guardado en: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        await Printing.sharePdf(bytes: bytes, filename: fileName);
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

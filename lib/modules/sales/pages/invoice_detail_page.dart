@@ -6,6 +6,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
+import 'dart:io' show Platform, File;
+import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data' show Uint8List;
 
 import '../../../shared/models/tax_treatment.dart';
@@ -894,11 +896,35 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       final pdf = await _generateInvoicePDF(freshInvoice);
       final bytes = await pdf.save();
 
-      // Use printing package for cross-platform PDF download/share
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'factura_${freshInvoice.invoiceNumber}.pdf',
-      );
+      // Platform-specific download
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        // Desktop: Use Save As dialog
+        final String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Guardar Factura PDF',
+          fileName: 'factura_${freshInvoice.invoiceNumber}.pdf',
+          allowedExtensions: ['pdf'],
+          type: FileType.custom,
+        );
+
+        if (outputFile != null) {
+          final file = File(outputFile);
+          await file.writeAsBytes(bytes);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('PDF guardado en: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        // Mobile: Use share sheet
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'factura_${freshInvoice.invoiceNumber}.pdf',
+        );
+      }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
       if (mounted) {

@@ -1,6 +1,9 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../modules/website/models/website_models.dart';
 import '../../shared/utils/chilean_utils.dart';
@@ -233,8 +236,25 @@ Future<void> downloadOrderPdf(OnlineOrder order) async {
     ),
   );
 
-  await Printing.sharePdf(
-    bytes: await pdf.save(),
-    filename: 'pedido_${order.orderNumber}.pdf',
-  );
+  final bytes = await pdf.save();
+  final fileName = 'pedido_${order.orderNumber}.pdf';
+
+  if (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+    final String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Guardar Pedido PDF',
+      fileName: fileName,
+      allowedExtensions: ['pdf'],
+      type: FileType.custom,
+    );
+
+    if (outputFile != null) {
+      final file = File(outputFile);
+      await file.writeAsBytes(bytes);
+    }
+  } else {
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
+  }
 }
