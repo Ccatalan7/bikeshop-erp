@@ -2073,6 +2073,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  /// Calculates the subtotal for a specific bike group
+  double _getBikeSubtotal(String? bikeName) {
+    if (bikeName == null || bikeName.isEmpty) {
+      return _lineEntries
+          .where((e) => (e.line.bikeName == null || e.line.bikeName!.isEmpty))
+          .fold(0.0, (sum, e) => sum + e.line.netAmount);
+    }
+    return _lineEntries
+        .where((e) => e.line.bikeName == bikeName)
+        .fold(0.0, (sum, e) => sum + e.line.netAmount);
+  }
+
   /// Builds line items grouped by bike with section headers.
   /// Items are sorted by bike so all items for one bike appear under a single header.
   List<Widget> _buildGroupedLineItems(ThemeData theme,
@@ -2099,12 +2111,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
       // Insert bike section header when bike changes
       if (bikeName != null && bikeName.isNotEmpty && bikeName != lastBikeName) {
-        widgets.add(_buildBikeSectionHeader(theme, bikeName));
+        widgets.add(_buildBikeSectionHeader(
+            theme, bikeName, _getBikeSubtotal(bikeName)));
         lastBikeName = bikeName;
       } else if ((bikeName == null || bikeName.isEmpty) &&
           lastBikeName != null) {
         // Items without a bike after bike-grouped items
-        widgets.add(_buildBikeSectionHeader(theme, 'General'));
+        widgets.add(
+            _buildBikeSectionHeader(theme, 'General', _getBikeSubtotal(null)));
         lastBikeName = null;
       }
 
@@ -2119,31 +2133,90 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   /// Builds a visual section header for bike grouping in invoices.
-  Widget _buildBikeSectionHeader(ThemeData theme, String bikeName) {
+  Widget _buildBikeSectionHeader(
+      ThemeData theme, String bikeName, double subtotal) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outline.withOpacity(0.2),
-          ),
+          top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.1)),
         ),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.pedal_bike,
-            size: 16,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            bikeName,
-            style: theme.textTheme.labelLarge?.copyWith(
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ]),
+            child: Icon(
+              Icons.pedal_bike,
+              size: 18,
               color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bikeName.toUpperCase(),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  'GRUPO DE ARTÍCULOS',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Subtotal:',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  ChileanUtils.formatCurrency(subtotal),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
