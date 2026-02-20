@@ -443,6 +443,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           cost: item.cost,
           description: item.description,
           isCatalogProduct: item.isCatalogProduct,
+          jobBikeId: item.jobBikeId,
+          bikeName: item.bikeName,
         ),
       );
       entry.attachListeners(_handleLinesChanged);
@@ -1075,6 +1077,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
 
       _applyInvoice(saved);
+
+      // Sync descriptions (and all items) to the linked Pega job, if any
+      if (saved.id != null) {
+        _salesService.triggerInvoiceSync(saved.id!).catchError((e) {
+          debugPrint('⚠️ [InvoiceFormPage] Sync trigger warning: $e');
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1908,9 +1917,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     children: [
                       // Line items (all states)
                       if (_lineEntries.isNotEmpty)
-                        ..._lineEntries.asMap().entries.map((entry) =>
-                            _buildCompactLineRow(
-                                theme, entry.key + 1, entry.value)),
+                        ..._buildGroupedLineItems(theme, isCompact: true),
 
                       // Add new line button (only when editing)
                       if (_canEditFields)
@@ -2049,8 +2056,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               textAlign: TextAlign.center,
             ),
           ),
-        ..._lineEntries.asMap().entries.map((entry) =>
-            _buildMobileLineItemCard(theme, entry.key + 1, entry.value)),
+        ..._buildGroupedLineItems(theme, isCompact: false),
         if (_canEditFields)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -2064,6 +2070,84 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Builds line items grouped by bike with section headers.
+  /// Items are sorted by bike so all items for one bike appear under a single header.
+  List<Widget> _buildGroupedLineItems(ThemeData theme,
+      {required bool isCompact}) {
+    final widgets = <Widget>[];
+    String? lastBikeName;
+    int itemIndex = 0;
+
+    // Sort entries by bike name so same-bike items are grouped together
+    // Items without a bike come last
+    final sortedEntries = List<_InvoiceLineEntry>.from(_lineEntries)
+      ..sort((a, b) {
+        final aName = a.line.bikeName ?? '';
+        final bName = b.line.bikeName ?? '';
+        if (aName.isEmpty && bName.isEmpty) return 0;
+        if (aName.isEmpty) return 1; // no-bike items go last
+        if (bName.isEmpty) return -1;
+        return aName.compareTo(bName);
+      });
+
+    for (final entry in sortedEntries) {
+      final bikeName = entry.line.bikeName;
+      itemIndex++;
+
+      // Insert bike section header when bike changes
+      if (bikeName != null && bikeName.isNotEmpty && bikeName != lastBikeName) {
+        widgets.add(_buildBikeSectionHeader(theme, bikeName));
+        lastBikeName = bikeName;
+      } else if ((bikeName == null || bikeName.isEmpty) &&
+          lastBikeName != null) {
+        // Items without a bike after bike-grouped items
+        widgets.add(_buildBikeSectionHeader(theme, 'General'));
+        lastBikeName = null;
+      }
+
+      if (isCompact) {
+        widgets.add(_buildCompactLineRow(theme, itemIndex, entry));
+      } else {
+        widgets.add(_buildMobileLineItemCard(theme, itemIndex, entry));
+      }
+    }
+
+    return widgets;
+  }
+
+  /// Builds a visual section header for bike grouping in invoices.
+  Widget _buildBikeSectionHeader(ThemeData theme, String bikeName) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.pedal_bike,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            bikeName,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2996,13 +3080,18 @@ class _InvoiceLine {
     this.cost = 0,
     this.description, // Custom description/notes
     this.isCatalogProduct = true, // true = catalog product, false = ad-hoc item
+    this.jobBikeId, // Multi-bike sync: links item to specific bike
+    this.bikeName, // Multi-bike sync: display name for section grouping
   });
 
   final String? productId; // Nullable for ad-hoc items
   final Product? product;
   final double cost;
-  final String? description; // Custom notes for line item
+  String?
+      description; // Custom notes for line item (mutable so listener can update)
   final bool isCatalogProduct; // Track if catalog vs ad-hoc
+  final String? jobBikeId; // Multi-bike sync metadata
+  final String? bikeName; // Multi-bike sync metadata
   double quantity;
   double unitPrice;
   double discount;
@@ -3048,6 +3137,13 @@ class _InvoiceLineEntry {
     quantityController.addListener(_onQuantityChanged);
     unitPriceController.addListener(_onUnitPriceChanged);
     discountController.addListener(_onDiscountChanged);
+    // Listen to description changes so the line model stays in sync before save
+    descriptionController.addListener(() {
+      line.description = descriptionController.text;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _listener?.call();
+      });
+    });
     // Don't listen to productNameController - only update on selection
   }
 
@@ -3072,6 +3168,8 @@ class _InvoiceLineEntry {
       discount: line.discount,
       lineTotal: line.netAmount,
       cost: product?.cost ?? line.cost,
+      jobBikeId: line.jobBikeId,
+      bikeName: line.bikeName,
     );
   }
 

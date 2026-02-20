@@ -290,6 +290,10 @@ class InvoiceItem {
   final double? hours; // For services: hours worked
   final double? hourlyRate; // For services: rate per hour
 
+  // ✅ Multi-bike sync metadata (preserves bike assignment through round-trip)
+  final String? jobBikeId; // Links to mechanic_job_bikes.id
+  final String? bikeName; // Display name for bike grouping
+
   InvoiceItem({
     this.id,
     this.invoiceId,
@@ -306,6 +310,8 @@ class InvoiceItem {
     this.isService = false,
     this.hours,
     this.hourlyRate,
+    this.jobBikeId,
+    this.bikeName,
   }) : lineTotal = lineTotal ?? (quantity * unitPrice - discount);
 
   InvoiceItem copyWith({
@@ -324,6 +330,8 @@ class InvoiceItem {
     bool? isService,
     double? hours,
     double? hourlyRate,
+    String? jobBikeId,
+    String? bikeName,
   }) {
     return InvoiceItem(
       id: id ?? this.id,
@@ -341,6 +349,8 @@ class InvoiceItem {
       isService: isService ?? this.isService,
       hours: hours ?? this.hours,
       hourlyRate: hourlyRate ?? this.hourlyRate,
+      jobBikeId: jobBikeId ?? this.jobBikeId,
+      bikeName: bikeName ?? this.bikeName,
     );
   }
 
@@ -370,6 +380,8 @@ class InvoiceItem {
           json['is_service'] as bool? ?? (json['item_type'] == 'service'),
       hours: (json['hours'] as num?)?.toDouble(),
       hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
+      jobBikeId: json['job_bike_id']?.toString(),
+      bikeName: json['bike_name']?.toString(),
     );
   }
 
@@ -390,6 +402,8 @@ class InvoiceItem {
       'is_service': isService,
       if (hours != null) 'hours': hours,
       if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (jobBikeId != null) 'job_bike_id': jobBikeId,
+      if (bikeName != null) 'bike_name': bikeName,
     };
   }
 }

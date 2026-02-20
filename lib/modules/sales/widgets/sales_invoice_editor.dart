@@ -470,6 +470,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           cost: item.cost,
           description: item.description,
           isCatalogProduct: item.isCatalogProduct,
+          jobBikeId: item.jobBikeId,
+          bikeName: item.bikeName,
         ),
       );
       entry.attachListeners(_handleLinesChanged);
@@ -2028,8 +2030,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     if (widget.isCompact) {
       return Column(
         children: [
-          ..._lineEntries.asMap().entries.map(
-              (entry) => _buildCompactListItem(theme, entry.key, entry.value)),
+          ..._buildGroupedCompactListItems(theme),
           if (_canEditFields)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -2120,8 +2121,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             thickness: 1,
             color: theme.colorScheme.outline.withOpacity(0.2)),
         Column(children: [
-          ..._lineEntries.asMap().entries.map((entry) =>
-              _buildCompactLineRow(theme, entry.key + 1, entry.value)),
+          ..._buildGroupedTableRows(theme),
           if (_canEditFields) _buildAddLineRow(theme),
         ])
       ],
@@ -2308,6 +2308,112 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Builds table rows grouped by bike with section headers.
+  List<Widget> _buildGroupedTableRows(ThemeData theme) {
+    final widgets = <Widget>[];
+    String? lastBikeName;
+    int itemIndex = 0;
+
+    // Sort by bike name so same-bike items are grouped together
+    final sortedEntries = List<_InvoiceLineEntry>.from(_lineEntries)
+      ..sort((a, b) {
+        final aName = a.line.bikeName ?? '';
+        final bName = b.line.bikeName ?? '';
+        if (aName.isEmpty && bName.isEmpty) return 0;
+        if (aName.isEmpty) return 1;
+        if (bName.isEmpty) return -1;
+        return aName.compareTo(bName);
+      });
+
+    for (final entry in sortedEntries) {
+      final bikeName = entry.line.bikeName;
+      itemIndex++;
+
+      if (bikeName != null && bikeName.isNotEmpty && bikeName != lastBikeName) {
+        widgets.add(_buildBikeSectionHeader(theme, bikeName));
+        lastBikeName = bikeName;
+      } else if ((bikeName == null || bikeName.isEmpty) &&
+          lastBikeName != null) {
+        widgets.add(_buildBikeSectionHeader(theme, 'General'));
+        lastBikeName = null;
+      }
+
+      widgets.add(_buildCompactLineRow(theme, itemIndex, entry));
+    }
+
+    return widgets;
+  }
+
+  /// Builds compact list items grouped by bike.
+  List<Widget> _buildGroupedCompactListItems(ThemeData theme) {
+    final widgets = <Widget>[];
+    String? lastBikeName;
+    int itemIndex = 0;
+
+    // Sort by bike name so same-bike items are grouped together
+    final sortedEntries = List<_InvoiceLineEntry>.from(_lineEntries)
+      ..sort((a, b) {
+        final aName = a.line.bikeName ?? '';
+        final bName = b.line.bikeName ?? '';
+        if (aName.isEmpty && bName.isEmpty) return 0;
+        if (aName.isEmpty) return 1;
+        if (bName.isEmpty) return -1;
+        return aName.compareTo(bName);
+      });
+
+    for (final entry in sortedEntries) {
+      final bikeName = entry.line.bikeName;
+      itemIndex++;
+
+      if (bikeName != null && bikeName.isNotEmpty && bikeName != lastBikeName) {
+        widgets.add(_buildBikeSectionHeader(theme, bikeName));
+        lastBikeName = bikeName;
+      } else if ((bikeName == null || bikeName.isEmpty) &&
+          lastBikeName != null) {
+        widgets.add(_buildBikeSectionHeader(theme, 'General'));
+        lastBikeName = null;
+      }
+
+      widgets.add(_buildCompactListItem(theme, itemIndex, entry));
+    }
+
+    return widgets;
+  }
+
+  /// Builds a visual section header for bike grouping.
+  Widget _buildBikeSectionHeader(ThemeData theme, String bikeName) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.pedal_bike,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            bikeName,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2578,6 +2684,8 @@ class _InvoiceLine {
     this.cost = 0,
     this.description,
     this.isCatalogProduct = true,
+    this.jobBikeId,
+    this.bikeName,
   });
 
   final String? productId;
@@ -2585,6 +2693,8 @@ class _InvoiceLine {
   final double cost;
   String? description;
   final bool isCatalogProduct;
+  final String? jobBikeId;
+  final String? bikeName;
   double quantity;
   double unitPrice;
   double discount;
@@ -2655,6 +2765,8 @@ class _InvoiceLineEntry {
       discount: line.discount,
       lineTotal: line.netAmount,
       cost: product?.cost ?? line.cost,
+      jobBikeId: line.jobBikeId,
+      bikeName: line.bikeName,
     );
     debugPrint(
         '🐛 [InvoiceLineEntry] Converting item: ${item.productName}. ProductId: ${item.productId}');

@@ -11919,6 +11919,8 @@ declare
   v_unit_price numeric(12,2);
   v_line_total numeric(12,2);
   v_tenant_id uuid;
+  v_job_bike_id uuid;
+  v_default_bike_id uuid;
 begin
   -- Prevent circular sync: if we're already deep in triggers, skip
   if pg_trigger_depth() > 2 then
@@ -11949,6 +11951,13 @@ begin
   -- Get tenant_id from invoice
   v_tenant_id := v_invoice.tenant_id;
   
+  -- Get the default (first) bike for items without a specific bike assignment
+  select id into v_default_bike_id
+  from mechanic_job_bikes
+  where job_id = v_job_id
+  order by order_index
+  limit 1;
+  
   -- Set a flag to prevent reverse sync
   perform set_config('app.syncing_invoice_to_job', 'true', true);
   
@@ -11964,7 +11973,20 @@ begin
     v_line_total := coalesce((v_item->>'line_total')::numeric, v_quantity * v_unit_price, 0);
     v_product_name := v_item->>'product_name';
 
-    -- Check if it's labor (no product_id) or a part
+    -- Resolve job_bike_id from item JSON, fallback to default bike
+    v_job_bike_id := nullif(v_item->>'job_bike_id', '')::uuid;
+    if v_job_bike_id is null then
+      v_job_bike_id := v_default_bike_id;
+    else
+      -- Validate the bike still exists for this job
+      if not exists (
+        select 1 from mechanic_job_bikes 
+        where id = v_job_bike_id and job_id = v_job_id
+      ) then
+        v_job_bike_id := v_default_bike_id;
+      end if;
+    end if;
+
     -- Determine product info (if exists)
     v_product_type := null;
     v_product_name := null;
@@ -11988,6 +12010,7 @@ begin
     insert into mechanic_job_items (
       tenant_id,
       job_id,
+      job_bike_id,
       product_id,
       product_name,
       product_sku,
@@ -11995,6 +12018,7 @@ begin
       unit_price,
       total_price,
       notes,
+      description,
       item_type,
       service_product_id,
       created_at,
@@ -12002,12 +12026,14 @@ begin
     ) values (
       v_tenant_id,
       v_job_id,
+      v_job_bike_id,
       case when v_product_type = 'service' then null else v_product_id end,
       coalesce(v_product_name, v_item->>'product_name'),
       coalesce(v_item->>'product_sku', ''),
       case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
       v_unit_price,
       v_line_total,
+      coalesce(v_item->>'description', ''),
       coalesce(v_item->>'description', ''),
       case when v_product_id is null or v_product_type = 'service' then 'service' else 'product' end,
       case when v_product_id is null or v_product_type = 'service' then v_product_id else null end,
@@ -12033,8 +12059,8 @@ begin
   -- Clear the sync flag
   perform set_config('app.syncing_invoice_to_job', '', true);
   
-  raise notice 'Synced invoice % items to job (parts: $%, labor: $%)', 
-    p_invoice_id, v_parts_cost, v_labor_cost;
+  raise notice 'Synced invoice % items to job % (parts: $%, labor: $%)', 
+    p_invoice_id, v_job_id, v_parts_cost, v_labor_cost;
 end;
 $$;
 
@@ -12162,20 +12188,38 @@ begin
   for v_item in 
     select * from mechanic_job_items where job_id = p_job_id
   loop
-    v_items := v_items || jsonb_build_object(
-      'product_id', case when coalesce(v_item.item_type, 'product') = 'service'
-                         then coalesce(v_item.service_product_id::text, '')
-                         else v_item.product_id::text
-                    end,
-      'product_name', v_item.product_name,
-      'product_sku', coalesce(v_item.product_sku, ''),
-      'description', coalesce(v_item.notes, ''),
-      'item_type', coalesce(v_item.item_type, 'product'),
-      'is_catalog_product', case when v_item.item_type = 'adhoc' then false else true end,
-      'quantity', v_item.quantity,
-      'unit_price', v_item.unit_price,
-      'line_total', coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0)
-    );
+    -- Resolve bike display name from job_bike_id
+    declare
+      v_bike_name text := null;
+    begin
+      if v_item.job_bike_id is not null then
+        select coalesce(
+          nullif(concat_ws(' ', b.brand, b.model), ''),
+          'Bicicleta'
+        )
+        into v_bike_name
+        from mechanic_job_bikes mjb
+        join bikes b on b.id = mjb.bike_id
+        where mjb.id = v_item.job_bike_id;
+      end if;
+
+      v_items := v_items || jsonb_build_object(
+        'product_id', case when coalesce(v_item.item_type, 'product') = 'service'
+                           then coalesce(v_item.service_product_id::text, '')
+                           else v_item.product_id::text
+                      end,
+        'product_name', v_item.product_name,
+        'product_sku', coalesce(v_item.product_sku, ''),
+        'description', coalesce(v_item.notes, ''),
+        'item_type', coalesce(v_item.item_type, 'product'),
+        'is_catalog_product', case when v_item.item_type = 'adhoc' then false else true end,
+        'quantity', v_item.quantity,
+        'unit_price', v_item.unit_price,
+        'line_total', coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0),
+        'job_bike_id', v_item.job_bike_id,
+        'bike_name', v_bike_name
+      );
+    end;
 
     if coalesce(v_item.item_type, 'product') in ('service', 'adhoc') then
       v_labor_cost := v_labor_cost + coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0);
