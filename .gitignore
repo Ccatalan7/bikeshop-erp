@@ -66,3 +66,7 @@ scripts/zoho_import/temp_zoho_images/
 flutter.zip
 flutter.zip
 flutter/
+
+# Environment variables
+.env
+.env.*
