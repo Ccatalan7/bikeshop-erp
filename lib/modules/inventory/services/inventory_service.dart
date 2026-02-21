@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -48,6 +49,23 @@ class InventoryService extends ChangeNotifier {
     // Grace window to survive router/workspace rebuilds during navigation
     return DateTime.now().difference(_lastListStateSavedAt!) <
         _listStateGraceWindow;
+  }
+
+  // ============================================================
+  // EXTERNAL EVENTS (e.g., from AI Assistant)
+  // ============================================================
+  final _externalSearchController = StreamController<String>.broadcast();
+  Stream<String> get externalSearchStream => _externalSearchController.stream;
+
+  void applyExternalSearch(String term) {
+    saveListState(searchTerm: term);
+    _externalSearchController.add(term);
+  }
+
+  @override
+  void dispose() {
+    _externalSearchController.close();
+    super.dispose();
   }
 
   void saveListState({
@@ -155,21 +173,24 @@ class InventoryService extends ChangeNotifier {
         data = await _db.select('products', fetchAll: true);
 
         // 2. Client-side fuzzy search for better flexibility
-        // This is acceptable because product count is usually < 5000 for a bike shop
-        // and we want to match "Cassette Shimano" even if name is "Shimano Cassette"
-        final searchTerms =
+        // Use normalization and stemming to handle plurals and accents
+        final rawSearchTerms =
             searchTerm.toLowerCase().trim().split(RegExp(r'\s+'));
+
+        final searchTerms = rawSearchTerms
+            .map((t) => _stemSearchTerm(_normalizeText(t)))
+            .toList();
 
         List<Map<String, dynamic>> filteredData = [];
 
         for (final item in data) {
-          final name = (item['name'] as String? ?? '').toLowerCase();
-          final sku = (item['sku'] as String? ?? '').toLowerCase();
-          final brand = (item['brand'] as String? ?? '').toLowerCase();
+          final name = _normalizeText(item['name'] as String? ?? '');
+          final sku = _normalizeText(item['sku'] as String? ?? '');
+          final brand = _normalizeText(item['brand'] as String? ?? '');
           final category =
-              (item['category_name'] as String? ?? '').toLowerCase();
-          final model = (item['model'] as String? ?? '').toLowerCase();
-          final tags = (item['tags'] as List?)?.join(' ').toLowerCase() ?? '';
+              _normalizeText(item['category_name'] as String? ?? '');
+          final model = _normalizeText(item['model'] as String? ?? '');
+          final tags = _normalizeText((item['tags'] as List?)?.join(' ') ?? '');
 
           final searchableText = '$name $sku $brand $category $model $tags';
 
@@ -655,5 +676,59 @@ class InventoryService extends ChangeNotifier {
       if (kDebugMode) print('Error posting purchase accounting entry: $e');
       // Don't rethrow as this is supplementary
     }
+  }
+
+  /// Normalizes text by removing diacritics and converting to lowercase
+  String _normalizeText(String text) {
+    if (text.isEmpty) return text;
+
+    // Convert to lowercase first
+    String normalized = text.toLowerCase();
+
+    // Replace accented characters
+    normalized = normalized.replaceAll(RegExp(r'[áàäâ]'), 'a');
+    normalized = normalized.replaceAll(RegExp(r'[éèëê]'), 'e');
+    normalized = normalized.replaceAll(RegExp(r'[íìïî]'), 'i');
+    normalized = normalized.replaceAll(RegExp(r'[óòöô]'), 'o');
+    normalized = normalized.replaceAll(RegExp(r'[úùüû]'), 'u');
+    normalized = normalized.replaceAll(RegExp(r'[ñ]'), 'n');
+    normalized = normalized.replaceAll(RegExp(r'[ç]'), 'c');
+
+    return normalized;
+  }
+
+  /// Naive Spanish stemming for search queries
+  /// Removes trailing 's' or 'es' to match singular products
+  String _stemSearchTerm(String term) {
+    if (term.length <= 3) return term; // Too short to stem safely
+
+    // If it ends in 'es' (e.g. pedales -> pedal, cassettes (wait, cassette ends in e))
+    if (term.endsWith('es')) {
+      // Exceptions where removing 'es' is wrong
+      if (term == 'mes' || term == 'tres') return term;
+
+      // Let's strip 's' first, which is the most common plural.
+      // If the word ends in a consonant + 'es' (like l, d, r, n), removing 'es' might be better.
+      final beforeEs = term.substring(0, term.length - 2);
+      if (beforeEs.isNotEmpty) {
+        final lastChar = beforeEs[beforeEs.length - 1];
+        if ('ldrn'.contains(lastChar)) {
+          return beforeEs; // pedales -> pedal
+        }
+      }
+    }
+
+    // Most common: just remove trailing 's'
+    if (term.endsWith('s')) {
+      if (term == 'cas' ||
+          term == 'dos' ||
+          term == 'mas' ||
+          term == 'las' ||
+          term == 'los' ||
+          term == 'sus') return term;
+      return term.substring(0, term.length - 1);
+    }
+
+    return term;
   }
 }

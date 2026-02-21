@@ -171,6 +171,7 @@ class _ProductListPageState extends State<ProductListPage> {
       _searchTerm.isNotEmpty;
 
   StreamSubscription? _scanSubscription;
+  StreamSubscription<String>? _externalSearchSub;
   bool _shouldRestoreState = false; // Local flag for this page instance
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
@@ -201,6 +202,17 @@ class _ProductListPageState extends State<ProductListPage> {
       _restoreSavedState();
     }
     // Note: Don't clear state here - it's cleared when user navigates away from inventory
+
+    // Listen to external search commands (e.g., from the AI Assistant panel)
+    _externalSearchSub = _inventoryService.externalSearchStream.listen((term) {
+      if (mounted) {
+        setState(() {
+          _searchTerm = term;
+          _searchController.text = term;
+        });
+        _applyFilters(resetPagination: true);
+      }
+    });
 
     // Initial load sequence - SMART: skip full reload if we have cached data
     if (_shouldRestoreState && _inventoryService.hasProductsCache) {
@@ -608,18 +620,59 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  /// Normalizes text by removing diacritics and converting to lowercase
+  String _normalizeText(String text) {
+    if (text.isEmpty) return text;
+    String normalized = text.toLowerCase();
+    normalized = normalized.replaceAll(RegExp(r'[áàäâ]'), 'a');
+    normalized = normalized.replaceAll(RegExp(r'[éèëê]'), 'e');
+    normalized = normalized.replaceAll(RegExp(r'[íìïî]'), 'i');
+    normalized = normalized.replaceAll(RegExp(r'[óòöô]'), 'o');
+    normalized = normalized.replaceAll(RegExp(r'[úùüû]'), 'u');
+    normalized = normalized.replaceAll(RegExp(r'[ñ]'), 'n');
+    normalized = normalized.replaceAll(RegExp(r'[ç]'), 'c');
+    return normalized;
+  }
+
+  /// Naive Spanish stemming for search queries
+  String _stemSearchTerm(String term) {
+    if (term.length <= 3) return term;
+    if (term.endsWith('es')) {
+      if (term == 'mes' || term == 'tres') return term;
+      final beforeEs = term.substring(0, term.length - 2);
+      if (beforeEs.isNotEmpty) {
+        final lastChar = beforeEs[beforeEs.length - 1];
+        if ('ldrn'.contains(lastChar)) return beforeEs;
+      }
+    }
+    if (term.endsWith('s')) {
+      if (term == 'cas' ||
+          term == 'dos' ||
+          term == 'mas' ||
+          term == 'las' ||
+          term == 'los' ||
+          term == 'sus') return term;
+      return term.substring(0, term.length - 1);
+    }
+    return term;
+  }
+
   /// Token-based search: splits query into words and matches if ALL tokens found
   bool _matchesTokenSearch(String query, Product product) {
     if (query.isEmpty) return true;
-    final tokens = query.toLowerCase().split(RegExp(r'\s+'));
+    final rawTokens = query.toLowerCase().split(RegExp(r'\s+'));
+    final tokens =
+        rawTokens.map((t) => _stemSearchTerm(_normalizeText(t))).toList();
+
     final searchableText = [
-      product.name.toLowerCase(),
-      product.sku.toLowerCase(),
-      product.supplierCode?.toLowerCase() ?? '',
-      product.brand?.toLowerCase() ?? '',
-      product.model?.toLowerCase() ?? '',
-      _resolveCategoryName(product)?.toLowerCase() ?? '',
+      _normalizeText(product.name),
+      _normalizeText(product.sku),
+      _normalizeText(product.supplierCode ?? ''),
+      _normalizeText(product.brand ?? ''),
+      _normalizeText(product.model ?? ''),
+      _normalizeText(_resolveCategoryName(product) ?? ''),
     ].join(' ');
+
     // ALL tokens must be found in searchable text
     return tokens.every((token) => searchableText.contains(token));
   }

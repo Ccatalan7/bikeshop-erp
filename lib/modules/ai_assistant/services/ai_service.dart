@@ -4,6 +4,12 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../inventory/services/inventory_service.dart';
 
+/// Callback type for navigation actions the AI can trigger.
+/// The [route] is the path to navigate to (e.g. '/inventory/products').
+/// The [searchTerm] is an optional pre-filled search query.
+typedef AINavigationCallback = void Function(String route,
+    {String? searchTerm});
+
 class AIAssistantService extends ChangeNotifier {
   static final AIAssistantService _instance = AIAssistantService._internal();
   factory AIAssistantService() => _instance;
@@ -14,16 +20,20 @@ class AIAssistantService extends ChangeNotifier {
   final List<Content> _history = [];
   bool _isLoading = false;
 
-  // Tools definition
-  late final List<Tool> _tools;
+  // Tools definition - NOT late final, so it can be reassigned safely
+  List<Tool> _tools = [];
 
   bool get isLoading => _isLoading;
   List<Content> get history => _history;
 
   void initialize() {
-    // Fallback to hardcoded key if .env fails to load (common on Web due to caching)
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ??
-        'AIzaSyCs2hQbEXJ4xESeemQlWZRusrEUGdQWzBM';
+    // Singleton guard: if already initialized, do nothing
+    if (_model != null) {
+      debugPrint('ℹ️ [AIService] Already initialized, skipping...');
+      return;
+    }
+
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
 
     if (apiKey.isEmpty) {
       debugPrint('⚠️ GEMINI_API_KEY not found in .env');
@@ -44,6 +54,24 @@ class AIAssistantService extends ChangeNotifier {
                       'The product name, brand, or category to search for. Use short keywords (e.g., "HG200", "Cassette 7v") instead of long sentences.'),
             },
             requiredProperties: ['query'],
+          ),
+        ),
+        FunctionDeclaration(
+          'navigateToInventory',
+          'Navigates the app to the Inventory module and pre-fills the search box with a query. '
+              'Use this when the user asks to "show", "find", "list", or "buscar" products, parts, or items. '
+              'CRITICAL: You MUST extract concise, searchable keywords. NEVER pass the raw conversational sentence. '
+              'For bike parts, simplify to core components and dimensions (e.g., "llanta 20", "neumatico 29", "cassette 7v"). '
+              'DO NOT use connector words like "para", "de", "con". '
+              'After navigating, always confirm to the user what you did.',
+          Schema(
+            SchemaType.object,
+            properties: {
+              'searchTerm': Schema(SchemaType.string,
+                  description:
+                      'The semantic keyword search term (e.g., "llanta 20", "camara 29"). Never use full phrases.'),
+            },
+            requiredProperties: ['searchTerm'],
           ),
         ),
         FunctionDeclaration(
@@ -72,6 +100,7 @@ class AIAssistantService extends ChangeNotifier {
     String message, {
     List<MechanicJob>? jobs,
     InventoryService? inventoryService,
+    AINavigationCallback? onNavigate,
   }) async {
     if (_model == null) {
       return 'Error: API Key not configured. Please add GEMINI_API_KEY to .env file.';
@@ -113,6 +142,12 @@ class AIAssistantService extends ChangeNotifier {
           if (name == 'searchStock') {
             result = await _toolSearchStock(
                 args['query'] as String?, inventoryService);
+          } else if (name == 'navigateToInventory') {
+            result = _toolNavigateToInventory(
+              args['searchTerm'] as String?,
+              inventoryService: inventoryService,
+              onNavigate: onNavigate,
+            );
           } else if (name == 'searchInternet') {
             result = await _toolSearchInternet(args['query'] as String?);
           } else {
@@ -183,6 +218,38 @@ class AIAssistantService extends ChangeNotifier {
     }
   }
 
+  Map<String, Object?> _toolNavigateToInventory(
+    String? searchTerm, {
+    InventoryService? inventoryService,
+    AINavigationCallback? onNavigate,
+  }) {
+    if (searchTerm == null || searchTerm.isEmpty) {
+      return {'error': 'Search term is required'};
+    }
+
+    if (onNavigate == null) {
+      return {'error': 'Navigation is not available in this context'};
+    }
+
+    debugPrint('🧭 [AI] Navigating to inventory with search: "$searchTerm"');
+
+    // Set the saved search term AND signal any active listeners
+    if (inventoryService != null) {
+      inventoryService.applyExternalSearch(searchTerm);
+    }
+
+    // Trigger navigation (closes the dialog and navigates)
+    onNavigate('/inventory/products', searchTerm: searchTerm);
+
+    return {
+      'success': true,
+      'navigatedTo': '/inventory/products',
+      'searchTerm': searchTerm,
+      'message':
+          'Navigated to inventory and searched for "$searchTerm". The results are now displayed on screen.',
+    };
+  }
+
   Future<Map<String, Object?>> _toolSearchInternet(String? query) async {
     if (query == null) return {'error': 'Query is empty'};
 
@@ -207,15 +274,22 @@ You are a helpful and powerful AI assistant for "Vinabike" Bike Shop ERP.
 Your capabilities include:
 1. Managing repair jobs (Pegas).
 2. Checking inventory stock and prices.
-3. Answering technical questions about bike compatibility by searching the internet.
+3. Navigating the app to show the user specific products in the Inventory module.
+4. Answering technical questions about bike compatibility by searching the internet.
 
-When asked about products, ALWAYS check the inventory using the `searchStock` tool.
-STRATEGY: 
-- **COMPATIBILITY FIRST:** If the user needs a spare part (e.g., for a "Trek Marlin 5"), DO NOT search for the exact stock part (e.g., "Shimano HG200").
-- **SEARCH GENERIC SPECS:** Instead, search for the **TECHNICAL SPEC** to find ALL compatible brands.
-  - Example: For a 7-speed bike, search for "Cassette 7v" or "Piñon 7v". This will find Shimano, Sunrace, Saiguan, etc.
-- **TYPOS:** Correct typos before searching (e.g., "casette" -> "cassette").
-- Only search for a specific brand if the user EXPLICITLY asks for it (e.g., "I want a Shimano cassette").
+CRITICAL RULES FOR SEARCHING AND NAVIGATING INVENTORY:
+1. The inventory system uses basic text matching. It CANNOT understand conversational queries.
+2. When answering queries like "Do we have tires for a BMX?" or "Show me rims for a 29er":
+   - You MUST translate the request into the actual technical specs.
+   - BMX parts usually use "20" (e.g., "llanta 20", "neumatico 20", "camara 20").
+   - Mountain bikes usually use "29", "27.5", or "26".
+   - Road bikes usually use "700".
+3. NEVER pass connector words to `searchStock` or `navigateToInventory` (e.g., instead of "llantas para bmx", use "llanta 20". Instead of "pastillas de freno shimano", use "pastilla shimano").
+4. If a generic search returns 0 results, try simplifying it to just the core component (e.g., just "llanta").
+
+NAVIGATION STRATEGY:
+- When the user asks to "show", "find", "list", "buscar", "mostrar", or "listar" any product or item, ALWAYS use the `navigateToInventory` tool.
+- After navigating, confirm to the user what you did in one short sentence (e.g., "Te llevé al inventario con las llantas aro 20").
 
 When asked about compatibility or specs you don't know, use `searchInternet`.
 

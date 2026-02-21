@@ -698,137 +698,104 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           child: Column(
             children: [
               // Top actions bar
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isMobile = constraints.maxWidth < 600;
-
-                  if (isMobile) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+              // Sleek SaaS Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // More Actions Menu
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert),
-                            onSelected: (value) async {
-                              switch (value) {
-                                case 'refresh':
-                                  await context
-                                      .read<SmartPurchaseListService>()
-                                      .refresh();
-                                  break;
-                                case 'scan':
-                                  _scanLowStockProducts();
-                                  break;
-                                case 'clear':
-                                  _cleanupAllData();
-                                  break;
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'refresh',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.refresh, color: Colors.grey),
-                                    SizedBox(width: 8),
-                                    Text('Recargar'),
-                                  ],
+                          Text(
+                            'Gestión de Compras',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.5,
                                 ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'scan',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.scanner, color: Colors.grey),
-                                    SizedBox(width: 8),
-                                    Text('Escanear Stock Bajo'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'clear',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_sweep, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Limpiar Todo',
-                                        style: TextStyle(color: Colors.red)),
-                                  ],
-                                ),
-                              ),
-                            ],
                           ),
-                          const Spacer(),
-
-                          // Add Button (Icon only on mobile)
-                          FloatingActionButton.small(
-                            onPressed: _showAddItemDialog,
-                            child: const Icon(Icons.add),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Prioriza y organiza el reabastecimiento de tu inventario',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ),
-                    );
-                  }
-
-                  // Desktop View
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    ),
+                    const SizedBox(width: 16),
+                    // Action Buttons - Minimalist
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Recargar'),
-                          onPressed: () async {
-                            try {
-                              await context
-                                  .read<SmartPurchaseListService>()
-                                  .refresh();
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('✅ Lista actualizada'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
+                        Tooltip(
+                          message: 'Recargar Datos',
+                          child: IconButton(
+                            icon: const Icon(Icons.refresh, size: 20),
+                            onPressed: () async {
+                              try {
+                                await context
+                                    .read<SmartPurchaseListService>()
+                                    .refresh();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('✅ Lista actualizada')),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')),
+                                  );
+                                }
                               }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.scanner),
-                          label: const Text('Escanear Stock Bajo'),
-                          onPressed: _scanLowStockProducts,
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.delete_sweep),
-                          label: const Text('Limpiar Todo'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade700,
-                            foregroundColor: Colors.white,
+                            },
                           ),
-                          onPressed: _cleanupAllData,
                         ),
-                        const SizedBox(width: 8),
-                        FloatingActionButton.extended(
+                        Tooltip(
+                          message: 'Escanear Stock Bajo',
+                          child: IconButton(
+                            icon: const Icon(Icons.scanner, size: 20),
+                            onPressed: _scanLowStockProducts,
+                          ),
+                        ),
+                        Tooltip(
+                          message: 'Limpiar Todo',
+                          child: IconButton(
+                            icon: const Icon(Icons.delete_sweep,
+                                size: 20, color: Colors.redAccent),
+                            onPressed: _cleanupAllData,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        FilledButton.icon(
                           onPressed: _showAddItemDialog,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Agregar Producto'),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Agregar'),
+                          style: FilledButton.styleFrom(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
                         ),
                       ],
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
               // Main content
               Expanded(
@@ -856,31 +823,54 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
                     final filteredItems = _getFilteredItems(service);
 
-                    return SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            // Dashboard Summary
-                            _buildDashboard(service),
-                            const SizedBox(height: 16),
-
-                            // Filters and Search
-                            _buildFilters(service),
-                            const SizedBox(height: 16),
-
-                            // Bulk Actions
-                            if (_selectedItems.isNotEmpty) _buildBulkActions(),
-                            if (_selectedItems.isNotEmpty)
-                              const SizedBox(height: 16),
-
-                            // Items List
-                            filteredItems.isEmpty
-                                ? _buildEmptyState()
-                                : _buildItemsList(service),
-                          ],
+                    return CustomScrollView(
+                      slivers: [
+                        // Dashboard summary (scrolls)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                            child: _buildDashboard(service),
+                          ),
                         ),
-                      ),
+
+                        // Sticky Filter Bar (pins to top)
+                        SliverPersistentHeader(
+                          pinned: true,
+                          delegate: _StickyHeaderDelegate(
+                            height:
+                                80.0, // Increased height to accommodate dropdowns safely
+                            backgroundColor:
+                                Theme.of(context).colorScheme.surface,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return SizedBox(
+                                  width: constraints.maxWidth,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24),
+                                    child: _buildFilters(service),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // Bulk Actions
+                        if (_selectedItems.isNotEmpty)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                              child: _buildBulkActions(),
+                            ),
+                          ),
+
+                        // Items List (already uses Slivers)
+                        if (filteredItems.isEmpty)
+                          SliverToBoxAdapter(child: _buildEmptyState())
+                        else
+                          ..._buildItemsListSlivers(service),
+                      ],
                     );
                   },
                 ),
@@ -926,169 +916,130 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 800;
+        final theme = Theme.of(context);
 
-        if (isMobile) {
-          // Mobile: 2x2 Grid or vertical stack depending on space
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Resumen',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.8,
-                    children: [
-                      _buildDashboardCard(
-                        'Pendientes',
-                        service.totalPendingItems.toString(),
-                        Icons.shopping_cart,
-                        Colors.blue,
-                        isCompact: true,
-                      ),
-                      _buildDashboardCard(
-                        'Urgentes',
-                        service.urgentItemsCount.toString(),
-                        Icons.priority_high,
-                        Colors.red,
-                        isCompact: true,
-                      ),
-                      _buildDashboardCard(
-                        'Sin Stock',
-                        service.outOfStockCount.toString(),
-                        Icons.warning,
-                        Colors.orange,
-                        isCompact: true,
-                      ),
-                      _buildDashboardCard(
-                        'Proveedor Top',
-                        service.topSupplier ?? 'N/A',
-                        Icons.business,
-                        Colors.green,
-                        isNumber: false,
-                        isCompact: true,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        // Desktop: Row
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Resumen',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDashboardCard(
-                        'Total Pendiente',
-                        service.totalPendingItems.toString(),
-                        Icons.shopping_cart,
-                        Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildDashboardCard(
-                        'Urgentes',
-                        service.urgentItemsCount.toString(),
-                        Icons.priority_high,
-                        Colors.red,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildDashboardCard(
-                        'Sin Stock',
-                        service.outOfStockCount.toString(),
-                        Icons.warning,
-                        Colors.orange,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildDashboardCard(
-                        'Proveedor Principal',
-                        service.topSupplier ?? 'N/A',
-                        Icons.business,
-                        Colors.green,
-                        isNumber: false,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        final metrics = [
+          _buildMetricItem(
+            'TOTAL PENDIENTE',
+            service.totalPendingItems.toString(),
+            theme,
           ),
+          _buildMetricItem(
+            'URGENTES',
+            service.urgentItemsCount.toString(),
+            theme,
+            isAlert: service.urgentItemsCount > 0,
+          ),
+          _buildMetricItem(
+            'SIN STOCK',
+            service.outOfStockCount.toString(),
+            theme,
+            isAlert: service.outOfStockCount > 0,
+          ),
+          _buildMetricItem(
+            'PROV. PRINCIPAL',
+            service.topSupplier ?? '-',
+            theme,
+            isText: true,
+          ),
+        ];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+          ),
+          child: isMobile
+              ? Column(
+                  children: metrics.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final widget = entry.value;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        widget,
+                        if (idx < metrics.length - 1)
+                          Divider(
+                              height: 1,
+                              color: theme.colorScheme.outlineVariant
+                                  .withOpacity(0.5)),
+                      ],
+                    );
+                  }).toList(),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: metrics.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final widget = entry.value;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          widget,
+                          if (idx < metrics.length - 1)
+                            Container(
+                              height: 48,
+                              width: 1,
+                              color: theme.colorScheme.outlineVariant
+                                  .withOpacity(0.5),
+                            ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
         );
       },
     );
   }
 
-  Widget _buildDashboardCard(
+  Widget _buildMetricItem(
     String label,
     String value,
-    IconData icon,
-    Color color, {
-    bool isNumber = true,
-    bool isCompact = false,
+    ThemeData theme, {
+    bool isAlert = false,
+    bool isText = false,
   }) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: EdgeInsets.all(isCompact ? 12 : 16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: isCompact ? 16 : 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: isCompact ? 11 : 12,
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (isAlert) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ]
             ],
           ),
-          SizedBox(height: isCompact ? 4 : 8),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
-              fontSize:
-                  isNumber ? (isCompact ? 20 : 24) : (isCompact ? 12 : 14),
-              fontWeight: FontWeight.bold,
-              color: color,
+              fontSize: isText ? 20 : 32,
+              fontWeight: isText ? FontWeight.w600 : FontWeight.w700,
+              letterSpacing: isText ? 0 : -1.0,
+              color: theme.colorScheme.onSurface,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -1099,234 +1050,276 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
   }
 
   Widget _buildFilters(SmartPurchaseListService service) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final isMobile = constraints.maxWidth < 800;
+    return SizedBox(
+        height:
+            60, // Enforce a strict height boundary on the filters themselves
+        child: LayoutBuilder(builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 800;
 
-      if (isMobile) {
-        return Row(
-          children: [
-            Expanded(
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Buscar producto...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+          if (isMobile) {
+            return Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Buscar producto...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                        _currentPage = 1;
+                      });
+                    },
                   ),
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                    _currentPage = 1;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: () => _showMobileFilters(service),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => _showMobileFilters(service),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.tune,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ),
-                child: Icon(
-                  Icons.tune,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          ],
-        );
-      }
+              ],
+            );
+          }
 
-      // Desktop Filters (Original Layout)
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // First row: Search and Status
-              Row(
-                children: [
-                  // Search
-                  Expanded(
-                    flex: 2,
+          // Desktop Filters (New Layout)
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+            child: Row(
+              children: [
+                // Search Bar
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withOpacity(0.5)),
+                    ),
                     child: TextField(
                       decoration: const InputDecoration(
-                        labelText: 'Buscar producto',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
+                        hintText: 'Buscar productos o SKU...',
+                        prefixIcon: Icon(Icons.search, size: 20),
+                        border: InputBorder.none,
                         isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onChanged: (value) {
-                        // Only update local state - client-side filtering via _getFilteredItems()
                         setState(() {
                           _searchQuery = value;
-                          _currentPage = 1; // Reset to first page
+                          _currentPage = 1;
                         });
                       },
                     ),
                   ),
-                  const SizedBox(width: 16),
+                ),
+                const SizedBox(width: 16),
 
-                  // Status Filter
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _statusFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('Todos')),
-                        DropdownMenuItem(
-                            value: 'pending', child: Text('Pendiente')),
-                        DropdownMenuItem(
-                            value: 'ordered', child: Text('Ordenado')),
-                        DropdownMenuItem(
-                            value: 'received', child: Text('Recibido')),
-                        DropdownMenuItem(
-                            value: 'ignored', child: Text('Ignorado')),
-                        DropdownMenuItem(
-                            value: 'archived', child: Text('Archivado')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _statusFilter = value;
-                            _currentPage = 1; // Reset to first page
-                          });
-                          service.loadItems(
-                            statusFilter: value,
-                            supplierFilter: _supplierFilter,
-                            searchQuery: _searchQuery,
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Second row: Supplier and Priority
-              Row(
-                children: [
-                  // Supplier Filter
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _supplierFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Proveedor',
-                        prefixIcon: Icon(Icons.business),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                            value: 'all', child: Text('Todos')),
-                        const DropdownMenuItem(
-                            value: 'none', child: Text('Sin proveedor')),
-                        ..._suppliers.map((supplier) => DropdownMenuItem(
-                              value: supplier.id,
-                              child: Text(supplier.name),
-                            )),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _supplierFilter = value;
-                            _currentPage = 1; // Reset to first page
-                          });
-                          service.loadItems(
-                            statusFilter: _statusFilter,
-                            supplierFilter:
-                                value, // Pass the value as-is ('all', 'none', or supplier_id)
-                            searchQuery: _searchQuery,
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // Priority Filter
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _priorityFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Prioridad',
-                        prefixIcon: Icon(Icons.priority_high),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('Todas')),
-                        DropdownMenuItem(
-                            value: 'critical', child: Text('Crítica (80+)')),
-                        DropdownMenuItem(
-                            value: 'high', child: Text('Alta (60-80)')),
-                        DropdownMenuItem(
-                            value: 'medium', child: Text('Media (40-60)')),
-                        DropdownMenuItem(
-                            value: 'low', child: Text('Baja (<40)')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _priorityFilter = value;
-                            _currentPage = 1; // Reset to first page
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Third row: Category filter
-              Row(
-                children: [
-                  // Category Filter (searchable)
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _showCategoryPicker(context),
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Categoría',
-                          prefixIcon: Icon(Icons.category),
-                          border: OutlineInputBorder(),
-                          isDense: true,
+                // Filter Pills
+                Expanded(
+                  flex: 5,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterPill(
+                            label: 'Estado',
+                            value: _statusFilter,
+                            items: const {
+                              'all': 'Todos',
+                              'pending': 'Pendiente',
+                              'ordered': 'Ordenado',
+                              'received': 'Recibido',
+                              'ignored': 'Ignorado',
+                              'archived': 'Archivado'
+                            },
+                            onChanged: (val) {
+                              setState(() {
+                                _statusFilter = val;
+                                _currentPage = 1;
+                              });
+                              service.loadItems(
+                                  statusFilter: val,
+                                  supplierFilter: _supplierFilter,
+                                  searchQuery: _searchQuery);
+                            }),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                            label: 'Proveedor',
+                            value: _supplierFilter,
+                            items: {
+                              'all': 'Todos',
+                              'none': 'Sin proveedor',
+                              ...Map.fromEntries(_suppliers
+                                  .map((s) => MapEntry(s.id, s.name))),
+                            },
+                            onChanged: (val) {
+                              setState(() {
+                                _supplierFilter = val;
+                                _currentPage = 1;
+                              });
+                              service.loadItems(
+                                  statusFilter: _statusFilter,
+                                  supplierFilter: val,
+                                  searchQuery: _searchQuery);
+                            }),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                            label: 'Prioridad',
+                            value: _priorityFilter,
+                            items: const {
+                              'all': 'Todas',
+                              'critical': 'Crítica',
+                              'high': 'Alta',
+                              'medium': 'Media',
+                              'low': 'Baja'
+                            },
+                            onChanged: (val) {
+                              setState(() {
+                                _priorityFilter = val;
+                                _currentPage = 1;
+                              });
+                            }),
+                        const SizedBox(width: 8),
+                        // Category Filter Pill
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => _showCategoryPicker(context),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant
+                                      .withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Categoría: ',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                                Text(
+                                  _getCategoryDisplayName(),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.keyboard_arrow_down,
+                                    size: 16,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          _getCategoryDisplayName(),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      ],
                     ),
                   ),
-                  const Expanded(
-                      flex: 1, child: SizedBox()), // Spacer to match layout
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          );
+        }));
+  }
+
+  Widget _buildFilterPill({
+    required String label,
+    required String value,
+    required Map<String, String> items,
+    required Function(String) onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final displayValue = items[value] ?? value;
+
+    return PopupMenuButton<String>(
+      initialValue: value,
+      onSelected: onChanged,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      itemBuilder: (context) {
+        return items.entries
+            .map((e) => PopupMenuItem(
+                  value: e.key,
+                  child: Text(e.value, style: const TextStyle(fontSize: 14)),
+                ))
+            .toList();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
         ),
-      );
-    });
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$label: ',
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            Text(
+              displayValue,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down,
+                size: 16, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showMobileFilters(SmartPurchaseListService service) {
@@ -1665,8 +1658,23 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               const SizedBox(height: 8),
             ],
 
-            _buildTableHeader(paginatedItems, filteredItems),
-            ...paginatedItems.map((item) => _buildItemRow(item, service)),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width:
+                    constraints.maxWidth > 1200 ? constraints.maxWidth : 1200,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment
+                      .stretch, // SAFE now because of bounded parent width
+                  children: [
+                    _buildTableHeader(paginatedItems, filteredItems),
+                    ...paginatedItems
+                        .map((item) => _buildItemRow(item, service)),
+                  ],
+                ),
+              ),
+            ),
 
             // Pagination controls at bottom
             if (totalItems > _itemsPerPage) ...[
@@ -1682,6 +1690,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     debugPrint('✅ [LIST BUILD] Completed in ${buildTime}ms');
 
     return widget;
+  }
+
+  List<Widget> _buildItemsListSlivers(SmartPurchaseListService service) {
+    return [
+      SliverToBoxAdapter(
+        child: _buildItemsList(service),
+      ),
+    ];
   }
 
   Widget _buildMobileItemCard(
@@ -1951,138 +1967,129 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final isReceivedView = _statusFilter == 'received';
     final hasMultiplePages = filteredItems.length > _itemsPerPage;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+
+    final headerTextStyle = TextStyle(
+      fontWeight: FontWeight.w600,
+      fontSize: 11,
+      letterSpacing: 0.5,
+      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+    );
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[850] : Colors.grey[200],
-        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+            width: 1,
+          ),
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          if (!isReceivedView) ...[
-            SizedBox(
-              width: 40,
-              child: Tooltip(
-                message: 'Seleccionar productos en esta página',
-                child: Checkbox(
-                  value: _selectAll,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectAll = value ?? false;
-                      if (_selectAll) {
-                        // Select only items on current page
-                        _selectedItems.addAll(
-                          paginatedItems.map((i) => i.id),
-                        );
-                      } else {
-                        _selectedItems.clear();
-                      }
-                    });
-                  },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            if (!isReceivedView) ...[
+              SizedBox(
+                width: 80, // Reduced from 120: Checkbox + Todos icon
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      child: Tooltip(
+                        message: 'Seleccionar productos en esta página',
+                        child: Checkbox(
+                          value: _selectAll,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectAll = value ?? false;
+                              if (_selectAll) {
+                                _selectedItems.addAll(
+                                  paginatedItems.map((i) => i.id),
+                                );
+                              } else {
+                                _selectedItems.clear();
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    if (hasMultiplePages)
+                      Tooltip(
+                        message:
+                            'Seleccionar todos los productos (todas las páginas)',
+                        child: IconButton(
+                          icon: const Icon(Icons.select_all, size: 18),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _selectedItems.clear();
+                              _selectedItems.addAll(
+                                filteredItems.map((i) => i.id),
+                              );
+                              _selectAll = true;
+                            });
+                          },
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            if (hasMultiplePages) ...[
-              Tooltip(
-                message: 'Seleccionar todos los productos (todas las páginas)',
-                child: TextButton.icon(
-                  icon: const Icon(Icons.select_all, size: 16),
-                  label: const Text('Todos', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _selectedItems.clear();
-                      _selectedItems.addAll(
-                        filteredItems.map((i) => i.id),
-                      );
-                      _selectAll = true;
-                    });
-                  },
-                ),
-              ),
+              SizedBox(
+                  width: 70, child: Text('Prioridad', style: headerTextStyle)),
+              const SizedBox(width: 16),
             ],
-            const SizedBox(
-                width: 50,
-                child: Text('Prioridad',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
+            Expanded(flex: 4, child: Text('Producto', style: headerTextStyle)),
             const SizedBox(width: 16),
+            Expanded(flex: 2, child: Text('Categoría', style: headerTextStyle)),
+            const SizedBox(width: 16),
+            Expanded(flex: 2, child: Text('Proveedor', style: headerTextStyle)),
+            const SizedBox(width: 16),
+            SizedBox(
+                width: 120,
+                child: Text('Alternativas', style: headerTextStyle)),
+            const SizedBox(width: 16),
+            if (isReceivedView) ...[
+              SizedBox(
+                  width: 120,
+                  child: Text('Stock Inicial', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 120,
+                  child: Text('Stock Final', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 100,
+                  child: Text('Diferencia', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 130,
+                  child: Text('N° Factura', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 120, child: Text('Creado el', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 120,
+                  child: Text('Recibido el', style: headerTextStyle)),
+            ] else ...[
+              SizedBox(width: 80, child: Text('Stock', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 80, child: Text('Cant. Sug.', style: headerTextStyle)),
+              const SizedBox(width: 16),
+              SizedBox(
+                  width: 100, child: Text('Estado', style: headerTextStyle)),
+            ],
+            const SizedBox(width: 16),
+            SizedBox(
+                width: 200, child: Text('Acciones', style: headerTextStyle)),
           ],
-          const Expanded(
-              flex: 2,
-              child: Text('Producto',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
-          const SizedBox(width: 16),
-          const Expanded(
-              child: Text('Categoría',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
-          const SizedBox(width: 16),
-          const Expanded(
-              child: Text('Proveedor',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
-          const SizedBox(width: 16),
-          const SizedBox(
-              width: 120,
-              child: Text('Alternativas',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
-          const SizedBox(width: 16),
-          if (isReceivedView) ...[
-            const SizedBox(
-                width: 120,
-                child: Text('Stock Inicial',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 120,
-                child: Text('Stock Final',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 100,
-                child: Text('Diferencia',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 130,
-                child: Text('N° Factura',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 120,
-                child: Text('Creado el',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 120,
-                child: Text('Recibido el',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-          ] else ...[
-            const SizedBox(
-                width: 80,
-                child: Text('Stock',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 80,
-                child: Text('Cant. Sug.',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 16),
-            const SizedBox(
-                width: 100,
-                child: Text('Estado',
-                    style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
-          const SizedBox(width: 16),
-          const SizedBox(
-              width: 120,
-              child: Text('Acciones',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
-        ],
+        ),
       ),
     );
   }
@@ -2092,380 +2099,464 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final isSelected = _selectedItems.contains(item.id);
     final isReceivedView = _statusFilter == 'received';
     final theme = Theme.of(context);
+    bool isHovered = false;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isSelected ? theme.primaryColor.withOpacity(0.05) : null,
-        border: Border(bottom: BorderSide(color: theme.dividerColor)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          // Checkbox - only for non-received view
-          if (!isReceivedView) ...[
-            SizedBox(
-              width: 40,
-              child: Checkbox(
-                value: isSelected,
-                onChanged: item.isPending
-                    ? (value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedItems.add(item.id);
-                          } else {
+    return StatefulBuilder(
+      builder: (context, setRowState) {
+        return MouseRegion(
+          onEnter: (_) => setRowState(() => isHovered = true),
+          onExit: (_) => setRowState(() => isHovered = false),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(
+                      color:
+                          theme.colorScheme.outlineVariant.withOpacity(0.2))),
+            ),
+            child: Material(
+              color: isSelected
+                  ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                  : Colors.transparent,
+              child: InkWell(
+                onTap: item.isPending
+                    ? () {
+                        this.setState(() {
+                          if (isSelected) {
                             _selectedItems.remove(item.id);
                             _selectAll = false;
+                          } else {
+                            _selectedItems.add(item.id);
                           }
                         });
                       }
                     : null,
-              ),
-            ),
-
-            // Priority Indicator - only for non-received view
-            SizedBox(
-              width: 50,
-              child: _buildPriorityBadge(item.priority, item.priorityLevel),
-            ),
-            const SizedBox(width: 16),
-          ],
-
-          // Product
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.productName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                if (item.productSku != null)
-                  Text(
-                    'SKU: ${item.productSku}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                if (!isReceivedView && item.isOutOfStock)
-                  const Text(
-                    'SIN STOCK',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // Category
-          Expanded(
-            flex: 1,
-            child: Tooltip(
-              message: item.categoryName ?? 'Sin categoría',
-              waitDuration: const Duration(milliseconds: 500),
-              child: Text(
-                _extractCategoryName(item.categoryName),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // Supplier
-          Expanded(
-            flex: 1,
-            child: Text(item.supplierName ?? 'Sin proveedor'),
-          ),
-          const SizedBox(width: 16),
-
-          // Alternatives
-          SizedBox(
-            width: 120,
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _findAlternatives(item),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Text('-', style: TextStyle(color: Colors.grey));
-                }
-
-                final alternatives = snapshot.data!;
-                final totalStock = alternatives.fold<int>(
-                  0,
-                  (sum, alt) => sum + (alt['stock'] as int),
-                );
-
-                return InkWell(
-                  onTap: () =>
-                      _showAlternativesDialog(context, item, alternatives),
+                hoverColor: theme.colorScheme.onSurface.withOpacity(0.02),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 16,
-                        color: totalStock > 10 ? Colors.green : Colors.orange,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          '${alternatives.length} (${totalStock}u)',
-                          style: TextStyle(
-                            color: Colors.blue[700],
-                            decoration: TextDecoration.underline,
-                            fontSize: 12,
+                      // Checkbox - only for non-received view
+                      if (!isReceivedView) ...[
+                        SizedBox(
+                          width: 80, // Match the Header Checkbox + Todos width
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 40,
+                              child: Checkbox(
+                                value: isSelected,
+                                onChanged: item.isPending
+                                    ? (value) {
+                                        setState(() {
+                                          if (value == true) {
+                                            _selectedItems.add(item.id);
+                                          } else {
+                                            _selectedItems.remove(item.id);
+                                            _selectAll = false;
+                                          }
+                                        });
+                                      }
+                                    : null,
+                              ),
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
+                        ),
+
+                        // Priority Indicator - only for non-received view
+                        SizedBox(
+                          width: 70,
+                          child: _buildPriorityBadge(
+                              item.priority, item.priorityLevel),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+
+                      // Product
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.productName,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                            if (item.productSku != null)
+                              Text(
+                                'SKU: ${item.productSku}',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                            if (!isReceivedView && item.isOutOfStock)
+                              const Text(
+                                'SIN STOCK',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Category
+                      Expanded(
+                        flex: 2,
+                        child: Tooltip(
+                          message: item.categoryName ?? 'Sin categoría',
+                          waitDuration: const Duration(milliseconds: 500),
+                          child: Text(
+                            _extractCategoryName(item.categoryName),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Supplier
+                      Expanded(
+                        flex: 2,
+                        child: Text(item.supplierName ?? 'Sin proveedor'),
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Alternatives
+                      SizedBox(
+                        width: 120,
+                        child: FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _findAlternatives(item),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return const Text('-',
+                                  style: TextStyle(color: Colors.grey));
+                            }
+
+                            final alternatives = snapshot.data!;
+                            final totalStock = alternatives.fold<int>(
+                              0,
+                              (sum, alt) => sum + (alt['stock'] as int),
+                            );
+
+                            return InkWell(
+                              onTap: () => _showAlternativesDialog(
+                                  context, item, alternatives),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    size: 16,
+                                    color: totalStock > 10
+                                        ? Colors.green
+                                        : Colors.orange,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      '${alternatives.length} (${totalStock}u)',
+                                      style: TextStyle(
+                                        color: Colors.blue[700],
+                                        decoration: TextDecoration.underline,
+                                        fontSize: 12,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+
+                      if (isReceivedView) ...[
+                        // Stock Inicial (when order was generated)
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            item.stockAtOrder?.toString() ?? 'N/A',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: item.stockAtOrder == null
+                                  ? Colors.grey
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Stock Final (stock at receipt time, not current stock)
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            item.stockAtReceipt != null
+                                ? item.stockAtReceipt.toString()
+                                : 'N/A',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: item.stockAtReceipt != null
+                                  ? Colors.green
+                                  : Colors.grey,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Diferencia (Stock Final - Stock Inicial)
+                        SizedBox(
+                          width: 100,
+                          child: Builder(
+                            builder: (context) {
+                              if (item.stockAtOrder == null ||
+                                  item.stockAtReceipt == null) {
+                                return const Text(
+                                  'N/A',
+                                  style: TextStyle(color: Colors.grey),
+                                );
+                              }
+
+                              final stockInitial = item.stockAtOrder!;
+                              final stockFinal = item.stockAtReceipt!;
+                              final difference = stockFinal - stockInitial;
+
+                              return Text(
+                                difference >= 0
+                                    ? '+$difference'
+                                    : difference.toString(),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: difference > 0
+                                      ? Colors.green
+                                      : (difference < 0
+                                          ? Colors.red
+                                          : Colors.grey),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // N° Factura (invoice number) - Synchronous cache lookup
+                        SizedBox(
+                          width: 130,
+                          child: Builder(
+                            builder: (context) {
+                              final invoiceNumber = _getInvoiceNumber(
+                                  item.linkedPurchaseInvoiceId);
+
+                              if (invoiceNumber == null) {
+                                return Text(
+                                  '-',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant),
+                                );
+                              }
+
+                              return InkWell(
+                                onTap: () => _navigateToInvoice(
+                                    item.linkedPurchaseInvoiceId!),
+                                child: Text(
+                                  invoiceNumber,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Creado el (invoice creation date) - Synchronous cache lookup
+                        SizedBox(
+                          width: 120,
+                          child: Builder(
+                            builder: (context) {
+                              final createdDate = _getInvoiceCreatedDate(
+                                  item.linkedPurchaseInvoiceId);
+
+                              if (createdDate == null) {
+                                return Text(
+                                  '-',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant),
+                                );
+                              }
+
+                              return Text(
+                                '${createdDate.day}/${createdDate.month}/${createdDate.year}',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Recibido el (received date)
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            item.receivedDate != null
+                                ? '${item.receivedDate!.day}/${item.receivedDate!.month}/${item.receivedDate!.year}'
+                                : '-',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                      ] else ...[
+                        // Stock - for non-received view
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            '${item.currentStock} / ${item.minStockLevel}',
+                            style: TextStyle(
+                              color: item.currentStock <= item.minStockLevel
+                                  ? Colors.red
+                                  : null,
+                              fontWeight:
+                                  item.currentStock <= item.minStockLevel
+                                      ? FontWeight.bold
+                                      : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Suggested Quantity
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            item.suggestedQuantity.toString(),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Status
+                        SizedBox(
+                          width: 100,
+                          child: _buildStatusChip(item.status),
+                        ),
+                      ],
+                      const SizedBox(width: 16),
+
+                      // Actions
+                      SizedBox(
+                        width:
+                            200, // Match the Header width to fit 4 IconButtons
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 150),
+                          opacity: isHovered || isSelected ? 1.0 : 0.2,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (item.isPending) ...[
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  onPressed: () =>
+                                      _showEditItemDialog(item, service),
+                                  tooltip: 'Editar',
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  hoverColor: theme.colorScheme.primary
+                                      .withOpacity(0.1),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.archive, size: 18),
+                                  onPressed: () =>
+                                      service.updateStatus(item.id, 'archived'),
+                                  tooltip: 'Archivar',
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  hoverColor: theme.colorScheme.primary
+                                      .withOpacity(0.1),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_off,
+                                      size: 18),
+                                  onPressed: () =>
+                                      service.markAsIgnored(item.id),
+                                  tooltip: 'Ignorar',
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  hoverColor: theme.colorScheme.primary
+                                      .withOpacity(0.1),
+                                ),
+                              ],
+                              IconButton(
+                                icon: const Icon(Icons.delete, size: 18),
+                                onPressed: () => _confirmDelete(item, service),
+                                tooltip: 'Eliminar',
+                                color: theme.colorScheme.error.withOpacity(0.7),
+                                hoverColor:
+                                    theme.colorScheme.error.withOpacity(0.1),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-
-          if (isReceivedView) ...[
-            // Stock Inicial (when order was generated)
-            SizedBox(
-              width: 120,
-              child: Text(
-                item.stockAtOrder?.toString() ?? 'N/A',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: item.stockAtOrder == null ? Colors.grey : null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Stock Final (stock at receipt time, not current stock)
-            SizedBox(
-              width: 120,
-              child: Text(
-                item.stockAtReceipt != null
-                    ? item.stockAtReceipt.toString()
-                    : 'N/A',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color:
-                      item.stockAtReceipt != null ? Colors.green : Colors.grey,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Diferencia (Stock Final - Stock Inicial)
-            SizedBox(
-              width: 100,
-              child: Builder(
-                builder: (context) {
-                  if (item.stockAtOrder == null ||
-                      item.stockAtReceipt == null) {
-                    return const Text(
-                      'N/A',
-                      style: TextStyle(color: Colors.grey),
-                    );
-                  }
-
-                  final stockInitial = item.stockAtOrder!;
-                  final stockFinal = item.stockAtReceipt!;
-                  final difference = stockFinal - stockInitial;
-
-                  return Text(
-                    difference >= 0 ? '+$difference' : difference.toString(),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: difference > 0
-                          ? Colors.green
-                          : (difference < 0 ? Colors.red : Colors.grey),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // N° Factura (invoice number) - Synchronous cache lookup
-            SizedBox(
-              width: 130,
-              child: Builder(
-                builder: (context) {
-                  final invoiceNumber =
-                      _getInvoiceNumber(item.linkedPurchaseInvoiceId);
-
-                  if (invoiceNumber == null) {
-                    return Text(
-                      '-',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    );
-                  }
-
-                  return InkWell(
-                    onTap: () =>
-                        _navigateToInvoice(item.linkedPurchaseInvoiceId!),
-                    child: Text(
-                      invoiceNumber,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w500,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Creado el (invoice creation date) - Synchronous cache lookup
-            SizedBox(
-              width: 120,
-              child: Builder(
-                builder: (context) {
-                  final createdDate =
-                      _getInvoiceCreatedDate(item.linkedPurchaseInvoiceId);
-
-                  if (createdDate == null) {
-                    return Text(
-                      '-',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    );
-                  }
-
-                  return Text(
-                    '${createdDate.day}/${createdDate.month}/${createdDate.year}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Recibido el (received date)
-            SizedBox(
-              width: 120,
-              child: Text(
-                item.receivedDate != null
-                    ? '${item.receivedDate!.day}/${item.receivedDate!.month}/${item.receivedDate!.year}'
-                    : '-',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ),
-          ] else ...[
-            // Stock - for non-received view
-            SizedBox(
-              width: 80,
-              child: Text(
-                '${item.currentStock} / ${item.minStockLevel}',
-                style: TextStyle(
-                  color: item.currentStock <= item.minStockLevel
-                      ? Colors.red
-                      : null,
-                  fontWeight: item.currentStock <= item.minStockLevel
-                      ? FontWeight.bold
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Suggested Quantity
-            SizedBox(
-              width: 80,
-              child: Text(
-                item.suggestedQuantity.toString(),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Status
-            SizedBox(
-              width: 100,
-              child: _buildStatusChip(item.status),
-            ),
-          ],
-          const SizedBox(width: 16),
-
-          // Actions
-          SizedBox(
-            width: 120,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (item.isPending) ...[
-                  IconButton(
-                    icon: const Icon(Icons.edit, size: 18),
-                    onPressed: () => _showEditItemDialog(item, service),
-                    tooltip: 'Editar',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.archive, size: 18),
-                    onPressed: () => service.updateStatus(item.id, 'archived'),
-                    tooltip: 'Archivar',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.visibility_off, size: 18),
-                    onPressed: () => service.markAsIgnored(item.id),
-                    tooltip: 'Ignorar',
-                  ),
-                ],
-                IconButton(
-                  icon: const Icon(Icons.delete, size: 18),
-                  onPressed: () => _confirmDelete(item, service),
-                  tooltip: 'Eliminar',
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildPriorityBadge(double priority, String level,
       {bool isCompact = false}) {
     Color color;
-    String label;
 
     switch (level) {
       case 'critical':
-        color = Colors.red;
-        label = priority.toStringAsFixed(0);
+        color = Colors.redAccent;
         break;
       case 'high':
-        color = Colors.orange;
-        label = priority.toStringAsFixed(0);
+        color = Colors.orangeAccent;
         break;
       case 'medium':
-        color = Colors.yellow[700]!;
-        label = priority.toStringAsFixed(0);
+        color = Colors.amber;
         break;
       default:
         color = Colors.green;
-        label = priority.toStringAsFixed(0);
     }
 
-    return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: isCompact ? 4 : 8, vertical: isCompact ? 2 : 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: isCompact ? 10 : 12,
-          fontWeight: FontWeight.bold,
-          color: color,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        textAlign: TextAlign.center,
-      ),
+        if (!isCompact) ...[
+          const SizedBox(width: 6),
+          Text(
+            priority.toStringAsFixed(0),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ]
+      ],
     );
   }
 
@@ -2495,12 +2586,24 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
         label = status;
     }
 
-    return Chip(
-      label: Text(label),
-      backgroundColor: color.withOpacity(0.1),
-      labelStyle: TextStyle(color: color, fontSize: 12),
-      padding: EdgeInsets.zero,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ],
     );
   }
 
@@ -3462,5 +3565,43 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     }
 
     return pageButtons;
+  }
+}
+
+class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+  final Color backgroundColor;
+
+  _StickyHeaderDelegate({
+    required this.child,
+    required this.height,
+    required this.backgroundColor,
+  });
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: backgroundColor,
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        height: height,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _StickyHeaderDelegate oldDelegate) {
+    return oldDelegate.height != height ||
+        oldDelegate.child != child ||
+        oldDelegate.backgroundColor != backgroundColor;
   }
 }

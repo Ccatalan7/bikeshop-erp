@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'ai_chat_bubble.dart';
+import 'package:provider/provider.dart';
+import '../../../shared/services/workspace_manager.dart';
 
 class GlobalAIFloatingButton extends StatelessWidget {
   const GlobalAIFloatingButton({super.key});
@@ -13,11 +14,7 @@ class GlobalAIFloatingButton extends StatelessWidget {
       color: theme.colorScheme.primary,
       tooltip: 'Asistente IA Global',
       onPressed: () {
-        showDialog(
-          context: context,
-          builder: (context) => const AIChatDialog(
-              jobs: []), // Passing empty jobs for now, will refactor later
-        );
+        context.read<WorkspaceManager>().toggleAIPanel();
       },
     );
   }

@@ -24,6 +24,7 @@ import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/utils/web_url.dart';
+import 'modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
@@ -690,16 +691,18 @@ class VinabikeApp extends StatelessWidget {
                         const WorkspaceTabBar(),
                         // Only this part needs to rebuild on workspace changes
                         Expanded(
-                          child:
-                              Selector<WorkspaceManager, (int, List<String>)>(
+                          child: Selector<WorkspaceManager,
+                              (int, List<String>, bool)>(
                             selector: (_, wm) => (
                               wm.activeIndex,
-                              wm.workspaces.map((w) => w.id).toList()
+                              wm.workspaces.map((w) => w.id).toList(),
+                              wm.isAIPanelOpen,
                             ),
                             builder: (context, data, _) {
                               final workspaceManager =
                                   context.read<WorkspaceManager>();
-                              return IndexedStack(
+
+                              final mainContent = IndexedStack(
                                 index: data.$1,
                                 sizing: StackFit.expand,
                                 children: workspaceManager.workspaces
@@ -710,6 +713,30 @@ class VinabikeApp extends StatelessWidget {
                                     authService: authService,
                                   );
                                 }).toList(),
+                              );
+
+                              if (!data.$3) {
+                                return mainContent;
+                              }
+
+                              return Row(
+                                children: [
+                                  Expanded(child: mainContent),
+                                  // Right Panel
+                                  Container(
+                                    width: 400,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .scaffoldBackgroundColor,
+                                      border: Border(
+                                        left: BorderSide(
+                                            color:
+                                                Theme.of(context).dividerColor),
+                                      ),
+                                    ),
+                                    child: const AIChatPanel(jobs: []),
+                                  ),
+                                ],
                               );
                             },
                           ),
@@ -762,6 +789,10 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
       widget.authService,
       initialLocationOverride: widget.workspace.currentRoute,
     );
+
+    // Save the router reference to the workspace object so external UI
+    // (like global floating buttons) can trigger navigation on the active tab
+    widget.workspace.router = _router;
 
     // Listen for notification taps to navigate to specific chats
     // Only handle if this is the active workspace

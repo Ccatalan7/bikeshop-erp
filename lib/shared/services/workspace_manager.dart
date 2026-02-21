@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/web_url.dart';
 
+import 'package:go_router/go_router.dart';
+
 /// Maps route paths to human-readable titles for workspace tabs
 String getRouteTitle(String path) {
   // Remove query parameters and clean the path
@@ -175,6 +177,7 @@ class Workspace {
   final String initialRoute;
   String currentRoute; // Track current route for title updates
   final GlobalKey<NavigatorState> navigatorKey;
+  GoRouter? router; // Track actual router instance for external navigation
 
   Workspace({
     required this.id,
@@ -200,12 +203,14 @@ class WorkspaceManager extends ChangeNotifier {
   final List<Workspace> _workspaces = [];
   int _activeIndex = 0;
   bool _isInitialized = false;
+  bool _isAIPanelOpen = false;
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   int get activeIndex => _activeIndex;
   Workspace? get activeWorkspace =>
       _workspaces.isEmpty ? null : _workspaces[_activeIndex];
   bool get isInitialized => _isInitialized;
+  bool get isAIPanelOpen => _isAIPanelOpen;
 
   WorkspaceManager() {
     debugPrint(
@@ -336,6 +341,29 @@ class WorkspaceManager extends ChangeNotifier {
       _workspaces[index].title = newTitle;
       notifyListeners();
     }
+  }
+
+  /// Navigate the currently active workspace to a new route
+  /// This is essential for external UI elements (like global FABs)
+  /// that exist outside the individual GoRouter subtrees.
+  void navigateActiveWorkspace(String route) {
+    if (_workspaces.isEmpty) return;
+
+    final activeWorkspace = _workspaces[_activeIndex];
+    if (activeWorkspace.router != null) {
+      debugPrint(
+          '🧭 [WorkspaceManager] External navigation triggered to: $route');
+      activeWorkspace.router!.go(route);
+    } else {
+      debugPrint(
+          '⚠️ [WorkspaceManager] Cannot navigate: active workspace router is null');
+    }
+  }
+
+  /// Toggles the AI Assistant right panel visibility
+  void toggleAIPanel() {
+    _isAIPanelOpen = !_isAIPanelOpen;
+    notifyListeners();
   }
 
   /// Update the active workspace's title based on current route
