@@ -70,3 +70,6 @@ flutter/
 # Environment variables
 .env
 .env.*
+!.env.example
+!assets/.env.example
+assets/.env
