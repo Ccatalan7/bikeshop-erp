@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 
 class InventoryService extends ChangeNotifier {
@@ -248,6 +250,39 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
+  /// Semantic vector search via pgvector RPC.
+  /// Returns raw maps with: name, sku, brand, price, inventory_qty, warehouse_location, similarity.
+  Future<List<Map<String, dynamic>>> searchProductsSemantic(List<double> vector,
+      {double threshold = 0.4, int limit = 10}) async {
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant found');
+
+      debugPrint('🧠 [InventoryService] Calling match_products_semantic RPC...');
+
+      final dynamic response =
+          await _db.rpc('match_products_semantic', params: {
+        'query_embedding': vector.toString(),
+        'match_threshold': threshold,
+        'match_count': limit,
+        'match_tenant_id': tenantId,
+      });
+
+      if (response == null) return [];
+
+      final results = (response as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+
+      debugPrint(
+          '🧠 [InventoryService] Semantic search returned ${results.length} results');
+      return results;
+    } catch (e) {
+      debugPrint('❌ [InventoryService] Error in semantic search RPC: $e');
+      rethrow;
+    }
+  }
+
   Future<Product?> getProductById(String id) async {
     try {
       final data = await _db.selectById('products', id);
@@ -278,6 +313,20 @@ class InventoryService extends ChangeNotifier {
 
       // Add tenant_id to product data
       final productData = _tenantService.addTenantId(product.toJson());
+
+      // Generate embedding BEFORE insert
+      try {
+        final aiService = AIAssistantService();
+        final embeddingContent =
+            '${product.name} ${product.brand ?? ""} ${product.categoryName ?? ""} ${product.description ?? ""}';
+        final vector = await aiService.generateEmbedding(embeddingContent);
+        if (vector != null) {
+          productData['embedding'] = vector.toString();
+        }
+      } catch (e) {
+        debugPrint('⚠️ [InventoryService] Failed to generate embedding: $e');
+      }
+
       final data = await _db.insert('products', productData);
 
       // Create initial stock movement if inventory > 0
@@ -317,6 +366,21 @@ class InventoryService extends ChangeNotifier {
         throw Exception('ID de producto inválido');
       }
 
+      final productData = updatedProduct.toJson();
+
+      // Generate/Refresh embedding on update
+      try {
+        final aiService = AIAssistantService();
+        final embeddingContent =
+            '${product.name} ${product.brand ?? ""} ${product.categoryName ?? ""} ${product.description ?? ""}';
+        final vector = await aiService.generateEmbedding(embeddingContent);
+        if (vector != null) {
+          productData['embedding'] = vector.toString();
+        }
+      } catch (e) {
+        debugPrint('⚠️ [InventoryService] Failed to update embedding: $e');
+      }
+
       // Check if stock quantity changed - if so, create stock_adjustments record
       final existingProduct = await getProductById(product.id!);
       if (existingProduct != null &&
@@ -343,8 +407,7 @@ class InventoryService extends ChangeNotifier {
         }
       }
 
-      final data =
-          await _db.update('products', product.id!, updatedProduct.toJson());
+      final data = await _db.update('products', product.id!, productData);
       invalidateProductsCache();
       notifyListeners();
       return Product.fromJson(data);
@@ -675,6 +738,121 @@ class InventoryService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) print('Error posting purchase accounting entry: $e');
       // Don't rethrow as this is supplementary
+    }
+  }
+
+  bool _embeddingBackfillDone = false;
+
+  /// Backfills embeddings for all products that don't have one yet.
+  /// Runs in the background and does not block the UI. Only runs once per session.
+  /// Skips products that already have embeddings and retries on rate limit errors.
+  Future<void> backfillEmbeddings() async {
+    if (_embeddingBackfillDone) return;
+    _embeddingBackfillDone = true;
+    try {
+      final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+      if (apiKey.isEmpty) {
+        debugPrint('⚠️ [Embedding] No API key, skipping backfill');
+        return;
+      }
+
+      // Fetch only product IDs that are missing embeddings via raw RPC
+      final List<dynamic> missingRows = await _db.rpc(
+        'get_products_missing_embeddings',
+        params: {'batch_limit': 1500},
+      );
+
+      if (missingRows.isEmpty) {
+        debugPrint('✅ [Embedding] All products already have embeddings');
+        return;
+      }
+
+      final missingIds =
+          missingRows.map((r) => (r as Map)['id'].toString()).toSet();
+
+      // Get full product data for those IDs
+      final allProducts = await getProducts(forceRefresh: true);
+      final productsToProcess =
+          allProducts.where((p) => p.id != null && missingIds.contains(p.id)).toList();
+
+      debugPrint(
+          '🧠 [Embedding] Backfilling ${productsToProcess.length} products missing embeddings...');
+
+      int generated = 0;
+      int errors = 0;
+
+      for (final product in productsToProcess) {
+        try {
+          // Try up to 2 times per product (retry once on rate limit)
+          List<double>? embedding;
+          for (int attempt = 0; attempt < 2; attempt++) {
+            embedding = await _generateProductEmbedding(product);
+            if (embedding != null) break;
+
+            // Wait longer on retry (likely rate limited)
+            if (attempt == 0) {
+              debugPrint(
+                  '⏳ [Embedding] Rate limited, waiting 5s before retry...');
+              await Future.delayed(const Duration(seconds: 5));
+            }
+          }
+
+          if (embedding == null) {
+            errors++;
+            continue;
+          }
+
+          await _db.update(
+              'products',
+              product.id!,
+              {
+                'embedding': embedding.toString(),
+              },
+              applyTimestamps: false);
+          generated++;
+        } catch (e) {
+          errors++;
+          debugPrint(
+              '⚠️ [Embedding] Skipping product ${product.id} (${product.name}): $e');
+        }
+
+        // Rate limit: pause every 5 products
+        if (generated % 5 == 0 && generated > 0) {
+          debugPrint(
+              '🧠 [Embedding] Progress: $generated/${productsToProcess.length} (errors: $errors)');
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+
+      debugPrint(
+          '✅ [Embedding] Backfill complete: $generated generated, $errors errors out of ${productsToProcess.length}');
+    } catch (e) {
+      debugPrint('⚠️ [Embedding] Backfill failed: $e');
+      // Allow retry next session
+      _embeddingBackfillDone = false;
+    }
+  }
+
+  /// Generates a vector embedding for a product using the shared AIAssistantService.
+  /// Returns null if the call fails (non-blocking).
+  Future<List<double>?> _generateProductEmbedding(Product product) async {
+    try {
+      final text =
+          '${product.name} ${product.brand ?? ''} ${product.categoryName ?? ''} ${product.description ?? ''}'
+              .trim();
+
+      if (text.isEmpty) return null;
+
+      final aiService = AIAssistantService();
+      final vector = await aiService.generateEmbedding(text);
+      if (vector != null) {
+        debugPrint(
+            '✅ [Embedding] Generated ${vector.length}-dim vector for "${product.name}"');
+      }
+      return vector;
+    } catch (e) {
+      debugPrint('⚠️ [Embedding] Failed to generate embedding: $e');
+      return null;
     }
   }
 

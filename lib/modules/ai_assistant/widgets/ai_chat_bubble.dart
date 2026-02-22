@@ -44,6 +44,17 @@ class _AIChatPanelState extends State<AIChatPanel> {
     _aiService = AIAssistantService();
     _aiService.initialize();
 
+    // Backfill product embeddings in the background (only generates missing ones)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        if (mounted) {
+          context.read<InventoryService>().backfillEmbeddings();
+        }
+      } catch (e) {
+        debugPrint('⚠️ [AIChatPanel] Backfill trigger failed: $e');
+      }
+    });
+
     // Add welcome message
     _messages.add({
       'role': 'assistant',
