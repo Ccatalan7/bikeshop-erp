@@ -59,7 +59,12 @@ class InventoryService extends ChangeNotifier {
   final _externalSearchController = StreamController<String>.broadcast();
   Stream<String> get externalSearchStream => _externalSearchController.stream;
 
-  void applyExternalSearch(String term) {
+  /// SKUs matched by the AI assistant's semantic+keyword search.
+  /// When set, the product list filters by these SKUs instead of keyword search.
+  List<String>? aiMatchedSkus;
+
+  void applyExternalSearch(String term, {List<String>? matchedSkus}) {
+    aiMatchedSkus = matchedSkus;
     saveListState(searchTerm: term);
     _externalSearchController.add(term);
   }
@@ -196,10 +201,17 @@ class InventoryService extends ChangeNotifier {
 
           final searchableText = '$name $sku $brand $category $model $tags';
 
-          // Check if ALL keywords exist in the searchable text
+          // Check if ALL keywords exist in the searchable text.
+          // Numeric tokens use word-boundary matching to avoid "29" matching "295".
           bool matchesAll = true;
           for (final term in searchTerms) {
-            if (!searchableText.contains(term)) {
+            if (RegExp(r'^\d+$').hasMatch(term)) {
+              if (!RegExp('(?:^|\\s|[^0-9])$term(?:\$|\\s|[^0-9])')
+                  .hasMatch(searchableText)) {
+                matchesAll = false;
+                break;
+              }
+            } else if (!searchableText.contains(term)) {
               matchesAll = false;
               break;
             }
@@ -253,7 +265,7 @@ class InventoryService extends ChangeNotifier {
   /// Semantic vector search via pgvector RPC.
   /// Returns raw maps with: name, sku, brand, price, inventory_qty, warehouse_location, similarity.
   Future<List<Map<String, dynamic>>> searchProductsSemantic(List<double> vector,
-      {double threshold = 0.4, int limit = 10}) async {
+      {double threshold = 0.65, int limit = 10}) async {
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) throw Exception('No tenant found');

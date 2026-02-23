@@ -24,6 +24,9 @@ class AIAssistantService extends ChangeNotifier {
   // Tools definition - NOT late final, so it can be reassigned safely
   List<Tool> _tools = [];
 
+  /// SKUs from the last searchStock call, used to sync with inventory page.
+  List<String>? _lastSearchSkus;
+
   bool get isLoading => _isLoading;
   List<Content> get history => _history;
 
@@ -49,13 +52,15 @@ class AIAssistantService extends ChangeNotifier {
       Tool(functionDeclarations: [
         FunctionDeclaration(
           'searchStock',
-          'Search for products in the inventory using semantic search. Understands natural language concepts and meaning, not just exact keywords.',
+          'Search for products in the inventory using semantic AI search. Returns product name, SKU, brand, category, price, stock quantity, and location.',
           Schema(
             SchemaType.object,
             properties: {
               'query': Schema(SchemaType.string,
                   description:
-                      'A natural language search query. Can be descriptive concepts (e.g., "ruedas para BMX", "protección para ciclista") or technical terms (e.g., "HG200", "cassette 7v"). The system uses AI vector matching to find semantically similar products.'),
+                      'Search query. Use the specific product type in Spanish as it appears in product names '
+                      '(e.g., "llanta 29" not "aro 29", "camara 29" not "tubo 29"). '
+                      'Include size and specs when the user mentions them.'),
             },
             requiredProperties: ['query'],
           ),
@@ -208,7 +213,7 @@ class AIAssistantService extends ChangeNotifier {
       final List<Map<String, dynamic>> semanticResults = [];
       final List<Map<String, dynamic>> keywordResults = [];
 
-      // 1. Semantic search
+      // 1. Semantic search (high threshold = only relevant results)
       try {
         final vector = await generateEmbedding(query);
         if (vector != null) {
@@ -228,6 +233,7 @@ class AIAssistantService extends ChangeNotifier {
               'name': p.name,
               'sku': p.sku,
               'brand': p.brand ?? '',
+              'category_name': p.categoryName ?? '',
               'price': p.price,
               'inventory_qty': p.inventoryQty,
               'warehouse_location': p.warehouseLocation ?? 'Unknown',
@@ -241,7 +247,7 @@ class AIAssistantService extends ChangeNotifier {
 
       // 3. Merge results: deduplicate by SKU, prefer semantic ordering
       final seen = <String>{};
-      final merged = <Map<String, dynamic>>[];
+      var merged = <Map<String, dynamic>>[];
 
       for (final r in [...semanticResults, ...keywordResults]) {
         final sku = (r['sku'] ?? '').toString();
@@ -250,7 +256,38 @@ class AIAssistantService extends ChangeNotifier {
         merged.add(r);
       }
 
+      // 4. Post-filter: ONLY filter by numeric tokens (sizes).
+      // Embeddings can't distinguish 29" from 27.5" — all bike wheel parts
+      // cluster together. But text-based filtering (llanta vs camara) is
+      // left to Gemini, which understands "32h" = "32 hoyos" = "32 agujeros".
+      if (merged.isNotEmpty) {
+        final tokens = query.toLowerCase().split(RegExp(r'\s+'));
+        final numericTokens = tokens
+            .where((t) => RegExp(r'^\d+\.?\d*$').hasMatch(t))
+            .toList();
+
+        if (numericTokens.isNotEmpty) {
+          final filtered = merged.where((r) {
+            final name = (r['name'] ?? '').toString().toLowerCase();
+            for (final num in numericTokens) {
+              // Number must appear as standalone (29 ≠ 295)
+              final pattern =
+                  RegExp('(?:^|[^0-9])${RegExp.escape(num)}(?:\$|[^0-9])');
+              if (!pattern.hasMatch(name)) return false;
+            }
+            return true;
+          }).toList();
+
+          debugPrint(
+              '🎯 [AI] Size filter: ${merged.length} → ${filtered.length} results');
+          if (filtered.isNotEmpty) {
+            merged = filtered;
+          }
+        }
+      }
+
       if (merged.isEmpty) {
+        _lastSearchSkus = null;
         return {
           'result': 'No products found for "$query".'
         };
@@ -259,12 +296,19 @@ class AIAssistantService extends ChangeNotifier {
       debugPrint(
           '✅ [AI] Combined: ${merged.length} unique results for "$query"');
 
+      // Save matched SKUs so navigateToInventory can pass them to the list
+      _lastSearchSkus = merged
+          .map((r) => (r['sku'] ?? '').toString())
+          .where((sku) => sku.isNotEmpty)
+          .toList();
+
       final summary = merged
           .take(15)
           .map((r) => {
                 'name': r['name'] ?? 'Unknown',
                 'sku': r['sku'] ?? '',
                 'brand': r['brand'] ?? '',
+                'category': r['category_name'] ?? '',
                 'price': r['price'] ?? 0,
                 'stock': r['inventory_qty'] ?? 0,
                 'location': r['warehouse_location'] ?? 'Unknown',
@@ -319,7 +363,8 @@ class AIAssistantService extends ChangeNotifier {
 
     // Set the saved search term AND signal any active listeners
     if (inventoryService != null) {
-      inventoryService.applyExternalSearch(searchTerm);
+      inventoryService.applyExternalSearch(searchTerm,
+          matchedSkus: _lastSearchSkus);
     }
 
     // Trigger navigation (closes the dialog and navigates)
@@ -369,22 +414,16 @@ The `searchStock` tool uses AI-powered semantic vector matching. You can search 
 
 TOOL STRATEGY:
 1. ALWAYS use `searchStock` first for ANY product question. It uses semantic AI search.
-   - CRITICAL: You MUST review and FILTER the results before presenting them. The semantic search may return loosely related products.
-   - For example, if the user asks for "llantas 29 32h" (29" rims with 32 holes), only present products that are actually RIMS ("llanta"), not tubes ("camara"), tires ("neumatico"), spokes ("rayos"), hubs ("maza"), or forks ("horquilla").
-   - Only present products that genuinely match what the user asked for. If none of the semantic results are relevant, say so.
+   - Each result includes: name, SKU, brand, category, price, stock (quantity), and location.
+   - YOU are responsible for analyzing results and only presenting products that match what the user asked.
+   - Use the "category" field to verify product type. Use "stock" to check availability.
+   - If the user asks for "llantas 29", only show products that are actually 29" rims — not tubes, tires, spokes, or other sizes.
 
-BIKE NOMENCLATURE — IMPORTANT EQUIVALENCES:
-When filtering results, understand that bike parts use many equivalent abbreviations:
-- "32H" = "32h" = "32 hoyos" = "32 agujeros" = "32 holes" (all mean 32 spoke holes)
-- "36H" = "36 hoyos", "28H" = "28 hoyos", etc.
-- "7v" = "7 velocidades" = "7 speed"
-- "V/A" = "V.Auto" = "Válvula Auto" = "Schrader valve"
-- "V/F" = "V.Francesa" = "Válvula Francesa" = "Presta valve"
-- "MTB" = "Mountain Bike" = bikes with 26", 27.5", or 29" wheels
-- "Doble Pared" = "Double Wall" (rim construction type)
-Always treat these as equivalent when deciding if a product matches the user's query.
+2. STOCK & FOLLOW-UP AWARENESS:
+   - Each result has a "stock" field. When the user asks "en stock" or "disponible", check the stock field.
+   - When the user refines a previous query (adds "en stock", "32h", a brand, etc.), FIRST check if you can answer from results you already have. Don't re-search if you already have the data.
 
-2. AFTER presenting results, ALWAYS use `navigateToInventory` to open the inventory screen.
+3. AFTER presenting results, ALWAYS use `navigateToInventory` to open the inventory screen.
    - CRITICAL: The inventory screen uses KEYWORD text matching, NOT semantic search.
    - You MUST simplify and translate the search term for navigation:
      - "llantas mtb" → navigate with "llanta"

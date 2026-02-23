@@ -172,6 +172,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   StreamSubscription? _scanSubscription;
   StreamSubscription<String>? _externalSearchSub;
+  List<String>? _aiMatchedSkus; // SKUs from AI search, used instead of keyword search
   bool _shouldRestoreState = false; // Local flag for this page instance
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
@@ -209,6 +210,7 @@ class _ProductListPageState extends State<ProductListPage> {
         setState(() {
           _searchTerm = term;
           _searchController.text = term;
+          _aiMatchedSkus = _inventoryService.aiMatchedSkus;
         });
         _applyFilters(resetPagination: true);
       }
@@ -345,6 +347,7 @@ class _ProductListPageState extends State<ProductListPage> {
     // Restore state from service
     _searchTerm = _inventoryService.savedSearchTerm ?? '';
     _searchController.text = _searchTerm;
+    _aiMatchedSkus = _inventoryService.aiMatchedSkus;
     _currentPage = _inventoryService.savedCurrentPage;
     _savedScrollOffset = _inventoryService.savedScrollOffset > 0
         ? _inventoryService.savedScrollOffset
@@ -673,8 +676,15 @@ class _ProductListPageState extends State<ProductListPage> {
       _normalizeText(_resolveCategoryName(product) ?? ''),
     ].join(' ');
 
-    // ALL tokens must be found in searchable text
-    return tokens.every((token) => searchableText.contains(token));
+    // ALL tokens must be found in searchable text.
+    // Numeric tokens use word-boundary matching to avoid "29" matching "295".
+    return tokens.every((token) {
+      if (RegExp(r'^\d+$').hasMatch(token)) {
+        return RegExp('(?:^|\\s|[^0-9])$token(?:\$|\\s|[^0-9])')
+            .hasMatch(searchableText);
+      }
+      return searchableText.contains(token);
+    });
   }
 
   void _applyFilters({bool resetPagination = true}) {
@@ -742,8 +752,11 @@ class _ProductListPageState extends State<ProductListPage> {
       filtered = filtered.where((product) => product.isActive).toList();
     }
 
-    // 5. Search
-    if (_searchTerm.isNotEmpty) {
+    // 5. Search — use AI-matched SKUs if available, otherwise keyword search
+    if (_aiMatchedSkus != null && _aiMatchedSkus!.isNotEmpty) {
+      final skuSet = _aiMatchedSkus!.toSet();
+      filtered = filtered.where((product) => skuSet.contains(product.sku)).toList();
+    } else if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((product) {
         return _matchesTokenSearch(_searchTerm, product);
       }).toList();
@@ -799,6 +812,7 @@ class _ProductListPageState extends State<ProductListPage> {
   void _onSearchChanged(String value) {
     setState(() {
       _searchTerm = value.trim();
+      _aiMatchedSkus = null; // Clear AI results when user types manually
       _applyFilters();
     });
   }
