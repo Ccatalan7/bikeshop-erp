@@ -951,29 +951,36 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
-  // Tax calculations for PURCHASES (tax is ADDED, not included)
-  // Opposite to sales where tax is included in price
+  // Tax calculations for PURCHASES
+  // If taxIncluded: The entered prices ALREADY INCLUDE TAX.
+  //                 Subtotal = Gross Total.
+  //                 Net = Subtotal / 1.19
+  //                 IVA = Subtotal - Net
+  //                 Total = Subtotal
+  // If noTax:       The entered prices DO NOT INCLUDE TAX, and no tax applies.
+  //                 Subtotal = Net Amount. Total = Net Amount.
+
   double get _netAmount {
-    return _subtotal; // Net is always the subtotal for purchases
+    if (_taxTreatment == TaxTreatment.taxIncluded) {
+      return _subtotal / 1.19; // Extract net from the gross subtotal
+    } else {
+      return _subtotal; // No tax, net is the subtotal
+    }
   }
 
   double get _iva {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
-      return _subtotal * 0.19; // Add 19% tax on (possibly discounted) subtotal
+      return _subtotal - _netAmount; // Tax is the difference
     } else {
       return 0; // No tax
     }
   }
 
   double get _total {
-    double t;
-    if (_taxTreatment == TaxTreatment.taxIncluded) {
-      t = _subtotal + _iva;
-    } else {
-      t = _subtotal;
-    }
+    double t = _subtotal; // Subtotal represents the full amount in both cases
 
     // If discount is AFTER tax, subtract it from the total here
+    // Note: If discount is BEFORE tax, it's already handled in _subtotal getter
     if (!_isDiscountBeforeTax) {
       t -= _discountAmount;
     }
@@ -3071,14 +3078,21 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Build rows dynamically based on timing
     final List<Widget> rows = [];
 
+    // Calculate display subtotal to guarantee sum logic makes sense
+    double displaySubtotal = _taxTreatment == TaxTreatment.taxIncluded
+        ? _subtotalBeforeDiscount / 1.19
+        : _subtotalBeforeDiscount;
+
     // 1. Base Subtotal
     rows.add(_buildSummaryRow(
         // If discount is Pre-Tax, this is Bruto (before discount).
         // If discount is Post-Tax, this is *already* Net (because discount applies later).
         (_isDiscountBeforeTax && discountAmt > 0)
             ? 'Subtotal (Bruto)'
-            : 'Subtotal (Neto)',
-        ChileanUtils.formatCurrency(_subtotalBeforeDiscount),
+            : (_taxTreatment == TaxTreatment.taxIncluded
+                ? 'Subtotal (Neto)'
+                : 'Subtotal'),
+        ChileanUtils.formatCurrency(displaySubtotal),
         textStyle,
         theme));
 
@@ -3091,10 +3105,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             _buildDiscountRow(theme, textStyle, discountAmt, discountAmt > 0));
 
         // Show Net after discount
+        double displayNet = _taxTreatment == TaxTreatment.taxIncluded
+            ? _subtotal / 1.19
+            : _subtotal;
         rows.add(const SizedBox(height: 8));
         rows.add(_buildSummaryRow(
             'Neto con Descuento',
-            ChileanUtils.formatCurrency(_subtotal),
+            ChileanUtils.formatCurrency(displayNet),
             textStyle?.copyWith(fontWeight: FontWeight.w700),
             theme));
       } else {

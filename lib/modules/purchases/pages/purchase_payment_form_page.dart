@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../shared/utils/chilean_utils.dart';
-import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/main_layout.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 
-/// Payment Form Page for Purchase Invoices
-/// Handles payment registration for both Standard and Prepayment models
-/// Uses dynamic payment methods from database
 class PurchasePaymentFormPage extends StatefulWidget {
   final String invoiceId;
 
@@ -29,23 +28,31 @@ class PurchasePaymentFormPage extends StatefulWidget {
 
 class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _referenceController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _paymentMethodService = PaymentMethodService();
+  late final TextEditingController _amountController;
+  final TextEditingController _referenceController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
 
   PaymentMethod? _selectedPaymentMethod;
   DateTime _paymentDate = DateTime.now();
   bool _isSaving = false;
   bool _isLoading = true;
+  bool _isLoadingMethods = true;
   PurchaseInvoice? _invoice;
 
-  List<PaymentMethod> _paymentMethods = [];
-  bool _isLoadingPaymentMethods = true;
+  /// Effective balance: guards against cases where the DB trigger hasn't updated yet or was negative
+  double get _effectiveBalance {
+    if (_invoice == null) return 0;
+    final b = _invoice!.balance;
+    if (b > 0) return b;
+    double calculated = (_invoice!.total - _invoice!.paidAmount);
+    if (calculated < 0) calculated = 0;
+    return calculated;
+  }
 
   @override
   void initState() {
     super.initState();
+    _amountController = TextEditingController();
     _loadInvoice();
     _loadPaymentMethods();
   }
@@ -53,15 +60,15 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   Future<void> _loadInvoice() async {
     try {
       final purchaseService = context.read<PurchaseService>();
-      final invoices = await purchaseService.getPurchaseInvoices(forceRefresh: true);
+      final invoices =
+          await purchaseService.getPurchaseInvoices(forceRefresh: true);
       final invoice = invoices.firstWhere((inv) => inv.id == widget.invoiceId);
-      
+
       if (mounted) {
         setState(() {
           _invoice = invoice;
           _isLoading = false;
-          // Pre-fill amount with invoice balance
-          _amountController.text = invoice.balance.toStringAsFixed(0);
+          _amountController.text = _effectiveBalance.toStringAsFixed(0);
         });
       }
     } catch (e) {
@@ -77,6 +84,19 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     }
   }
 
+  Future<void> _loadPaymentMethods() async {
+    final paymentMethodService = context.read<PaymentMethodService>();
+    await paymentMethodService.loadPaymentMethods();
+    if (mounted) {
+      setState(() {
+        _isLoadingMethods = false;
+        if (paymentMethodService.paymentMethods.isNotEmpty) {
+          _selectedPaymentMethod = paymentMethodService.paymentMethods.first;
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -85,178 +105,109 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
     super.dispose();
   }
 
-  Future<void> _loadPaymentMethods() async {
-    try {
-      await _paymentMethodService.loadPaymentMethods();
-      if (mounted) {
-        setState(() {
-          _paymentMethods = _paymentMethodService.paymentMethods;
-          // Select first payment method by default (usually "Efectivo")
-          if (_paymentMethods.isNotEmpty) {
-            _selectedPaymentMethod = _paymentMethods.first;
-          }
-          _isLoadingPaymentMethods = false;
-        });
-        
-        // Debug: Print loaded payment methods
-        debugPrint('✅ Loaded ${_paymentMethods.length} payment methods');
-        for (var method in _paymentMethods) {
-          debugPrint('  - ${method.name} (${method.id})');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingPaymentMethods = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading payment methods: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        debugPrint('❌ Error loading payment methods: $e');
-      }
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _paymentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() => _paymentDate = picked);
     }
   }
 
-  Future<void> _savePayment() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _returnToInvoice({bool refresh = false}) {
+    if (refresh) {
+      GoRouter.of(context).pop(true);
+    } else {
+      GoRouter.of(context).pop();
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     if (_selectedPaymentMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debe seleccionar un método de pago'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Selecciona un método de pago.')),
       );
       return;
     }
 
-    // Validate reference if required
-    if (_selectedPaymentMethod!.requiresReference &&
-        _referenceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              '${_selectedPaymentMethod!.name} requiere número de referencia'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final amount = double.tryParse(
-        _amountController.text.replaceAll('.', '').replaceAll(',', '.'));
+    final rawAmount =
+        _amountController.text.trim().replaceAll('.', '').replaceAll(',', '.');
+    final amount = double.tryParse(rawAmount);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingrese un monto válido'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Ingresa un monto válido.')),
       );
       return;
     }
 
-    if (amount > _invoice!.balance) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Monto mayor al saldo'),
-          content: Text(
-            'El monto ingresado (${ChileanUtils.formatCurrency(amount)}) '
-            'es mayor al saldo de la factura (${ChileanUtils.formatCurrency(_invoice!.balance)}).\n\n'
-            '¿Desea continuar de todas formas?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Continuar'),
-            ),
-          ],
-        ),
+    final balance = _effectiveBalance;
+    final amountInt = amount.round();
+    final balanceInt = balance.round();
+    if (amountInt - balanceInt > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'El pago no puede exceder el saldo (${ChileanUtils.formatCurrency(balance)})')),
       );
+      return;
+    }
 
-      if (confirm != true) return;
+    final effectiveAmount = amount > balance ? balance : amount;
+
+    final purchaseService = context.read<PurchaseService>();
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Error: No se pudo obtener el tenant ID')),
+        );
+      }
+      return;
     }
 
     setState(() => _isSaving = true);
-
     try {
-      // Get current user's tenant_id
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('Usuario no autenticado');
-      }
-
-      // Get tenant_id from user_profiles
-      final profileResponse = await Supabase.instance.client
-          .from('user_profiles')
-          .select('tenant_id')
-          .eq('user_id', userId)
-          .single();
-
-      final tenantId = profileResponse['tenant_id'] as String?;
-      if (tenantId == null) {
-        throw Exception('No se encontró tenant_id para el usuario');
-      }
-
-      // Create payment record - use correct column names from core_schema.sql
-      final paymentData = {
-        'tenant_id': tenantId, // ⚠️ CRITICAL: Required for RLS policy
-        'invoice_id':
-            widget.invoiceId, // Correct column name (not purchase_invoice_id)
-        'date': _paymentDate.toIso8601String(),
-        'amount': amount,
-        'payment_method_id': _selectedPaymentMethod!.id, // UUID foreign key
-        'reference': _referenceController.text.trim().isEmpty
+      final payment = PurchasePayment(
+        tenantId: tenantId,
+        invoiceId: widget.invoiceId,
+        paymentMethodId: _selectedPaymentMethod!.id,
+        amount: effectiveAmount,
+        date: _paymentDate,
+        reference: _referenceController.text.trim().isEmpty
             ? null
             : _referenceController.text.trim(),
-        'notes': _notesController.text.trim().isEmpty
+        notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
-      };
+      );
 
-      print('=== ATTEMPTING TO INSERT PAYMENT ===');
-      print('Payment data: $paymentData');
-      print('===================================');
-
-      await Supabase.instance.client
-          .from('purchase_payments')
-          .insert(paymentData);
-
-      // Trigger automatically:
-      // 1. Creates journal entry via handle_purchase_payment_change()
-      // 2. Updates invoice paid_amount and balance via recalculate_purchase_invoice_payments()
-      // 3. Updates invoice status if fully paid
+      await purchaseService.createPayment(payment);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Pago registrado: ${ChileanUtils.formatCurrency(amount)}'),
+          const SnackBar(
+            content: Text('Pago registrado correctamente'),
             backgroundColor: Colors.green,
           ),
         );
-        context.pop(true); // Return true to indicate success
+        _returnToInvoice(refresh: true);
       }
     } catch (e) {
-      // Print detailed error to console for debugging
-      print('=== PAYMENT ERROR DEBUG ===');
-      print('Error type: ${e.runtimeType}');
-      print('Error message: $e');
-      print('========================');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al registrar pago: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo registrar el pago: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -266,310 +217,286 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registrar Pago'),
-        actions: [
-          if (_isSaving)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            ),
+    return MainLayout(
+      child: _isLoading
+          ? const Center(child: BrandedLoading())
+          : _invoice == null
+              ? _buildNotFound()
+              : _buildContent(context, _invoice!),
+    );
+  }
+
+  Widget _buildNotFound() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.receipt_long, size: 64),
+          const SizedBox(height: 16),
+          const Text('Factura no encontrada'),
+          const SizedBox(height: 16),
+          AppButton(
+            text: 'Volver',
+            onPressed: _returnToInvoice,
+          ),
         ],
       ),
-      body: _isLoading || _invoice == null
-          ? const Center(child: BrandedLoading())
-          : _isLoadingPaymentMethods
-              ? const Center(child: BrandedLoading())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Form(
-                    key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildInvoiceInfo(),
-                    const SizedBox(height: 24),
-                    _buildPaymentForm(),
-                    const SizedBox(height: 32),
-                    _buildActionButtons(),
-                  ],
-                ),
-              ),
-            ),
     );
   }
 
-  Widget _buildInvoiceInfo() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Factura ${_invoice!.invoiceNumber}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+  Widget _buildContent(BuildContext context, PurchaseInvoice invoice) {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        final padding =
+            isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24);
+
+        return SingleChildScrollView(
+          padding: padding,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isMobile ? double.infinity : 560,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: _returnToInvoice,
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Volver',
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              invoice.invoiceNumber.isNotEmpty
+                                  ? 'Factura ${invoice.invoiceNumber}'
+                                  : 'Factura',
+                              style: theme.textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              invoice.supplierName ?? 'Proveedor',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildFormContents(context, invoice),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            if (_invoice!.supplierName != null)
-              Text(
-                _invoice!.supplierName!,
-                style: const TextStyle(color: Colors.grey),
-              ),
-            const Divider(height: 24),
-            _buildInfoRow(
-                'Total', ChileanUtils.formatCurrency(_invoice!.total)),
-            _buildInfoRow('Pagado',
-                ChileanUtils.formatCurrency(_invoice!.paidAmount)),
-            _buildInfoRow(
-              'Saldo',
-              ChileanUtils.formatCurrency(_invoice!.balance),
-              highlight: true,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool highlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildFormContents(BuildContext context, PurchaseInvoice invoice) {
+    final paymentMethodService = context.watch<PaymentMethodService>();
+    final theme = Theme.of(context);
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label,
-            style: TextStyle(
-              fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
-            ),
+            'Registrar pago a proveedor',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: highlight ? FontWeight.bold : FontWeight.w500,
-              fontSize: highlight ? 18 : 14,
-              color: highlight ? Colors.blue : null,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 16),
 
-  Widget _buildPaymentForm() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          // Invoice breakdown card
+          Card(
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildBreakdownRow(
+                    'Total factura:',
+                    ChileanUtils.formatCurrency(invoice.total),
+                    context,
+                  ),
+                  const SizedBox(height: 4),
+                  _buildBreakdownRow(
+                    'Pagado:',
+                    ChileanUtils.formatCurrency(invoice.paidAmount),
+                    context,
+                  ),
+                  const Divider(height: 16),
+                  const SizedBox(height: 4),
+                  _buildBreakdownRow(
+                    'Saldo pendiente:',
+                    ChileanUtils.formatCurrency(_effectiveBalance),
+                    context,
+                    isBold: true,
+                    color: theme.colorScheme.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _amountController,
+            decoration: const InputDecoration(
+              labelText: 'Monto',
+              prefixText: '\$ ',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Ingresa el monto del pago';
+              }
+              final normalizedValue =
+                  value.replaceAll('.', '').replaceAll(',', '.');
+              final parsed = double.tryParse(normalizedValue);
+              if (parsed == null || parsed <= 0) {
+                return 'Monto inválido';
+              }
+              final parsedInt = parsed.round();
+              final balanceInt = _effectiveBalance.round();
+              if (parsedInt - balanceInt > 1) {
+                return 'No puede superar el saldo';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_isLoadingMethods)
+            const LinearProgressIndicator()
+          else if (paymentMethodService.paymentMethods.isEmpty)
             const Text(
-              'Detalles del Pago',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // Payment Date
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today),
-              title: const Text('Fecha de Pago'),
-              subtitle: Text(ChileanUtils.formatDate(_paymentDate)),
-              trailing: const Icon(Icons.edit),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _paymentDate,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now().add(const Duration(days: 1)),
-                );
-                if (picked != null) {
-                  setState(() => _paymentDate = picked);
+              'No hay métodos de pago disponibles',
+              style: TextStyle(color: Colors.red),
+            )
+          else
+            DropdownButtonFormField<PaymentMethod>(
+              value: _selectedPaymentMethod,
+              decoration: const InputDecoration(labelText: 'Medio de pago'),
+              items: paymentMethodService.paymentMethods
+                  .map((method) => DropdownMenuItem(
+                        value: method,
+                        child: Row(
+                          children: [
+                            if (method.icon != null) ...[
+                              Icon(_getIconForPaymentMethod(method.icon!),
+                                  size: 18),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(method.name),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedPaymentMethod = value;
+                  });
                 }
               },
-            ),
-            const Divider(),
-
-            // Payment Amount
-            TextFormField(
-              controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Monto *',
-                prefixText: '\$ ',
-                hintText: '0',
-                helperText: 'Ingrese el monto del pago',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El monto es requerido';
-                }
-                final amount = double.tryParse(value.replaceAll('.', ''));
-                if (amount == null || amount <= 0) {
-                  return 'Ingrese un monto válido';
+                if (value == null) {
+                  return 'Selecciona un método de pago';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 16),
-
-            // Payment Method (Dynamic from database)
-            if (_paymentMethods.isEmpty)
-              Card(
-                color: Colors.orange[100],
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.warning, color: Colors.orange, size: 32),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'No hay métodos de pago configurados',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Por favor, configure los métodos de pago en Configuración → Métodos de Pago',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              DropdownButtonFormField<PaymentMethod>(
-                value: _selectedPaymentMethod,
-                decoration: const InputDecoration(
-                  labelText: 'Método de Pago *',
-                  prefixIcon: Icon(Icons.payment),
-                ),
-                items: _paymentMethods.map((method) {
-                  return DropdownMenuItem<PaymentMethod>(
-                    value: method,
-                    child: Row(
-                      children: [
-                        Icon(_getPaymentMethodIcon(method.icon), size: 20),
-                        const SizedBox(width: 8),
-                        Text(method.name),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: _isSaving ? null : (value) {
-                  setState(() => _selectedPaymentMethod = value);
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Seleccione un método de pago';
-                  }
-                  return null;
-                },
-              ),
-            const SizedBox(height: 16),
-
-            // Reference field (conditional based on payment method)
-            if (_selectedPaymentMethod?.requiresReference == true) ...[
-              TextFormField(
-                controller: _referenceController,
-                decoration: InputDecoration(
-                  labelText: 'Referencia *',
-                  hintText: 'Ej: Transferencia #12345',
-                  prefixIcon: const Icon(Icons.numbers),
-                  helperText:
-                      'Campo requerido para ${_selectedPaymentMethod?.name}',
-                  helperStyle: const TextStyle(color: Colors.red),
-                ),
-                maxLength: 100,
-                validator: (value) {
-                  if (_selectedPaymentMethod?.requiresReference == true &&
-                      (value == null || value.trim().isEmpty)) {
-                    return 'La referencia es requerida para ${_selectedPaymentMethod?.name}';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (_selectedPaymentMethod?.requiresReference != true) ...[
-              TextFormField(
-                controller: _referenceController,
-                decoration: const InputDecoration(
-                  labelText: 'Referencia (opcional)',
-                  hintText: 'Ej: Comprobante #12345',
-                  prefixIcon: Icon(Icons.numbers),
-                ),
-                maxLength: 100,
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            // Notes
-            TextFormField(
-              controller: _notesController,
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _selectDate,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
               decoration: const InputDecoration(
-                labelText: 'Notas',
-                hintText: 'Observaciones adicionales',
-                prefixIcon: Icon(Icons.note),
+                labelText: 'Fecha de pago',
+                border: OutlineInputBorder(),
               ),
-              maxLines: 3,
-              maxLength: 500,
+              child: Row(
+                children: [
+                  const Icon(Icons.event),
+                  const SizedBox(width: 8),
+                  Text(ChileanUtils.formatDate(_paymentDate)),
+                  const Spacer(),
+                  const Icon(Icons.keyboard_arrow_down),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_selectedPaymentMethod?.requiresReference == true) ...[
+            TextFormField(
+              controller: _referenceController,
+              decoration: const InputDecoration(
+                labelText: 'Referencia *',
+                hintText: 'Número de transferencia, cheque, etc.',
+              ),
+              validator: (value) {
+                if (_selectedPaymentMethod?.requiresReference == true &&
+                    (value == null || value.trim().isEmpty)) {
+                  return 'Este método de pago requiere una referencia';
+                }
+                return null;
+              },
+            ),
+          ] else ...[
+            TextFormField(
+              controller: _referenceController,
+              decoration: const InputDecoration(
+                labelText: 'Referencia',
+                hintText: 'Número de documento, comprobante, etc. (opcional)',
+              ),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _notesController,
+            decoration: const InputDecoration(
+              labelText: 'Notas internas',
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _isSaving ? null : _submit,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              label: const Text('Registrar pago'),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _isSaving ? null : () => context.pop(false),
-            child: const Text('Cancelar'),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 2,
-          child: FilledButton.icon(
-            onPressed: _isSaving ? null : _savePayment,
-            icon: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.check),
-            label: Text(_isSaving ? 'Guardando...' : 'Registrar Pago'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  IconData _getPaymentMethodIcon(String? iconName) {
-    switch (iconName?.toLowerCase()) {
+  IconData _getIconForPaymentMethod(String iconName) {
+    switch (iconName.toLowerCase()) {
       case 'cash':
-        return Icons.money;
+        return Icons.attach_money;
       case 'bank':
         return Icons.account_balance;
       case 'credit_card':
@@ -579,5 +506,28 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       default:
         return Icons.payment;
     }
+  }
+
+  Widget _buildBreakdownRow(
+    String label,
+    String value,
+    BuildContext context, {
+    bool isBold = false,
+    Color? color,
+  }) {
+    final textStyle = isBold
+        ? Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+            )
+        : Theme.of(context).textTheme.bodyLarge?.copyWith(color: color);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: textStyle),
+        Text(value, style: textStyle),
+      ],
+    );
   }
 }

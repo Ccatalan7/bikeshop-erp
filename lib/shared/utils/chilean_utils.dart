@@ -21,6 +21,7 @@ class ChileanUtils {
 
   // Format currency in Chilean Pesos
   static String formatCurrency(double amount) {
+    if (amount.round() == 0) amount = 0.0;
     return _clpFormat.format(amount);
   }
 

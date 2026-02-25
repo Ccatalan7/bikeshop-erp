@@ -9,6 +9,7 @@ import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../../../shared/models/tax_treatment.dart';
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import '../../settings/services/appearance_service.dart';
@@ -730,7 +731,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       itemBuilder: (context, index) {
         final invoice = invoices[index];
         final isSelected = _selectedInvoice?.id == invoice.id;
-        final balance = invoice.total - invoice.paidAmount;
+        final rawBalance = invoice.total - invoice.paidAmount;
+        final balance = rawBalance.abs() < 0.01 ? 0.0 : rawBalance;
         final isDark = theme.brightness == Brightness.dark;
 
         return Container(
@@ -1307,7 +1309,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Widget _buildCell(String column, PurchaseInvoice invoice, double width) {
-    final balance = invoice.total - invoice.paidAmount;
+    final rawBalance = invoice.total - invoice.paidAmount;
+    final balance = rawBalance.abs() < 0.01 ? 0.0 : rawBalance;
 
     Widget content;
     switch (column) {
@@ -1684,7 +1687,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Widget _buildInvoiceDocument(PurchaseInvoice invoice, double containerWidth) {
-    final balance = invoice.total - invoice.paidAmount;
+    final rawBalance = invoice.total - invoice.paidAmount;
+    final balance = rawBalance.abs() < 0.01 ? 0.0 : rawBalance;
 
     // Calculate responsive sizes based on width
     final double scale = (containerWidth / 800.0).clamp(0.6, 1.0);
@@ -1820,17 +1824,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       isHeader: true, scale: scale),
                   _buildTableCell('Cant.', isHeader: true, scale: scale),
                   _buildTableCell('Tarifa', isHeader: true, scale: scale),
-                  _buildTableCell('Cantidad', isHeader: true, scale: scale),
+                  _buildTableCell('Importe', isHeader: true, scale: scale),
                 ],
               ),
               ...invoice.items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
-                final itemTotal = item.quantity *
-                    item.unitCost *
-                    (1 - item.discount) *
-                    (1 + item.ivaRate);
-
                 return TableRow(
                   children: [
                     _buildTableCell('${index + 1}', scale: scale),
@@ -1848,7 +1847,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         scale: scale),
                     _buildTableCell(ChileanUtils.formatCurrency(item.unitCost),
                         scale: scale),
-                    _buildTableCell(ChileanUtils.formatCurrency(itemTotal),
+                    _buildTableCell(
+                        ChileanUtils.formatCurrency(item.netAmountClamped),
                         scale: scale),
                   ],
                 );
@@ -1863,13 +1863,31 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 width: 300 * scale,
                 child: Column(
                   children: [
-                    _buildTotalRow('Subtotal', invoice.subtotal, scale: scale),
+                    // Subtotal (always display Neto logic on the UI side if tax included, meaning true subtotal / 1.19)
+                    _buildTotalRow(
+                        invoice.taxTreatment == TaxTreatment.taxIncluded
+                            ? 'Subtotal (Neto)'
+                            : 'Subtotal',
+                        invoice.taxTreatment == TaxTreatment.taxIncluded
+                            ? invoice.subtotal / 1.19
+                            : invoice.subtotal,
+                        scale: scale),
+                    if (invoice.discountAmount > 0)
+                      _buildTotalRow(
+                          'Descuento',
+                          invoice
+                              .discountAmount, // Fix UI bug by not negatively reversing it
+                          isNegative: true,
+                          scale: scale),
+                    if (invoice.ivaAmount > 0)
+                      _buildTotalRow('IVA (19%)', invoice.ivaAmount,
+                          scale: scale),
                     const Divider(),
                     _buildTotalRow('Total', invoice.total,
                         isTotal: true, scale: scale),
                     if (invoice.paidAmount > 0) ...[
                       const Divider(),
-                      _buildTotalRow('Pago realizado', -invoice.paidAmount,
+                      _buildTotalRow('Pago realizado', invoice.paidAmount,
                           isNegative: true, scale: scale),
                     ],
                     const Divider(thickness: 2),
@@ -2184,18 +2202,14 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     _buildPdfTableCell('Artículo & Descripción',
                         isHeader: true),
                     _buildPdfTableCell('Cant.', isHeader: true),
-                    _buildPdfTableCell('Costo', isHeader: true),
-                    _buildPdfTableCell('Total', isHeader: true),
+                    _buildPdfTableCell('Tarifa', isHeader: true),
+                    _buildPdfTableCell('Importe', isHeader: true),
                   ],
                 ),
                 // Data rows
                 ...invoice.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
-                  final itemTotal = item.quantity *
-                      item.unitCost *
-                      (1 - item.discount) *
-                      (1 + item.ivaRate);
                   final hasDescription =
                       item.description != null && item.description!.isNotEmpty;
                   final hasSku =
@@ -2244,7 +2258,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       _buildPdfTableCell(
                           ChileanUtils.formatCurrency(item.unitCost)),
                       _buildPdfTableCell(
-                          ChileanUtils.formatCurrency(itemTotal)),
+                          ChileanUtils.formatCurrency(item.netAmountClamped)),
                     ],
                   );
                 }),
@@ -2261,7 +2275,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   width: 250,
                   child: pw.Column(
                     children: [
-                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
+                      // Subtotal (always display Neto logic on the UI side if tax included, meaning true subtotal / 1.19)
+                      _buildPdfTotalRow(
+                          invoice.taxTreatment == TaxTreatment.taxIncluded
+                              ? 'Subtotal (Neto)'
+                              : 'Subtotal',
+                          invoice.taxTreatment == TaxTreatment.taxIncluded
+                              ? invoice.subtotal / 1.19
+                              : invoice.subtotal),
+                      if (invoice.discountAmount > 0)
+                        _buildPdfTotalRow('Descuento', -invoice.discountAmount),
                       if (invoice.ivaAmount > 0)
                         _buildPdfTotalRow('IVA (19%)', invoice.ivaAmount),
                       pw.Divider(thickness: 0.3, color: PdfColors.grey400),
