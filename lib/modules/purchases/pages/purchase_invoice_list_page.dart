@@ -13,6 +13,7 @@ import '../../../shared/models/tax_treatment.dart';
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import '../../settings/services/appearance_service.dart';
+import '../../../shared/services/inventory_service.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -87,6 +88,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       context
           .read<PurchaseService>()
           .getPurchaseInvoices(); // Uses cache if valid
+      context.read<InventoryService>().getProducts(); // Ensure cache is loaded
     });
   }
 
@@ -1830,17 +1832,26 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               ...invoice.items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
+
+                // Lookup clean product name from cache if available (mirrors form view logic)
+                final products = context.read<InventoryService>().products;
+                final product = products.cast<dynamic>().firstWhere(
+                      (p) => p.id == item.productId,
+                      orElse: () => null,
+                    );
+                final displayName =
+                    product?.name ?? item.productName ?? 'Sin nombre';
+                final displaySku = product?.sku ?? item.productSku;
+
                 return TableRow(
                   children: [
                     _buildTableCell('${index + 1}', scale: scale),
                     _buildTableCell(
-                      item.productName ?? 'Sin nombre',
+                      displayName,
                       subtitle: item.description != null &&
                               item.description!.isNotEmpty
                           ? item.description
-                          : (item.productSku != null
-                              ? 'SKU: ${item.productSku}'
-                              : null),
+                          : (displaySku != null ? 'SKU: $displaySku' : null),
                       scale: scale,
                     ),
                     _buildTableCell('${item.quantity.toStringAsFixed(2)}',
@@ -1863,14 +1874,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 width: 300 * scale,
                 child: Column(
                   children: [
-                    // Subtotal (always display Neto logic on the UI side if tax included, meaning true subtotal / 1.19)
+                    // Subtotal (the actual stored subtotal is always the net amount for purchases)
                     _buildTotalRow(
                         invoice.taxTreatment == TaxTreatment.taxIncluded
                             ? 'Subtotal (Neto)'
                             : 'Subtotal',
-                        invoice.taxTreatment == TaxTreatment.taxIncluded
-                            ? invoice.subtotal / 1.19
-                            : invoice.subtotal,
+                        invoice.subtotal,
                         scale: scale),
                     if (invoice.discountAmount > 0)
                       _buildTotalRow(
@@ -2046,6 +2055,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       debugPrint('Error loading logo for PDF: $e');
     }
 
+    // Load products to use clean names
+    final products = await context.read<InventoryService>().getProducts();
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.letter,
@@ -2210,10 +2222,19 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 ...invoice.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
+
+                  // Lookup clean product name from cache if available (mirrors form view logic)
+                  final product = products.cast<dynamic>().firstWhere(
+                        (p) => p.id == item.productId,
+                        orElse: () => null,
+                      );
+                  final displayName =
+                      product?.name ?? item.productName ?? 'Sin nombre';
+                  final displaySku = product?.sku ?? item.productSku;
+
                   final hasDescription =
                       item.description != null && item.description!.isNotEmpty;
-                  final hasSku =
-                      item.productSku != null && item.productSku!.isNotEmpty;
+                  final hasSku = displaySku != null && displaySku.isNotEmpty;
 
                   return pw.TableRow(
                     children: [
@@ -2226,7 +2247,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
                             pw.Text(
-                              item.productName ?? 'Sin nombre',
+                              displayName,
                               style: pw.TextStyle(
                                 fontWeight: pw.FontWeight.bold,
                                 fontSize: 10,
@@ -2244,7 +2265,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                             ] else if (hasSku) ...[
                               pw.SizedBox(height: 3),
                               pw.Text(
-                                'SKU: ${item.productSku}',
+                                'SKU: $displaySku',
                                 style: const pw.TextStyle(
                                   fontSize: 9,
                                   color: PdfColors.grey700,
@@ -2275,14 +2296,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   width: 250,
                   child: pw.Column(
                     children: [
-                      // Subtotal (always display Neto logic on the UI side if tax included, meaning true subtotal / 1.19)
+                      // Subtotal (the actual stored subtotal is always the net amount for purchases)
                       _buildPdfTotalRow(
                           invoice.taxTreatment == TaxTreatment.taxIncluded
                               ? 'Subtotal (Neto)'
                               : 'Subtotal',
-                          invoice.taxTreatment == TaxTreatment.taxIncluded
-                              ? invoice.subtotal / 1.19
-                              : invoice.subtotal),
+                          invoice.subtotal),
                       if (invoice.discountAmount > 0)
                         _buildPdfTotalRow('Descuento', -invoice.discountAmount),
                       if (invoice.ivaAmount > 0)

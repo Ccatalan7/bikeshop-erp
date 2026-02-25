@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../services/workspace_manager.dart';
 
 class ExpandableMenuItem extends StatelessWidget {
   final IconData icon;
@@ -180,56 +183,136 @@ class ExpandableMenuItem extends StatelessWidget {
                 margin: const EdgeInsets.only(left: 36, right: 8, bottom: 2),
                 child: Material(
                   color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
-                    splashFactory: NoSplash.splashFactory,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    onTap: enabled
-                        ? () {
-                            if (!isSelected) {
-                              if (onNavigate != null) {
-                                onNavigate!(subItem.route);
-                              } else {
-                                context.go(subItem.route);
+                  child: GestureDetector(
+                    onSecondaryTapDown: enabled
+                        ? (details) {
+                            final renderBox =
+                                context.findRenderObject() as RenderBox;
+                            final overlay = Navigator.of(context)
+                                .overlay!
+                                .context
+                                .findRenderObject() as RenderBox;
+                            final position = renderBox.localToGlobal(
+                                details.localPosition,
+                                ancestor: overlay);
+
+                            showMenu(
+                              context: context,
+                              position: RelativeRect.fromLTRB(
+                                position.dx,
+                                position.dy,
+                                position.dx + 1,
+                                position.dy + 1,
+                              ),
+                              items: [
+                                PopupMenuItem(
+                                  value: 'current_tab',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.tab,
+                                          size: 18,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.7)),
+                                      const SizedBox(width: 8),
+                                      const Text('Abrir en esta pestaña'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'new_tab',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.open_in_new,
+                                          size: 18,
+                                          color: theme.colorScheme.primary),
+                                      const SizedBox(width: 8),
+                                      const Text('Abrir en nueva pestaña'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ).then((value) {
+                              if (value == 'current_tab') {
+                                if (!isSelected) {
+                                  if (onNavigate != null) {
+                                    onNavigate!(subItem.route);
+                                  } else {
+                                    context.go(subItem.route);
+                                  }
+                                }
+                              } else if (value == 'new_tab') {
+                                try {
+                                  final workspaceManager =
+                                      context.read<WorkspaceManager>();
+                                  final existingFound = workspaceManager
+                                      .switchToExistingWorkspaceWithRoute(
+                                          subItem.route);
+                                  if (!existingFound) {
+                                    workspaceManager.addWorkspace(
+                                      title: subItem.title,
+                                      initialRoute: subItem.route,
+                                    );
+                                  }
+                                } catch (e) {
+                                  // Fallback if WorkspaceManager isn't available
+                                  context.go(subItem.route);
+                                }
                               }
-                            }
+                            });
                           }
                         : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: isSelected
-                            ? theme.primaryColor.withOpacity(0.08)
-                            : Colors.transparent,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            subItem.icon,
-                            size: 16,
-                            color: isSelected
-                                ? theme.primaryColor
-                                : theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              subItem.title,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: isSelected
-                                    ? theme.primaryColor
-                                    : theme.colorScheme.onSurface
-                                        .withOpacity(0.8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      splashFactory: NoSplash.splashFactory,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      onTap: enabled
+                          ? () {
+                              if (!isSelected) {
+                                if (onNavigate != null) {
+                                  onNavigate!(subItem.route);
+                                } else {
+                                  context.go(subItem.route);
+                                }
+                              }
+                            }
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: isSelected
+                              ? theme.primaryColor.withOpacity(0.08)
+                              : Colors.transparent,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              subItem.icon,
+                              size: 16,
+                              color: isSelected
+                                  ? theme.primaryColor
+                                  : theme.colorScheme.onSurface
+                                      .withOpacity(0.6),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                subItem.title,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? theme.primaryColor
+                                      : theme.colorScheme.onSurface
+                                          .withOpacity(0.8),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

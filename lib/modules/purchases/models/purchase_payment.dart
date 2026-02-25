@@ -52,8 +52,6 @@ class PurchasePayment {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'invoice_id': invoiceId,
-      'invoice_number': invoiceNumber,
-      'supplier_name': supplierName,
       'payment_method_id': paymentMethodId,
       'amount': amount,
       'date': date.toIso8601String(),

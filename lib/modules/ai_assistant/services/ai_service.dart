@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../inventory/services/inventory_service.dart';
 
@@ -84,7 +85,7 @@ class AIAssistantService extends ChangeNotifier {
         ),
         FunctionDeclaration(
           'searchInternet',
-          'Search the internet for information not available in the internal database (e.g., bike compatibility, specs).',
+          'Search the internet for information not available in the internal database (e.g., bike compatibility, specs, standard parts).',
           Schema(
             SchemaType.object,
             properties: {
@@ -239,8 +240,7 @@ class AIAssistantService extends ChangeNotifier {
               'warehouse_location': p.warehouseLocation ?? 'Unknown',
               'source': 'keyword',
             }));
-        debugPrint(
-            '🔤 [AI] Keyword: ${products.length} results for "$query"');
+        debugPrint('🔤 [AI] Keyword: ${products.length} results for "$query"');
       } catch (e) {
         debugPrint('⚠️ [AI] Keyword search failed: $e');
       }
@@ -262,9 +262,8 @@ class AIAssistantService extends ChangeNotifier {
       // left to Gemini, which understands "32h" = "32 hoyos" = "32 agujeros".
       if (merged.isNotEmpty) {
         final tokens = query.toLowerCase().split(RegExp(r'\s+'));
-        final numericTokens = tokens
-            .where((t) => RegExp(r'^\d+\.?\d*$').hasMatch(t))
-            .toList();
+        final numericTokens =
+            tokens.where((t) => RegExp(r'^\d+\.?\d*$').hasMatch(t)).toList();
 
         if (numericTokens.isNotEmpty) {
           final filtered = merged.where((r) {
@@ -288,9 +287,7 @@ class AIAssistantService extends ChangeNotifier {
 
       if (merged.isEmpty) {
         _lastSearchSkus = null;
-        return {
-          'result': 'No products found for "$query".'
-        };
+        return {'result': 'No products found for "$query".'};
       }
 
       debugPrint(
@@ -337,8 +334,8 @@ class AIAssistantService extends ChangeNotifier {
 
     try {
       final content = Content.text(text);
-      final result = await _embeddingModel!.embedContent(content,
-          outputDimensionality: 768);
+      final result = await _embeddingModel!
+          .embedContent(content, outputDimensionality: 768);
       return result.embedding.values.toList();
     } catch (e) {
       debugPrint('❌ [AI] Embedding generation error: $e');
@@ -380,16 +377,63 @@ class AIAssistantService extends ChangeNotifier {
   }
 
   Future<Map<String, Object?>> _toolSearchInternet(String? query) async {
-    if (query == null) return {'error': 'Query is empty'};
+    if (query == null || query.isEmpty) return {'error': 'Query is empty'};
 
-    // Mock simulation for now
-    await Future.delayed(const Duration(seconds: 1));
-    return {
-      'result': 'Simulated search result for "$query":\n'
-          '- Official Trek Archive: Marlin 5 Gen 2 (2022) uses a Shimano HG200, 12-32, 7 speed cassette (or 8 speed depending on sub-model).\n'
-          '- Logic suggests checking 7/8 speed HG cassettes compatibility.\n'
-          '(Note: Real internet search requires a separate Google Search API key)'
-    };
+    debugPrint('🌐 [AI] Searching internet for: "$query"');
+
+    try {
+      final url = Uri.parse(
+          'https://html.duckduckgo.com/html/?q=${Uri.encodeComponent(query)}');
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        var body = response.body;
+        // Simple regex to extract search result snippets from DuckDuckGo HTML
+        final snippetRegex =
+            RegExp(r'<a class="result__snippet[^>]*>(.*?)</a>', dotAll: true);
+
+        final snippets = snippetRegex
+            .allMatches(body)
+            .map((m) {
+              // Remove all HTML tags and decode basic entities manually or rely on LLM to read them
+              var text =
+                  m.group(1)?.replaceAll(RegExp(r'<[^>]*>'), '').trim() ?? '';
+              text = text
+                  .replaceAll('&amp;', '&')
+                  .replaceAll('&quot;', '"')
+                  .replaceAll('&#x27;', "'")
+                  .replaceAll('&lt;', '<')
+                  .replaceAll('&gt;', '>');
+              return text;
+            })
+            .where((s) => s.isNotEmpty)
+            .take(5)
+            .toList();
+
+        if (snippets.isEmpty) {
+          return {'result': 'No internet search results found.'};
+        }
+
+        return {
+          'result': 'Internet search results for "$query":\n\n' +
+              snippets.join('\n\n')
+        };
+      } else {
+        return {
+          'error':
+              'Failed to fetch search results. Status code: ${response.statusCode}'
+        };
+      }
+    } catch (e) {
+      debugPrint('❌ [AI] Internet search error: $e');
+      return {'error': 'Failed to search internet: $e'};
+    }
   }
 
   String _buildSystemPrompt(List<MechanicJob> jobs) {
@@ -423,7 +467,12 @@ TOOL STRATEGY:
    - Each result has a "stock" field. When the user asks "en stock" or "disponible", check the stock field.
    - When the user refines a previous query (adds "en stock", "32h", a brand, etc.), FIRST check if you can answer from results you already have. Don't re-search if you already have the data.
 
-3. AFTER presenting results, ALWAYS use `navigateToInventory` to open the inventory screen.
+3. INTERNET SEARCH FALLBACK (CRITICAL):
+   - If the user asks about a specific bike model's specs (e.g. "qué llanta usa una trek xcaliber 8") AND `searchStock` returns no results or irrelevant results, you MUST use `searchInternet`.
+   - Use `searchInternet` to find the technical specifications or compatibility information online. This performs a live web search. Read the snippet results carefully to answer the user's question, but do NOT hallucinate info that is not actually in the snippets.
+   - Do NOT just tell the user "I couldn't find it in the inventory". If it's a general question about a bike or part, search the internet!
+
+4. AFTER presenting results, ALWAYS use `navigateToInventory` to open the inventory screen.
    - CRITICAL: The inventory screen uses KEYWORD text matching, NOT semantic search.
    - You MUST simplify and translate the search term for navigation:
      - "llantas mtb" → navigate with "llanta"
@@ -433,8 +482,6 @@ TOOL STRATEGY:
      - "ruedas para BMX" → navigate with "llanta 20"
    - NEVER pass the raw user query to navigateToInventory. Always extract the simplest keyword.
    - After navigating, briefly confirm (e.g., "También te llevé al inventario buscando 'llanta 29'").
-
-When asked about compatibility or specs you don't know, use `searchInternet`.
 
 Current Jobs Context:
 $jobSummaries
