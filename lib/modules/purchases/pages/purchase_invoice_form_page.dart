@@ -23,6 +23,7 @@ import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
 import '../../../shared/widgets/ocr_cleanup_page.dart';
 import '../../inventory/pages/product_form_page.dart';
+import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 
@@ -1678,6 +1679,29 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       if (!widget.readOnly && widget.invoiceId != null) {
         // Use form's payment model state
         final isPrepayment = _isPrepaymentModel;
+
+        actionButtons.add(
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => TaskFormDialog(
+                  prefillPurchaseInvoiceId: _loadedInvoice!.id,
+                  prefillPurchaseInvoiceNumber: _loadedInvoice!.invoiceNumber,
+                  prefillSupplierId: _selectedSupplier?.id,
+                  prefillSupplierName: _selectedSupplier?.name,
+                ),
+              );
+            },
+            icon: Icon(Icons.add_task,
+                color: Theme.of(context).colorScheme.primary),
+            tooltip: 'Crear Tarea',
+          ),
+        );
+        actionButtons.add(const SizedBox(width: 8));
+        actionButtons
+            .add(Container(height: 24, width: 1, color: Colors.grey[300]));
+        actionButtons.add(const SizedBox(width: 8));
 
         if (_status == PurchaseInvoiceStatus.draft) {
           // Draft: Can edit (if not editing), send to supplier, or delete

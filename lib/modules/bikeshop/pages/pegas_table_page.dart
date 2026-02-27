@@ -31,6 +31,7 @@ import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
 import '../widgets/deadline_cell.dart';
 import '../widgets/smart_job_details_editor.dart';
+import '../widgets/pegas_tasks_widget.dart';
 import 'bike_form_dialog.dart';
 import '../../ai_assistant/widgets/ai_chat_bubble.dart';
 
@@ -1797,6 +1798,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                                 value: 'gantt',
                                 icon: Icon(Icons.view_timeline, size: 16),
                                 label: Text('Gantt')),
+                            ButtonSegment(
+                                value: 'tasks',
+                                icon: Icon(Icons.task_alt, size: 16),
+                                label: Text('Tareas')),
                           ],
                           selected: <String>{_viewMode},
                           onSelectionChanged: (selected) {
@@ -1876,6 +1881,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                           value: 'gantt',
                           icon: Icon(Icons.view_timeline, size: 16),
                           label: Text('Gantt', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'tasks',
+                          icon: Icon(Icons.task_alt, size: 16),
+                          label: Text('Tareas', style: TextStyle(fontSize: 13)),
                         ),
                       ],
                       selected: <String>{_viewMode},
@@ -5918,10 +5928,17 @@ class _PegasTablePageState extends State<PegasTablePage>
         return _buildCalendarView();
       case 'gantt':
         return _buildGanttView();
+      case 'tasks':
+        return _buildTasksView();
       case 'table':
       default:
         return _buildDataTable();
     }
+  }
+
+  // ========== TASKS VIEW ==========
+  Widget _buildTasksView() {
+    return const PegasTasksWidget();
   }
 
   // ========== BOARD VIEW (Kanban) ==========

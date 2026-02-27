@@ -42,6 +42,7 @@ import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/bikeshop/services/wheel_building_service.dart';
 import 'modules/bikeshop/services/smart_task_service.dart';
+import 'modules/tasks/services/task_service.dart';
 import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/hr/services/payroll_voucher_service.dart';
@@ -379,6 +380,16 @@ class VinabikeApp extends StatelessWidget {
                 SmartPurchaseListService()), // Singleton - persists across app
         ChangeNotifierProvider(
             create: (context) => HRService(
+                  Provider.of<TenantService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => TaskService(
+                  Supabase.instance.client,
+                  Provider.of<TenantService>(context, listen: false),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => TaskService(
+                  Supabase.instance.client,
                   Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(

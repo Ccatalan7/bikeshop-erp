@@ -20,6 +20,7 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
+import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 import 'package:pdf/pdf.dart';
@@ -1668,6 +1669,33 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         ),
       );
       // Add divider/spacing
+      if (!widget.isCompact) {
+        actionButtons.add(const SizedBox(width: 8));
+        actionButtons
+            .add(Container(height: 24, width: 1, color: Colors.grey[300]));
+        actionButtons.add(const SizedBox(width: 8));
+      }
+
+      actionButtons.add(
+        IconButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => TaskFormDialog(
+                prefillSalesInvoiceId: _loadedInvoice!.id,
+                prefillSalesInvoiceNumber: _loadedInvoice!.invoiceNumber,
+                prefillCustomerId: _selectedCustomer?.id,
+                prefillCustomerName: _selectedCustomer?.name,
+                prefillJobId: widget.preselectedJobId,
+              ),
+            );
+          },
+          icon: Icon(Icons.add_task,
+              color: Theme.of(context).colorScheme.primary),
+          tooltip: 'Crear Tarea',
+        ),
+      );
+
       if (!widget.isCompact) {
         actionButtons.add(const SizedBox(width: 8));
         actionButtons

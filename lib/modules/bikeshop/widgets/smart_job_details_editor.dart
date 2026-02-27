@@ -18,6 +18,7 @@ import 'package:file_picker/file_picker.dart';
 import '../models/bikeshop_models.dart';
 import '../../sales/models/sales_models.dart';
 import '../../settings/services/appearance_service.dart';
+import 'task_form_dialog.dart';
 
 class SmartJobDetailsEditor extends StatefulWidget {
   final String? customerName;
@@ -531,6 +532,30 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                               ),
                               if (widget.job != null) ...[
                                 _SmartDetailsExportButton(
+                                  icon: Icons.add_task,
+                                  tooltip: 'Crear Tarea',
+                                  onTap: () {
+                                    // Close overlay first if it's open
+                                    if (!widget.isInline) _saveAndClose();
+
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => TaskFormDialog(
+                                        prefillJobId: widget.job?.id,
+                                        prefillJobNumber: widget.job?.jobNumber,
+                                        prefillCustomerId:
+                                            widget.job?.customerId,
+                                        prefillCustomerName:
+                                            widget.customerName,
+                                      ),
+                                    );
+                                  },
+                                  isDark: isDark,
+                                  iconColor:
+                                      Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                _SmartDetailsExportButton(
                                   icon: Icons.picture_as_pdf_outlined,
                                   tooltip: 'Exportar a PDF',
                                   onTap: () =>
@@ -780,6 +805,27 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                 ),
               ),
               if (widget.job != null) ...[
+                _SmartDetailsExportButton(
+                  icon: Icons.add_task,
+                  tooltip: 'Crear Tarea',
+                  onTap: () {
+                    // Close overlay first if it's open
+                    if (!widget.isInline) _saveAndClose();
+
+                    showDialog(
+                      context: context,
+                      builder: (context) => TaskFormDialog(
+                        prefillJobId: widget.job?.id,
+                        prefillJobNumber: widget.job?.jobNumber,
+                        prefillCustomerId: widget.job?.customerId,
+                        prefillCustomerName: widget.customerName,
+                      ),
+                    );
+                  },
+                  isDark: isDark,
+                  iconColor: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
                 _SmartDetailsExportButton(
                   icon: Icons.picture_as_pdf_outlined,
                   tooltip: 'Exportar a PDF',
@@ -1964,12 +2010,14 @@ class _SmartDetailsExportButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onTap;
   final bool isDark;
+  final Color? iconColor;
 
   const _SmartDetailsExportButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
     required this.isDark,
+    this.iconColor,
   });
 
   @override
@@ -1984,7 +2032,7 @@ class _SmartDetailsExportButton extends StatelessWidget {
           child: Icon(
             icon,
             size: 16,
-            color: isDark ? Colors.grey[500] : Colors.grey[600],
+            color: iconColor ?? (isDark ? Colors.grey[500] : Colors.grey[600]),
           ),
         ),
       ),

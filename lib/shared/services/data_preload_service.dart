@@ -10,6 +10,7 @@ import '../../modules/inventory/services/brand_service.dart';
 import '../../modules/sales/services/sales_service.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/hr/services/hr_service.dart';
+import '../../modules/tasks/services/task_service.dart';
 
 /// DataPreloadService - Loads critical data immediately after authentication
 ///
@@ -44,6 +45,7 @@ class DataPreloadService extends ChangeNotifier {
   SalesService? _salesService;
   PurchaseService? _purchaseService;
   HRService? _hrService;
+  TaskService? _taskService;
 
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -67,6 +69,7 @@ class DataPreloadService extends ChangeNotifier {
     SalesService? salesService,
     PurchaseService? purchaseService,
     HRService? hrService,
+    TaskService? taskService,
     bool isPublicStore = false, // NEW: Skip preload on public store
   }) {
     // Skip everything if this is a public store context
@@ -94,6 +97,7 @@ class DataPreloadService extends ChangeNotifier {
     _salesService = salesService;
     _purchaseService = purchaseService;
     _hrService = hrService;
+    _taskService = taskService;
 
     // Listen to auth state changes
     _authSubscription =
@@ -166,6 +170,8 @@ class DataPreloadService extends ChangeNotifier {
         _preloadSuppliers(),
         // HR
         _preloadEmployees(),
+        // Tasks
+        _preloadTasks(),
       ], eagerError: false); // Continue even if one fails
 
       stopwatch.stop();
@@ -326,6 +332,20 @@ class DataPreloadService extends ChangeNotifier {
     } catch (e) {
       if (!kReleaseMode) {
         debugPrint('⚠️ [Preload] Employees failed: $e');
+      }
+    }
+  }
+
+  Future<void> _preloadTasks() async {
+    try {
+      await _taskService?.fetchTasks();
+      if (!kReleaseMode) {
+        debugPrint(
+            '📦 [Preload] Tasks: ${_taskService?.tasks.length ?? 0} items');
+      }
+    } catch (e) {
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Tasks failed: $e');
       }
     }
   }
