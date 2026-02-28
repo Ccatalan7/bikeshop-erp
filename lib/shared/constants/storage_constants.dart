@@ -31,4 +31,7 @@ class StorageFolders {
 
   /// Shared placeholder for marketing assets when needed.
   static const String marketingAssets = 'marketing/assets';
+
+  /// Task attachment files.
+  static const String tasks = 'tasks/attachments';
 }

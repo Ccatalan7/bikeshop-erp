@@ -23,55 +23,32 @@ class TaskService extends ChangeNotifier {
 
   Future<void> fetchTasks() async {
     final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) return;
+    if (tenantId == null) {
+      print('⚠️ [TaskService] No tenant ID, skipping fetchTasks');
+      return;
+    }
 
     try {
-      final response = await _supabase.from('smart_tasks').select('''
-            *,
-            creator:profiles!created_by(full_name),
-            assignee:profiles!assigned_to(full_name),
-            job:jobs!linked_job_id(job_number),
-            purchase_invoice:purchase_invoices!linked_purchase_invoice_id(invoice_number),
-            sales_invoice:sales_invoices!linked_sales_invoice_id(invoice_number),
-            customer:customers!linked_customer_id(name),
-            supplier:suppliers!linked_supplier_id(trade_name)
-          ''').eq('tenant_id', tenantId).order('created_at', ascending: false);
+      // Simple query with NO joins — ensures tasks always load
+      // even if FK relationships or RLS policies have issues.
+      final response = await _supabase
+          .from('smart_tasks')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false);
 
       final List<TaskModel> loadedTasks = [];
       for (var row in (response as List<dynamic>)) {
         final map = row as Map<String, dynamic>;
-
-        // Extract joined names for convenience badging
-        final creatorName = map['creator']?['full_name'] as String?;
-        final assigneeName = map['assignee']?['full_name'] as String?;
-        final linkedJobNumber = map['job']?['job_number'] as String?;
-        final linkedPurchaseNumber =
-            map['purchase_invoice']?['invoice_number'] as String?;
-        final linkedSalesNumber =
-            map['sales_invoice']?['invoice_number'] as String?;
-        final linkedCustomerName = map['customer']?['name'] as String?;
-        final linkedSupplierName = map['supplier']?['trade_name'] as String?;
-
-        var task = TaskModel.fromJson(map);
-        task = task.copyWith(
-          creatorName: creatorName,
-          assigneeName: assigneeName,
-          linkedJobNumber: linkedJobNumber,
-          linkedPurchaseInvoiceNumber: linkedPurchaseNumber,
-          linkedSalesInvoiceNumber: linkedSalesNumber,
-          linkedCustomerName: linkedCustomerName,
-          linkedSupplierName: linkedSupplierName,
-        );
-
-        loadedTasks.add(task);
+        loadedTasks.add(TaskModel.fromJson(map));
       }
 
       _tasks = loadedTasks;
       notifyListeners();
       print('✅ [TaskService] Loaded ${_tasks.length} tasks');
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ [TaskService] Error fetching tasks: $e');
-      rethrow;
+      print('❌ [TaskService] Stack: $stackTrace');
     }
   }
 
@@ -145,6 +122,126 @@ class TaskService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       print('❌ [TaskService] Error deleting task: $e');
+      rethrow;
+    }
+  }
+
+  // ── Attachments ──
+
+  /// Upload a file to Supabase Storage and attach it to a task.
+  Future<void> addAttachment({
+    required String taskId,
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No tenant ID');
+
+    try {
+      // Sanitize filename
+      final safeFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final storagePath = 'tasks/attachments/$tenantId/$taskId/$safeFileName';
+
+      // Upload to Supabase Storage
+      await _supabase.storage.from('vinabike-assets').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(contentType: mimeType, upsert: true),
+          );
+
+      // Get public URL
+      final publicUrl =
+          _supabase.storage.from('vinabike-assets').getPublicUrl(storagePath);
+
+      // Build attachment metadata
+      final attachment = {
+        'name': fileName,
+        'url': publicUrl,
+        'type': mimeType,
+        'size': bytes.length,
+        'storage_path': storagePath,
+        'uploaded_at': DateTime.now().toIso8601String(),
+      };
+
+      // Fetch current attachments from DB and append
+      final current = await _supabase
+          .from('smart_tasks')
+          .select('attachments')
+          .eq('id', taskId)
+          .eq('tenant_id', tenantId)
+          .single();
+
+      final existingAttachments =
+          List<Map<String, dynamic>>.from(current['attachments'] ?? []);
+      existingAttachments.add(attachment);
+
+      await _supabase
+          .from('smart_tasks')
+          .update({'attachments': existingAttachments})
+          .eq('id', taskId)
+          .eq('tenant_id', tenantId);
+
+      // Refresh local cache
+      await fetchTasks();
+      print('✅ [TaskService] Attachment added: $fileName');
+    } catch (e) {
+      print('❌ [TaskService] Error adding attachment: $e');
+      rethrow;
+    }
+  }
+
+  /// Remove an attachment from a task (deletes from storage + updates JSONB).
+  Future<void> removeAttachment({
+    required String taskId,
+    required String attachmentUrl,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No tenant ID');
+
+    try {
+      // Fetch current attachments
+      final current = await _supabase
+          .from('smart_tasks')
+          .select('attachments')
+          .eq('id', taskId)
+          .eq('tenant_id', tenantId)
+          .single();
+
+      final existingAttachments =
+          List<Map<String, dynamic>>.from(current['attachments'] ?? []);
+
+      // Find the attachment to remove
+      final toRemove =
+          existingAttachments.where((a) => a['url'] == attachmentUrl).toList();
+
+      // Delete from storage if we have the storage_path
+      for (final att in toRemove) {
+        final storagePath = att['storage_path'] as String?;
+        if (storagePath != null) {
+          try {
+            await _supabase.storage
+                .from('vinabike-assets')
+                .remove([storagePath]);
+          } catch (e) {
+            print('⚠️ [TaskService] Could not delete from storage: $e');
+          }
+        }
+      }
+
+      // Update DB
+      existingAttachments.removeWhere((a) => a['url'] == attachmentUrl);
+      await _supabase
+          .from('smart_tasks')
+          .update({'attachments': existingAttachments})
+          .eq('id', taskId)
+          .eq('tenant_id', tenantId);
+
+      // Refresh local cache
+      await fetchTasks();
+      print('✅ [TaskService] Attachment removed');
+    } catch (e) {
+      print('❌ [TaskService] Error removing attachment: $e');
       rethrow;
     }
   }

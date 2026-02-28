@@ -43,6 +43,9 @@ class TaskModel {
   final String? linkedCustomerName;
   final String? linkedSupplierName;
 
+  // Attachments: list of {name, url, type, size, uploaded_at}
+  final List<Map<String, dynamic>> attachments;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -68,6 +71,7 @@ class TaskModel {
     this.linkedSalesInvoiceNumber,
     this.linkedCustomerName,
     this.linkedSupplierName,
+    this.attachments = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -155,6 +159,10 @@ class TaskModel {
       linkedSalesInvoiceNumber: json['linked_sales_invoice_number'],
       linkedCustomerName: json['linked_customer_name'],
       linkedSupplierName: json['linked_supplier_name'],
+      attachments: json['attachments'] != null
+          ? List<Map<String, dynamic>>.from((json['attachments'] as List)
+              .map((e) => Map<String, dynamic>.from(e)))
+          : [],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
@@ -179,6 +187,7 @@ class TaskModel {
       'linked_sales_invoice_id': linkedSalesInvoiceId,
       'linked_customer_id': linkedCustomerId,
       'linked_supplier_id': linkedSupplierId,
+      'attachments': attachments,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -214,6 +223,7 @@ class TaskModel {
     String? linkedSalesInvoiceNumber,
     String? linkedCustomerName,
     String? linkedSupplierName,
+    List<Map<String, dynamic>>? attachments,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -242,6 +252,7 @@ class TaskModel {
           linkedSalesInvoiceNumber ?? this.linkedSalesInvoiceNumber,
       linkedCustomerName: linkedCustomerName ?? this.linkedCustomerName,
       linkedSupplierName: linkedSupplierName ?? this.linkedSupplierName,
+      attachments: attachments ?? this.attachments,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

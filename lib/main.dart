@@ -388,11 +388,6 @@ class VinabikeApp extends StatelessWidget {
                   Provider.of<TenantService>(context, listen: false),
                 )),
         ChangeNotifierProvider(
-            create: (context) => TaskService(
-                  Supabase.instance.client,
-                  Provider.of<TenantService>(context, listen: false),
-                )),
-        ChangeNotifierProvider(
             create: (context) => PayrollVoucherService(
                   Provider.of<DatabaseService>(context, listen: false),
                 )),
@@ -597,6 +592,7 @@ class VinabikeApp extends StatelessWidget {
                 salesService: context.read<SalesService>(),
                 purchaseService: context.read<PurchaseService>(),
                 hrService: context.read<HRService>(),
+                taskService: context.read<TaskService>(),
                 isPublicStore: isPublicStoreHost, // Disable on public store
               );
             });
