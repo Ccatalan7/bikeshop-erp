@@ -15,14 +15,14 @@ CREATE TABLE public.smart_tasks (
     
     due_date TIMESTAMPTZ,
     
-    assigned_to UUID REFERENCES public.profiles(id) ON DELETE SET NULL, 
+    assigned_to UUID REFERENCES auth.users(id) ON DELETE SET NULL, 
     -- Optional: specific staff member to assign the task to
     
-    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     -- Who created the task
     
     -- Entity Links (Polymorphic relations)
-    linked_job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
+    linked_job_id UUID REFERENCES public.mechanic_jobs(id) ON DELETE SET NULL,
     linked_purchase_invoice_id UUID REFERENCES public.purchase_invoices(id) ON DELETE SET NULL,
     linked_sales_invoice_id UUID REFERENCES public.sales_invoices(id) ON DELETE SET NULL,
     linked_customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
