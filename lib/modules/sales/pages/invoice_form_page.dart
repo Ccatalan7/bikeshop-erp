@@ -102,10 +102,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _status == InvoiceStatus.draft &&
       !_isEditing;
   double get _outstandingAmount {
-    final balance = _loadedInvoice?.balance;
-    if (balance != null && balance > 0) {
-      return balance;
-    }
     final paid = _loadedInvoice?.paidAmount ?? 0;
     final total = _loadedInvoice?.total ?? _total;
     return (total - paid).clamp(0, double.infinity);
@@ -2621,9 +2617,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     final textStyle =
         theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
 
-    // Get paid amount and balance from loaded invoice
+    // Get paid amount and calculate balance fresh (don't trust DB trigger value)
     final paidAmount = _loadedInvoice?.paidAmount ?? 0;
-    final balance = _loadedInvoice?.balance ?? _total;
+    final balance = _total - paidAmount;
     final hasPayments = paidAmount > 0;
 
     return Column(

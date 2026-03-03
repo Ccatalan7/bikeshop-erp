@@ -63,6 +63,7 @@ import 'shared/services/data_preload_service.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
+import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
@@ -405,6 +406,7 @@ class VinabikeApp extends StatelessWidget {
         // MercadoPago: Don't auto-initialize - checkout will init with proper tenant_id
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => BackupService()),
+        ChangeNotifierProvider(create: (_) => SpreadsheetService()),
 
         // User Management
         Provider(

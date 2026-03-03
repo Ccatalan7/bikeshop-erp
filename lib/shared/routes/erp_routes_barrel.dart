@@ -96,6 +96,10 @@ export '../../modules/mail/pages/mail_inbox_page.dart';
 // Debug Module
 export '../../modules/debug/pages/bug_list_page.dart';
 
+// Spreadsheets Module
+export '../../modules/spreadsheets/pages/spreadsheet_dashboard_page.dart';
+export '../../modules/spreadsheets/pages/spreadsheet_editor_page.dart';
+
 // WebView Modules
 export '../../modules/webview_modules/webview_modules.dart';
 

@@ -88,6 +88,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         SettingsPage,
         SmartPurchaseListPage,
         SpokeLengthCalculatorPage,
+        SpreadsheetDashboardPage,
+        SpreadsheetEditorPage,
         StockMovementsPage,
         SupplierFormPage,
         SupplierListPage,
@@ -2357,6 +2359,29 @@ class AppRouter {
             erp.loadLibrary(),
             () => erp.WhatsAppWebModulePage(),
           ),
+        ),
+
+        // ── Native Spreadsheets ──
+        GoRoute(
+          path: '/tools/spreadsheets',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.SpreadsheetDashboardPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/tools/spreadsheets/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.SpreadsheetEditorPage(spreadsheetId: id),
+            );
+          },
         ),
 
         // Google Sheets

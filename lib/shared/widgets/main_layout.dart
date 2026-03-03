@@ -381,6 +381,11 @@ const String _chatSectionKey = 'chat';
 // Tools (WebView embedded websites)
 const List<MenuSubItem> _toolsMenuItems = [
   MenuSubItem(
+    icon: Icons.table_chart,
+    title: '📊 Planillas',
+    route: '/tools/spreadsheets',
+  ),
+  MenuSubItem(
     icon: Icons.message,
     title: 'WhatsApp Web',
     route: '/tools/whatsapp-web',
