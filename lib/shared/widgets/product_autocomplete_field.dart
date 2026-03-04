@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -108,6 +109,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   @override
   void dispose() {
     _removeOverlay();
+    _hideImagePreview();
     if (widget.controller == null) {
       _controller.dispose();
     }
@@ -132,43 +134,66 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     final size = renderBox.size;
     final position = renderBox.localToGlobal(Offset.zero);
 
-    // Use wider dropdown (minimum 500px) like Zoho for better product info display
+    // Get actual overlay bounds (the true rendering area)
+    final overlayBox = overlay.context.findRenderObject() as RenderBox;
+    final overlaySize = overlayBox.size;
+    final overlayPosition = overlayBox.localToGlobal(Offset.zero);
+
+    // Position relative to overlay origin
+    final relativeY = position.dy - overlayPosition.dy;
+    final relativeX = position.dx - overlayPosition.dx;
+
+    // Use wider dropdown (minimum 500px) for better product info display
     final dropdownWidth = size.width < 500 ? 500.0 : size.width;
 
-    // Calculate available space below and above the field
-    final screenHeight = MediaQuery.of(context).size.height;
-    final spaceBelow = screenHeight - position.dy - size.height;
-    final spaceAbove = position.dy;
+    const margin = 8.0;
+    final fieldBottomInOverlay = relativeY + size.height;
+    final spaceBelow = overlaySize.height - fieldBottomInOverlay - margin;
+    final spaceAbove = relativeY - margin;
 
-    // Dropdown max height
-    const maxDropdownHeight = 400.0;
+    const preferredMaxHeight = 400.0;
 
-    // Decide whether to show above or below
-    final showAbove = spaceBelow < maxDropdownHeight && spaceAbove > spaceBelow;
-    final offset = showAbove
-        ? Offset(0, -(maxDropdownHeight + 4)) // Position above
-        : Offset(0, size.height + 4); // Position below
+    // Always show wherever there's more space — above or below
+    final showAbove = spaceAbove > spaceBelow;
+
+    final availableSpace = showAbove ? spaceAbove : spaceBelow;
+    final dropdownMaxHeight = availableSpace.clamp(100.0, preferredMaxHeight);
+
+    final left = relativeX.clamp(
+        0.0, (overlaySize.width - dropdownWidth).clamp(0.0, double.infinity));
+
+    final bottomAnchor = overlaySize.height - relativeY + 4;
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        width: dropdownWidth,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: offset,
-          child: Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(8),
-            child: _buildDropdownContent(Theme.of(context)),
-          ),
-        ),
-      ),
+      builder: (context) => showAbove
+          ? Positioned(
+              left: left,
+              bottom: bottomAnchor,
+              width: dropdownWidth,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                child:
+                    _buildDropdownContent(Theme.of(context), dropdownMaxHeight),
+              ),
+            )
+          : Positioned(
+              left: left,
+              top: fieldBottomInOverlay + 4,
+              width: dropdownWidth,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                child:
+                    _buildDropdownContent(Theme.of(context), dropdownMaxHeight),
+              ),
+            ),
     );
 
     overlay.insert(_overlayEntry!);
   }
 
-  Widget _buildDropdownContent(ThemeData theme) {
+  Widget _buildDropdownContent(ThemeData theme, double maxHeight) {
     return MouseRegion(
       onEnter: (_) {
         // Keep overlay open when mouse is over dropdown
@@ -187,8 +212,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         });
       },
       child: Container(
-        constraints: const BoxConstraints(
-          maxHeight: 400,
+        constraints: BoxConstraints(
+          maxHeight: maxHeight,
         ),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
@@ -269,6 +294,113 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     );
   }
 
+  /// Overlay entry for the enlarged image preview
+  OverlayEntry? _imagePreviewOverlay;
+  Timer? _imagePreviewTimer;
+
+  void _scheduleImagePreview(String imageUrl, Offset mousePosition) {
+    _cancelImagePreviewTimer();
+    _imagePreviewTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) {
+        _showImagePreview(imageUrl, mousePosition);
+      }
+    });
+  }
+
+  void _cancelImagePreviewTimer() {
+    _imagePreviewTimer?.cancel();
+    _imagePreviewTimer = null;
+  }
+
+  void _showImagePreview(String imageUrl, Offset mousePosition) {
+    _hideImagePreview();
+    final overlay = Overlay.of(context);
+
+    // Get overlay origin to convert global mouse position to overlay-local
+    final overlayBox = overlay.context.findRenderObject() as RenderBox;
+    final overlaySize = overlayBox.size;
+    final overlayPos = overlayBox.localToGlobal(Offset.zero);
+
+    const previewSize = 250.0;
+    const gap = 12.0;
+
+    // Anchor X to the right edge of the dropdown (never overlaps the list)
+    final fieldBox = context.findRenderObject() as RenderBox;
+    final fieldPos = fieldBox.localToGlobal(Offset.zero);
+    final fieldRelX = fieldPos.dx - overlayPos.dx;
+    final dropdownWidth =
+        fieldBox.size.width < 500 ? 500.0 : fieldBox.size.width;
+    final dropdownRightEdge = fieldRelX + dropdownWidth;
+
+    // Use cursor Y for vertical position (natural feel — preview is next to what you're hovering)
+    final mouseRelY = mousePosition.dy - overlayPos.dy;
+
+    // Try right side first, flip to left if not enough room
+    final fitsRight =
+        dropdownRightEdge + gap + previewSize < overlaySize.width - 8;
+    final left = fitsRight
+        ? dropdownRightEdge + gap
+        : (fieldRelX - previewSize - gap)
+            .clamp(8.0, overlaySize.width - previewSize - 8.0);
+
+    // Vertically center preview on the cursor, clamp to screen
+    final top = (mouseRelY - previewSize / 2)
+        .clamp(8.0, overlaySize.height - previewSize - 8.0);
+
+    _imagePreviewOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        left: left,
+        top: top,
+        child: IgnorePointer(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) => Opacity(
+              opacity: value,
+              child: Transform.scale(
+                scale: 0.9 + 0.1 * value,
+                alignment: Alignment.centerLeft,
+                child: child,
+              ),
+            ),
+            child: Material(
+              elevation: 16,
+              shadowColor: Colors.black45,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    width: 1,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Image.network(
+                    imageUrl,
+                    width: previewSize,
+                    height: previewSize,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_imagePreviewOverlay!);
+  }
+
+  void _hideImagePreview() {
+    _cancelImagePreviewTimer();
+    _imagePreviewOverlay?.remove();
+    _imagePreviewOverlay = null;
+  }
+
   Widget _buildProductTile(Product product, ThemeData theme) {
     final hasStock = product.stockQuantity > 0;
     bool isHovered = false;
@@ -277,13 +409,17 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       builder: (context, setHoverState) {
         return MouseRegion(
           onEnter: (_) => setHoverState(() => isHovered = true),
-          onExit: (_) => setHoverState(() => isHovered = false),
+          onExit: (_) {
+            setHoverState(() => isHovered = false);
+            _hideImagePreview();
+          },
           child: GestureDetector(
             onTapDown: (_) {
               // Prevent focus loss during tap
               _isTapInProgress = true;
             },
             onTap: () {
+              _hideImagePreview();
               _selectProduct(product);
               _removeOverlay();
               // Reset flag after overlay removed
@@ -295,103 +431,115 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
               // Reset flag if tap is cancelled
               _isTapInProgress = false;
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isHovered
-                    ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
-                    : Colors.transparent,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Product image (keep - only thing better than Zoho!)
-                  if (product.imageUrl != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.network(
-                        product.imageUrl!,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(4),
+            child: Builder(builder: (tileContext) {
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isHovered
+                      ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+                      : Colors.transparent,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Product image with hover-to-enlarge
+                    MouseRegion(
+                      onEnter: (event) {
+                        if (product.imageUrl != null) {
+                          _scheduleImagePreview(
+                              product.imageUrl!, event.position);
+                        }
+                      },
+                      onExit: (_) => _hideImagePreview(),
+                      child: product.imageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.network(
+                                product.imageUrl!,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Icon(
+                                    Icons.inventory_2,
+                                    size: 20,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2,
+                                size: 20,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Product info - compact like Zoho
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            product.name,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          child: Icon(
-                            Icons.inventory_2,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
+                          const SizedBox(height: 2),
+                          Text(
+                            'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: hasStock
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : theme.colorScheme.error,
+                              fontSize: 12,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Icon(
-                        Icons.inventory_2,
-                        size: 20,
-                        color: theme.colorScheme.onSurfaceVariant,
+                        ],
                       ),
                     ),
-                  const SizedBox(width: 12),
-                  // Product info - compact like Zoho
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          product.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'SKU: ${product.sku} • ${hasStock ? '${product.stockQuantity} ${product.unit.name}' : 'Sin stock'}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: hasStock
-                                ? theme.colorScheme.onSurfaceVariant
-                                : theme.colorScheme.error,
-                            fontSize: 12,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    // Price/Cost - right-aligned like Zoho
+                    Text(
+                      widget.showCost
+                          ? '\$${product.cost.toStringAsFixed(0)}'
+                          : '\$${product.price.toStringAsFixed(0)}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: widget.showCost
+                            ? theme.colorScheme.tertiary
+                            : theme.colorScheme.onSurface,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Price/Cost - right-aligned like Zoho
-                  Text(
-                    widget.showCost
-                        ? '\$${product.cost.toStringAsFixed(0)}'
-                        : '\$${product.price.toStringAsFixed(0)}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: widget.showCost
-                          ? theme
-                              .colorScheme.tertiary // Different color for cost
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                ),
+              );
+            }),
           ),
         );
       },

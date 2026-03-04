@@ -2017,18 +2017,65 @@ class _PegasTablePageState extends State<PegasTablePage>
 
               const Spacer(),
 
-              // Stats - sum invoice totals, not job costs
+              // Stats - sum invoice totals, paid, and outstanding
               if (_filteredJobs.isNotEmpty)
-                Text(
-                  'Valor total: ${NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(_filteredJobs.fold<double>(0, (sum, job) {
+                Builder(builder: (context) {
+                  double totalSum = 0;
+                  double paidSum = 0;
+                  for (final job in _filteredJobs) {
                     final invoice =
                         job.invoiceId != null ? _invoices[job.invoiceId] : null;
-                    return sum + (invoice?.total ?? job.totalCost);
-                  }))}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                    totalSum += invoice?.total ?? job.totalCost;
+                    paidSum += invoice?.paidAmount ?? 0;
+                  }
+                  final outstandingSum = totalSum - paidSum;
+                  final fmt =
+                      NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Total: ${fmt.format(totalSum)}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
-                ),
+                      if (paidSum > 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('·',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 16)),
+                        ),
+                        Text(
+                          'Pagado: ${fmt.format(paidSum)}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green.shade700,
+                                  ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('·',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 16)),
+                        ),
+                        Text(
+                          'Por cobrar: ${fmt.format(outstandingSum)}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: outstandingSum > 0
+                                        ? Colors.orange.shade700
+                                        : Colors.green.shade700,
+                                  ),
+                        ),
+                      ],
+                    ],
+                  );
+                }),
             ],
           ),
         ],
@@ -3903,16 +3950,61 @@ class _PegasTablePageState extends State<PegasTablePage>
           );
         }
 
-        // Show invoice total if exists, otherwise job total cost (for summary and single bike)
+        // Show invoice total with payment progress bar
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
         final displayTotal = invoice?.total ?? job.totalCost;
-        return Text(
-          NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-              .format(displayTotal),
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+        final paidAmount = invoice?.paidAmount ?? 0.0;
+        final hasPayments = paidAmount > 0 && displayTotal > 0;
+        final isFullyPaid = hasPayments && paidAmount >= displayTotal;
+        final paymentRatio = displayTotal > 0
+            ? (paidAmount / displayTotal).clamp(0.0, 1.0)
+            : 0.0;
+        final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
+        final content = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fmt.format(displayTotal),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: isFullyPaid ? Colors.green.shade700 : null,
+              ),
+            ),
+            // Thin payment progress bar
+            if (hasPayments)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: SizedBox(
+                    height: 4,
+                    width: 80,
+                    child: LinearProgressIndicator(
+                      value: paymentRatio,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isFullyPaid
+                            ? Colors.green.shade500
+                            : Colors.orange.shade400,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+
+        if (!hasPayments) return content;
+
+        // Tooltip with full breakdown
+        return Tooltip(
+          message: 'Total: ${fmt.format(displayTotal)}\n'
+              'Pagado: ${fmt.format(paidAmount)}\n'
+              'Saldo: ${fmt.format(displayTotal - paidAmount)}',
+          child: content,
         );
 
       case 'invoice':

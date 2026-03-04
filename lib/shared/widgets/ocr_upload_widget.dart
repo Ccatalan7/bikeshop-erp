@@ -1,7 +1,8 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -126,13 +127,24 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     _initializeOCR();
   }
 
+  /// Whether the current platform supports local ML Kit OCR.
+  /// ML Kit only works on iOS and Android, not on macOS/Windows/Linux/Web.
+  bool get _isLocalOCRSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
+
   Future<void> _initializeOCR() async {
     try {
-      // Initialize local OCR (may fail on macOS/desktop)
-      try {
-        await _ocrService.initialize();
-      } catch (e) {
-        debugPrint('⚠️ Local OCR init failed (OK on desktop): $e');
+      // Initialize local OCR only on supported platforms (iOS/Android)
+      if (_isLocalOCRSupported) {
+        try {
+          await _ocrService.initialize();
+        } catch (e) {
+          debugPrint('⚠️ Local OCR init failed: $e');
+        }
+      } else {
+        debugPrint('ℹ️ Local ML Kit OCR not supported on this platform');
       }
 
       // Check Veryfi availability
@@ -148,14 +160,32 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // Determine which provider to use
       switch (widget.provider) {
         case OCRProvider.auto:
-          _useVeryfi = _veryfiAvailable;
+          // On desktop/web, ALWAYS use Veryfi (ML Kit doesn't exist)
+          if (!_isLocalOCRSupported) {
+            _useVeryfi = true;
+          } else {
+            _useVeryfi = _veryfiAvailable;
+          }
           break;
         case OCRProvider.veryfi:
           _useVeryfi = true;
           break;
         case OCRProvider.local:
-          _useVeryfi = false;
+          // If someone forces local on desktop, override to Veryfi
+          if (!_isLocalOCRSupported) {
+            _useVeryfi = true;
+            debugPrint(
+                '⚠️ Local OCR forced but not supported on this platform, switching to Veryfi');
+          } else {
+            _useVeryfi = false;
+          }
           break;
+      }
+
+      // If we need Veryfi but it's not configured, show error
+      if (_useVeryfi && !_veryfiAvailable) {
+        _errorMessage =
+            'Veryfi no está configurado. Agrega VERYFI_CLIENT_ID y VERYFI_API_KEY en el archivo .env para usar OCR en escritorio.';
       }
     } catch (e) {
       debugPrint('❌ OCR initialization error: $e');
