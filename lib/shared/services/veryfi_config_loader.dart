@@ -74,9 +74,15 @@ class VeryfiConfigLoader {
       headers['Client-Id'] = clientId;
     }
 
-    // Veryfi requires: Authorization: apikey USERNAME:API_KEY
+    // Veryfi requires Authorization header
     if (username.isNotEmpty && apiKey.isNotEmpty) {
       headers['Authorization'] = 'apikey $username:$apiKey';
+    } else if (clientId.isNotEmpty && apiKey.isNotEmpty) {
+      // In many Veryfi configs without username, Client ID acts as the username
+      headers['Authorization'] = 'apikey $clientId:$apiKey';
+    } else if (apiKey.isNotEmpty) {
+      // Fallback for some specific plan configurations
+      headers['Authorization'] = 'apikey $apiKey';
     } else if (dotenv.env['VERYFI_AUTH_HEADER'] != null &&
         dotenv.env['VERYFI_AUTH_VALUE'] != null) {
       // Alternative: custom header format
