@@ -564,13 +564,14 @@ class PurchaseService extends ChangeNotifier {
       await getPurchasePayments(forceRefresh: true);
       await getPurchaseInvoices(forceRefresh: true);
 
-      // Verify balance and update status if needed
+      // Verify balance and update status if needed (tolerance of $1 for rounding)
       final updatedInvoice = await getPurchaseInvoice(payment.invoiceId);
       if (updatedInvoice != null &&
-          updatedInvoice.balance <= 0 &&
+          updatedInvoice.balance < 1.0 &&
+          updatedInvoice.paidAmount > 0 &&
           updatedInvoice.status != PurchaseInvoiceStatus.paid) {
         debugPrint(
-            '💰 Invoice ${updatedInvoice.invoiceNumber} fully paid. Updating status to PAID.');
+            '💰 Invoice ${updatedInvoice.invoiceNumber} fully paid (balance: ${updatedInvoice.balance}). Updating status to PAID.');
         await markAsPaid(updatedInvoice.id!);
       }
 

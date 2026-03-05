@@ -1312,7 +1312,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   Widget _buildCell(String column, PurchaseInvoice invoice, double width) {
     final rawBalance = invoice.total - invoice.paidAmount;
-    final balance = rawBalance.abs() < 0.01 ? 0.0 : rawBalance;
+    // Tolerance of $1 for rounding differences (e.g. payment of 61612 on total of 61612.25)
+    final balance = rawBalance.abs() < 1.0 ? 0.0 : rawBalance;
 
     Widget content;
     switch (column) {

@@ -1,5 +1,8 @@
 {
   "name": "vinabike-erp",
   "version": "1.0.0",
-  "description": "Vinabike ERP - Flutter Web Application"
+  "description": "Vinabike ERP - Flutter Web Application",
+  "dependencies": {
+    "pg": "^8.20.0"
+  }
 }
