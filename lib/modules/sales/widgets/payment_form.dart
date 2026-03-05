@@ -37,11 +37,10 @@ class _PaymentFormState extends State<PaymentForm> {
   bool _isLoadingMethods = true;
   bool _includesIva = false; // Payment-level IVA toggle
 
-  /// Effective balance: use DB balance when > 0; fall back to total - paidAmount.
-  /// Guards against cases where the DB `balance` trigger hasn't updated yet.
+  /// Effective balance: always compute from total - paidAmount for consistency.
+  /// The raw DB `balance` field can be stale if the invoice total was changed
+  /// after a payment was recorded, causing it to disagree with paid_amount.
   double get _effectiveBalance {
-    final b = widget.invoice.balance;
-    if (b > 0) return b;
     return (widget.invoice.total - widget.invoice.paidAmount)
         .clamp(0.0, widget.invoice.total);
   }

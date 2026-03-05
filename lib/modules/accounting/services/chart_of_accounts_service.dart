@@ -116,6 +116,7 @@ class ChartOfAccountsService extends ChangeNotifier {
   Future<void> addAccount(Account account) async {
     try {
       final payload = {
+        'tenant_id': account.tenantId,
         'code': account.code,
         'name': account.name,
         'type': account.type.name,
@@ -187,9 +188,12 @@ class ChartOfAccountsService extends ChangeNotifier {
   Account? get cashAccount => getAccountByCode('1101');
   Account? get bankAccount => getAccountByCode('1110');
   Account? get accountsReceivable => getAccountByCode('1130');
-  Account? get inventory => getAccountByCode('1105'); // Fixed: 1150→1105 (matches SQL functions)
-  Account? get ivaCredit => getAccountByCode('2120'); // Fixed: 1180→2120 (tax receivable)
-  Account? get accountsPayable => getAccountByCode('2101'); // Fixed: 2100→2101 (matches seed)
+  Account? get inventory =>
+      getAccountByCode('1105'); // Fixed: 1150→1105 (matches SQL functions)
+  Account? get ivaCredit =>
+      getAccountByCode('2120'); // Fixed: 1180→2120 (tax receivable)
+  Account? get accountsPayable =>
+      getAccountByCode('2101'); // Fixed: 2100→2101 (matches seed)
   Account? get ivaDebit => getAccountByCode('2150');
   Account? get salesRevenue => getAccountByCode('4100');
   Account? get costOfGoodsSold => getAccountByCode('5100');

@@ -2617,9 +2617,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     final textStyle =
         theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
 
-    // Get paid amount and calculate balance fresh (don't trust DB trigger value)
+    // Compute balance from paid_amount to stay consistent with payment terminal
+    // Do NOT use raw DB `balance` field — it can be stale/inconsistent if total changed
     final paidAmount = _loadedInvoice?.paidAmount ?? 0;
-    final balance = _total - paidAmount;
+    final balance = (_loadedInvoice?.total ?? _total) - paidAmount;
     final hasPayments = paidAmount > 0;
 
     return Column(
@@ -2750,7 +2751,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         .map((entry) => entry.toInvoiceItem())
         .toList();
 
-    // Use paidAmount and balance from loaded invoice if available (payments are external)
+    // Use paidAmount from DB; compute balance consistently as total - paidAmount
     final paidAmount = _loadedInvoice?.paidAmount ?? 0;
     final balance = _total - paidAmount;
 
