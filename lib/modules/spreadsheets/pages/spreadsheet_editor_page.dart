@@ -31,10 +31,34 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   final Map<String, CellData> _cells = {};
   int _selectedRow = 0;
   int _selectedCol = 0;
+  int? _selectionEndRow;
+  int? _selectionEndCol;
+
+  // Drag state
+  bool _isDraggingHandle = false;
+
   bool _isEditing = false;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasUnsaved = false;
+
+  bool get _isMultiSelection =>
+      _selectionEndRow != null &&
+      _selectionEndCol != null &&
+      (_selectionEndRow != _selectedRow || _selectionEndCol != _selectedCol);
+
+  int get _minRow => _isMultiSelection
+      ? (_selectedRow < _selectionEndRow! ? _selectedRow : _selectionEndRow!)
+      : _selectedRow;
+  int get _maxRow => _isMultiSelection
+      ? (_selectedRow > _selectionEndRow! ? _selectedRow : _selectionEndRow!)
+      : _selectedRow;
+  int get _minCol => _isMultiSelection
+      ? (_selectedCol < _selectionEndCol! ? _selectedCol : _selectionEndCol!)
+      : _selectedCol;
+  int get _maxCol => _isMultiSelection
+      ? (_selectedCol > _selectionEndCol! ? _selectedCol : _selectionEndCol!)
+      : _selectedCol;
 
   Timer? _saveTimer;
   final TextEditingController _formulaBarController = TextEditingController();
@@ -121,11 +145,25 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     setState(() {
       _selectedRow = row;
       _selectedCol = col;
+      _selectionEndRow = null;
+      _selectionEndCol = null;
       _isEditing = false;
+
+      // If single cell, show its raw value in formula bar
       final cell = _getCell(row, col);
       _formulaBarController.text = cell.rawValue;
     });
     _gridFocusNode.requestFocus();
+  }
+
+  void _updateSelectionEnd(int row, int col) {
+    setState(() {
+      _selectionEndRow = row;
+      _selectionEndCol = col;
+      // When exploring multi-selection, perhaps clear formula bar or show range stats
+      // For now, keep the starting cell's formula if we just drag
+    });
+    _ensureVisibleCell(row, col);
   }
 
   void _startEditing() {
@@ -224,6 +262,65 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   }
 
   // ══════════════════════════════════════════════════════════════════
+  // AUTOFILL LOGIC
+  // ══════════════════════════════════════════════════════════════════
+
+  void _performAutofill() {
+    if (!_isMultiSelection) return;
+
+    // Detect fill direction. We assume the "source" is the selectedRow/selectedCol.
+    // The "target" area is the expanded selection.
+
+    // For simplicity: copy from the first selected cell to all others in the range.
+    final srcRow = _selectedRow;
+    final srcCol = _selectedCol;
+    final srcCell = _getCell(srcRow, srcCol);
+    if (srcCell.isEmpty) return;
+
+    final baseRaw = srcCell.rawValue;
+
+    bool changedAny = false;
+    for (int r = _minRow; r <= _maxRow; r++) {
+      for (int c = _minCol; c <= _maxCol; c++) {
+        if (r == srcRow && c == srcCol) continue; // Skip source
+
+        if (baseRaw.startsWith('=')) {
+          // Increment formula refs based on offset
+          final rowOffset = r - srcRow;
+          final colOffset = c - srcCol;
+          final newFormula = _shiftFormula(baseRaw, rowOffset, colOffset);
+          _setCellValue(r, c, newFormula);
+        } else {
+          // Just copy value
+          _setCellValue(r, c, baseRaw);
+        }
+        changedAny = true;
+      }
+    }
+
+    if (changedAny) {
+      _scheduleSave();
+      setState(() {});
+    }
+  }
+
+  String _shiftFormula(String formula, int rowOffset, int colOffset) {
+    // Basic regex to find cell references like A1, B10, etc.
+    final refRegex = RegExp(r'\b([A-Z]+)(\d+)\b', caseSensitive: false);
+    return formula.replaceAllMapped(refRegex, (match) {
+      final colStr = match.group(1)!;
+      final rowStr = match.group(2)!;
+      final col = CellModel.letterToCol(colStr.toUpperCase());
+      final row = int.parse(rowStr) - 1;
+
+      final newCol = (col + colOffset).clamp(0, _defaultCols - 1);
+      final newRow = (row + rowOffset).clamp(0, _defaultRows - 1);
+
+      return '${CellModel.colToLetter(newCol)}${newRow + 1}';
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════
   // KEYBOARD
   // ══════════════════════════════════════════════════════════════════
 
@@ -253,21 +350,47 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       return KeyEventResult.ignored;
     }
 
-    // Navigation
+    // Navigation with Shift for multi-selection
+    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+
     if (key == LogicalKeyboardKey.arrowDown) {
-      _moveSelection(1, 0);
+      if (isShiftPressed) {
+        final endR = _selectionEndRow ?? _selectedRow;
+        final endC = _selectionEndCol ?? _selectedCol;
+        _updateSelectionEnd((endR + 1).clamp(0, _defaultRows - 1), endC);
+      } else {
+        _moveSelection(1, 0);
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowUp) {
-      _moveSelection(-1, 0);
+      if (isShiftPressed) {
+        final endR = _selectionEndRow ?? _selectedRow;
+        final endC = _selectionEndCol ?? _selectedCol;
+        _updateSelectionEnd((endR - 1).clamp(0, _defaultRows - 1), endC);
+      } else {
+        _moveSelection(-1, 0);
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      _moveSelection(0, 1);
+      if (isShiftPressed) {
+        final endR = _selectionEndRow ?? _selectedRow;
+        final endC = _selectionEndCol ?? _selectedCol;
+        _updateSelectionEnd(endR, (endC + 1).clamp(0, _defaultCols - 1));
+      } else {
+        _moveSelection(0, 1);
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
-      _moveSelection(0, -1);
+      if (isShiftPressed) {
+        final endR = _selectionEndRow ?? _selectedRow;
+        final endC = _selectionEndCol ?? _selectedCol;
+        _updateSelectionEnd(endR, (endC - 1).clamp(0, _defaultCols - 1));
+      } else {
+        _moveSelection(0, -1);
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.tab) {
@@ -282,7 +405,15 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     // Delete
     if (key == LogicalKeyboardKey.delete ||
         key == LogicalKeyboardKey.backspace) {
-      _setCellValue(_selectedRow, _selectedCol, '');
+      if (_isMultiSelection) {
+        for (int r = _minRow; r <= _maxRow; r++) {
+          for (int c = _minCol; c <= _maxCol; c++) {
+            _setCellValue(r, c, '');
+          }
+        }
+      } else {
+        _setCellValue(_selectedRow, _selectedCol, '');
+      }
       return KeyEventResult.handled;
     }
 
@@ -319,16 +450,18 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     setState(() {
       _selectedRow = (_selectedRow + dRow).clamp(0, _defaultRows - 1);
       _selectedCol = (_selectedCol + dCol).clamp(0, _defaultCols - 1);
+      _selectionEndRow = null;
+      _selectionEndCol = null;
       final cell = _getCell(_selectedRow, _selectedCol);
       _formulaBarController.text = cell.rawValue;
     });
-    _ensureVisible();
+    _ensureVisibleCell(_selectedRow, _selectedCol);
   }
 
-  void _ensureVisible() {
-    // Scroll to keep selected cell visible
-    final targetX = _headerWidth + _selectedCol * _cellWidth;
-    final targetY = _headerHeight + _selectedRow * _cellHeight;
+  void _ensureVisibleCell(int row, int col) {
+    // Scroll to keep targeted cell visible
+    final targetX = _headerWidth + col * _cellWidth;
+    final targetY = _headerHeight + row * _cellHeight;
     final viewportWidth = _hScrollController.position.viewportDimension;
     final viewportHeight = _vScrollController.position.viewportDimension;
 
@@ -524,8 +657,67 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                 child: _buildGrid(theme),
               ),
             ),
+
+            // ── Quick Stats Bottom Bar ──
+            if (_isMultiSelection) _buildQuickStatsBar(theme),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildQuickStatsBar(ThemeData theme) {
+    double sum = 0;
+    int count = 0;
+    int numCount = 0;
+
+    for (int r = _minRow; r <= _maxRow; r++) {
+      for (int c = _minCol; c <= _maxCol; c++) {
+        final cell = _getCell(r, c);
+        if (cell.isEmpty) continue;
+        count++;
+
+        final val =
+            double.tryParse(cell.isFormula ? cell.displayValue : cell.rawValue);
+        if (val != null) {
+          sum += val;
+          numCount++;
+        }
+      }
+    }
+
+    if (numCount == 0 && count == 0) return const SizedBox.shrink();
+
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: Colors.grey.shade300),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (numCount > 0) ...[
+            Text('Promedio: ${(sum / numCount).toStringAsFixed(2)}',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            const SizedBox(width: 16),
+            Text('Recuento nums: $numCount',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            const SizedBox(width: 16),
+            Text('Suma: ${sum.toStringAsFixed(2)}',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            const SizedBox(width: 16),
+          ],
+          Text('Recuento: $count',
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }
@@ -571,38 +763,96 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                       child: Stack(
                         children: [
                           // Click handler
-                          GestureDetector(
-                            onTapDown: (details) {
+                          // Click and Drag handler (using raw Listener to avoid gesture arena conflicts)
+                          Listener(
+                            onPointerDown: (details) {
                               final x = details.localPosition.dx;
                               final y = details.localPosition.dy;
                               if (x < _headerWidth || y < _headerHeight) return;
+
                               final col =
                                   ((x - _headerWidth) / _cellWidth).floor();
                               final row =
                                   ((y - _headerHeight) / _cellHeight).floor();
+
+                              // Check if clicked exactly on the auto-fill handle
+                              if (_isMultiSelection ||
+                                  (row == _selectedRow &&
+                                      col == _selectedCol)) {
+                                final maxR = _maxRow;
+                                final maxC = _maxCol;
+                                final handleX =
+                                    _headerWidth + (maxC + 1) * _cellWidth;
+                                final handleY =
+                                    _headerHeight + (maxR + 1) * _cellHeight;
+
+                                if ((x - handleX).abs() <= 12 &&
+                                    (y - handleY).abs() <= 12) {
+                                  _isDraggingHandle = true;
+                                  return;
+                                }
+                              }
+
+                              _isDraggingHandle = false;
                               if (row >= 0 &&
                                   row < _defaultRows &&
                                   col >= 0 &&
                                   col < _defaultCols) {
-                                _selectCell(row, col);
+                                if (HardwareKeyboard.instance.isShiftPressed) {
+                                  _updateSelectionEnd(row, col);
+                                } else {
+                                  _selectCell(row, col);
+                                }
                               }
                             },
-                            onDoubleTapDown: (details) {
+                            onPointerMove: (details) {
+                              // Only process if we are actively dragging (button is pressed)
+                              if (!details.down) return;
+
                               final x = details.localPosition.dx;
                               final y = details.localPosition.dy;
                               if (x < _headerWidth || y < _headerHeight) return;
-                              final col =
-                                  ((x - _headerWidth) / _cellWidth).floor();
-                              final row =
-                                  ((y - _headerHeight) / _cellHeight).floor();
-                              if (row >= 0 &&
-                                  row < _defaultRows &&
-                                  col >= 0 &&
-                                  col < _defaultCols) {
-                                _selectCell(row, col);
-                                _startEditing();
-                              }
+
+                              final col = ((x - _headerWidth) / _cellWidth)
+                                  .floor()
+                                  .clamp(0, _defaultCols - 1);
+                              final row = ((y - _headerHeight) / _cellHeight)
+                                  .floor()
+                                  .clamp(0, _defaultRows - 1);
+
+                              _updateSelectionEnd(row, col);
                             },
+                            onPointerUp: (details) {
+                              if (_isDraggingHandle && _isMultiSelection) {
+                                _performAutofill();
+                              }
+                              _isDraggingHandle = false;
+                            },
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onDoubleTapDown: (details) {
+                                final x = details.localPosition.dx;
+                                final y = details.localPosition.dy;
+                                if (x < _headerWidth || y < _headerHeight)
+                                  return;
+                                final col =
+                                    ((x - _headerWidth) / _cellWidth).floor();
+                                final row =
+                                    ((y - _headerHeight) / _cellHeight).floor();
+                                if (row >= 0 &&
+                                    row < _defaultRows &&
+                                    col >= 0 &&
+                                    col < _defaultCols) {
+                                  _selectCell(row, col);
+                                  _startEditing();
+                                }
+                              },
+                              child: Container(
+                                width: totalWidth,
+                                height: totalHeight,
+                                color: Colors.transparent, // Capture events
+                              ),
+                            ),
                           ),
 
                           // Inline cell editor
@@ -661,6 +911,9 @@ class _SpreadsheetPainter extends CustomPainter {
   final Map<String, CellData> cells;
   final int selectedRow;
   final int selectedCol;
+  final int? selectionEndRow;
+  final int? selectionEndCol;
+  final bool isDraggingHandle;
   final int rowCount;
   final int colCount;
   final double cellWidth;
@@ -673,6 +926,9 @@ class _SpreadsheetPainter extends CustomPainter {
     required this.cells,
     required this.selectedRow,
     required this.selectedCol,
+    this.selectionEndRow,
+    this.selectionEndCol,
+    this.isDraggingHandle = false,
     required this.rowCount,
     required this.colCount,
     required this.cellWidth,
@@ -682,17 +938,46 @@ class _SpreadsheetPainter extends CustomPainter {
     required this.theme,
   });
 
+  bool get _isMultiSelection =>
+      selectionEndRow != null &&
+      selectionEndCol != null &&
+      (selectionEndRow != selectedRow || selectionEndCol != selectedCol);
+
+  int get _minRow => _isMultiSelection
+      ? (selectedRow < selectionEndRow! ? selectedRow : selectionEndRow!)
+      : selectedRow;
+  int get _maxRow => _isMultiSelection
+      ? (selectedRow > selectionEndRow! ? selectedRow : selectionEndRow!)
+      : selectedRow;
+  int get _minCol => _isMultiSelection
+      ? (selectedCol < selectionEndCol! ? selectedCol : selectionEndCol!)
+      : selectedCol;
+  int get _maxCol => _isMultiSelection
+      ? (selectedCol > selectionEndCol! ? selectedCol : selectionEndCol!)
+      : selectedCol;
+
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
       ..color = Colors.grey.shade200
       ..strokeWidth = 0.5;
     final headerBg = Paint()..color = Colors.grey.shade100;
-    final selectionPaint = Paint()
+
+    final selectionBorderPaint = Paint()
       ..color = Colors.blue.shade600
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
+
+    final selectionFillPaint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
     final selectionHeaderBg = Paint()..color = Colors.blue.shade50;
+
+    final minR = _minRow;
+    final maxR = _maxRow;
+    final minC = _minCol;
+    final maxC = _maxCol;
 
     // ── Column headers ──
     canvas.drawRect(
@@ -701,8 +986,9 @@ class _SpreadsheetPainter extends CustomPainter {
     );
     for (int c = 0; c < colCount; c++) {
       final x = headerWidth + c * cellWidth;
-      // Highlight selected column header
-      if (c == selectedCol) {
+      // Highlight selected column header(s)
+      final isSelected = c >= minC && c <= maxC;
+      if (isSelected) {
         canvas.drawRect(
           Rect.fromLTWH(x, 0, cellWidth, headerHeight),
           selectionHeaderBg,
@@ -715,9 +1001,8 @@ class _SpreadsheetPainter extends CustomPainter {
           text: label,
           style: TextStyle(
             fontSize: 11,
-            fontWeight: c == selectedCol ? FontWeight.bold : FontWeight.w500,
-            color:
-                c == selectedCol ? Colors.blue.shade700 : Colors.grey.shade600,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.blue.shade700 : Colors.grey.shade600,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -744,8 +1029,9 @@ class _SpreadsheetPainter extends CustomPainter {
     );
     for (int r = 0; r < rowCount; r++) {
       final y = headerHeight + r * cellHeight;
-      // Highlight selected row header
-      if (r == selectedRow) {
+      // Highlight selected row header(s)
+      final isSelected = r >= minR && r <= maxR;
+      if (isSelected) {
         canvas.drawRect(
           Rect.fromLTWH(0, y, headerWidth, cellHeight),
           selectionHeaderBg,
@@ -757,9 +1043,8 @@ class _SpreadsheetPainter extends CustomPainter {
           text: label,
           style: TextStyle(
             fontSize: 11,
-            fontWeight: r == selectedRow ? FontWeight.bold : FontWeight.w500,
-            color:
-                r == selectedRow ? Colors.blue.shade700 : Colors.grey.shade600,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.blue.shade700 : Colors.grey.shade600,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -844,12 +1129,43 @@ class _SpreadsheetPainter extends CustomPainter {
       );
     }
 
-    // ── Selection border ──
-    final selX = headerWidth + selectedCol * cellWidth;
-    final selY = headerHeight + selectedRow * cellHeight;
+    // ── Selection Overlay ──
+    final selX = headerWidth + minC * cellWidth;
+    final selY = headerHeight + minR * cellHeight;
+    final selW = (maxC - minC + 1) * cellWidth;
+    final selH = (maxR - minR + 1) * cellHeight;
+
+    // Fill the selection (except the primary cell)
+    if (_isMultiSelection) {
+      canvas.drawRect(
+          Rect.fromLTWH(selX, selY, selW, selH), selectionFillPaint);
+
+      // Clear fill from the active cell
+      final activeX = headerWidth + selectedCol * cellWidth;
+      final activeY = headerHeight + selectedRow * cellHeight;
+      canvas.drawRect(
+          Rect.fromLTWH(activeX, activeY, cellWidth, cellHeight),
+          Paint()
+            ..color = Colors.white
+            ..blendMode = BlendMode.clear);
+    }
+
+    // Draw the main border around the selection
     canvas.drawRect(
-      Rect.fromLTWH(selX, selY, cellWidth, cellHeight),
-      selectionPaint,
+        Rect.fromLTWH(selX, selY, selW, selH), selectionBorderPaint);
+
+    // ── Autofill Handle ──
+    final handleSize = 6.0;
+    final handleX = selX + selW; // bottom right
+    final handleY = selY + selH;
+
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(handleX, handleY),
+        width: handleSize,
+        height: handleSize,
+      ),
+      Paint()..color = Colors.blue.shade700,
     );
   }
 

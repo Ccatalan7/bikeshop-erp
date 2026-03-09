@@ -1,0 +1,18 @@
+--- Standard ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- Standard with lower client-id ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- Client ID as Username ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- No Username ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- With Secret ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- With Secret as username ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}

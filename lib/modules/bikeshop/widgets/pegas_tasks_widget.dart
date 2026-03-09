@@ -20,7 +20,7 @@ class PegasTasksWidget extends StatefulWidget {
 
 class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   // Filters
-  TaskStatus? _statusFilter;
+  TaskStatus? _statusFilter = TaskStatus.pending;
   TaskPriority? _priorityFilter;
   String _searchQuery = '';
 

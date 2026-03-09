@@ -199,20 +199,39 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<JobStatusService>(context, listen: false);
 
       // Load data in parallel to speed up form opening
+      // Optimization: Fetch only a limited number initially, search will handle the rest
       final results = await Future.wait([
-        customerService.getCustomers(forceRefresh: false),
-        inventoryService.getProducts(forceRefresh: false),
-        jobStatusService
-            .loadStatuses(), // Returns void, but we await completion
+        customerService.getCustomers(limit: 50),
+        inventoryService.searchProducts('', limit: 50),
+        jobStatusService.loadStatuses(),
       ]);
 
-      final customers = results[0] as List<Customer>;
-      final products = results[1] as List<Product>;
+      List<Customer> customers = results[0] as List<Customer>;
+      List<Product> products = results[1] as List<Product>;
 
-      // Compute derived data efficiently
-      final serviceProducts = products
-          .where((product) => product.productType == ProductType.service)
-          .toList();
+      // If we have a specific customerId, ensure that customer is loaded
+      final targetCustomerId = widget.customerId ??
+          (widget.jobId != null
+              ? (await Provider.of<BikeshopService>(context, listen: false)
+                      .getJobById(widget.jobId!))
+                  ?.customerId
+              : null);
+
+      if (targetCustomerId != null) {
+        final hasCustomer = customers.any((c) => c.id == targetCustomerId);
+        if (!hasCustomer) {
+          final specificCustomer =
+              await customerService.getCustomerById(targetCustomerId);
+          if (specificCustomer != null) {
+            customers = [specificCustomer, ...customers];
+          }
+        }
+      }
+
+      // We still need service products for the "Service" dropdowns
+      // Fetch them specifically as they are usually few
+      final serviceProducts =
+          await inventoryService.getProductsByType(ProductType.service);
 
       final customStatuses = jobStatusService.activeStatuses;
       debugPrint('📋 Loaded ${customStatuses.length} custom statuses');
@@ -240,11 +259,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // If customer ID provided, pre-select customer
       if (widget.customerId != null && widget.jobId == null) {
-        final customer = _customers.firstWhere(
-          (c) => c.id == widget.customerId,
-          orElse: () => _customers.first,
-        );
-        await _selectCustomer(customer);
+        try {
+          final customer = _customers.firstWhere(
+            (c) => c.id == widget.customerId,
+          );
+          await _selectCustomer(customer);
+        } catch (_) {
+          // Fallback if not found (shouldn't happen with the logic above)
+          if (_customers.isNotEmpty) {
+            await _selectCustomer(_customers.first);
+          }
+        }
       }
 
       if (mounted) {
@@ -288,8 +313,23 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       debugPrint('✅ Job loaded: ${job.jobNumber}');
 
       // Load customer and bikes
-      final customer = _customers.firstWhere((c) => c.id == job.customerId);
-      await _selectCustomer(customer);
+      // Ensure customer is in our list (might not be in the initial top 50)
+      Customer? customer;
+      try {
+        customer = _customers.firstWhere((c) => c.id == job.customerId);
+      } catch (_) {
+        customer = await Provider.of<CustomerService>(context, listen: false)
+            .getCustomerById(job.customerId);
+        if (customer != null && mounted) {
+          setState(() {
+            _customers = [customer!, ..._customers];
+          });
+        }
+      }
+
+      if (customer != null) {
+        await _selectCustomer(customer);
+      }
 
       // Load all job items (parts + services)
       final allItems = await bikeshopService.getJobItems(job.id!);
@@ -4716,7 +4756,8 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
       try {
         final results = term.trim().isEmpty
             ? widget.initialCustomers
-            : await widget.customerService.getCustomers(searchTerm: term);
+            : await widget.customerService
+                .getCustomers(searchTerm: term, limit: 20);
         if (mounted) {
           setState(() => _customers = results);
         }

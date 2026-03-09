@@ -1,0 +1,519 @@
+{
+  "missing_brand": [
+    {
+      "sku": "AE0151",
+      "name": "Luz Delantera T6 LED AE 1000 Lumen",
+      "zoho_brand": "Aliexpress"
+    },
+    {
+      "sku": "AE0144",
+      "name": "Caliper Freno Trasero Mecánico Bucklos AE",
+      "zoho_brand": "Bucklos"
+    },
+    {
+      "sku": "7290001284339",
+      "name": "Candado OnGuard Llave Espiral NS 180cmX12mm Naranjo",
+      "zoho_brand": "On Guard"
+    },
+    {
+      "sku": "AE0159",
+      "name": "Luz trasera AE Led Recargable",
+      "zoho_brand": "Aliexpress"
+    },
+    {
+      "sku": "6927116119034",
+      "name": "Cámara Chaoyang 26x1.95/2.125 A/V 48MM",
+      "zoho_brand": "Chaoyang"
+    },
+    {
+      "sku": "6927116185589",
+      "name": "Cámara Chaoyang 26x1.95/2.125 A/V 33MM",
+      "zoho_brand": "Chaoyang"
+    },
+    {
+      "sku": "NNV51",
+      "name": "Eje Macizo Maza Trasera Sellada Genérico",
+      "zoho_brand": "Genérico"
+    },
+    {
+      "sku": "NNV74",
+      "name": "Kit Guía Cableado Interno Risk 1,5Mt",
+      "zoho_brand": "Risk"
+    },
+    {
+      "sku": "PO02771019200",
+      "name": "MAZA TRASERA 36H DISCO NEGRA COMPATIBLE / GENERICO ALTERNATIVO 2022 ECONOM.",
+      "zoho_brand": "Genérico"
+    },
+    {
+      "sku": "AE0292",
+      "name": "Pastillas Freno Disco Semi Metal - Ceramico DS01 ZTTO",
+      "zoho_brand": "ZITTO"
+    },
+    {
+      "sku": "NNV63",
+      "name": "Horquilla Suntour 29\" Xcm Rl Negra Mate Disco",
+      "zoho_brand": "Suntour"
+    },
+    {
+      "sku": "AE0203",
+      "name": "Guantes Dedo Completo Negro - West Biking - Silicona - XL",
+      "zoho_brand": "West Biking"
+    },
+    {
+      "sku": "AE0307",
+      "name": "Guantes Dedo Completo Negro - West Biking - Silicona - M",
+      "zoho_brand": "West Biking"
+    },
+    {
+      "sku": "4703",
+      "name": "Eje de Motor Sellado Ozono 122.5mm - 68mm",
+      "zoho_brand": "Ozono"
+    },
+    {
+      "sku": "NNV83",
+      "name": "Llave Para Lockring Motor 15-16mm",
+      "zoho_brand": "Aliexpress"
+    },
+    {
+      "sku": "23138",
+      "name": "Piñon RADIUS, Atornillado, 7 Velocidades, 14/28T, Brown/Black",
+      "zoho_brand": "Radius"
+    },
+    {
+      "sku": "AE0308",
+      "name": "Guantes Dedo Completo Negro - West Biking - Silicona - L",
+      "zoho_brand": "West Biking"
+    },
+    {
+      "sku": "S60082",
+      "name": "volante fc-ty301 ty for rear 6/7/8-vel. 170mm 48T",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "2000000172309",
+      "name": "Llanta Weinmann 26\" Tm19 36h Plata",
+      "zoho_brand": "Weinmann"
+    },
+    {
+      "sku": "2000000314853",
+      "name": "Luz De Seguridad Usb Radical Mountain Dc-115",
+      "zoho_brand": "Radical Mountain"
+    },
+    {
+      "sku": "SKU-E5A8640E",
+      "name": "Cámara Maxxis aro 20×1.5/2.5 Válvula Auto 48mm",
+      "zoho_brand": "Maxxis"
+    },
+    {
+      "sku": "13463",
+      "name": "LLANTA 26 x 1.75 * BUFFALO *ALUMINIO - SILVER (36H)",
+      "zoho_brand": "Buffalo"
+    },
+    {
+      "sku": "6927116103552",
+      "name": "Camara Bicicleta Ruta 700 X 25 a 38C V. Francesa Arisun",
+      "zoho_brand": "Arisun"
+    },
+    {
+      "sku": "6927116100094",
+      "name": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Runner Arisun",
+      "zoho_brand": "Arisun"
+    },
+    {
+      "sku": "PO02574017009",
+      "name": "MANILLA FRENO MTB ALHONGA 3 DEDOS ALUMINIO HJ-4133PDV BLACK/SILVER",
+      "zoho_brand": "Alhonga"
+    },
+    {
+      "sku": "AE0038",
+      "name": "ROTOR SHIMANO AE 160MM",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "18474",
+      "name": "CAMARA BEST BUTILO 27.5 X 1.95 / 2.125 VAL/FRANCESA 48MM WANDA",
+      "zoho_brand": "Best"
+    },
+    {
+      "sku": "PO02409001058",
+      "name": "AGUJA BLOQUEO ALUMINIO (3 PCS) COMPATIBLE / GENERICO",
+      "zoho_brand": "Andes Industrial"
+    },
+    {
+      "sku": "PO02633001073",
+      "name": "EJE BLOQUEO TRASERO 7/8 9V. COMPATIBLE / GENERICO",
+      "zoho_brand": "Andes Industrial"
+    },
+    {
+      "sku": "S57037",
+      "name": "CAMBIO SHIMANO 6/7V. RD-TX35 C/PATA (BOLSA) ARDTY300B",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "AE0081",
+      "name": "Risk Sticker protector para cadena de bicicleta",
+      "zoho_brand": "Risk"
+    },
+    {
+      "sku": "AE0089",
+      "name": "Corona DECKAS 104BCD Monoplato 34T Negra",
+      "zoho_brand": "Deckas"
+    },
+    {
+      "sku": "AE0093",
+      "name": "Volante IXF Integrado Black 170Mm + Motor BSA + Corona 34T",
+      "zoho_brand": "IXF"
+    },
+    {
+      "sku": "AE0136",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Negro",
+      "zoho_brand": "Wake"
+    },
+    {
+      "sku": "2000000402321",
+      "name": "Pedal Neco Mtb 9/16 103 X 100 Mm Aluminio",
+      "zoho_brand": "Neco"
+    },
+    {
+      "sku": "S60067",
+      "name": "cambiador shimano fd-tz510-ds6 3 (friction) x7/6 31.8mm T/ARRIBA",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "AE0239",
+      "name": "Cadena ZTTO 9V Silver 116 Links",
+      "zoho_brand": "ZITTO"
+    },
+    {
+      "sku": "PO02755001765",
+      "name": "MANILLA FRENO MTB V-BRAKE 3 DEDOS SAIGUAN",
+      "zoho_brand": "Genérico"
+    },
+    {
+      "sku": "AE0114",
+      "name": "Cassette Shimano Cs-Hg200 8V 12-32T AE",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "23407",
+      "name": "Neumatico 10TEN, 26x1.75",
+      "zoho_brand": "10Ten"
+    },
+    {
+      "sku": "16225",
+      "name": "Camara RIDEXC Butyl 29x1,75/2,125 Valvula de Auto 48mm",
+      "zoho_brand": "RideXC"
+    },
+    {
+      "sku": "23140",
+      "name": "Piñón Radius FW-8SI-GT 8 Vel Atornillado 14-34T",
+      "zoho_brand": "Radius"
+    },
+    {
+      "sku": "7290001284117",
+      "name": "Candado OnGuard Clave Espiral NS 180cmX12mm Verde",
+      "zoho_brand": "On Guard"
+    },
+    {
+      "sku": "7290001283912",
+      "name": "Candado OnGuard Llave Espiral NS Coil 180cmX12mm Naranjo",
+      "zoho_brand": "On Guard"
+    },
+    {
+      "sku": "AE0162",
+      "name": "Pastillas Freno Disco Hidráulico Metálica ZTTO Par DS03S",
+      "zoho_brand": "ZITTO"
+    },
+    {
+      "sku": "6927116100124",
+      "name": "CAMARA 26 X 1.50/2.20 V/FRANCESA 48mm EN CAJA",
+      "zoho_brand": "RBX"
+    },
+    {
+      "sku": "AE0145",
+      "name": "Caliper Freno Delantero Mecánico Bucklos AE",
+      "zoho_brand": "Bucklos"
+    },
+    {
+      "sku": "23450",
+      "name": "Campanilla Negra Ciclo",
+      "zoho_brand": "Comercial Ciclo"
+    },
+    {
+      "sku": "AE0155",
+      "name": "Disco freno Shimano Deore RT56 160MM",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "AE0183",
+      "name": "Pastillas Freno Disco Hidráulico Metálica ZTTO Par DS06S",
+      "zoho_brand": "ZITTO"
+    },
+    {
+      "sku": "DF0002",
+      "name": "Cubre Sillín DF",
+      "zoho_brand": "Defensor Forever"
+    },
+    {
+      "sku": "AE0169",
+      "name": "Disco de Freno Flotante 160mm Negro Deckas",
+      "zoho_brand": "Deckas"
+    },
+    {
+      "sku": "AE0154",
+      "name": "Sillín Gel RiderAce Prostático Negro",
+      "zoho_brand": "RideRace"
+    },
+    {
+      "sku": "NNV33",
+      "name": "Cassette Shimano 7V CS-HG200-7 12/32T",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "NNV34",
+      "name": "Cassette Shimano Cs-hg200 8v. (12-32)",
+      "zoho_brand": "Shimano"
+    },
+    {
+      "sku": "NNV61",
+      "name": "Grasa Park Tool Polylube 1000 (113grs)",
+      "zoho_brand": "Parktool"
+    },
+    {
+      "sku": "NNV39",
+      "name": "Collerín Bloqueo Frank 35mm",
+      "zoho_brand": "Frank"
+    },
+    {
+      "sku": "NNV55",
+      "name": "Freno Balata Genérico 90 mm",
+      "zoho_brand": "Genérico"
+    },
+    {
+      "sku": "AE0051",
+      "name": "MANILLA CAMBIO SHIMANO SL-M315, IZQ. 3-SPEED RAPIDFIRE PLUS",
+      "zoho_brand": "Shimano"
+    }
+  ],
+  "missing_supplier": [],
+  "brand_mismatch": [],
+  "new_products": [
+    {
+      "sku": "NNV2",
+      "name": "Aguja Para Eje Con Bloqueo 6-7-8 V",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV16",
+      "name": "Biela Izquierda Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "2000000116853",
+      "name": "Camara 26 X 1.95/2.125 Veloce Butyl A/v 48mm",
+      "brand": "Velocek",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV21",
+      "name": "Cámara 26\"x1.125/2.35 AV 48mm Barret",
+      "brand": "Barret",
+      "supplier": ""
+    },
+    {
+      "sku": "2000000253503",
+      "name": "Camara 29x1.95/2.125 Veloce Fv-48mm",
+      "brand": "Velocek",
+      "supplier": ""
+    },
+    {
+      "sku": "2000000210834",
+      "name": "Camara 700 X 23/25 Veloce Butyl F/v 48mm Chin",
+      "brand": "Velocek",
+      "supplier": ""
+    },
+    {
+      "sku": "2000000116952",
+      "name": "Camara 700 X 28/32 Veloce Butyl A/v 48mm Chin",
+      "brand": "Velocek",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV30",
+      "name": "Cambio Trasero Shimano Tourney 6-7 Speed",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "BB001",
+      "name": "Cambio Trasero SunRise TZ 7v",
+      "brand": "SunRace",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV31",
+      "name": "Canasto Negro Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV36",
+      "name": "Centrado de Rueda BettaBikes",
+      "brand": "Bettabikes",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV42",
+      "name": "Cubetas Motor Americano BMX Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV50",
+      "name": "Eje Delantero con Bloqueo Betta (108mm x 9mm)",
+      "brand": "Bettabikes",
+      "supplier": ""
+    },
+    {
+      "sku": "AE0010",
+      "name": "FRENO HIDRÁULICO TRASERO SHIMANO SET BL-MT200(R) / BR-MT200(R)",
+      "brand": "Shimano",
+      "supplier": ""
+    },
+    {
+      "sku": "BB004",
+      "name": "Juego de direccion 10Ten Semi Integrado",
+      "brand": "10Ten",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV85",
+      "name": "Luz USB Delantera Trip 400 LM",
+      "brand": "Bettabikes",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV86",
+      "name": "Luz USB Trasera Trip 20 LM",
+      "brand": "Bettabikes",
+      "supplier": ""
+    },
+    {
+      "sku": "4524667415039",
+      "name": "Manilla Cambio Freno Shimano 8v St-ef500-8r Der Tras Rig",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV100",
+      "name": "Maza Trasera c/dist. Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV114",
+      "name": "Pastilla de Frenos Ozono Par",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV115",
+      "name": "Pastilla Freno 1/2 Pista Bettabikes Par",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "BB007",
+      "name": "Pastilla Freno Disco Ozono DS06S",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV117",
+      "name": "Pastillas de Freno Zoom (DB-280/DB-450/DB-650)",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV121",
+      "name": "Pedales Eclipse Rojos",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV125",
+      "name": "Piñon 1v Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV126",
+      "name": "Piñon 1v Monsoon Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV127",
+      "name": "Piñon Freewheel Shimano MF-TZ500-7",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV135",
+      "name": "Postiza BettaBikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV141",
+      "name": "Puños Ozono Rojos con Abrazaderas (Par)",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV144",
+      "name": "Rayo 265 mm Negro Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV154",
+      "name": "Restauración de Freno Hidráulico",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV161",
+      "name": "Rodamiento Enjaulado Motor Bettabikes",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV164",
+      "name": "Ruedas Estabilizadoras Bicicleta Niño Aro 20",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV173",
+      "name": "Tee Kalin 22.2 x 25.4",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV179",
+      "name": "Tubo de Asiento Foss 31.6 x 400mm",
+      "brand": "",
+      "supplier": ""
+    },
+    {
+      "sku": "NNV180",
+      "name": "Volante Neco 3v",
+      "brand": "",
+      "supplier": ""
+    }
+  ]
+}

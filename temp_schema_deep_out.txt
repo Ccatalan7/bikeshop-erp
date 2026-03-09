@@ -1,0 +1,86 @@
+================================================================================
+STEP 1: Get all suppliers from Supabase
+================================================================================
+Found 0 suppliers
+
+================================================================================
+STEP 2: Get product schema (all columns)
+================================================================================
+  id: str = '38d18ebf-3199-446c-91a8-3a2c4116afe2'
+  name: str = 'Missinglink RISK 6-7-8 V Par (2 piezas)'
+  sku: str = 'AE0073'
+  description: str = ''
+  price: float = 2000.0
+  cost: float = 522.0
+  tax_type: str = 'iva'
+  is_service: bool = False
+  inventory_qty: int = 14
+  created_at: str = '2023-11-05T01:44:08+00:00'
+  category_id: str = '7e136690-d37d-431b-b4ac-78ad42c4a28b'
+  is_active: bool = True
+  updated_at: str = '2025-07-23T17:46:52+00:00'
+  additional_images: list = []
+  brand: str = 'Risk'
+  model: NoneType = None
+  min_stock_level: int = 0
+  image_url: str = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-asse
+  supplier_id: NoneType = None
+  supplier_name: NoneType = None
+  barcode: str = ''
+  stock_quantity: int = 14
+  max_stock_level: int = 0
+  image_urls: list = []
+  category: str = 'other'
+  category_name: str = 'Missinglink'
+  specifications: dict = {}
+  tags: list = []
+  unit: str = 'unit'
+  weight: float = 0.0
+  track_stock: bool = True
+  product_type: str = 'product'
+  show_on_website: bool = True
+  website_description: NoneType = None
+  website_featured: bool = False
+  supplier_reference: NoneType = None
+  manufacturer: NoneType = None
+  manufacturer_sku: NoneType = None
+  gtin: NoneType = None
+  hs_code: NoneType = None
+  country_of_origin: NoneType = None
+  color: NoneType = None
+  size: NoneType = None
+  material: NoneType = None
+  dimensions: dict = {}
+  warranty_months: int = 0
+  lifecycle_status: str = 'active'
+  serialized: bool = False
+  lot_tracking: bool = False
+  expiration_tracking: bool = False
+  expiry_days: NoneType = None
+  lead_time_days: int = 0
+  reorder_quantity: int = 0
+  warehouse_location: NoneType = None
+  price_currency: str = 'CLP'
+  cost_currency: str = 'CLP'
+  tax_rate: NoneType = None
+  is_published: bool = True
+  brand_id: str = '71a3fd16-e59d-4b2f-a86d-25fb6b676869'
+  tenant_id: str = '5443b130-cc28-45af-a420-cd500b288890'
+  is_google_merchant: bool = False
+  supplier_code: NoneType = None
+  is_set: bool = False
+  set_type: NoneType = None
+  parent_set_id: NoneType = None
+  component_label: NoneType = None
+  component_position: NoneType = None
+  image_url_optimized: str = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-asse
+  embedding: str = '[-0.0010010606,-0.0056724967,0.0011724363,-0.07545231,0.0039316136,0.00793639,0
+
+================================================================================
+STEP 3: Products with/without supplier_id
+================================================================================
+Total products: 1480
+With supplier_id: 44
+Without supplier_id: 1436
+With brand: 1126
+Without brand: 354

@@ -12,12 +12,10 @@ Usage:
     python generate_zoho_tokens.py
 """
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent))
-
-import config
 import requests
+
+ZOHO_OAUTH_DOMAIN = "https://accounts.zoho.com"
+ZOHO_ORG_ID = "788658742"
 
 
 def generate_refresh_token(client_id: str, client_secret: str, grant_token: str) -> dict:
@@ -42,20 +40,20 @@ def generate_refresh_token(client_id: str, client_secret: str, grant_token: str)
     print("🔑 Zoho Token Generation")
     print("=" * 80)
     
-    token_url = f"{config.ZOHO_OAUTH_DOMAIN}/oauth/v2/token"
+    token_url = f"{ZOHO_OAUTH_DOMAIN}/oauth/v2/token"
     
     payload = {
         'grant_type': 'authorization_code',  # ← GRANT TOKEN exchange (one-time use, ~10 min)
         'client_id': client_id,
         'client_secret': client_secret,
         'code': grant_token,  # ← One-time authorization code
-        'redirect_uri': '',  # Empty for offline mode
-        'organization_id': config.ZOHO_ORG_ID  # 🔑 CRITICAL: Org ID REQUIRED!
+        'redirect_uri': 'https://localhost:8000',  # 🔑 CRITICAL: Must exactly match the URL used to generate
+        'organization_id': ZOHO_ORG_ID  # 🔑 CRITICAL: Org ID REQUIRED!
     }
     
     print(f"\n📡 Exchanging grant token for refresh token...")
     print(f"   URL: {token_url}")
-    print(f"   Organization ID: {config.ZOHO_ORG_ID}")
+    print(f"   Organization ID: {ZOHO_ORG_ID}")
     
     try:
         response = requests.post(token_url, params=payload)

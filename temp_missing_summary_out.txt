@@ -1,0 +1,25 @@
+Fetching data for summary...
+\n================================================================================
+SUMMARY
+================================================================================
+MAPPING LOGIC:
+Both Flutter and Zoho have a 'SKU' column. We map exactly 1:1 on the SKU string.
+\n1. Existing products in flutter that need Brand/Supplier updates: 59
+   - AE0151 (Luz Delantera T6 LED AE 1000 Lumen): Missing Brand (Zoho has: Aliexpress)
+   - AE0144 (Caliper Freno Trasero Mecßnico Bucklos AE): Missing Brand (Zoho has: Bucklos)
+   - 7290001284339 (Candado OnGuard Llave Espiral NS 180cmX12mm Naranjo): Missing Brand (Zoho has: On Guard)
+   - AE0159 (Luz trasera AE Led Recargable): Missing Brand (Zoho has: Aliexpress)
+   - 6927116119034 (Cßmara Chaoyang 26x1.95/2.125 A/V 48MM): Missing Brand (Zoho has: Chaoyang)
+   - 6927116185589 (Cßmara Chaoyang 26x1.95/2.125 A/V 33MM): Missing Brand (Zoho has: Chaoyang)
+   - NNV51 (Eje Macizo Maza Trasera Sellada GenÚrico): Missing Brand (Zoho has: GenÚrico)
+   - NNV74 (Kit GuÝa Cableado Interno Risk 1,5Mt): Missing Brand (Zoho has: Risk)
+   - PO02771019200 (MAZA TRASERA 36H DISCO NEGRA COMPATIBLE / GENERICO ALTERNATIVO 2022 ECONOM.): Missing Brand (Zoho has: GenÚrico)
+   - AE0292 (Pastillas Freno Disco Semi Metal - Ceramico DS01 ZTTO): Missing Brand (Zoho has: ZITTO)
+   ... and 49 more.
+\n2. New products entirely missing from Flutter (found in Zoho): 36
+   - NNV2 (Aguja Para Eje Con Bloqueo 6-7-8 V) [Brand: , Supplier: ]
+   - NNV16 (Biela Izquierda Bettabikes) [Brand: , Supplier: ]
+   - 2000000116853 (Camara 26 X 1.95/2.125 Veloce Butyl A/v 48mm) [Brand: Velocek, Supplier: ]
+   - NNV21 (Cßmara 26"x1.125/2.35 AV 48mm Barret) [Brand: Barret, Supplier: ]
+   - 2000000253503 (Camara 29x1.95/2.125 Veloce Fv-48mm) [Brand: Velocek, Supplier: ]
+   ... and 31 more.

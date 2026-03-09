@@ -1,0 +1,30 @@
+================================================================================
+FULL ANALYSIS: BRAND + SUPPLIER GAPS
+================================================================================
+
+Zoho products: 1442
+Flutter products: 1480
+Unique Zoho suppliers: 0
+
+--- MISSING BRAND (Flutter has NO brand, Zoho HAS brand): 59
+   AE0151 (Luz Delantera T6 LED AE 1000 Lumen) -> Zoho brand: Aliexpress
+   AE0144 (Caliper Freno Trasero Mecßnico Bucklos AE) -> Zoho brand: Bucklos
+   7290001284339 (Candado OnGuard Llave Espiral NS 180cmX12mm Naranjo) -> Zoho brand: On Guard
+   AE0159 (Luz trasera AE Led Recargable) -> Zoho brand: Aliexpress
+   6927116119034 (Cßmara Chaoyang 26x1.95/2.125 A/V 48MM) -> Zoho brand: Chaoyang
+   ... and 54 more
+
+--- BRAND MISMATCH: 0
+
+--- MISSING SUPPLIER (Flutter has NO supplier_name, Zoho HAS vendor): 0
+
+--- NEW PRODUCTS (in Zoho, not in Flutter): 36
+   NNV2 (Aguja Para Eje Con Bloqueo 6-7-8 V) [Brand: , Supplier: ]
+   NNV16 (Biela Izquierda Bettabikes) [Brand: , Supplier: ]
+   2000000116853 (Camara 26 X 1.95/2.125 Veloce Butyl A/v 48mm) [Brand: Velocek, Supplier: ]
+   NNV21 (Cßmara 26"x1.125/2.35 AV 48mm Barret) [Brand: Barret, Supplier: ]
+   2000000253503 (Camara 29x1.95/2.125 Veloce Fv-48mm) [Brand: Velocek, Supplier: ]
+   ... and 31 more
+
+TOTAL PRODUCTS THAT NEED UPDATING: 95
+(Some products may appear in multiple categories)

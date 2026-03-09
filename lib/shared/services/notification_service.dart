@@ -146,11 +146,13 @@ class NotificationService {
     const initializationSettingsMacOS = DarwinInitializationSettings();
     const initializationSettingsLinux =
         LinuxInitializationSettings(defaultActionName: 'Open notification');
+    const initializationSettingsWindows = WindowsInitializationSettings();
     const initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
       macOS: initializationSettingsMacOS,
       linux: initializationSettingsLinux,
+      windows: initializationSettingsWindows,
     );
 
     debugPrint('🔔 [NotificationService] Initializing...');
@@ -613,6 +615,7 @@ class NotificationService {
       android: androidDetails,
       macOS: const DarwinNotificationDetails(),
       linux: const LinuxNotificationDetails(),
+      windows: const WindowsNotificationDetails(),
     );
 
     try {
@@ -644,6 +647,7 @@ class NotificationService {
         ),
         macOS: DarwinNotificationDetails(),
         linux: LinuxNotificationDetails(),
+        windows: WindowsNotificationDetails(),
       );
 
       await _localNotifications.show(

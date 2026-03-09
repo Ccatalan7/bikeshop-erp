@@ -1,0 +1,6 @@
+--- Letter O first ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}
+--- Number 0 both ---
+Status: 401
+Error: {"status": "fail", "message": "Not Authorized"}

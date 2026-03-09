@@ -634,7 +634,90 @@ values ('Product', 50, 50);
 
 ---
 
-# �🔧 COPILOT WORKFLOW CHECKLIST
+# 🔗 CRITICAL: PRODUCTS DENORMALIZATION PATTERN (supplier_id + supplier_name, brand_id + brand)
+
+**⚠️ PRODUCTS TABLE HAS DENORMALIZED FK + TEXT PAIRS — BOTH MUST BE UPDATED TOGETHER!**
+
+## The Dual Columns
+
+```sql
+-- products table - Supplier
+supplier_id uuid references suppliers(id),   -- FK to suppliers table (used by form dropdown)
+supplier_name text,                           -- Denormalized text copy (used for display, search, imports)
+
+-- products table - Brand
+brand_id uuid references brands(id),          -- FK to brands table (used by form dropdown)
+brand text,                                   -- Denormalized text copy (used for display, search, imports)
+
+-- products table - Category (same pattern)
+category_id uuid references categories(id),   -- FK
+category_name text,                            -- Denormalized text copy
+```
+
+## Why Both Exist
+
+This is a **deliberate denormalization** for performance and convenience:
+- **`supplier_id` / `brand_id`** = Proper FK for relational integrity, powers form dropdowns, purchase orders, reporting
+- **`supplier_name` / `brand`** = Avoids JOINs on product list queries, simplifies imports/exports, survives if FK record is deleted
+
+## MANDATORY Pattern: Update BOTH Columns
+
+**❌ WRONG — Only updating the text field:**
+```python
+# This will NOT show in the product form dropdown!
+supabase.table('products').update({'supplier_name': 'MKR'}).eq('id', product_id)
+```
+
+**❌ WRONG — Only updating the FK:**
+```python
+# The text field stays stale/empty, search won't work!
+supabase.table('products').update({'supplier_id': supplier_uuid}).eq('id', product_id)
+```
+
+**✅ CORRECT — Always update BOTH:**
+```python
+supabase.table('products').update({
+    'supplier_id': supplier_uuid,    # FK → powers the dropdown
+    'supplier_name': 'MKR'           # Text → powers display & search
+}).eq('id', product_id)
+```
+
+## Where This Pattern is REQUIRED
+
+- ✅ Product form save (`product_form_page.dart`) — sets both `supplierId` + `supplierName`
+- ✅ CSV/Excel imports (`product_import_service.dart`) — must set both
+- ✅ Any migration/sync script — must set both
+- ✅ Smart purchase list — reads `supplier_name` for display
+
+## Important: Suppliers Table
+
+The `suppliers` table stores the master list of suppliers (with full details: name, RUT, email, bank info, etc.). The product form loads this table to populate the "Proveedor" dropdown. If a supplier doesn't exist in that table, it **won't appear in the dropdown** even if `supplier_name` is set on the product.
+
+**When adding a new supplier via script:**
+1. First create the supplier in the `suppliers` table (with `tenant_id`)
+2. Then set BOTH `supplier_id` AND `supplier_name` on products
+
+## Common Mistakes
+
+```python
+# ❌ WRONG: Only set supplier_name (dropdown won't show it)
+update products set supplier_name = 'New Vendor' where sku = 'ABC';
+
+# ❌ WRONG: Set supplier_id without matching supplier_name
+update products set supplier_id = 'uuid-here' where sku = 'ABC';
+
+# ✅ CORRECT: Set both together
+update products 
+   set supplier_id = 'uuid-here',
+       supplier_name = 'New Vendor'
+ where sku = 'ABC';
+```
+
+**This pattern is PRODUCTION-TESTED and MUST be maintained going forward.**
+
+---
+
+# 🔧 COPILOT WORKFLOW CHECKLIST
 
 **For ANY database-related task:**
 

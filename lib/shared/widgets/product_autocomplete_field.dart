@@ -48,7 +48,6 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
   List<Product> _filteredProducts = [];
-  List<Product> _allProducts = [];
   Product? _selectedProduct;
   bool _isLoading = false;
   bool _isTapInProgress =
@@ -58,6 +57,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   bool _isMouseOverDropdown = false; // Track if mouse is over the dropdown
   late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -116,6 +116,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -547,11 +548,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   Future<void> _loadProducts() async {
+    // Only load initial/recent products to show as defaults when user taps field
     setState(() => _isLoading = true);
     try {
-      final products = await _inventoryService.getProducts();
+      final products = await _inventoryService.searchProducts('', limit: 20);
       setState(() {
-        _allProducts = products;
         _filteredProducts = products;
       });
     } finally {
@@ -561,30 +562,29 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   void _onTextChanged(String value) {
     if (value.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _filteredProducts = _allProducts;
-          _selectedProduct = null;
-        });
-        _showOverlay();
-      }
+      _loadProducts();
       return;
     }
 
-    final searchLower = value.toLowerCase();
-    if (mounted) {
-      setState(() {
-        _filteredProducts = _allProducts.where((product) {
-          return product.name.toLowerCase().contains(searchLower) ||
-              product.sku.toLowerCase().contains(searchLower) ||
-              (product.barcode?.toLowerCase().contains(searchLower) ?? false) ||
-              (product.supplierCode?.toLowerCase().contains(searchLower) ??
-                  false) ||
-              (product.brand?.toLowerCase().contains(searchLower) ?? false);
-        }).toList();
-      });
-      _showOverlay();
-    }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+
+      setState(() => _isLoading = true);
+      try {
+        final results =
+            await _inventoryService.searchProducts(value, limit: 20);
+        if (mounted) {
+          setState(() {
+            _filteredProducts = results;
+            _selectedProduct = null;
+          });
+          _showOverlay();
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    });
   }
 
   void _selectProduct(Product product) {
@@ -619,21 +619,20 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     if (trimmedValue.isEmpty) return;
 
     // First: try exact match by SKU or barcode (handles barcode scanner input)
-    final exactMatch = _allProducts.cast<Product?>().firstWhere(
-          (p) =>
-              p!.sku.toLowerCase() == trimmedValue.toLowerCase() ||
-              (p.barcode?.toLowerCase() == trimmedValue.toLowerCase()),
-          orElse: () => null,
-        );
-    if (exactMatch != null) {
-      _selectProduct(exactMatch);
-      return;
-    }
-
-    // Fallback: create ad-hoc item if allowed
-    if (widget.allowCustomItems && _selectedProduct == null) {
-      _selectCustomItem(trimmedValue);
-    }
+    // For exact match, we need to check the DB if not in current results
+    _inventoryService.getProductBySku(trimmedValue).then((p) {
+      if (p != null) {
+        _selectProduct(p);
+      } else {
+        _inventoryService.getProductByBarcode(trimmedValue).then((pb) {
+          if (pb != null) {
+            _selectProduct(pb);
+          } else if (widget.allowCustomItems && _selectedProduct == null) {
+            _selectCustomItem(trimmedValue);
+          }
+        });
+      }
+    });
   }
 
   void _onTap() {

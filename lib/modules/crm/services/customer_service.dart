@@ -8,7 +8,7 @@ import '../models/crm_models.dart';
 class CustomerService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService;
-  
+
   RealtimeChannel? _customersChannel;
 
   // ============================================================
@@ -18,16 +18,16 @@ class CustomerService extends ChangeNotifier {
   DateTime? _customersCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
   bool _isLoadingCustomers = false;
-  
+
   // Public getters for cached data (instant access)
   List<Customer> get cachedCustomers => _cachedCustomers ?? [];
   bool get hasCustomersCache => _cachedCustomers != null;
-  
+
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   void invalidateCustomersCache() {
     _cachedCustomers = null;
     _customersCacheTime = null;
@@ -39,28 +39,34 @@ class CustomerService extends ChangeNotifier {
   }
 
   // Customer operations
-  Future<List<Customer>> getCustomers({String? searchTerm, bool forceRefresh = false}) async {
+  Future<List<Customer>> getCustomers(
+      {String? searchTerm, bool forceRefresh = false, int limit = 50}) async {
     try {
       // Check if this is a filtered query
       final isFilteredQuery = searchTerm != null && searchTerm.isNotEmpty;
-      
+
       // Return cached data if valid and not a filtered query
-      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_customersCacheTime) && _cachedCustomers != null) {
-        debugPrint('📦 [CustomerService] Using cached customers (${_cachedCustomers!.length} items)');
+      if (!forceRefresh &&
+          !isFilteredQuery &&
+          _isCacheValid(_customersCacheTime) &&
+          _cachedCustomers != null) {
+        debugPrint(
+            '📦 [CustomerService] Using cached customers (${_cachedCustomers!.length} items)');
         return _cachedCustomers!;
       }
-      
+
       // Prevent concurrent fetches
       if (_isLoadingCustomers && !isFilteredQuery) {
         debugPrint('⏳ [CustomerService] Already loading customers, waiting...');
         while (_isLoadingCustomers) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
-        if (_cachedCustomers != null && !isFilteredQuery) return _cachedCustomers!;
+        if (_cachedCustomers != null && !isFilteredQuery)
+          return _cachedCustomers!;
       }
-      
+
       if (!isFilteredQuery) _isLoadingCustomers = true;
-      
+
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -74,18 +80,24 @@ class CustomerService extends ChangeNotifier {
 
         // Combine and deduplicate results
         final Set<String> ids = {};
-        data = [...nameResults, ...rutResults, ...emailResults].where((item) {
+        final List<Map<String, dynamic>> combined = [];
+
+        for (var item in [...nameResults, ...rutResults, ...emailResults]) {
           final id = item['id']?.toString();
-          if (id == null) return true;
-          return ids.add(id);
-        }).toList();
+          if (id != null && ids.add(id)) {
+            combined.add(item);
+          }
+          if (combined.length >= limit) break;
+        }
+        data = combined;
       } else {
         // Fetch ALL customers (uses pagination internally to bypass 1000 row limit)
+        // If no searchTerm, we might want to respect the limit too, but the cache logic usually wants "all"
         data = await _db.select('customers', fetchAll: true, orderBy: 'name');
       }
 
       final customers = data.map((json) => Customer.fromJson(json)).toList();
-      
+
       // Cache only unfiltered results
       if (!isFilteredQuery) {
         _cachedCustomers = customers;
@@ -93,7 +105,7 @@ class CustomerService extends ChangeNotifier {
         debugPrint('✅ [CustomerService] Cached ${customers.length} customers');
         _isLoadingCustomers = false;
       }
-      
+
       return customers;
     } catch (e) {
       _isLoadingCustomers = false;
@@ -251,7 +263,7 @@ class CustomerService extends ChangeNotifier {
       if (customerId.isEmpty) return;
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) return;
-      
+
       final loyalty = Loyalty(
         tenantId: tenantId,
         customerId: customerId,
@@ -447,7 +459,32 @@ class CustomerService extends ChangeNotifier {
               value: tenantId,
             ),
             callback: (payload) {
-              notifyListeners(); // Notify listeners to reload data
+              debugPrint(
+                  '🔔 [CustomerService] Customer changed: ${payload.eventType}');
+
+              if (payload.newRecord.isNotEmpty) {
+                final updatedCustomer = Customer.fromJson(payload.newRecord);
+
+                if (_cachedCustomers != null) {
+                  final index = _cachedCustomers!
+                      .indexWhere((c) => c.id == updatedCustomer.id);
+                  if (index == -1) {
+                    _cachedCustomers!.add(updatedCustomer);
+                    _cachedCustomers!.sort((a, b) =>
+                        a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                  } else {
+                    _cachedCustomers![index] = updatedCustomer;
+                  }
+                }
+                notifyListeners();
+              } else if (payload.eventType == PostgresChangeEvent.delete &&
+                  payload.oldRecord.isNotEmpty) {
+                final id = payload.oldRecord['id']?.toString();
+                if (id != null && _cachedCustomers != null) {
+                  _cachedCustomers!.removeWhere((c) => c.id == id);
+                  notifyListeners();
+                }
+              }
             },
           )
           .subscribe();

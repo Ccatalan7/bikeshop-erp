@@ -31,6 +31,28 @@ class InventoryService extends ChangeNotifier {
     return _products;
   }
 
+  /// Get products of a specific type from server with a limit
+  Future<List<Product>> getProductsByType(ProductType type,
+      {int limit = 100}) async {
+    try {
+      if (_db == null)
+        return _products.where((p) => p.productType == type).toList();
+
+      final data = await _db!.select('products',
+          where: "product_type=${type.name.toLowerCase()}", limit: limit);
+
+      final results = data.map(_productFromMap).toList();
+      // Update local cache with these items
+      for (var p in results) {
+        _upsertLocalProduct(p);
+      }
+      return results;
+    } catch (e) {
+      debugPrint('⚠️ [InventoryService] Failed to fetch products by type: $e');
+      return _products.where((p) => p.productType == type).toList();
+    }
+  }
+
   Future<void> refresh() => _loadProducts(force: true);
 
   Future<Product?> getProductById(String id,
@@ -136,23 +158,59 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
-  Future<List<Product>> searchProducts(String query) async {
-    final products = await getProducts();
-    if (query.trim().isEmpty) return products;
+  Future<List<Product>> searchProducts(String query, {int limit = 50}) async {
+    if (query.trim().isEmpty) {
+      return await getProducts();
+    }
 
     final lowered = query.toLowerCase();
-    return products.where((product) {
-      final candidates = <String?>[
-        product.name,
-        product.sku,
-        product.brand,
-        product.model,
-        product.barcode,
-        product.categoryName,
-      ];
-      return candidates.any(
-          (value) => value != null && value.toLowerCase().contains(lowered));
-    }).toList();
+
+    // 1. Try DB search first if available for efficiency on large datasets
+    if (_db != null) {
+      try {
+        // Search multiple columns and combine (Supabase doesn't have a simple multi-column ilike in the basic RPC yet)
+        final nameResults = await _db!.searchRecords('products', 'name', query);
+        final skuResults = await _db!.searchRecords('products', 'sku', query);
+        final brandResults =
+            await _db!.searchRecords('products', 'brand', query);
+
+        final Set<String> seenIds = {};
+        final List<Product> results = [];
+
+        for (var map in [...nameResults, ...skuResults, ...brandResults]) {
+          final id = map['id']?.toString();
+          if (id != null && seenIds.add(id)) {
+            final product = _productFromMap(map);
+            _upsertLocalProduct(product);
+            results.add(product);
+          }
+          if (results.length >= limit) break;
+        }
+
+        if (results.isNotEmpty) return results;
+      } catch (e) {
+        debugPrint(
+            '⚠️ [InventoryService] DB search failed, falling back to cache: $e');
+      }
+    }
+
+    // 2. Fallback to local cache search
+    final products = await getProducts();
+    return products
+        .where((product) {
+          final candidates = <String?>[
+            product.name,
+            product.sku,
+            product.brand,
+            product.model,
+            product.barcode,
+            product.categoryName,
+          ];
+          return candidates.any((value) =>
+              value != null && value.toLowerCase().contains(lowered));
+        })
+        .take(limit)
+        .toList();
   }
 
   Future<bool> updateStock(
@@ -493,11 +551,11 @@ extension _InventoryServiceRealtime on InventoryService {
       await _stockMovementsChannel?.unsubscribe();
 
       _stockMovementsChannel = Supabase.instance.client
-          .channel('stock_movements_changes')
+          .channel('inventory_changes')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
-            table: 'stock_movements',
+            table: 'products',
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'tenant_id',
@@ -505,8 +563,20 @@ extension _InventoryServiceRealtime on InventoryService {
             ),
             callback: (payload) {
               debugPrint(
-                  '🔔 [InventoryService] Stock movement changed: ${payload.eventType}');
-              refresh(); // Reload products to reflect stock changes
+                  '🔔 [InventoryService] Product changed: ${payload.eventType}');
+
+              if (payload.newRecord != null && payload.newRecord!.isNotEmpty) {
+                final updatedProduct = _productFromMap(payload.newRecord!);
+                _upsertLocalProduct(updatedProduct);
+                notifyListeners();
+              } else if (payload.eventType == PostgresChangeEvent.delete &&
+                  payload.oldRecord != null) {
+                final id = payload.oldRecord!['id']?.toString();
+                if (id != null) {
+                  _products.removeWhere((p) => p.id == id);
+                  notifyListeners();
+                }
+              }
             },
           )
           .subscribe();
