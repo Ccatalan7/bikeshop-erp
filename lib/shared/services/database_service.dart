@@ -94,11 +94,13 @@ class DatabaseService extends ChangeNotifier {
         final field = parts[0].trim();
         final rawValue = parts.sublist(1).join('=').trim();
         // Parse numeric values properly for integer columns
-        final dynamic value = int.tryParse(rawValue) ?? 
-                              double.tryParse(rawValue) ?? 
-                              (rawValue == 'true' ? true : 
-                               rawValue == 'false' ? false : 
-                               rawValue);
+        final dynamic value = int.tryParse(rawValue) ??
+            double.tryParse(rawValue) ??
+            (rawValue == 'true'
+                ? true
+                : rawValue == 'false'
+                    ? false
+                    : rawValue);
         query = query.eq(field, value);
       }
 
@@ -466,6 +468,36 @@ class DatabaseService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Search error: $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> searchRecordsMultiToken(
+    String table,
+    List<String> columns,
+    List<String> searchTerms, {
+    int limit = 50,
+  }) async {
+    if (searchTerms.isEmpty || columns.isEmpty) return [];
+
+    try {
+      var query = _client.from(table).select();
+
+      // For every search token, it MUST be present in AT LEAST ONE of the columns
+      for (final term in searchTerms) {
+        final safeTerm = term.replaceAll('%', '\\%').replaceAll('_', '\\_');
+        // e.g. "name.ilike.%term%,sku.ilike.%term%"
+        final orFilter =
+            columns.map((col) => '$col.ilike.%$safeTerm%').join(',');
+        query = query.or(orFilter);
+      }
+
+      final data = await query.limit(limit);
+      return List<Map<String, dynamic>>.from(data as List);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('searchRecordsMultiToken error: $e');
       }
       rethrow;
     }

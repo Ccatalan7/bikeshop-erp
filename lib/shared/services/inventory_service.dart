@@ -158,33 +158,56 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
+  String _normalize(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('ü', 'u');
+  }
+
   Future<List<Product>> searchProducts(String query, {int limit = 50}) async {
     if (query.trim().isEmpty) {
       return await getProducts();
     }
 
-    final lowered = query.toLowerCase();
+    final normalizedQuery = _normalize(query);
+    final searchTerms = normalizedQuery
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    if (searchTerms.isEmpty) {
+      return await getProducts();
+    }
 
     // 1. Try DB search first if available for efficiency on large datasets
     if (_db != null) {
       try {
-        // Search multiple columns and combine (Supabase doesn't have a simple multi-column ilike in the basic RPC yet)
-        final nameResults = await _db!.searchRecords('products', 'name', query);
-        final skuResults = await _db!.searchRecords('products', 'sku', query);
-        final brandResults =
-            await _db!.searchRecords('products', 'brand', query);
+        final rawResults = await _db!.searchRecordsMultiToken(
+          'products',
+          [
+            'name',
+            'sku',
+            'brand',
+            'model',
+            'supplier_code',
+            'barcode',
+            'category_name'
+          ],
+          searchTerms,
+          limit: limit,
+        );
 
-        final Set<String> seenIds = {};
         final List<Product> results = [];
-
-        for (var map in [...nameResults, ...skuResults, ...brandResults]) {
-          final id = map['id']?.toString();
-          if (id != null && seenIds.add(id)) {
-            final product = _productFromMap(map);
-            _upsertLocalProduct(product);
-            results.add(product);
-          }
-          if (results.length >= limit) break;
+        for (var map in rawResults) {
+          final product = _productFromMap(map);
+          _upsertLocalProduct(product);
+          results.add(product);
         }
 
         if (results.isNotEmpty) return results;
@@ -198,16 +221,17 @@ class InventoryService extends ChangeNotifier {
     final products = await getProducts();
     return products
         .where((product) {
-          final candidates = <String?>[
+          final searchableText = _normalize([
             product.name,
             product.sku,
-            product.brand,
-            product.model,
-            product.barcode,
-            product.categoryName,
-          ];
-          return candidates.any((value) =>
-              value != null && value.toLowerCase().contains(lowered));
+            product.brand ?? '',
+            product.model ?? '',
+            product.barcode ?? '',
+            product.categoryName ?? '',
+            product.supplierCode ?? '',
+          ].join(' '));
+
+          return searchTerms.every((term) => searchableText.contains(term));
         })
         .take(limit)
         .toList();
