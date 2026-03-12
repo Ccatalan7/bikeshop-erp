@@ -33,7 +33,7 @@ import '../widgets/deadline_cell.dart';
 import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import 'bike_form_dialog.dart';
-import '../../ai_assistant/widgets/ai_chat_bubble.dart';
+
 
 /// Modern, professional Pegas management with advanced data table
 class PegasTablePage extends StatefulWidget {
@@ -859,21 +859,12 @@ class _PegasTablePageState extends State<PegasTablePage>
               ? const Center(child: BrandedLoading())
               : _selectedJob != null
                   ? _buildSplitView()
-                  : Stack(
+                  : Column(
                       children: [
-                        Column(
-                          children: [
-                            _buildModernHeader(),
-                            _buildToolbar(),
-                            if (_showColumnPanel) _buildColumnVisibilityPanel(),
-                            Expanded(child: _buildViewContent()),
-                          ],
-                        ),
-                        Positioned(
-                          bottom: 24,
-                          right: 24,
-                          child: AIAssistantButton(jobs: _filteredJobs),
-                        ),
+                        _buildModernHeader(),
+                        _buildToolbar(),
+                        if (_showColumnPanel) _buildColumnVisibilityPanel(),
+                        Expanded(child: _buildViewContent()),
                       ],
                     ),
     );
