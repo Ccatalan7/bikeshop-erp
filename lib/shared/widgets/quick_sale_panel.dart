@@ -52,10 +52,36 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
 
   // View mode: list vs cards
   bool _cardView = false;
+  Product? _viewingProduct;
 
   // Barcode scanner
   bool _scannerEnabled = false;
   StreamSubscription<String>? _barcodeSub;
+
+  void _showProductMenu(BuildContext context, Product p, Offset position) {
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      items: [
+        PopupMenuItem(
+          value: 'details',
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, size: 20),
+              const SizedBox(width: 8),
+              Text('Ver detalles', style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      ],
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ).then((value) {
+      if (value == 'details') {
+        setState(() => _viewingProduct = p);
+      }
+    });
+  }
 
   // Payment state
   pm.PaymentMethod? _selectedPaymentMethod;
@@ -280,11 +306,13 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
 
     return Container(
       color: bg,
-      child: switch (_step) {
-        _QuickSaleStep.cart => _buildCartStep(theme, isDark),
-        _QuickSaleStep.payment => _buildPaymentStep(theme, isDark),
-        _QuickSaleStep.confirmation => _buildConfirmationStep(theme, isDark),
-      },
+      child: _viewingProduct != null
+          ? _buildProductDetailsStep(theme, isDark)
+          : switch (_step) {
+              _QuickSaleStep.cart => _buildCartStep(theme, isDark),
+              _QuickSaleStep.payment => _buildPaymentStep(theme, isDark),
+              _QuickSaleStep.confirmation => _buildConfirmationStep(theme, isDark),
+            },
     );
   }
 
@@ -305,6 +333,17 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
             focusNode: _searchFocusNode,
             autofocus: true,
             onChanged: _onSearchChanged,
+            onSubmitted: (value) async {
+              if (value.trim().isEmpty) return;
+              try {
+                final inventory = context.read<InventoryService>();
+                final results =
+                    await inventory.searchProducts(value.trim(), limit: 1);
+                if (results.isNotEmpty && mounted) {
+                  _addToCart(results.first);
+                }
+              } catch (_) {}
+            },
             decoration: InputDecoration(
               hintText: 'Buscar producto...',
               prefixIcon: const Icon(Icons.search, size: 20),
@@ -466,8 +505,11 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     final imgUrl = p.imageUrlOptimized ?? p.imageUrl;
     final inCart = _cart.any((item) => item.product.id == p.id);
 
-    return InkWell(
-      onTap: () => _addToCart(p),
+    return GestureDetector(
+      onSecondaryTapDown: (details) => _showProductMenu(context, p, details.globalPosition),
+      onLongPressStart: (details) => _showProductMenu(context, p, details.globalPosition),
+      child: InkWell(
+        onTap: () => _addToCart(p),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
@@ -561,8 +603,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Card / Grid view ──
   Widget _buildCardGrid(ThemeData theme, bool isDark, Color borderColor) {
@@ -584,9 +627,12 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     final imgUrl = p.imageUrlOptimized ?? p.imageUrl;
     final inCart = _cart.any((item) => item.product.id == p.id);
 
-    return InkWell(
-      onTap: () => _addToCart(p),
-      borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onSecondaryTapDown: (details) => _showProductMenu(context, p, details.globalPosition),
+      onLongPressStart: (details) => _showProductMenu(context, p, details.globalPosition),
+      child: InkWell(
+        onTap: () => _addToCart(p),
+        borderRadius: BorderRadius.circular(8),
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF222222) : const Color(0xFFFAFAFA),
@@ -655,8 +701,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ─── Shared product image builder ────────────────────────────────
   Widget _productImage(String? imgUrl, bool isDark, double iconSize) {
@@ -689,9 +736,12 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     final borderColor =
         isDark ? const Color(0xFF2E2E2E) : const Color(0xFFEEEEEE);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      padding: const EdgeInsets.all(8),
+    return GestureDetector(
+      onSecondaryTapDown: (details) => _showProductMenu(context, item.product, details.globalPosition),
+      onLongPressStart: (details) => _showProductMenu(context, item.product, details.globalPosition),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF222222) : const Color(0xFFFAFAFA),
         borderRadius: BorderRadius.circular(8),
@@ -765,8 +815,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _miniButton(IconData icon, VoidCallback onTap, ThemeData theme) {
     return InkWell(
@@ -782,6 +833,153 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         ),
         child: Icon(icon, size: 14),
       ),
+    );
+  }
+
+  // ─── Product Details Step ──────────────────────────────────────────
+  Widget _buildProductDetailsStep(ThemeData theme, bool isDark) {
+    final p = _viewingProduct!;
+    final imgUrl = p.imageUrl ?? p.imageUrlOptimized; // Use high-res for details if possible
+    final cardBg = isDark ? const Color(0xFF252525) : const Color(0xFFF8F9FA);
+    final borderColor = isDark ? const Color(0xFF3A3A3A) : const Color(0xFFDDE0E4);
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: borderColor, width: 0.5)),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, size: 20),
+                onPressed: () => setState(() => _viewingProduct = null),
+                tooltip: 'Volver',
+              ),
+              const SizedBox(width: 4),
+              const Text('Detalle del Producto',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        // Content
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Image
+              Container(
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: _productImage(imgUrl, isDark, 64),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Name and SKU
+              Text(
+                p.name,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.2),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    'SKU: ${p.sku}',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                  ),
+                  if (p.brand != null) ...[
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        p.brand!,
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: theme.colorScheme.primary),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Info Grid
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Column(
+                  children: [
+                    _detailRow('Categoría', p.category.displayName, theme),
+                    const Divider(height: 16),
+                    _detailRow('Stock', p.trackStock ? '${p.stockQuantity} unidades' : 'Servicio', theme,
+                        valueColor: p.trackStock && p.stockQuantity <= 0 ? Colors.red : null),
+                    const Divider(height: 16),
+                    _detailRow('Costo Unitario', '\$${p.cost.toStringAsFixed(0)}', theme),
+                    const Divider(height: 16),
+                    _detailRow('Precio de Venta', '\$${p.price.toStringAsFixed(0)}', theme, 
+                        isBold: true, valueColor: theme.colorScheme.primary),
+                  ],
+                ),
+              ),
+              
+              if (p.description != null && p.description!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Descripción', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                const SizedBox(height: 6),
+                Text(p.description!, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface, height: 1.4)),
+              ],
+            ],
+          ),
+        ),
+        // Add to cart footer
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: borderColor)),
+            color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8F9FA),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              icon: const Icon(Icons.add_shopping_cart, size: 18),
+              label: const Text('Agregar a la venta', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                _addToCart(p);
+                setState(() => _viewingProduct = null);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailRow(String label, String value, ThemeData theme, {bool isBold = false, Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withOpacity(0.6))),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: isBold ? FontWeight.bold : FontWeight.w500, color: valueColor ?? theme.colorScheme.onSurface)),
+      ],
     );
   }
 

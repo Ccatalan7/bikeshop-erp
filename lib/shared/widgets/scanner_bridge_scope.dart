@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:provider/provider.dart';
 import '../services/barcode_scanner_service.dart';
@@ -21,7 +22,6 @@ class ScannerBridgeScope extends StatefulWidget {
 
 class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
   StreamSubscription? _remoteSubscription;
-  final FocusNode _focusNode = FocusNode(); // For keyboard listener
 
   @override
   void initState() {
@@ -29,6 +29,7 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initialize();
     });
+    RawKeyboard.instance.addListener(_handleRawKeyEvent);
   }
 
   void _initialize() {
@@ -63,56 +64,48 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
 
   @override
   void dispose() {
+    RawKeyboard.instance.removeListener(_handleRawKeyEvent);
     _remoteSubscription?.cancel();
-    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleRawKeyEvent(RawKeyEvent event) {
+    if (_isPublicStoreHost() || !mounted) return;
+
+    // 🛡️ PREVENT INTERFERENCE:
+    // Do not process unrelated key events if the user is typing in a TextField/TextFormField.
+    // This prevents the scanner service from interpreting fast typing as barcode scans.
+    final focus = FocusManager.instance.primaryFocus;
+
+    // Check if the focused element is a text input
+    // Since EditableText wraps content in a Focus widget, we must check ancestors.
+    bool isTextInput = false;
+    if (focus != null && focus.context != null && focus.context!.mounted) {
+      try {
+        if (focus.context!.widget is EditableText) {
+          isTextInput = true;
+        } else {
+          // Look up the tree for EditableText
+          // SAFETY: Wrap in try-catch since context may be deactivated during rapid rebuilds
+          final editableAncestor =
+              focus.context!.findAncestorWidgetOfExactType<EditableText>();
+          isTextInput = editableAncestor != null;
+        }
+      } catch (e) {
+        // Context was deactivated during lookup - ignore this key event
+        return;
+      }
+    }
+
+    if (isTextInput) {
+      return; // Allow the keys to be handled naturally by the text field
+    }
+
+    context.read<BarcodeScannerService>().processKeyEvent(event);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isPublicStoreHost()) {
-      return widget.child;
-    }
-
-    return RawKeyboardListener(
-      focusNode: _focusNode,
-      onKey: (event) {
-        // 🛡️ PREVENT INTERFERENCE:
-        // Do not process unrelated key events if the user is typing in a TextField/TextFormField.
-        // This prevents the scanner service from interpreting fast typing as barcode scans.
-        final focus = FocusManager.instance.primaryFocus;
-
-        // Check if the focused element is a text input
-        // Since EditableText wraps content in a Focus widget, we must check ancestors.
-        bool isTextInput = false;
-        if (focus != null && focus.context != null && focus.context!.mounted) {
-          try {
-            if (focus.context!.widget is EditableText) {
-              isTextInput = true;
-            } else {
-              // Look up the tree for EditableText
-              // SAFETY: Wrap in try-catch since context may be deactivated during rapid rebuilds
-              final editableAncestor =
-                  focus.context!.findAncestorWidgetOfExactType<EditableText>();
-              isTextInput = editableAncestor != null;
-            }
-          } catch (e) {
-            // Context was deactivated during lookup - ignore this key event
-            return;
-          }
-        }
-
-        if (kDebugMode && !isTextInput && focus != null) {
-          // print('🔍 Focused widget type: ${focus.context?.widget.runtimeType}');
-        }
-
-        if (isTextInput) {
-          return; // Allow the keys to be handled naturally by the text field
-        }
-
-        context.read<BarcodeScannerService>().processKeyEvent(event);
-      },
-      child: widget.child,
-    );
+    return widget.child;
   }
 }
