@@ -21,6 +21,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import '../widgets/payment_form.dart' show PaymentForm;
 
 class InvoiceListPage extends StatefulWidget {
   const InvoiceListPage({super.key});
@@ -36,6 +37,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   final ScrollController _bodyScrollController = ScrollController();
 
   Invoice? _selectedInvoice;
+  bool _showPaymentTerminal = false;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
   static const double _maxListPaneWidth = 900.0;
@@ -1420,11 +1422,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   }
 
   Widget _buildInvoicePreview(Invoice invoice) {
+    if (_showPaymentTerminal) {
+      return _buildPaymentTerminal(invoice);
+    }
+
     return Container(
       color: Colors.grey[50],
       child: Column(
         children: [
           _buildActionBar(invoice),
+          _buildStatusActionBanner(invoice),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -1451,6 +1458,56 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentTerminal(Invoice invoice) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black87),
+          onPressed: () => setState(() => _showPaymentTerminal = false),
+          tooltip: 'Cancelar y volver al documento',
+        ),
+        title: Text(
+          'TERMINAL DE PAGO',
+          style: TextStyle(
+            color: Theme.of(context).primaryColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: Colors.grey[200]),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: PaymentForm(
+              invoice: invoice,
+              dismissOnSubmit: false,
+              onCompleted: () async {
+                final salesService = context.read<SalesService>();
+                final updated = await salesService.fetchInvoice(invoice.id!, refresh: true);
+                if (mounted) {
+                  setState(() {
+                    if (updated != null) _selectedInvoice = updated;
+                    _showPaymentTerminal = false;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2421,7 +2478,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                           isNegative: true, scale: scale),
                     ],
                     const Divider(thickness: 2),
-                    _buildTotalRow('Saldo adeudado', invoice.balance,
+                    _buildTotalRow('Saldo adeudado', (invoice.total - invoice.paidAmount).clamp(0.0, invoice.total),
                         isTotal: true, scale: scale),
                   ],
                 ),
@@ -2490,6 +2547,400 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ],
       ),
     );
+  }
+
+  // ============================================================
+  // STATUS ACTION BANNER (Zoho-like)
+  // ============================================================
+  Widget _buildStatusActionBanner(Invoice invoice) {
+    String? nextActionLabel;
+    String? subLabel;
+    VoidCallback? onActionPressed;
+    List<Widget> secondaryActions = [];
+
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
+    final effectiveBalance = (invoice.total - invoice.paidAmount).clamp(0.0, invoice.total);
+
+    switch (invoice.status) {
+      case InvoiceStatus.draft:
+        nextActionLabel = 'Marcar como enviada';
+        subLabel = 'Mueva la factura al estado "Enviada" para indicar que fue entregada al cliente.';
+        onActionPressed = () => _markAsSent(invoice);
+        break;
+
+      case InvoiceStatus.sent:
+        nextActionLabel = 'Confirmar';
+        subLabel = 'Confirme la factura para contabilizarla y deducir el stock del inventario.';
+        onActionPressed = () => _markAsConfirmed(invoice);
+        secondaryActions = [
+          OutlinedButton.icon(
+            onPressed: () => _revertToDraft(invoice),
+            icon: const Icon(Icons.undo, size: 16),
+            label: const Text('Volver a borrador'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        ];
+        break;
+
+      case InvoiceStatus.confirmed:
+        if (effectiveBalance > 0) {
+          nextActionLabel = 'Registrar pago';
+          subLabel = 'Factura pendiente de pago. Saldo: ${ChileanUtils.formatCurrency(effectiveBalance)}.';
+          onActionPressed = () => _openPaymentForm(invoice);
+        } else {
+          subLabel = 'Factura confirmada y contabilizada.';
+        }
+
+        if (invoice.paidAmount == 0) {
+          secondaryActions.add(
+            OutlinedButton.icon(
+              onPressed: () => _revertToSent(invoice),
+              icon: const Icon(Icons.undo, size: 16),
+              label: const Text('Volver a enviada'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          );
+        } else {
+          secondaryActions.add(
+            OutlinedButton.icon(
+              onPressed: () => _undoLastPayment(invoice),
+              icon: const Icon(Icons.history, size: 16),
+              label: const Text('Deshacer último pago'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red[700],
+                side: BorderSide(color: Colors.red[100]!),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          );
+        }
+        break;
+
+      case InvoiceStatus.paid:
+        subLabel = 'Esta factura ha sido pagada en su totalidad.';
+        secondaryActions.add(
+          OutlinedButton.icon(
+            onPressed: () => _undoLastPayment(invoice),
+            icon: const Icon(Icons.history, size: 16),
+            label: const Text('Deshacer pago'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red[700],
+              side: BorderSide(color: Colors.red[100]!),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        );
+        break;
+
+      case InvoiceStatus.overdue:
+        nextActionLabel = 'Registrar pago';
+        subLabel = 'Factura VENCIDA. Saldo: ${ChileanUtils.formatCurrency(effectiveBalance)}.';
+        onActionPressed = () => _openPaymentForm(invoice);
+        break;
+
+      case InvoiceStatus.cancelled:
+        subLabel = 'Esta factura ha sido ANULADA.';
+        break;
+
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.info_outline, color: primaryColor, size: 20),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FLUJO DE TRABAJO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: primaryColor.withOpacity(0.8),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (subLabel != null)
+                        Text(
+                          subLabel,
+                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ...secondaryActions.map((action) => Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: action,
+                    )),
+                if (nextActionLabel != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: FilledButton(
+                      onPressed: onActionPressed,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: invoice.status == InvoiceStatus.sent ? Colors.green[600] : primaryColor,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      ),
+                      child: Text(nextActionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // STATUS TRANSITION LOGIC
+  // ============================================================
+
+  Future<void> _markAsSent(Invoice invoice) async {
+    if (invoice.id == null) return;
+    final salesService = context.read<SalesService>();
+    final messenger = ScaffoldMessenger.of(context);
+    
+    try {
+      final updated = await salesService.updateInvoiceStatus(
+          invoice.id!, InvoiceStatus.sent);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Factura marcada como enviada')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('No se pudo actualizar el estado: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _markAsConfirmed(Invoice invoice) async {
+    if (invoice.id == null) return;
+
+    final salesService = context.read<SalesService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final updated = await salesService.updateInvoiceStatus(
+          invoice.id!, InvoiceStatus.confirmed);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Factura confirmada - contabilizada y stock actualizado')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('No se pudo confirmar la factura: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _revertToDraft(Invoice invoice) async {
+    if (invoice.id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revertir a borrador'),
+        content: const Text(
+          'Esto eliminará el asiento contable y restaurará el inventario. '
+          '¿Está seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revertir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final salesService = context.read<SalesService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final updated = await salesService.updateInvoiceStatus(
+          invoice.id!, InvoiceStatus.draft);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Factura revertida a borrador')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('No se pudo revertir: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _revertToSent(Invoice invoice) async {
+    if (invoice.id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revertir a enviada'),
+        content: const Text(
+          'Esto eliminará el asiento contable y restaurará el inventario. '
+          '¿Está seguro?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revertir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final salesService = context.read<SalesService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final updated = await salesService.updateInvoiceStatus(
+          invoice.id!, InvoiceStatus.sent);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Factura revertida a enviada')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('No se pudo revertir: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _undoLastPayment(Invoice invoice) async {
+    if (invoice.id == null) return;
+    final salesService = context.read<SalesService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final payments = salesService.getPaymentsForInvoice(invoice.id!);
+
+    if (payments.isEmpty) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No hay pagos para deshacer')),
+      );
+      return;
+    }
+
+    final lastPayment = payments.first;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deshacer pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
+          'y su asiento contable asociado. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar pago'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await salesService.deletePayment(lastPayment.id!);
+      // Refresh to get updated balance/status
+      final updated = await salesService.fetchInvoice(invoice.id!, refresh: true);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Pago eliminado correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el pago: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openPaymentForm(Invoice invoice) async {
+    final effectiveBalance = (invoice.total - invoice.paidAmount).clamp(0.0, invoice.total);
+    if (invoice.id == null || effectiveBalance <= 0) return;
+    setState(() => _showPaymentTerminal = true);
   }
 
   String _getColumnLabel(String column) {
