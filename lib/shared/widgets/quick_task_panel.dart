@@ -28,6 +28,15 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
   bool _isSaving = false;
   bool _showSuccess = false;
 
+  // ─── In-pane edit state ───────────────────────────────────────────
+  TaskModel? _editingTask;
+  final _editTitleCtrl = TextEditingController();
+  final _editDescCtrl = TextEditingController();
+  TaskPriority _editPriority = TaskPriority.normal;
+  TaskStatus _editStatus = TaskStatus.pending;
+  DateTime? _editDueDate;
+  bool _isSavingEdit = false;
+
   List<Map<String, dynamic>> _users = [];
   bool _isLoadingUsers = true;
 
@@ -42,6 +51,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     _titleController.dispose();
     _descriptionController.dispose();
     _titleFocusNode.dispose();
+    _editTitleCtrl.dispose();
+    _editDescCtrl.dispose();
     super.dispose();
   }
 
@@ -142,86 +153,89 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
 
     return Container(
       color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-      child: Column(
-        children: [
-          // Success banner
-          if (_showSuccess)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              color: const Color(0xFF388E3C).withOpacity(0.12),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle, size: 18, color: Color(0xFF388E3C)),
-                  SizedBox(width: 6),
-                  Text(
-                    '¡Tarea creada!',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF388E3C),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Recent tasks list
-          Expanded(
-            child: Consumer<TaskService>(
-              builder: (context, taskService, _) {
-                final tasks = taskService.tasks
-                    .where((t) =>
-                        t.status != TaskStatus.completed &&
-                        t.status != TaskStatus.cancelled)
-                    .toList()
-                  ..sort((a, b) {
-                    final aDate = a.createdAt ?? DateTime(2000);
-                    final bDate = b.createdAt ?? DateTime(2000);
-                    return bDate.compareTo(aDate);
-                  });
-
-                if (tasks.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+      child: _editingTask != null
+          ? _buildEditView(theme, isDark)
+          : Column(
+              children: [
+                // Success banner
+                if (_showSuccess)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    color: const Color(0xFF388E3C).withOpacity(0.12),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.task_alt,
-                            size: 48,
-                            color: theme.colorScheme.onSurface
-                                .withOpacity(0.15)),
-                        const SizedBox(height: 8),
-                        Text('No hay tareas pendientes',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.4),
-                            )),
+                        Icon(Icons.check_circle,
+                            size: 18, color: Color(0xFF388E3C)),
+                        SizedBox(width: 6),
+                        Text(
+                          '¡Tarea creada!',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF388E3C),
+                          ),
+                        ),
                       ],
                     ),
-                  );
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: tasks.length,
-                  separatorBuilder: (_, __) => Divider(
-                    height: 1,
-                    color: isDark
-                        ? const Color(0xFF2E2E2E)
-                        : const Color(0xFFEEEEEE),
                   ),
-                  itemBuilder: (ctx, i) =>
-                      _buildTaskRow(tasks[i], theme, isDark),
-                );
-              },
-            ),
-          ),
 
-          // Quick-add form at the bottom
-          _buildQuickAddForm(theme, isDark),
-        ],
-      ),
+                // Recent tasks list
+                Expanded(
+                  child: Consumer<TaskService>(
+                    builder: (context, taskService, _) {
+                      final tasks = taskService.tasks
+                          .where((t) =>
+                              t.status != TaskStatus.completed &&
+                              t.status != TaskStatus.cancelled)
+                          .toList()
+                        ..sort((a, b) {
+                          final aDate = a.createdAt ?? DateTime(2000);
+                          final bDate = b.createdAt ?? DateTime(2000);
+                          return bDate.compareTo(aDate);
+                        });
+
+                      if (tasks.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.task_alt,
+                                  size: 48,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.15)),
+                              const SizedBox(height: 8),
+                              Text('No hay tareas pendientes',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.4),
+                                  )),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: tasks.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: isDark
+                              ? const Color(0xFF2E2E2E)
+                              : const Color(0xFFEEEEEE),
+                        ),
+                        itemBuilder: (ctx, i) =>
+                            _buildTaskRow(tasks[i], theme, isDark),
+                      );
+                    },
+                  ),
+                ),
+
+                // Quick-add form at the bottom
+                _buildQuickAddForm(theme, isDark),
+              ],
+            ),
     );
   }
 
@@ -232,7 +246,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     final priorityColor = _priorityColor(task.priority);
 
     return InkWell(
-      onTap: () => _toggleTaskStatus(task),
+      onTap: () => _showTaskDetail(task),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
@@ -259,8 +273,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                         : Colors.transparent,
                   ),
                   child: task.status == TaskStatus.completed
-                      ? const Icon(Icons.check,
-                          size: 12, color: Colors.white)
+                      ? const Icon(Icons.check, size: 12, color: Colors.white)
                       : null,
                 ),
               ),
@@ -309,8 +322,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                             fontSize: 10,
                             color: isOverdue
                                 ? Colors.red
-                                : theme.colorScheme.onSurface
-                                    .withOpacity(0.45),
+                                : theme.colorScheme.onSurface.withOpacity(0.45),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -323,8 +335,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 10,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.45),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.45),
                             ),
                           ),
                         ),
@@ -347,6 +359,330 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     try {
       await taskService.updateTask(task.copyWith(status: newStatus));
     } catch (_) {}
+  }
+
+  void _showTaskDetail(TaskModel task) {
+    setState(() {
+      _editingTask = task;
+      _editTitleCtrl.text = task.title;
+      _editDescCtrl.text = task.description ?? '';
+      _editPriority = task.priority;
+      _editStatus = task.status;
+      _editDueDate = task.dueDate;
+      _isSavingEdit = false;
+    });
+  }
+
+  Future<void> _saveEdit() async {
+    final task = _editingTask;
+    if (task == null) return;
+    final title = _editTitleCtrl.text.trim();
+    if (title.isEmpty) return;
+    setState(() => _isSavingEdit = true);
+    try {
+      final taskService = context.read<TaskService>();
+      await taskService.updateTask(task.copyWith(
+        title: title,
+        description: _editDescCtrl.text.trim().isEmpty
+            ? null
+            : _editDescCtrl.text.trim(),
+        priority: _editPriority,
+        status: _editStatus,
+        dueDate: _editDueDate,
+      ));
+      if (mounted) setState(() => _editingTask = null);
+    } catch (_) {
+      if (mounted) setState(() => _isSavingEdit = false);
+    }
+  }
+
+  Widget _buildEditView(ThemeData theme, bool isDark) {
+    final borderCol =
+        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: theme.colorScheme.onSurface.withOpacity(0.5),
+      letterSpacing: 0.6,
+    );
+
+    InputDecoration _fieldDecoration({String? hint}) => InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withOpacity(0.35)),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: borderCol),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: borderCol),
+          ),
+        );
+
+    Color priorityColor(TaskPriority p) {
+      switch (p) {
+        case TaskPriority.urgent:
+          return const Color(0xFFE53E3E);
+        case TaskPriority.high:
+          return const Color(0xFFED8936);
+        case TaskPriority.normal:
+          return const Color(0xFF4299E1);
+        case TaskPriority.low:
+          return Colors.grey;
+      }
+    }
+
+    String priorityLabel(TaskPriority p) {
+      switch (p) {
+        case TaskPriority.urgent:
+          return 'Urgente';
+        case TaskPriority.high:
+          return 'Alta';
+        case TaskPriority.normal:
+          return 'Normal';
+        case TaskPriority.low:
+          return 'Baja';
+      }
+    }
+
+    String statusLabel(TaskStatus s) {
+      switch (s) {
+        case TaskStatus.pending:
+          return 'Pendiente';
+        case TaskStatus.inProgress:
+          return 'En progreso';
+        case TaskStatus.completed:
+          return 'Completada';
+        case TaskStatus.cancelled:
+          return 'Cancelada';
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back,
+                    size: 17,
+                    color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: 'Volver',
+                onPressed: () => setState(() => _editingTask = null),
+              ),
+              const SizedBox(width: 2),
+              Text('Editar tarea',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  )),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.delete_outline,
+                    size: 17, color: Colors.red.withOpacity(0.65)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: 'Eliminar',
+                onPressed: () async {
+                  final task = _editingTask!;
+                  setState(() => _editingTask = null);
+                  try {
+                    await context.read<TaskService>().deleteTask(task.id!);
+                  } catch (_) {}
+                },
+              ),
+            ],
+          ),
+        ),
+        Divider(color: borderCol, height: 1),
+        // Scrollable fields
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('TÍTULO', style: labelStyle),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _editTitleCtrl,
+                  style: TextStyle(
+                      fontSize: 13, color: theme.colorScheme.onSurface),
+                  decoration: _fieldDecoration(),
+                ),
+                const SizedBox(height: 12),
+                Text('DESCRIPCIÓN', style: labelStyle),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _editDescCtrl,
+                  maxLines: 3,
+                  style: TextStyle(
+                      fontSize: 13, color: theme.colorScheme.onSurface),
+                  decoration: _fieldDecoration(hint: 'Agregar descripción...'),
+                ),
+                const SizedBox(height: 12),
+                // Priority + Status
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('PRIORIDAD', style: labelStyle),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<TaskPriority>(
+                            value: _editPriority,
+                            isDense: true,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface),
+                            decoration: _fieldDecoration(),
+                            items: TaskPriority.values
+                                .map((p) => DropdownMenuItem(
+                                      value: p,
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                                color: priorityColor(p),
+                                                shape: BoxShape.circle),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(priorityLabel(p),
+                                              style: const TextStyle(
+                                                  fontSize: 12)),
+                                        ],
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => _editPriority = v!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ESTADO', style: labelStyle),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<TaskStatus>(
+                            value: _editStatus,
+                            isDense: true,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface),
+                            decoration: _fieldDecoration(),
+                            items: TaskStatus.values
+                                .map((s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(statusLabel(s),
+                                          style: const TextStyle(fontSize: 12)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) => setState(() => _editStatus = v!),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('FECHA LÍMITE', style: labelStyle),
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _editDueDate ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null && mounted)
+                      setState(() => _editDueDate = picked);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: borderCol),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.event_outlined,
+                            size: 14,
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.5)),
+                        const SizedBox(width: 6),
+                        Text(
+                          _editDueDate != null
+                              ? DateFormat('dd/MM/yyyy').format(_editDueDate!)
+                              : 'Sin fecha',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _editDueDate != null
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.onSurface.withOpacity(0.4),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_editDueDate != null)
+                          GestureDetector(
+                            onTap: () => setState(() => _editDueDate = null),
+                            child: Icon(Icons.clear,
+                                size: 14,
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(0.4)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Save button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              onPressed: _isSavingEdit ? null : _saveEdit,
+              child: Text(
+                _isSavingEdit ? 'Guardando...' : 'Guardar',
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildQuickAddForm(ThemeData theme, bool isDark) {
@@ -455,8 +791,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           onTap: () => setState(() => _dueDate = null),
                           child: Icon(Icons.close,
                               size: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.4)),
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.4)),
                         ),
                       ],
                     ],
@@ -474,8 +810,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                       setState(() {
                         _assignedToId = val;
                         if (val != null) {
-                          final u =
-                              _users.firstWhere((u) => u['id'] == val);
+                          final u = _users.firstWhere((u) => u['id'] == val);
                           _assigneeName = u['full_name'] as String? ??
                               u['email'] as String?;
                         } else {
@@ -638,8 +973,7 @@ class _PriorityChip extends StatelessWidget {
             Container(
               width: 6,
               height: 6,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 4),
             Text(
