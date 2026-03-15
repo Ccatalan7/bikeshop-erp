@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'calculator_panel.dart';
+import 'quick_access_expense_rail.dart';
 import 'quick_sale_panel.dart';
 import 'quick_task_panel.dart';
 
@@ -7,6 +9,7 @@ import 'quick_task_panel.dart';
 /// Add new entries here to extend the toolbar with more tools.
 enum ToolbarTool {
   quickSale,
+  expenses,
   tasks,
   calculator,
 }
@@ -31,6 +34,26 @@ class _RightToolbarState extends State<RightToolbar> {
   static const double _minWidth = 320.0;
   static const double _maxWidth = 600.0;
   static const double _collapsedWidth = 48.0;
+  static const String _prefKey = 'right_toolbar_width';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWidth();
+  }
+
+  Future<void> _loadWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getDouble(_prefKey);
+    if (saved != null && mounted) {
+      setState(() => _expandedWidth = saved.clamp(_minWidth, _maxWidth));
+    }
+  }
+
+  Future<void> _saveWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_prefKey, _expandedWidth);
+  }
 
   bool get _isExpanded => _activeTool != null;
 
@@ -54,6 +77,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.quickSale:
         return 'Venta Rápida';
+      case ToolbarTool.expenses:
+        return 'Gastos Rápidos';
       case ToolbarTool.tasks:
         return 'Tareas';
       case ToolbarTool.calculator:
@@ -65,6 +90,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.quickSale:
         return Icons.flash_on;
+      case ToolbarTool.expenses:
+        return Icons.receipt_long_outlined;
       case ToolbarTool.tasks:
         return Icons.task_alt;
       case ToolbarTool.calculator:
@@ -76,6 +103,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.quickSale:
         return const QuickSalePanel();
+      case ToolbarTool.expenses:
+        return const QuickAccessExpenseRail(embedded: true);
       case ToolbarTool.tasks:
         return const QuickTaskPanel();
       case ToolbarTool.calculator:
@@ -89,7 +118,8 @@ class _RightToolbarState extends State<RightToolbar> {
     final isDark = theme.brightness == Brightness.dark;
 
     final barBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F1F3);
-    final barBorder = isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
+    final barBorder =
+        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
     final activeBg = isDark
         ? theme.colorScheme.primary.withOpacity(0.2)
         : theme.colorScheme.primary.withOpacity(0.1);
@@ -99,7 +129,8 @@ class _RightToolbarState extends State<RightToolbar> {
     return Stack(
       children: [
         AnimatedContainer(
-          duration: _isResizing ? Duration.zero : const Duration(milliseconds: 250),
+          duration:
+              _isResizing ? Duration.zero : const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
           width: currentWidth,
           decoration: BoxDecoration(
@@ -127,12 +158,14 @@ class _RightToolbarState extends State<RightToolbar> {
                     setState(() => _isResizing = true),
                 onHorizontalDragUpdate: (details) {
                   setState(() {
-                    _expandedWidth =
-                        (_expandedWidth - details.delta.dx).clamp(_minWidth, _maxWidth);
+                    _expandedWidth = (_expandedWidth - details.delta.dx)
+                        .clamp(_minWidth, _maxWidth);
                   });
                 },
-                onHorizontalDragEnd: (_) =>
-                    setState(() => _isResizing = false),
+                onHorizontalDragEnd: (_) {
+                  setState(() => _isResizing = false);
+                  _saveWidth();
+                },
                 child: Container(color: Colors.transparent),
               ),
             ),
@@ -160,7 +193,8 @@ class _RightToolbarState extends State<RightToolbar> {
                 child: Container(
                   width: 40,
                   height: 40,
-                  margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                  margin:
+                      const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -177,60 +211,114 @@ class _RightToolbarState extends State<RightToolbar> {
     );
   }
 
-  /// Expanded panel with header + tool content
+  /// Expanded panel with mini icon rail + header + tool content
   Widget _buildExpanded(ThemeData theme, bool isDark) {
     final tool = _activeTool!;
+    final railBg = isDark ? const Color(0xFF161616) : const Color(0xFFE8EAED);
+    final railBorder =
+        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
 
-    return Column(
+    return Row(
       children: [
-        // Header bar
-        Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4),
-              ),
-            ),
-          ),
-          child: Row(
+        // Panel area first (left), mini rail on right edge
+        Expanded(
+          child: Column(
             children: [
-              Icon(
-                _toolIcon(tool),
-                size: 18,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _toolTitle(tool),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              // Close button
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _close,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.close,
-                      size: 18,
-                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+              // Header bar
+              Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF2E2E2E)
+                          : const Color(0xFFDDE0E4),
                     ),
                   ),
                 ),
+                child: Row(
+                  children: [
+                    Icon(_toolIcon(tool),
+                        size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      _toolTitle(tool),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _close,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              // Tool content
+              Expanded(child: _toolPanel(tool)),
             ],
           ),
         ),
-        // Tool content
-        Expanded(
-          child: _toolPanel(tool),
+        // Mini icon rail — right edge, always visible to switch tools
+        Container(
+          width: _collapsedWidth,
+          decoration: BoxDecoration(
+            color: railBg,
+            border: Border(
+              left: BorderSide(color: railBorder, width: 1),
+            ),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              for (final t in ToolbarTool.values)
+                Tooltip(
+                  message: _toolTitle(t),
+                  preferBelow: false,
+                  waitDuration: const Duration(milliseconds: 300),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _selectTool(t),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: t == tool
+                              ? theme.colorScheme.primary
+                                  .withOpacity(isDark ? 0.25 : 0.12)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _toolIcon(t),
+                          size: 20,
+                          color: t == tool
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface.withOpacity(0.55),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ],
     );

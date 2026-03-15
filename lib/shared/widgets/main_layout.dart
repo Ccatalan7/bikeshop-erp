@@ -12,7 +12,6 @@ import '../services/notification_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import 'expandable_menu_item.dart';
-import 'right_toolbar.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
   MenuSubItem(
@@ -857,12 +856,11 @@ class _MainLayoutState extends State<MainLayout> {
                       ],
                     ),
                   ),
-                  const RightToolbar(),
                 ],
               ),
             ),
-            // Right-side toolbar (Zoho Books style)
-            const RightToolbar(),
+            // Right-side toolbar is rendered by _WorkspaceRouterView (above the router)
+            // so it persists across navigation without flickering.
           ],
         ),
       );

@@ -72,6 +72,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
+import 'shared/widgets/right_toolbar.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
 
@@ -833,12 +834,19 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.dispose();
   }
 
+  final _toolbarKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
     try {
-      return Router.withConfig(config: _router);
+      return Row(
+        children: [
+          Expanded(child: Router.withConfig(config: _router)),
+          RightToolbar(key: _toolbarKey),
+        ],
+      );
     } catch (e) {
       debugPrint('🔴 [WorkspaceRouterView] Router build error: $e');
       return Material(
