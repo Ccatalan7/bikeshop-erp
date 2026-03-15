@@ -781,75 +781,83 @@ class _MainLayoutState extends State<MainLayout> {
                     )
                   : const SizedBox.shrink(),
             ),
-            // Main Content Area with left border
             Expanded(
-              child: Stack(
+              child: Row(
                 children: [
-                  // Main content with border (no app bar)
-                  Container(
-                    decoration: navigationService.isDrawerVisible
-                        ? BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: Theme.of(context).dividerColor,
-                                width: 1,
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        // Main content with border (no app bar)
+                        Container(
+                          decoration: navigationService.isDrawerVisible
+                              ? BoxDecoration(
+                                  border: Border(
+                                    left: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                      width: 1,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          child: widget.body ?? widget.child,
+                        ),
+                        // Invisible resize handle on left edge (12px wide)
+                        if (navigationService.isDrawerVisible)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 12,
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.resizeColumn,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onHorizontalDragStart: (details) {
+                                  navigationService.startResizing();
+                                },
+                                onHorizontalDragUpdate: (details) {
+                                  navigationService.updateDrawerWidth(
+                                    navigationService.drawerWidth +
+                                        details.delta.dx,
+                                  );
+                                },
+                                onHorizontalDragEnd: (details) {
+                                  navigationService.stopResizing();
+                                },
+                                child: Container(
+                                  color: Colors.transparent,
+                                ),
                               ),
                             ),
-                          )
-                        : null,
-                    child: widget.body ?? widget.child,
-                  ),
-                  // Invisible resize handle on left edge (12px wide)
-                  if (navigationService.isDrawerVisible)
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 12,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.resizeColumn,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onHorizontalDragStart: (details) {
-                            navigationService.startResizing();
-                          },
-                          onHorizontalDragUpdate: (details) {
-                            navigationService.updateDrawerWidth(
-                              navigationService.drawerWidth + details.delta.dx,
-                            );
-                          },
-                          onHorizontalDragEnd: (details) {
-                            navigationService.stopResizing();
-                          },
-                          child: Container(
-                            color: Colors.transparent,
                           ),
-                        ),
-                      ),
-                    ),
-                  // Small toggle button (bottom-left, only when drawer is hidden)
-                  if (!navigationService.isDrawerVisible)
-                    Positioned(
-                      left: 8,
-                      bottom: 8,
-                      child: Material(
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(20),
-                        child: InkWell(
-                          onTap: () => navigationService.showDrawer(),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
+                        // Small toggle button (bottom-left, only when drawer is hidden)
+                        if (!navigationService.isDrawerVisible)
+                          Positioned(
+                            left: 8,
+                            bottom: 8,
+                            child: Material(
+                              elevation: 4,
                               borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                onTap: () => navigationService.showDrawer(),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(context).colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(Icons.menu, size: 20),
+                                ),
+                              ),
                             ),
-                            child: const Icon(Icons.menu, size: 20),
                           ),
-                        ),
-                      ),
+                      ],
                     ),
+                  ),
+                  const RightToolbar(),
                 ],
               ),
             ),
