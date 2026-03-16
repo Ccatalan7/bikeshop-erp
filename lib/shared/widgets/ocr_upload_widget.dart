@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
 
+import 'dart:async';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
@@ -117,6 +118,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   List<ProductBrand> _brands = [];
   bool _loadingCategories = false;
   bool _creatingProducts = false;
+  final Map<int, TextEditingController> _skuControllers = {};
+  Timer? _debounceTimer;
+  bool _isDialogShowing = false;
   String? _supplierIdForNewProducts; // For potential future use
   String? _ocrSupplierName; // Supplier detected by OCR
   bool _showStock = false; // Toggle to show/hide stock column
@@ -766,15 +770,40 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     flex: 3,
-                                    child: Text(
-                                      item.sku ?? '-',
+                                    child: TextField(
+                                      decoration: InputDecoration(
+                                        hintText: 'ASIGNAR SKU',
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 4),
+                                        border: (item.sku == null || item.sku!.isEmpty)
+                                            ? OutlineInputBorder(
+                                                borderSide: BorderSide(
+                                                    color: Colors.orange.shade300,
+                                                    width: 0.5),
+                                              )
+                                            : InputBorder.none,
+                                        filled: (item.sku == null || item.sku!.isEmpty),
+                                        fillColor: Colors.orange.shade50,
+                                        hintStyle: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.orange.shade300),
+                                      ),
+                                      controller: _skuControllers.putIfAbsent(
+                                          _parsedData!.lineItems.indexOf(item),
+                                          () => TextEditingController(
+                                              text: item.sku)),
                                       style: TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'monospace',
                                         fontSize: 13,
+                                        fontWeight: FontWeight.bold,
                                         color: item.existsInDatabase == true
                                             ? Colors.green.shade700
                                             : null,
                                       ),
+                                      onChanged: (newSku) =>
+                                          _updateItemSku(item, newSku),
                                     ),
                                   ),
                                   Expanded(
@@ -848,16 +877,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
         const SizedBox(height: 24),
 
-        // Create New Products Button (if any new products detected)
-        if (data.lineItems.any((item) =>
-            item.existsInDatabase == false && (item.sku?.isNotEmpty ?? false)))
+        // Create New Products Button (if any unrecognized products)
+        if (data.lineItems.any((item) => item.existsInDatabase == false))
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: OutlinedButton.icon(
               onPressed: _openBulkCreateScreen,
               icon: const Icon(Icons.add_circle_outline, color: Colors.orange),
               label: Text(
-                'Crear ${data.lineItems.where((item) => item.existsInDatabase == false && (item.sku?.isNotEmpty ?? false)).length} Productos Nuevos',
+                'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
                 style: const TextStyle(color: Colors.orange),
               ),
               style: OutlinedButton.styleFrom(
@@ -904,6 +932,195 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
+  /// Update SKU for a line item and re-verify against database
+  void _updateItemSku(ParsedLineItem item, String newSku) {
+    if (_parsedData == null) return;
+
+    // Use debounce for real-time matching to avoid overlapping lookups and dialogs
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+      final verifiedItem =
+          await _verifySingleProduct(item.copyWith(sku: newSku.trim()));
+
+      // If we found a match, validate if names match
+      if (verifiedItem.existsInDatabase == true &&
+          verifiedItem.matchedProductId != null) {
+        await _validateSkuMatch(item, verifiedItem);
+      } else {
+        // No match or mismatch cleared, just update the item
+        _applyItemUpdate(item, verifiedItem);
+      }
+    });
+  }
+
+  void _applyItemUpdate(ParsedLineItem oldItem, ParsedLineItem newItem) {
+    if (_parsedData == null) return;
+    final updatedItems = _parsedData!.lineItems.map((i) {
+      if (i == oldItem) {
+        return newItem;
+      }
+      return i;
+    }).toList();
+
+    setState(() {
+      _parsedData = _parsedData!.copyWith(lineItems: updatedItems);
+    });
+  }
+
+  /// Validates if the matched product name corresponds to the invoice description.
+  /// If not, asks the user for confirmation.
+  Future<void> _validateSkuMatch(
+      ParsedLineItem originalItem, ParsedLineItem verifiedItem) async {
+    if (_isDialogShowing) return;
+
+    final invoiceName = originalItem.description.trim().toLowerCase();
+    final inventoryName = verifiedItem.matchedProductName!.trim().toLowerCase();
+
+    // SIMPLE SIMILARITY CHECK:
+    // If one contains the other or they are "similar enough" (basic check for now)
+    bool isMatch = inventoryName.contains(invoiceName) ||
+        invoiceName.contains(inventoryName) ||
+        inventoryName == invoiceName;
+
+    // Case-insensitive exact match or inclusion is considered "ok"
+    if (isMatch) {
+      _applyItemUpdate(originalItem, verifiedItem);
+      return;
+    }
+
+    // DISCREPANCY DETECTED: Show confirmation dialog
+    _isDialogShowing = true;
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Discrepancia de Nombre'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'El SKU ingresado corresponde a un producto diferente en el inventario:'),
+            const SizedBox(height: 16),
+            _buildDiffRow('En Factura:', originalItem.description),
+            _buildDiffRow('En Inventario:', verifiedItem.matchedProductName!),
+            const SizedBox(height: 16),
+            const Text('¿Cómo deseas proceder?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'REJECT'),
+            child: const Text('Ingresar otro SKU',
+                style: TextStyle(color: Colors.red)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'SYNC'),
+            child: const Text('Usar nombre de inventario'),
+          ),
+        ],
+      ),
+    );
+    _isDialogShowing = false;
+
+    if (result == 'SYNC') {
+      // Update the item but ALSO overwrite description with the one from DB
+      _applyItemUpdate(
+          originalItem,
+          verifiedItem.copyWith(
+            description: verifiedItem.matchedProductName!,
+          ));
+    } else {
+      // Reject match: clear SKU in the controller and revert item status
+      final index = _parsedData!.lineItems.indexOf(originalItem);
+      if (index != -1 && _skuControllers.containsKey(index)) {
+        _skuControllers[index]!.clear();
+      }
+      _applyItemUpdate(originalItem, originalItem.copyWith(sku: ''));
+    }
+  }
+
+  Widget _buildDiffRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          Text(value,
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
+
+  /// Verify a single product against the database
+  Future<ParsedLineItem> _verifySingleProduct(ParsedLineItem item) async {
+    final inventoryService =
+        Provider.of<InventoryService>(context, listen: false);
+
+    Product? matchedProduct;
+
+    // PRIORITY 1: Try to find by SKU (if available)
+    if (item.sku != null && item.sku!.trim().isNotEmpty) {
+      try {
+        matchedProduct = await inventoryService.getProductBySku(item.sku!.trim());
+      } catch (e) {
+        debugPrint('   ❌ Error looking up SKU ${item.sku}: $e');
+      }
+    }
+
+    // PRIORITY 2: Try to find by Supplier Code
+    if (matchedProduct == null && item.sku != null && item.sku!.trim().isNotEmpty) {
+      final cleanSku = item.sku!.trim();
+      try {
+        matchedProduct =
+            await inventoryService.getProductBySupplierCode(cleanSku);
+      } catch (e) {
+        debugPrint('   ❌ Error looking up Supplier Code $cleanSku: $e');
+      }
+    }
+
+    // PRIORITY 3: Fall back to searching by name (EXACT MATCH ONLY)
+    if (matchedProduct == null && item.description.isNotEmpty) {
+      try {
+        final normalizedDescription = item.description.trim().toLowerCase();
+        final allProducts = await inventoryService.getProducts();
+
+        for (final product in allProducts) {
+          final normalizedProductName = product.name.trim().toLowerCase();
+          if (normalizedProductName == normalizedDescription) {
+            matchedProduct = product;
+            break;
+          }
+        }
+      } catch (e) {
+        debugPrint('   ❌ Error searching by name: $e');
+      }
+    }
+
+    // Set verification result
+    if (matchedProduct != null) {
+      return item.copyWith(
+        existsInDatabase: true,
+        matchedProductId: matchedProduct.id,
+        matchedProductName: matchedProduct.name,
+        currentStock: matchedProduct.stockQuantity,
+        sku: item.sku, // Keep whatever the user typed or OCR found
+      );
+    } else {
+      return item.copyWith(existsInDatabase: false);
+    }
+  }
+
   /// Open the bulk product creation screen
   Future<void> _uploadImage(
       _NewProductEntry entry, Uint8List bytes, String fileName) async {
@@ -928,10 +1145,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<void> _openBulkCreateScreen() async {
     if (_parsedData == null) return;
 
-    // Get new products (those with SKU but not in database)
+    // Get new products (all unrecognized items)
     final newProducts = _parsedData!.lineItems
-        .where((item) =>
-            item.existsInDatabase == false && (item.sku?.isNotEmpty ?? false))
+        .where((item) => item.existsInDatabase == false)
         .toList();
 
     if (newProducts.isEmpty) return;
@@ -1342,17 +1558,23 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                             ),
                           ),
                         ),
-                        // SKU (readonly)
+                        // SKU (editable)
                         Expanded(
                           flex: 3,
-                          child: Text(
-                            entry.sku,
-                            style: TextStyle(
+                          child: TextField(
+                            controller: entry.skuController,
+                            enabled: entry.isSelected,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
+                              errorText: entry.sku.isEmpty ? 'Requerido' : null,
+                              errorStyle: const TextStyle(fontSize: 10),
+                            ),
+                            style: const TextStyle(
                               fontFamily: 'monospace',
-                              fontSize: 13,
-                              color: entry.isSelected
-                                  ? Colors.black87
-                                  : Colors.grey,
+                              fontSize: 12,
                             ),
                           ),
                         ),
@@ -1989,83 +2211,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     debugPrint(
         '🔍 Verifying ${invoice.lineItems.length} products in database...');
 
-    // Use the existing InventoryService from the provider to ensure we access the cached products
-    final inventoryService =
-        Provider.of<InventoryService>(context, listen: false);
     final verifiedItems = <ParsedLineItem>[];
 
     for (final item in invoice.lineItems) {
-      Product? matchedProduct;
-
-      // PRIORITY 1: Try to find by SKU (if available)
-      if (item.sku != null && item.sku!.isNotEmpty) {
-        try {
-          matchedProduct = await inventoryService.getProductBySku(item.sku!);
-          if (matchedProduct != null) {
-            debugPrint(
-                '   ✓ Found by SKU: ${matchedProduct.name} (${item.sku})');
-          }
-        } catch (e) {
-          debugPrint('   ❌ Error looking up SKU ${item.sku}: $e');
-        }
-      }
-
-      // PRIORITY 2: Try to find by Supplier Code (match invoice SKU to product supplier_code)
-      if (matchedProduct == null && item.sku != null && item.sku!.isNotEmpty) {
-        final cleanSku = item.sku!.trim();
-        try {
-          debugPrint('   🔍 Searching by Supplier Code: "$cleanSku"');
-          matchedProduct =
-              await inventoryService.getProductBySupplierCode(cleanSku);
-          if (matchedProduct != null) {
-            debugPrint(
-                '   ✓ Found by Supplier Code: ${matchedProduct.name} ($cleanSku)');
-          } else {
-            debugPrint('   ⚠️ No product found with supplier_code="$cleanSku"');
-          }
-        } catch (e) {
-          debugPrint('   ❌ Error looking up Supplier Code $cleanSku: $e');
-        }
-      }
-
-      // PRIORITY 3: Fall back to searching by name (EXACT MATCH ONLY)
-      // Only matches if product name exactly equals OCR description (case-insensitive)
-      if (matchedProduct == null && item.description.isNotEmpty) {
-        try {
-          final normalizedDescription = item.description.trim().toLowerCase();
-          final allProducts = await inventoryService.getProducts();
-
-          // Find product with exact name match (case-insensitive)
-          for (final product in allProducts) {
-            final normalizedProductName = product.name.trim().toLowerCase();
-            if (normalizedProductName == normalizedDescription) {
-              matchedProduct = product;
-              debugPrint(
-                  '   ✓ Found by EXACT name match: ${matchedProduct.name}');
-              break;
-            }
-          }
-
-          if (matchedProduct == null) {
-            debugPrint('   ⚠ No exact name match for: "${item.description}"');
-          }
-        } catch (e) {
-          debugPrint('   ❌ Error searching by name: $e');
-        }
-      }
-
-      // Set verification result
-      if (matchedProduct != null) {
-        verifiedItems.add(item.copyWith(
-          existsInDatabase: true,
-          matchedProductId: matchedProduct.id,
-          matchedProductName: matchedProduct.name,
-          currentStock: matchedProduct.stockQuantity,
-        ));
-      } else {
-        debugPrint('   ⚠ No match for: ${item.sku ?? item.description}');
-        verifiedItems.add(item.copyWith(existsInDatabase: false));
-      }
+      final verifiedItem = await _verifySingleProduct(item);
+      verifiedItems.add(verifiedItem);
     }
 
     debugPrint(
@@ -2111,6 +2261,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    for (var controller in _skuControllers.values) {
+      controller.dispose();
+    }
+    _skuControllers.clear();
     // Note: Don't dispose OCRService here (it's a singleton)
     super.dispose();
   }
@@ -2127,6 +2282,7 @@ class _NewProductEntry {
   final ParsedLineItem originalItem;
   bool isSelected;
   final TextEditingController nameController;
+  final TextEditingController skuController;
   final TextEditingController priceController;
   Category? selectedCategory;
   ProductBrand? selectedBrand;
@@ -2143,6 +2299,7 @@ class _NewProductEntry {
     this.selectedBrand,
   })  : nameController = TextEditingController(
             text: initialName ?? _cleanDescription(originalItem.description)),
+        skuController = TextEditingController(text: originalItem.sku),
         priceController =
             TextEditingController(text: _calculateDefaultPrice(originalItem));
 
@@ -2174,11 +2331,12 @@ class _NewProductEntry {
 
   void dispose() {
     nameController.dispose();
+    skuController.dispose();
     priceController.dispose();
   }
 
-  /// Get SKU from original item
-  String get sku => originalItem.sku ?? '';
+  /// Get SKU from controller
+  String get sku => skuController.text.trim();
 
   /// Get cost from original item (unitPrice, or calculated from total/quantity)
   double get cost {
