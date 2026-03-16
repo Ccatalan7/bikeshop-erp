@@ -13,6 +13,8 @@ class PurchasePayment {
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String? deletedBy;
 
   PurchasePayment({
     this.id,
@@ -27,6 +29,8 @@ class PurchasePayment {
     this.notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.deletedAt,
+    this.deletedBy,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -44,6 +48,8 @@ class PurchasePayment {
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      deletedAt: json['deleted_at'] != null ? _parseDate(json['deleted_at']) : null,
+      deletedBy: json['deleted_by']?.toString(),
     );
   }
 
@@ -57,6 +63,8 @@ class PurchasePayment {
       'date': date.toIso8601String(),
       'reference': reference,
       'notes': notes,
+      'deleted_at': deletedAt?.toIso8601String(),
+      'deleted_by': deletedBy,
     };
   }
 
@@ -73,6 +81,8 @@ class PurchasePayment {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? deletedAt,
+    String? deletedBy,
   }) {
     return PurchasePayment(
       id: id ?? this.id,
@@ -87,6 +97,8 @@ class PurchasePayment {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      deletedBy: deletedBy ?? this.deletedBy,
     );
   }
 

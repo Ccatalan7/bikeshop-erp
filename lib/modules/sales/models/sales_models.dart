@@ -422,6 +422,8 @@ class Payment {
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String? deletedBy;
 
   // Payment-level tax handling (multi-payment with split tax)
   final String taxTreatment; // 'no_tax', 'tax_included', 'tax_excluded'
@@ -440,6 +442,8 @@ class Payment {
     this.notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.deletedAt,
+    this.deletedBy,
     this.taxTreatment = 'no_tax',
     double? netAmount,
     double? ivaAmount,
@@ -466,6 +470,8 @@ class Payment {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? deletedAt,
+    String? deletedBy,
     String? taxTreatment,
     double? netAmount,
     double? ivaAmount,
@@ -482,6 +488,8 @@ class Payment {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      deletedBy: deletedBy ?? this.deletedBy,
       taxTreatment: taxTreatment ?? this.taxTreatment,
       netAmount: netAmount ?? this.netAmount,
       ivaAmount: ivaAmount ?? this.ivaAmount,
@@ -504,6 +512,8 @@ class Payment {
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      deletedAt: json['deleted_at'] != null ? _parseDate(json['deleted_at']) : null,
+      deletedBy: json['deleted_by']?.toString(),
       taxTreatment: taxTreatment,
       netAmount: (json['net_amount'] as num?)?.toDouble(),
       ivaAmount: (json['iva_amount'] as num?)?.toDouble(),
@@ -521,6 +531,8 @@ class Payment {
       'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'notes': notes,
+      'deleted_at': deletedAt?.toUtc().toIso8601String(),
+      'deleted_by': deletedBy,
       'tax_treatment': taxTreatment,
       'net_amount': netAmount,
       'iva_amount': ivaAmount,

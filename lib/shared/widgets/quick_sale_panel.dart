@@ -1346,8 +1346,12 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                         spacing: 6,
                         runSpacing: 4,
                         children: [
-                          _pill(theme, isDark, subtleBorder, product.sku,
+                          _pill(theme, isDark, subtleBorder, 'SKU: ${product.sku}',
                               isCode: true),
+                          if ((product.supplierCode ?? '').isNotEmpty)
+                            _pill(theme, isDark, subtleBorder,
+                                'Prov: ${product.supplierCode}',
+                                isCode: true),
                           if ((product.categoryName ?? '').isNotEmpty)
                             _pill(theme, isDark, subtleBorder,
                                 product.categoryName!),
