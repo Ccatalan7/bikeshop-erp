@@ -37,6 +37,12 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
   DateTime? _editDueDate;
   bool _isSavingEdit = false;
 
+  // filter: false = pending only, true = all tasks
+  bool _showAll = false;
+
+  // sections collapsed by default
+  final Set<String> _collapsedSections = {'Completadas'};
+
   List<Map<String, dynamic>> _users = [];
   bool _isLoadingUsers = true;
 
@@ -181,22 +187,78 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                     ),
                   ),
 
-                // Recent tasks list
+                // Filter tabs
+                _buildFilterTabs(theme, isDark),
+
+                // Grouped tasks list
                 Expanded(
                   child: Consumer<TaskService>(
                     builder: (context, taskService, _) {
-                      final tasks = taskService.tasks
-                          .where((t) =>
-                              t.status != TaskStatus.completed &&
-                              t.status != TaskStatus.cancelled)
-                          .toList()
-                        ..sort((a, b) {
-                          final aDate = a.createdAt ?? DateTime(2000);
-                          final bDate = b.createdAt ?? DateTime(2000);
-                          return bDate.compareTo(aDate);
-                        });
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final tomorrow = today.add(const Duration(days: 1));
+                      final endOfWeek = today.add(const Duration(days: 7));
+                      final endOf2Weeks = today.add(const Duration(days: 14));
+                      final endOfMonth = today.add(const Duration(days: 30));
+                      final endOf3Months = today.add(const Duration(days: 90));
 
-                      if (tasks.isEmpty) {
+                      bool isDone(TaskModel t) =>
+                          t.status == TaskStatus.completed ||
+                          t.status == TaskStatus.cancelled;
+
+                      int bucket(TaskModel t) {
+                        if (isDone(t)) return 9;
+                        if (t.dueDate == null) return 6;
+                        final d = DateTime(
+                            t.dueDate!.year, t.dueDate!.month, t.dueDate!.day);
+                        if (d.isBefore(today)) return 0; // Vencidas
+                        if (d == today) return 1; // Hoy
+                        if (d == tomorrow) return 2; // Mañana
+                        if (d.isBefore(endOfWeek)) return 3; // Esta semana
+                        if (d.isBefore(endOf2Weeks))
+                          return 4; // Próximas 2 semanas
+                        if (d.isBefore(endOfMonth)) return 5; // Este mes
+                        if (d.isBefore(endOf3Months))
+                          return 7; // Próximos 3 meses
+                        return 8; // Más adelante
+                      }
+
+                      final bucketLabels = {
+                        0: 'Vencidas',
+                        1: 'Hoy',
+                        2: 'Mañana',
+                        3: 'Esta semana',
+                        4: 'Próximas 2 semanas',
+                        5: 'Este mes',
+                        6: 'Sin fecha',
+                        7: 'Próximos 3 meses',
+                        8: 'Más adelante',
+                        9: 'Completadas',
+                      };
+
+                      // Group tasks into ordered sections
+                      final Map<int, List<TaskModel>> groups = {};
+                      for (final t in taskService.tasks) {
+                        if (!_showAll && isDone(t)) continue;
+                        final b = bucket(t);
+                        groups.putIfAbsent(b, () => []).add(t);
+                      }
+                      // Sort within each group
+                      for (final list in groups.values) {
+                        list.sort((a, b) {
+                          if (a.dueDate != null && b.dueDate != null) {
+                            return a.dueDate!.compareTo(b.dueDate!);
+                          }
+                          if (a.dueDate != null) return -1;
+                          if (b.dueDate != null) return 1;
+                          return (b.createdAt ?? DateTime(2000))
+                              .compareTo(a.createdAt ?? DateTime(2000));
+                        });
+                      }
+
+                      final sortedBuckets = groups.keys.toList()..sort();
+
+                      if (sortedBuckets.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -206,7 +268,10 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                                   color: theme.colorScheme.onSurface
                                       .withOpacity(0.15)),
                               const SizedBox(height: 8),
-                              Text('No hay tareas pendientes',
+                              Text(
+                                  _showAll
+                                      ? 'No hay tareas'
+                                      : 'No hay tareas pendientes',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurface
                                         .withOpacity(0.4),
@@ -216,17 +281,110 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                         );
                       }
 
-                      return ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        itemCount: tasks.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: isDark
-                              ? const Color(0xFF2E2E2E)
-                              : const Color(0xFFEEEEEE),
-                        ),
-                        itemBuilder: (ctx, i) =>
-                            _buildTaskRow(tasks[i], theme, isDark),
+                      // Flatten into: header entries + task entries per section
+                      // _SectionEntry = (label, count) | TaskModel
+                      final List<dynamic> items = [];
+                      for (final b in sortedBuckets) {
+                        final label = bucketLabels[b]!;
+                        final tasks = groups[b]!;
+                        items.add(
+                            _SectionHeader(label: label, count: tasks.length));
+                        if (!_collapsedSections.contains(label)) {
+                          items.addAll(tasks);
+                        }
+                      }
+
+                      final dividerColor = isDark
+                          ? const Color(0xFF2E2E2E)
+                          : const Color(0xFFEEEEEE);
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        itemCount: items.length,
+                        itemBuilder: (ctx, i) {
+                          final item = items[i];
+                          if (item is _SectionHeader) {
+                            final isOverdue = item.label == 'Vencidas';
+                            final isCollapsed =
+                                _collapsedSections.contains(item.label);
+                            return InkWell(
+                              onTap: () => setState(() {
+                                if (isCollapsed) {
+                                  _collapsedSections.remove(item.label);
+                                } else {
+                                  _collapsedSections.add(item.label);
+                                }
+                              }),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(10, 10, 8, 4),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      item.label.toUpperCase(),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.8,
+                                        color: isOverdue
+                                            ? Colors.red.withOpacity(0.8)
+                                            : theme.colorScheme.onSurface
+                                                .withOpacity(0.4),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Count badge
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: isOverdue
+                                            ? Colors.red.withOpacity(0.12)
+                                            : theme.colorScheme.onSurface
+                                                .withOpacity(0.07),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${item.count}',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: isOverdue
+                                              ? Colors.red.withOpacity(0.8)
+                                              : theme.colorScheme.onSurface
+                                                  .withOpacity(0.4),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                        child: Divider(
+                                            height: 1, color: dividerColor)),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      isCollapsed
+                                          ? Icons.expand_more
+                                          : Icons.expand_less,
+                                      size: 14,
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.3),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          final task = item as TaskModel;
+                          final prevIsTask = i > 0 && items[i - 1] is TaskModel;
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (prevIsTask)
+                                Divider(height: 1, color: dividerColor),
+                              _buildTaskRow(task, theme, isDark),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),
@@ -239,113 +397,167 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     );
   }
 
-  Widget _buildTaskRow(TaskModel task, ThemeData theme, bool isDark) {
-    final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(DateTime.now()) &&
-        task.status != TaskStatus.completed;
-    final priorityColor = _priorityColor(task.priority);
+  Widget _buildFilterTabs(ThemeData theme, bool isDark) {
+    final borderCol =
+        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE8EAED);
+    final activeColor = theme.colorScheme.primary;
+    final inactiveColor = theme.colorScheme.onSurface.withOpacity(0.45);
 
-    return InkWell(
-      onTap: () => _showTaskDetail(task),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Checkbox
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: GestureDetector(
-                onTap: () => _toggleTaskStatus(task),
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: task.status == TaskStatus.completed
-                          ? Colors.green
-                          : Colors.grey.shade400,
-                      width: 1.5,
-                    ),
-                    color: task.status == TaskStatus.completed
-                        ? Colors.green
-                        : Colors.transparent,
-                  ),
-                  child: task.status == TaskStatus.completed
-                      ? const Icon(Icons.check, size: 12, color: Colors.white)
-                      : null,
+    Widget tab(String label, bool active, VoidCallback onTap) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: active ? activeColor : Colors.transparent,
+                  width: 2,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    task.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      // Priority dot
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: priorityColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      if (task.dueDate != null) ...[
-                        Icon(
-                          isOverdue
-                              ? Icons.warning_amber
-                              : Icons.event_outlined,
-                          size: 11,
-                          color: isOverdue ? Colors.red : Colors.grey,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          DateFormat('dd/MM').format(task.dueDate!),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isOverdue
-                                ? Colors.red
-                                : theme.colorScheme.onSurface.withOpacity(0.45),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      if (task.assigneeName != null)
-                        Flexible(
-                          child: Text(
-                            task.assigneeName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.45),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active ? activeColor : inactiveColor,
               ),
             ),
-          ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: borderCol)),
+      ),
+      child: Row(
+        children: [
+          tab('Pendientes', !_showAll, () => setState(() => _showAll = false)),
+          tab('Todas', _showAll, () => setState(() => _showAll = true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskRow(TaskModel task, ThemeData theme, bool isDark) {
+    final isDone = task.status == TaskStatus.completed ||
+        task.status == TaskStatus.cancelled;
+    final isOverdue = task.dueDate != null &&
+        task.dueDate!.isBefore(DateTime.now()) &&
+        !isDone;
+    final priorityColor = _priorityColor(task.priority);
+
+    return Opacity(
+      opacity: isDone ? 0.5 : 1.0,
+      child: InkWell(
+        onTap: () => _showTaskDetail(task),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Checkbox
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: GestureDetector(
+                  onTap: () => _toggleTaskStatus(task),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: task.status == TaskStatus.completed
+                            ? Colors.green
+                            : Colors.grey.shade400,
+                        width: 1.5,
+                      ),
+                      color: task.status == TaskStatus.completed
+                          ? Colors.green
+                          : Colors.transparent,
+                    ),
+                    child: task.status == TaskStatus.completed
+                        ? const Icon(Icons.check, size: 12, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        // Priority dot
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: priorityColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        if (task.dueDate != null) ...[
+                          Icon(
+                            isOverdue
+                                ? Icons.warning_amber
+                                : Icons.event_outlined,
+                            size: 11,
+                            color: isOverdue ? Colors.red : Colors.grey,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            DateFormat('dd/MM').format(task.dueDate!),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isOverdue
+                                  ? Colors.red
+                                  : theme.colorScheme.onSurface
+                                      .withOpacity(0.45),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        if (task.assigneeName != null)
+                          Flexible(
+                            child: Text(
+                              task.assigneeName!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(0.45),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -918,6 +1130,13 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
         return Colors.red;
     }
   }
+}
+
+// ─── Section header data ───────────────────────────────────────────
+class _SectionHeader {
+  final String label;
+  final int count;
+  const _SectionHeader({required this.label, required this.count});
 }
 
 // ─── Priority chip selector ────────────────────────────────────────

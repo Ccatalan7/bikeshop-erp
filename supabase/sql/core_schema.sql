@@ -6019,6 +6019,40 @@ begin
 end;
 $$;
 
+-- Idempotent wrapper: ensures a sales invoice JE exists for confirmed/paid invoices.
+-- Called from Dart after updateInvoiceStatus as a safety net in case the trigger
+-- did not fire (old trigger version, depth > 1, or any other reason).
+-- Internally uses create_sales_invoice_journal_entry which has its own duplicate check.
+create or replace function public.ensure_sales_invoice_journal_entry(p_invoice_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice public.sales_invoices%rowtype;
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  select * into v_invoice
+    from public.sales_invoices
+   where id = p_invoice_id;
+
+  if not found then
+    raise notice 'ensure_sales_invoice_journal_entry: invoice % not found', p_invoice_id;
+    return;
+  end if;
+
+  -- create_sales_invoice_journal_entry already checks for duplicate JE,
+  -- so this call is idempotent — safe to call even if trigger already ran.
+  perform public.create_sales_invoice_journal_entry(v_invoice);
+end;
+$$;
+
+grant execute on function public.ensure_sales_invoice_journal_entry(uuid) to authenticated;
+
 create or replace function public.handle_sales_invoice_change()
 returns trigger
 language plpgsql

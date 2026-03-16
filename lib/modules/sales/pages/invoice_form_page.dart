@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/models/tax_treatment.dart';
@@ -595,6 +596,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         await _refreshInvoiceById(invoiceId);
       } else if (mounted) {
         await _refreshInvoiceById(invoiceId);
+      }
+
+      // Safety net: ensure invoice JE exists after confirming.
+      // Idempotent — no-op if trigger already created it.
+      // Needed because deployed trigger didn't handle draft→confirmed.
+      if (newStatus == InvoiceStatus.confirmed ||
+          newStatus == InvoiceStatus.paid) {
+        try {
+          await Supabase.instance.client.rpc(
+            'ensure_sales_invoice_journal_entry',
+            params: {'p_invoice_id': invoiceId},
+          );
+        } catch (_) {}
       }
       if (mounted) {
         String message = 'Estado actualizado';

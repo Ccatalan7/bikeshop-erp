@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
 import '../models/payment_method.dart' as pm;
+import '../models/tax_treatment.dart';
 import '../services/inventory_service.dart';
 import '../services/number_generation_service.dart';
 import '../services/payment_method_service.dart';
@@ -62,6 +65,8 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
 
   // Payment state
   pm.PaymentMethod? _selectedPaymentMethod;
+  TaxTreatment _taxTreatment =
+      TaxTreatment.noTax; // Default sin IVA, igual al flujo normal de facturas
   bool _isProcessing = false;
 
   // Confirmation state
@@ -78,9 +83,24 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   // ─── Computed ────────────────────────────────────────────────────
   double get _subtotal => _cart.fold(0.0, (s, i) => s + i.lineTotal);
   double get _total => _subtotal;
+  double get _ivaAmount => _taxTreatment == TaxTreatment.taxIncluded
+      ? _total - (_total / 1.19)
+      : 0.0;
+  double get _netAmount => _total - _ivaAmount;
   int get _itemCount => _cart.fold(0, (s, i) => s + i.quantity);
 
   // ─── Lifecycle ───────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    // Ensure payment methods are loaded — required for the payment step
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<PaymentMethodService>().loadPaymentMethods();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -372,6 +392,48 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     if (amount <= 0 || amount < _total) return;
     if (_selectedPaymentMethod == null) return;
 
+    // ⚠️ WARN when paying with card but no IVA — same logic as POS dashboard
+    if (_selectedPaymentMethod!.code == 'card' &&
+        _taxTreatment == TaxTreatment.noTax) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+              SizedBox(width: 12),
+              Text('Venta sin IVA - Pago con Tarjeta'),
+            ],
+          ),
+          content: const Text(
+            '⚠️ Estás cobrando con TARJETA pero la venta NO tiene IVA.\n\n'
+            '• Pagos con tarjeta DEBEN llevar IVA (19%)\n'
+            '• Efectivo/transferencia pueden ser sin IVA',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'add_tax'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('✓ Agregar IVA (19%)'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'no_tax'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Continuar sin IVA'),
+            ),
+          ],
+        ),
+      );
+      if (result == null || result == 'cancel') return;
+      if (result == 'add_tax') {
+        setState(() => _taxTreatment = TaxTreatment.taxIncluded);
+      }
+    }
+
     setState(() => _isProcessing = true);
 
     try {
@@ -397,21 +459,23 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
               ))
           .toList();
 
-      final taxTreatment = _selectedPaymentMethod!.defaultTaxTreatment;
+      // Use the user-selected (or dialog-updated) tax treatment
+      final taxTreatment = _taxTreatment;
       double netAmount = _total;
       double ivaAmount = 0;
-      if (taxTreatment.name == 'taxIncluded') {
+      if (taxTreatment == TaxTreatment.taxIncluded) {
         netAmount = _total / 1.19;
         ivaAmount = _total - netAmount;
       }
 
+      // Step 1: Save as DRAFT (no journal entry yet) — mirrors normal invoice flow
       final invoice = Invoice(
         tenantId: tenantId,
         invoiceNumber: invoiceNumber,
         customerName: 'Cliente Mostrador',
         date: DateTime.now(),
         dueDate: DateTime.now(),
-        status: InvoiceStatus.confirmed,
+        status: InvoiceStatus.draft,
         subtotal: _total,
         netAmount: netAmount,
         ivaAmount: ivaAmount,
@@ -423,6 +487,24 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
 
       final saved = await salesService.saveInvoice(invoice);
       if (saved.id == null) throw Exception('Invoice save failed');
+
+      // Step 2: Post to CONFIRMED — triggers DB to create sales invoice journal entry
+      // (DR Cuentas por Cobrar / CR Ventas + IVA) — same path as normal invoice flow
+      await salesService.updateInvoiceStatus(
+          saved.id!, InvoiceStatus.confirmed);
+
+      // Safety net: explicitly ensure the invoice JE was created.
+      // Idempotent — if the trigger already created it this is a no-op.
+      // Needed because older deployed trigger versions don't handle draft→confirmed.
+      try {
+        await Supabase.instance.client.rpc(
+          'ensure_sales_invoice_journal_entry',
+          params: {'p_invoice_id': saved.id!},
+        );
+      } catch (e) {
+        // Non-fatal: log but don't abort the sale — payment JE is still correct
+        debugPrint('⚠️ ensure_sales_invoice_journal_entry: $e');
+      }
 
       final payment = Payment(
         tenantId: tenantId,
@@ -464,6 +546,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
       _searchController.clear();
       _searchResults = [];
       _selectedPaymentMethod = null;
+      _taxTreatment = TaxTreatment.noTax; // reset to default for next sale
       _amountController.clear();
       _invoiceNumber = null;
       _totalPaid = 0;
@@ -1783,6 +1866,52 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                           letterSpacing: 1,
                         ),
                       ),
+                      // IVA breakdown
+                      if (_taxTreatment == TaxTreatment.taxIncluded) ...[
+                        const SizedBox(height: 8),
+                        Divider(
+                            height: 1,
+                            color: theme.colorScheme.outline
+                                .withValues(alpha: 0.2)),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Neto',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.55))),
+                              Text(_money(_netAmount),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.55))),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('IVA (19%)',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.55))),
+                              Text(_money(_ivaAmount),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.55))),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1802,7 +1931,30 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                     return _buildMethodChip(m, isSelected, theme, isDark);
                   }).toList(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                // IVA toggle — same as terminal de pago en facturas normales
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Incluye IVA (19%)',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  secondary: Icon(
+                    _taxTreatment == TaxTreatment.taxIncluded
+                        ? Icons.receipt_long
+                        : Icons.receipt_outlined,
+                    color: _taxTreatment == TaxTreatment.taxIncluded
+                        ? theme.colorScheme.primary
+                        : null,
+                    size: 20,
+                  ),
+                  value: _taxTreatment == TaxTreatment.taxIncluded,
+                  onChanged: (value) => setState(() {
+                    _taxTreatment =
+                        value ? TaxTreatment.taxIncluded : TaxTreatment.noTax;
+                  }),
+                ),
+                const SizedBox(height: 4),
                 Text('Monto recibido',
                     style: TextStyle(
                       fontSize: 12,
@@ -1939,7 +2091,11 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     }
 
     return InkWell(
-      onTap: () => setState(() => _selectedPaymentMethod = method),
+      onTap: () => setState(() {
+        _selectedPaymentMethod = method;
+        // Auto-set IVA based on method's default — same as payment_form.dart
+        _taxTreatment = method.defaultTaxTreatment;
+      }),
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
