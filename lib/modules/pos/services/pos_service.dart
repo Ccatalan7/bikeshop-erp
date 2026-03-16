@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/product.dart';
@@ -27,8 +28,9 @@ class POSService extends ChangeNotifier {
   Customer? _selectedCustomer;
   bool _isProcessingSale = false;
   TaxTreatment _taxTreatment = TaxTreatment.noTax; // Default: no tax for POS
-  pm.PaymentMethod? _selectedPaymentMethod; // Primary payment method for tax detection
-  
+  pm.PaymentMethod?
+      _selectedPaymentMethod; // Primary payment method for tax detection
+
   // Invoice payment mode state (NEW)
   sales_models.Invoice? _linkedInvoice;
 
@@ -69,7 +71,7 @@ class POSService extends ChangeNotifier {
   bool get hasItemsInCart => _cartItems.isNotEmpty;
   TaxTreatment get taxTreatment => _taxTreatment;
   pm.PaymentMethod? get selectedPaymentMethod => _selectedPaymentMethod;
-  
+
   // Invoice payment mode getters (NEW)
   bool get isInvoicePaymentMode => _linkedInvoice != null;
   sales_models.Invoice? get linkedInvoice => _linkedInvoice;
@@ -79,10 +81,10 @@ class POSService extends ChangeNotifier {
       _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
   double get cartDiscountAmount =>
       _cartItems.fold(0.0, (sum, item) => sum + item.discountAmount);
-  
+
   // Net amount after discounts
   double get cartNetAmount => cartSubtotal - cartDiscountAmount;
-  
+
   // Tax calculation: When tax_included, extract tax by dividing
   double get cartTaxAmount {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
@@ -94,10 +96,10 @@ class POSService extends ChangeNotifier {
       return 0; // No tax
     }
   }
-  
+
   // Total is always the net amount (price customer sees)
   double get cartTotal => cartNetAmount;
-  
+
   double get cartTotalCost =>
       _cartItems.fold(0.0, (sum, item) => sum + item.totalCost);
   int get cartTotalItems =>
@@ -126,8 +128,7 @@ class POSService extends ChangeNotifier {
         return false;
       }
 
-      _cartItems[existingIndex] =
-          existingItem.copyWith(quantity: newQuantity);
+      _cartItems[existingIndex] = existingItem.copyWith(quantity: newQuantity);
     } else {
       // Add new item
       final tenantId = await _tenantService.getTenantId();
@@ -167,7 +168,7 @@ class POSService extends ChangeNotifier {
       quantity: quantity,
       unitPrice: price,
     );
-    
+
     _cartItems.add(cartItem);
     notifyListeners();
     return true;
@@ -194,8 +195,9 @@ class POSService extends ChangeNotifier {
 
       // Check stock availability (only for real products, not ad-hoc)
       if (item.product != null) {
-        final requiresStock = item.product!.productType == ProductType.product &&
-            item.product!.trackStock;
+        final requiresStock =
+            item.product!.productType == ProductType.product &&
+                item.product!.trackStock;
         if (requiresStock && item.product!.stockQuantity < newQuantity) {
           if (kDebugMode)
             print('POSService: Insufficient stock for quantity $newQuantity');
@@ -234,39 +236,39 @@ class POSService extends ChangeNotifier {
     _selectedCustomer = customer;
     notifyListeners();
   }
-  
+
   void setTaxTreatment(TaxTreatment treatment) {
     _taxTreatment = treatment;
     notifyListeners();
   }
-  
+
   /// Set primary payment method and auto-detect tax treatment
   void setPaymentMethod(pm.PaymentMethod? method) {
     _selectedPaymentMethod = method;
-    
+
     // Auto-detect tax treatment based on payment method's default
     if (method != null) {
       _taxTreatment = method.defaultTaxTreatment;
     }
-    
+
     notifyListeners();
   }
-  
+
   // Invoice payment mode methods (NEW)
-  
+
   /// Enter invoice payment mode - clears cart and links invoice
   void enterInvoicePaymentMode(sales_models.Invoice invoice) {
     _linkedInvoice = invoice;
     _cartItems.clear(); // Clear cart when entering invoice mode
     notifyListeners();
   }
-  
+
   /// Exit invoice payment mode - returns to normal POS mode
   void exitInvoicePaymentMode() {
     _linkedInvoice = null;
     notifyListeners();
   }
-  
+
   /// Get the display total (invoice balance or cart total)
   double get displayTotal {
     if (_linkedInvoice != null) {
@@ -309,7 +311,7 @@ class POSService extends ChangeNotifier {
     notifyListeners();
 
     final timestamp = DateTime.now();
-    
+
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
       throw Exception('User does not have a tenant_id. Cannot proceed.');
@@ -332,7 +334,7 @@ class POSService extends ChangeNotifier {
       // Generate invoice number using new sequential system
       final numberService = NumberGenerationService();
       final invoiceNumber = await numberService.nextSalesInvoiceNumber();
-      
+
       final invoiceItems = _cartItems.map((item) {
         final discountAmount = item.discountAmount;
         return sales_models.InvoiceItem(
@@ -363,7 +365,8 @@ class POSService extends ChangeNotifier {
             ? sales_models.InvoiceStatus.confirmed
             : sales_models.InvoiceStatus.draft,
         subtotal: cartNetAmount, // Total before tax (for line items display)
-        netAmount: cartNetAmount - cartTaxAmount, // ✅ CRITICAL: Net revenue (total - IVA)
+        netAmount: cartNetAmount -
+            cartTaxAmount, // ✅ CRITICAL: Net revenue (total - IVA)
         ivaAmount: cartTaxAmount,
         total: cartTotal,
         taxTreatment: _taxTreatment, // ✅ Include tax treatment
@@ -376,6 +379,16 @@ class POSService extends ChangeNotifier {
             'No se pudo obtener el identificador de la factura generada.');
       }
       final invoiceId = savedInvoice.id!;
+
+      // Safety net: ensure invoice journal entry is created even if trigger missed it
+      try {
+        await Supabase.instance.client.rpc(
+          'ensure_sales_invoice_journal_entry',
+          params: {'p_invoice_id': invoiceId},
+        );
+      } catch (e) {
+        if (kDebugMode) print('⚠️ POS: ensure_sales_invoice_journal_entry: $e');
+      }
 
       double remaining = cartTotal;
       for (final payment in payments) {
