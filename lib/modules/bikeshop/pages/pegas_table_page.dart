@@ -682,6 +682,15 @@ class _PegasTablePageState extends State<PegasTablePage>
       final isPaidEffective =
           job.isPaid || (invoice?.status == InvoiceStatus.paid);
 
+      final isDelivered = job.deliveredAt != null ||
+          job.status == JobStatus.entregado ||
+          (job.customStatus?.code.toLowerCase() == 'entregado');
+
+      // Warranty is archived immediately if Delivered + $0, OR if Delivered + Paid
+      final isFinishedWarranty = job.isWarrantyJob &&
+          isDelivered &&
+          (job.totalCost <= 0 || (isInvoicedEffective && isPaidEffective));
+
       // Get the job's phase from custom status, or infer from legacy status
       final jobPhase =
           job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
@@ -699,6 +708,12 @@ class _PegasTablePageState extends State<PegasTablePage>
 
           if (isDelivered && isInvoicedEffective && isPaidEffective)
             return false;
+
+          // Also exclude finished warranties from active list
+          if (isFinishedWarranty) return false;
+          break;
+        case 'warranty_completed':
+          if (!isFinishedWarranty) return false;
           break;
         case 'completed':
           // Completed = only complete phase with finalizado status
@@ -1750,6 +1765,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                             ButtonSegment(
                                 value: 'delivered', label: Text('Entregados')),
                             ButtonSegment(
+                                value: 'warranty_completed',
+                                label: Text('Garantías')),
+                            ButtonSegment(
                                 value: 'unpaid', label: Text('Sin Pagar')),
                             ButtonSegment(value: 'all', label: Text('Todos')),
                           ],
@@ -1827,8 +1845,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                         ),
                         ButtonSegment(
                           value: 'delivered',
-                          label: Text('Entregados',
-                              style: TextStyle(fontSize: 13)),
+                          label:
+                              Text('Entregados', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'warranty_completed',
+                          label:
+                              Text('Garantías', style: TextStyle(fontSize: 13)),
                         ),
                         ButtonSegment(
                           value: 'unpaid',
