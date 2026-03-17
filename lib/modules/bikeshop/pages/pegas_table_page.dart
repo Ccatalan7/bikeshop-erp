@@ -3237,9 +3237,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         String shopMsg;
         Color shopColor;
 
-        if (shopDone) {
+        if (shopDone && job.startedAt != null) {
           final d = job.completedAt!.difference(job.startedAt!);
           shopMsg = 'Taller: ${_formatDuration(d)} (Completado)';
+          shopColor = Colors.green;
+        } else if (shopDone) {
+          // If completed but skip started, use arrival date as fallback for duration
+          final d = job.completedAt!.difference(job.arrivalDate);
+          shopMsg = 'Taller: ${_formatDuration(d)} (Completado sin inicio)';
           shopColor = Colors.green;
         } else if (shopStarted) {
           final d = now.difference(job.startedAt!);
