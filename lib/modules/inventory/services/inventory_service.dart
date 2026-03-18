@@ -62,10 +62,13 @@ class InventoryService extends ChangeNotifier {
   /// SKUs matched by the AI assistant's semantic+keyword search.
   /// When set, the product list filters by these SKUs instead of keyword search.
   List<String>? aiMatchedSkus;
+  int? aiStockFilterIndex;
 
-  void applyExternalSearch(String term, {List<String>? matchedSkus}) {
+  void applyExternalSearch(String term,
+      {List<String>? matchedSkus, int? stockFilterIndex}) {
     aiMatchedSkus = matchedSkus;
-    saveListState(searchTerm: term);
+    aiStockFilterIndex = stockFilterIndex;
+    saveListState(searchTerm: term, stockFilterIndex: stockFilterIndex);
     _externalSearchController.add(term);
   }
 
@@ -124,6 +127,8 @@ class InventoryService extends ChangeNotifier {
     savedFilterGoogleMerchant = false;
     savedShowInactive = false;
     savedSortOptionIndex = 2;
+    aiMatchedSkus = null;
+    aiStockFilterIndex = null;
   }
 
   bool _isCacheValid(DateTime? cacheTime) {
@@ -270,7 +275,8 @@ class InventoryService extends ChangeNotifier {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) throw Exception('No tenant found');
 
-      debugPrint('🧠 [InventoryService] Calling match_products_semantic RPC...');
+      debugPrint(
+          '🧠 [InventoryService] Calling match_products_semantic RPC...');
 
       final dynamic response =
           await _db.rpc('match_products_semantic', params: {
@@ -784,8 +790,9 @@ class InventoryService extends ChangeNotifier {
 
       // Get full product data for those IDs
       final allProducts = await getProducts(forceRefresh: true);
-      final productsToProcess =
-          allProducts.where((p) => p.id != null && missingIds.contains(p.id)).toList();
+      final productsToProcess = allProducts
+          .where((p) => p.id != null && missingIds.contains(p.id))
+          .toList();
 
       debugPrint(
           '🧠 [Embedding] Backfilling ${productsToProcess.length} products missing embeddings...');

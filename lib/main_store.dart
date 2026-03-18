@@ -22,6 +22,7 @@ import 'shared/config/supabase_config.dart';
 import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/utils/web_url.dart';
+import 'shared/widgets/app_selection_scope.dart';
 import 'modules/website/providers/website_edit_mode_provider.dart';
 import 'modules/website/services/mercadopago_service.dart';
 import 'modules/website/services/website_service.dart';
@@ -184,7 +185,11 @@ class PublicStoreApp extends StatelessWidget {
         routerConfig: PublicStoreRouter.createRouter(),
         builder: (context, child) {
           // Single place to do tenant detection + initial data preload.
-          return PublicStoreBootstrap(child: child ?? const SizedBox.shrink());
+          return AppSelectionScope(
+            child: PublicStoreBootstrap(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          );
         },
       ),
     );

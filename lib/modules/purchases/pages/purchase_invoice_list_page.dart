@@ -128,6 +128,22 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     await prefs.setDouble('purchase_invoice_col_$column', width);
   }
 
+  bool _isCurrentMonth(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month;
+  }
+
+  bool _isAccountedInvoice(PurchaseInvoice invoice) {
+    return invoice.status == PurchaseInvoiceStatus.received ||
+        invoice.status == PurchaseInvoiceStatus.paid;
+  }
+
+  double _taxCreditBase(PurchaseInvoice invoice) {
+    if (invoice.ivaAmount <= 0) return 0;
+    if (invoice.netAmount > 0) return invoice.netAmount;
+    return invoice.subtotal;
+  }
+
   List<PurchaseInvoice> _getFilteredAndSortedInvoices(
       List<PurchaseInvoice> invoices) {
     List<PurchaseInvoice> filtered = List.from(invoices);
@@ -478,7 +494,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
         return Column(
           children: [
-            _buildSummaryCards(invoices),
+            _buildSummaryCards(purchaseService.purchaseInvoices),
             const SizedBox(height: 16),
             _buildSearchBar(false),
             const SizedBox(height: 8),
@@ -554,53 +570,51 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Widget _buildSummaryCards(List<PurchaseInvoice> invoices) {
-    final totalPayable = invoices
-        .where((inv) =>
-            inv.status != PurchaseInvoiceStatus.draft &&
-            inv.paidAmount < inv.total)
-        .fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
+    final currentMonthInvoices = invoices
+        .where((inv) => _isAccountedInvoice(inv) && _isCurrentMonth(inv.date))
+        .toList();
 
-    final overdue = invoices.where((inv) {
-      if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
-      return inv.dueDate!.isBefore(DateTime.now());
-    }).fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
+    final monthlyPurchases = currentMonthInvoices.fold<double>(
+      0,
+      (sum, inv) => sum + inv.total,
+    );
 
-    final dueIn30Days = invoices.where((inv) {
-      if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
-      final now = DateTime.now();
-      return inv.dueDate!.isAfter(now) &&
-          inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
-    }).fold(0.0, (sum, inv) => sum + (inv.total - inv.paidAmount));
+    final monthlyTaxBase = currentMonthInvoices.fold<double>(
+      0,
+      (sum, inv) => sum + _taxCreditBase(inv),
+    );
 
-    final overdueCount = invoices.where((inv) {
-      if (inv.dueDate == null || inv.paidAmount >= inv.total) return false;
-      return inv.dueDate!.isBefore(DateTime.now());
-    }).length;
+    final monthlyIvaCredit = currentMonthInvoices.fold<double>(
+      0,
+      (sum, inv) => sum + (inv.ivaAmount > 0 ? inv.ivaAmount : 0),
+    );
+
+    final monthlyCount = currentMonthInvoices.length;
 
     final cards = [
       _buildSummaryCard(
-        'Por pagar',
-        ChileanUtils.formatCurrency(totalPayable),
-        Icons.account_balance_wallet_outlined,
-        Colors.orange,
-      ),
-      _buildSummaryCard(
-        'Vencidos hoy',
-        ChileanUtils.formatCurrency(overdue),
-        Icons.warning_amber_outlined,
-        Colors.red,
-      ),
-      _buildSummaryCard(
-        'Próximos 30 días',
-        ChileanUtils.formatCurrency(dueIn30Days),
-        Icons.schedule_outlined,
+        'Compras del mes',
+        ChileanUtils.formatCurrency(monthlyPurchases),
+        Icons.shopping_bag_outlined,
         Colors.blue,
       ),
       _buildSummaryCard(
-        'Vencidas (Qt)',
-        '$overdueCount',
+        'Base IVA crédito',
+        ChileanUtils.formatCurrency(monthlyTaxBase),
         Icons.receipt_long_outlined,
-        overdueCount > 0 ? Colors.red : Colors.green,
+        Colors.orange,
+      ),
+      _buildSummaryCard(
+        'IVA crédito mes',
+        ChileanUtils.formatCurrency(monthlyIvaCredit),
+        Icons.account_balance_outlined,
+        Colors.green,
+      ),
+      _buildSummaryCard(
+        'Facturas contabilizadas',
+        '$monthlyCount',
+        Icons.fact_check_outlined,
+        monthlyCount > 0 ? Colors.teal : Colors.grey,
       ),
     ];
 

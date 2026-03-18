@@ -1199,76 +1199,69 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     // Build the main content (normal view mode)
-    final mainContent = SelectionArea(
-      child: Scaffold(
-        key: const ValueKey('scaffold_normal_mode'),
-        backgroundColor: backgroundColor,
-        body: Stack(
-          children: [
-            pageContent,
-            // Internal Chat System (replaces WhatsApp for richer interaction)
-            const CustomerChatWidget(),
-            if (hasWhatsApp &&
-                1 ==
-                    0) // Disable WhatsApp button in favor of new chat (or make it configurable)
-              Positioned(
-                bottom: 24,
-                right: 24,
-                child: FloatingWhatsAppButton(
-                  phoneNumber: whatsappNumber,
-                  message:
-                      'Hola! Me gustaría consultar sobre ${storeName.isNotEmpty ? storeName : 'sus productos'}.',
-                  backgroundColor: accentColor,
-                ),
+    final mainContent = Scaffold(
+      key: const ValueKey('scaffold_normal_mode'),
+      backgroundColor: backgroundColor,
+      body: Stack(
+        children: [
+          pageContent,
+          // Internal Chat System (replaces WhatsApp for richer interaction)
+          const CustomerChatWidget(),
+          if (hasWhatsApp &&
+              1 ==
+                  0) // Disable WhatsApp button in favor of new chat (or make it configurable)
+            Positioned(
+              bottom: 24,
+              right: 24,
+              child: FloatingWhatsAppButton(
+                phoneNumber: whatsappNumber,
+                message:
+                    'Hola! Me gustaría consultar sobre ${storeName.isNotEmpty ? storeName : 'sus productos'}.',
+                backgroundColor: accentColor,
               ),
-            // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
-            // This is for admin previewing the store from ERP, not for customers
-            if (isLoggedIn &&
-                widget.showEditorButton &&
-                !_isPublicStoreDomain())
-              Positioned(
-                bottom: 24,
-                right: hasWhatsApp ? 104 : 24,
-                child: Builder(
-                  builder: (context) {
-                    final editProvider =
-                        context.watch<WebsiteEditModeProvider>();
-                    final isInEditorContext = editProvider.isInEditorContext;
-                    final websiteService = context.read<WebsiteService>();
+            ),
+          // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
+          // This is for admin previewing the store from ERP, not for customers.
+          if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
+            Positioned(
+              bottom: 24,
+              right: hasWhatsApp ? 104 : 24,
+              child: Builder(
+                builder: (context) {
+                  final editProvider = context.watch<WebsiteEditModeProvider>();
+                  final isInEditorContext = editProvider.isInEditorContext;
+                  final websiteService = context.read<WebsiteService>();
 
-                    // Don't show the floating button if we're already in editor context
-                    if (isInEditorContext) return const SizedBox.shrink();
+                  if (isInEditorContext) return const SizedBox.shrink();
 
-                    return FloatingActionButton.extended(
-                      heroTag: 'edit_site_fab',
-                      onPressed: () {
-                        debugPrint(
-                            '🎨 [Layout] Edit button pressed. Entering preview mode');
-                        // Enter preview mode first (shows top bar with Editar button)
-                        final blocks = List<Map<String, dynamic>>.from(
-                            websiteService.blocks);
-                        final settings =
-                            Map<String, dynamic>.from(websiteService.settings);
-                        debugPrint(
-                            '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
-                        editProvider.enterPreviewMode(blocks, settings);
-                      },
-                      backgroundColor: accentColor,
-                      icon: const Icon(Icons.edit, color: Colors.white),
-                      label: const Text(
-                        'Editar Sitio',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  return FloatingActionButton.extended(
+                    heroTag: 'edit_site_fab',
+                    onPressed: () {
+                      debugPrint(
+                          '🎨 [Layout] Edit button pressed. Entering preview mode');
+                      final blocks = List<Map<String, dynamic>>.from(
+                          websiteService.blocks);
+                      final settings =
+                          Map<String, dynamic>.from(websiteService.settings);
+                      debugPrint(
+                          '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
+                      editProvider.enterPreviewMode(blocks, settings);
+                    },
+                    backgroundColor: accentColor,
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    label: const Text(
+                      'Editar Sitio',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
-                      tooltip: 'Editar sitio web',
-                    );
-                  },
-                ),
+                    ),
+                    tooltip: 'Editar sitio web',
+                  );
+                },
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
 

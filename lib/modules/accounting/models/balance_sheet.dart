@@ -29,6 +29,9 @@ class BalanceSheet extends FinancialReport {
   final List<ReportLine> equity; // Patrimonio
   final double totalEquity;
 
+  // Cumulative profit from prior fiscal years when no year-close entry exists.
+  final double priorRetainedEarnings;
+
   // Period net income (from Income Statement)
   final double periodNetIncome;
 
@@ -51,6 +54,7 @@ class BalanceSheet extends FinancialReport {
     required this.totalLiabilities,
     required this.equity,
     required this.totalEquity,
+    required this.priorRetainedEarnings,
     required this.periodNetIncome,
   });
 
@@ -60,19 +64,20 @@ class BalanceSheet extends FinancialReport {
   @override
   String get subtitle => 'Al ${_formatDate(endDate)}';
 
+  double get totalEquityWithResults =>
+      totalEquity + priorRetainedEarnings + periodNetIncome;
+
   /// Check if accounting equation is balanced
-  /// Assets = Liabilities + Equity + Period Net Income
+  /// Assets = Liabilities + Equity + Prior Retained Earnings + Period Net Income
   bool get isBalanced {
-    final totalEquityWithIncome = totalEquity + periodNetIncome;
     final difference =
-        (totalAssets - (totalLiabilities + totalEquityWithIncome)).abs();
+        (totalAssets - (totalLiabilities + totalEquityWithResults)).abs();
     return difference < 1.00; // Tolerance of 1 peso for rounding
   }
 
   /// Difference between assets and liabilities + equity
   double get accountingEquationDifference {
-    final totalEquityWithIncome = totalEquity + periodNetIncome;
-    return totalAssets - (totalLiabilities + totalEquityWithIncome);
+    return totalAssets - (totalLiabilities + totalEquityWithResults);
   }
 
   /// Current ratio (liquidity metric)
@@ -103,8 +108,9 @@ class BalanceSheet extends FinancialReport {
 
   /// Debt to equity ratio
   /// Total Liabilities / Total Equity
-  double get debtToEquityRatio =>
-      totalEquity > 0 ? totalLiabilities / totalEquity : 0;
+  double get debtToEquityRatio => totalEquityWithResults > 0
+      ? totalLiabilities / totalEquityWithResults
+      : 0;
 
   /// Debt ratio (leverage)
   /// Total Liabilities / Total Assets
@@ -112,12 +118,14 @@ class BalanceSheet extends FinancialReport {
 
   /// Equity ratio
   /// Total Equity / Total Assets
-  double get equityRatio => totalAssets > 0 ? totalEquity / totalAssets : 0;
+  double get equityRatio =>
+      totalAssets > 0 ? totalEquityWithResults / totalAssets : 0;
 
   /// Return on equity (ROE) - requires period net income
   /// Net Income / Total Equity
-  double get returnOnEquity =>
-      totalEquity > 0 ? (periodNetIncome / totalEquity) * 100 : 0;
+  double get returnOnEquity => totalEquityWithResults > 0
+      ? (periodNetIncome / totalEquityWithResults) * 100
+      : 0;
 
   /// Return on assets (ROA) - requires period net income
   /// Net Income / Total Assets
@@ -227,7 +235,16 @@ class BalanceSheet extends FinancialReport {
       lines.addAll(equity);
     }
 
-    // Add period net income as retained earnings
+    if (priorRetainedEarnings != 0) {
+      lines.add(ReportLine.account(
+        code: '3201',
+        name: 'Utilidades Retenidas Anteriores',
+        amount: priorRetainedEarnings,
+        category: 'retainedEarnings',
+      ));
+    }
+
+    // Add current-period net income separately from prior retained earnings.
     if (periodNetIncome != 0) {
       lines.add(ReportLine.account(
         code: '',
@@ -242,7 +259,7 @@ class BalanceSheet extends FinancialReport {
     // TOTAL PATRIMONIO (including net income)
     lines.add(ReportLine.total(
       name: 'TOTAL PATRIMONIO',
-      amount: totalEquity + periodNetIncome,
+      amount: totalEquityWithResults,
     ));
     lines.add(ReportLine.blank());
     lines.add(ReportLine.blank());
@@ -250,7 +267,7 @@ class BalanceSheet extends FinancialReport {
     // ========== TOTAL PASIVOS + PATRIMONIO ==========
     lines.add(ReportLine.total(
       name: 'TOTAL PASIVOS + PATRIMONIO',
-      amount: totalLiabilities + totalEquity + periodNetIncome,
+      amount: totalLiabilities + totalEquityWithResults,
     ));
 
     return lines;
@@ -278,7 +295,9 @@ class BalanceSheet extends FinancialReport {
       'total_liabilities': totalLiabilities,
       'equity': equity.map((l) => l.toJson()).toList(),
       'total_equity': totalEquity,
+      'prior_retained_earnings': priorRetainedEarnings,
       'period_net_income': periodNetIncome,
+      'total_equity_with_results': totalEquityWithResults,
       'is_balanced': isBalanced,
       'accounting_equation_difference': accountingEquationDifference,
       'current_ratio': currentRatio,

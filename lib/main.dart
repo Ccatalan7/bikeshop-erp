@@ -46,7 +46,6 @@ import 'modules/tasks/services/task_service.dart';
 import 'modules/bikeshop/services/job_status_service.dart';
 import 'modules/hr/services/hr_service.dart';
 import 'modules/hr/services/payroll_voucher_service.dart';
-import 'modules/tasks/services/task_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
 import 'modules/website/services/google_business_service.dart';
@@ -713,40 +712,52 @@ class VinabikeApp extends StatelessWidget {
                               final workspaceManager =
                                   context.read<WorkspaceManager>();
 
-                              final mainContent = IndexedStack(
-                                index: data.$1,
-                                sizing: StackFit.expand,
-                                children: workspaceManager.workspaces
-                                    .map((workspace) {
-                                  return _WorkspaceRouterView(
-                                    key: ValueKey(workspace.id),
-                                    workspace: workspace,
-                                    authService: authService,
-                                  );
-                                }).toList(),
-                              );
-
-                              if (!data.$3) {
-                                return mainContent;
-                              }
-
+                              // Use a Row so the workspace pane stays at
+                              // index 0 regardless of AI panel state. This
+                              // prevents the IndexedStack (and its child
+                              // Routers) from being destroyed and recreated
+                              // every time the AI panel is toggled.
                               return Row(
                                 children: [
-                                  Expanded(child: mainContent),
-                                  // Right Panel
-                                  Container(
-                                    width: 400,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .scaffoldBackgroundColor,
-                                      border: Border(
-                                        left: BorderSide(
-                                            color:
-                                                Theme.of(context).dividerColor),
+                                  Expanded(
+                                    // SelectionArea works here (no Overlay
+                                    // wrapper needed) because we are already
+                                    // inside the outer MaterialApp Navigator's
+                                    // own Overlay.
+                                    child: SelectionArea(
+                                      child: IndexedStack(
+                                        index: data.$1,
+                                        sizing: StackFit.expand,
+                                        children: workspaceManager.workspaces
+                                            .map((workspace) {
+                                          return _WorkspaceRouterView(
+                                            key: ValueKey(workspace.id),
+                                            workspace: workspace,
+                                            authService: authService,
+                                          );
+                                        }).toList(),
                                       ),
                                     ),
-                                    child: const AIChatPanel(jobs: []),
                                   ),
+                                  // Right panel – only mounted when open, but
+                                  // its addition/removal never shifts the
+                                  // workspace pane above.
+                                  if (data.$3)
+                                    SelectionArea(
+                                      child: Container(
+                                        width: 400,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .scaffoldBackgroundColor,
+                                          border: Border(
+                                            left: BorderSide(
+                                                color: Theme.of(context)
+                                                    .dividerColor),
+                                          ),
+                                        ),
+                                        child: const AIChatPanel(jobs: []),
+                                      ),
+                                    ),
                                 ],
                               );
                             },

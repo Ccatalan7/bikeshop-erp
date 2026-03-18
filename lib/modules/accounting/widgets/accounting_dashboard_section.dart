@@ -36,6 +36,56 @@ extension on _ExpenseBreakdownRange {
   }
 }
 
+const int _maxBreakdownSlices = 8;
+const String _otherBreakdownKey = '__other__';
+
+String _expenseBreakdownKeyForDetail(PeriodDetailItem item) {
+  if (item.sourceType == 'purchase_payment') {
+    return 'purchase_payment';
+  }
+  if (item.accountId != null && item.accountId!.isNotEmpty) {
+    return 'account:${item.accountId!}';
+  }
+  if (item.accountCode != null && item.accountCode!.isNotEmpty) {
+    return 'code:${item.accountCode!}';
+  }
+  return '${item.sourceType}:${item.secondaryText.trim()}';
+}
+
+String _expenseBreakdownCodeForDetail(PeriodDetailItem item) {
+  if (item.sourceType == 'purchase_payment') {
+    return '5000';
+  }
+  return item.accountCode ?? '';
+}
+
+String _expenseBreakdownNameForDetail(PeriodDetailItem item) {
+  if (item.sourceType == 'purchase_payment') {
+    return 'Pagos a Proveedores';
+  }
+
+  final label = item.secondaryText.trim();
+  if (label.isNotEmpty) {
+    return label;
+  }
+
+  return 'Sin clasificar';
+}
+
+class _ExpenseBreakdownAggregate {
+  final String key;
+  final String code;
+  final String name;
+  double amount;
+
+  _ExpenseBreakdownAggregate({
+    required this.key,
+    required this.code,
+    required this.name,
+    required this.amount,
+  });
+}
+
 class AccountingDashboardSection extends StatefulWidget {
   const AccountingDashboardSection({super.key});
 
@@ -149,6 +199,77 @@ class _AccountingDashboardSectionState
       });
       _refreshData();
     }
+  }
+
+  DateTime _exclusiveBreakdownEnd(DateTime inclusiveEnd) {
+    return inclusiveEnd.add(const Duration(seconds: 1));
+  }
+
+  List<ExpenseBreakdownItem> _buildExpenseBreakdown(
+    List<PeriodDetailItem> detailItems,
+  ) {
+    if (detailItems.isEmpty) {
+      return const [];
+    }
+
+    final grouped = <String, _ExpenseBreakdownAggregate>{};
+
+    for (final item in detailItems) {
+      final key = _expenseBreakdownKeyForDetail(item);
+      final aggregate = grouped.putIfAbsent(
+        key,
+        () => _ExpenseBreakdownAggregate(
+          key: key,
+          code: _expenseBreakdownCodeForDetail(item),
+          name: _expenseBreakdownNameForDetail(item),
+          amount: 0,
+        ),
+      );
+      aggregate.amount += item.amount.abs();
+    }
+
+    final sorted = grouped.values.toList()
+      ..sort((a, b) => b.amount.compareTo(a.amount));
+
+    if (sorted.length <= _maxBreakdownSlices) {
+      return sorted
+          .map(
+            (entry) => ExpenseBreakdownItem(
+              accountId: entry.key,
+              accountCode: entry.code,
+              accountName: entry.name,
+              amount: entry.amount,
+              breakdownKey: entry.key,
+            ),
+          )
+          .toList();
+    }
+
+    final topCount = _maxBreakdownSlices - 1;
+    final topItems = sorted.take(topCount).toList();
+    final otherAmount = sorted
+        .skip(topCount)
+        .fold<double>(0, (sum, entry) => sum + entry.amount);
+
+    return [
+      ...topItems.map(
+        (entry) => ExpenseBreakdownItem(
+          accountId: entry.key,
+          accountCode: entry.code,
+          accountName: entry.name,
+          amount: entry.amount,
+          breakdownKey: entry.key,
+        ),
+      ),
+      ExpenseBreakdownItem(
+        accountId: _otherBreakdownKey,
+        accountCode: '',
+        accountName: 'Otros',
+        amount: otherAmount,
+        breakdownKey: _otherBreakdownKey,
+        isOther: true,
+      ),
+    ];
   }
 
   Future<void> _refreshData({int retryCount = 0}) async {
@@ -274,18 +395,22 @@ class _AccountingDashboardSectionState
         break;
     }
 
-    final breakdown = await reportsService.getExpenseBreakdown(
+    final breakdownDetails = await reportsService.getExpensePeriodDetails(
       startDate: breakdownStart,
-      endDate: breakdownEnd,
-      limit: 8,
+      endDate: _exclusiveBreakdownEnd(breakdownEnd),
+      isCashFlow: isCashFlow,
     );
+
+    final breakdown = _buildExpenseBreakdown(breakdownDetails);
 
     final totalIncome =
         series.fold<double>(0, (sum, point) => sum + point.income);
     final totalExpense =
         series.fold<double>(0, (sum, point) => sum + point.expense);
-    final breakdownTotal =
-        breakdown.fold<double>(0, (sum, item) => sum + item.displayAmount);
+    final breakdownTotal = breakdownDetails.fold<double>(
+      0,
+      (sum, item) => sum + item.amount.abs(),
+    );
 
     final monthsCount = _periodToMonths[_selectedPeriod] ?? 12;
     final rangeStart = series.isNotEmpty ? series.first.periodStart : now;
@@ -304,6 +429,7 @@ class _AccountingDashboardSectionState
       breakdownStart: breakdownStart,
       breakdownEnd: breakdownEnd,
       breakdownTotal: breakdownTotal,
+      breakdownDetails: breakdownDetails,
     );
   }
 
@@ -363,6 +489,7 @@ class _AccountingDashboardSectionState
 class _DashboardPayload {
   final List<MonthlyIncomeExpensePoint> series;
   final List<ExpenseBreakdownItem> expenseBreakdown;
+  final List<PeriodDetailItem> breakdownDetails;
   final String trailingLabel;
   final double totalIncome;
   final double totalExpense;
@@ -377,6 +504,7 @@ class _DashboardPayload {
   const _DashboardPayload({
     required this.series,
     required this.expenseBreakdown,
+    required this.breakdownDetails,
     required this.trailingLabel,
     required this.totalIncome,
     required this.totalExpense,
@@ -599,7 +727,9 @@ class _DashboardContent extends StatelessWidget {
                       flex: 5, // Good space for pie chart
                       child: _ExpenseBreakdownCard(
                         items: data.expenseBreakdown,
+                        details: data.breakdownDetails,
                         chartHeight: chartHeight,
+                        basis: basis,
                         breakdownRange: selectedBreakdownRange,
                         rangeLabel: data.trailingLabel,
                         breakdownOptions: breakdownOptions,
@@ -629,7 +759,9 @@ class _DashboardContent extends StatelessWidget {
                   const SizedBox(height: 16),
                   _ExpenseBreakdownCard(
                     items: data.expenseBreakdown,
+                    details: data.breakdownDetails,
                     chartHeight: chartHeight,
+                    basis: basis,
                     breakdownRange: selectedBreakdownRange,
                     rangeLabel: data.trailingLabel,
                     breakdownOptions: breakdownOptions,
@@ -1761,7 +1893,9 @@ class _ExpenseLegendRow extends StatelessWidget {
 
 class _ExpenseBreakdownCard extends StatefulWidget {
   final List<ExpenseBreakdownItem> items;
+  final List<PeriodDetailItem> details;
   final double chartHeight;
+  final _AccountingBasis basis;
   final _ExpenseBreakdownRange breakdownRange;
   final String rangeLabel;
   final List<_ExpenseBreakdownRange> breakdownOptions;
@@ -1772,7 +1906,9 @@ class _ExpenseBreakdownCard extends StatefulWidget {
 
   const _ExpenseBreakdownCard({
     required this.items,
+    required this.details,
     required this.chartHeight,
+    required this.basis,
     required this.breakdownRange,
     required this.rangeLabel,
     required this.breakdownOptions,
@@ -1793,7 +1929,7 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
   bool _isLoadingDetails = false;
   int _touchedIndex = -1;
 
-  void _onSliceTapped(ExpenseBreakdownItem item) async {
+  void _onSliceTapped(ExpenseBreakdownItem item) {
     setState(() {
       _selectedItem = item;
       _isLoadingDetails = true;
@@ -1801,25 +1937,21 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
     });
 
     try {
-      final reportsService = context.read<FinancialReportsService>();
+      final visibleKeys = widget.items
+          .where((entry) => !entry.isOther)
+          .map((entry) => entry.breakdownKey)
+          .toSet();
 
-      // Always fetch Accrual (isCashFlow: false) for Pie Chart drill-down
-      // because Pie Chart data comes from Journal Entries (Accrual)
-      final allItems = await reportsService.getExpensePeriodDetails(
-        startDate: widget.rangeStart,
-        endDate: widget.rangeEnd,
-        isCashFlow: false,
-      );
+      final filteredItems = widget.details.where((detail) {
+        final detailKey = _expenseBreakdownKeyForDetail(detail);
 
-      // Filter by the selected account
-      final filteredItems = allItems.where((detail) {
-        // If accountId is available, use it (best precision)
-        if (detail.accountId != null && item.accountId.isNotEmpty) {
-          return detail.accountId == item.accountId;
+        if (item.isOther) {
+          return !visibleKeys.contains(detailKey);
         }
-        // Fallback to name match if IDs missing (shouldn't happen with new SQL)
-        return detail.secondaryText == item.accountName;
-      }).toList();
+
+        return detailKey == item.breakdownKey;
+      }).toList()
+        ..sort((a, b) => b.amount.abs().compareTo(a.amount.abs()));
 
       if (mounted) {
         setState(() {
@@ -1866,7 +1998,9 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No hay gastos registrados en ${widget.rangeLabel.toLowerCase()}',
+                    widget.basis == _AccountingBasis.cash
+                        ? 'No hay egresos de caja registrados en ${widget.rangeLabel.toLowerCase()}'
+                        : 'No hay gastos registrados en ${widget.rangeLabel.toLowerCase()}',
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -1931,7 +2065,9 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
           children: [
             Expanded(
               child: Text(
-                'Gastos principales',
+                widget.basis == _AccountingBasis.cash
+                    ? 'Principales egresos de caja'
+                    : 'Gastos principales',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -2082,7 +2218,9 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'GASTOS',
+                                  widget.basis == _AccountingBasis.cash
+                                      ? 'EGRESOS'
+                                      : 'GASTOS',
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodyMedium
@@ -2092,7 +2230,9 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                                       ),
                                 ),
                                 Text(
-                                  'PRINCIPALES',
+                                  widget.basis == _AccountingBasis.cash
+                                      ? 'DE CAJA'
+                                      : 'PRINCIPALES',
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall

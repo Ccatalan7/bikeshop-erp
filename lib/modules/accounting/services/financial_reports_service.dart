@@ -230,9 +230,27 @@ class FinancialReportsService extends ChangeNotifier {
       final totalLiabilities =
           totalCurrentLiabilities + totalLongTermLiabilities;
 
-      // Calculate period net income if period start is provided
+      double priorRetainedEarnings = 0;
+
+      // Calculate period net income and prior-year retained earnings if period start is provided.
+      // If historical year-closing entries exist, prior retained earnings will already be zeroed out
+      // in P&L accounts and this stays safe. If they do not exist, this surfaces the missing equity.
       double periodNetIncome = 0;
       if (periodStartDate != null) {
+        final priorPeriodEnd =
+            periodStartDate.subtract(const Duration(seconds: 1));
+
+        if (!priorPeriodEnd.isBefore(DateTime.utc(2000, 1, 1))) {
+          final retainedEarningsResult = await _databaseService.rpc(
+            'calculate_net_income',
+            params: {
+              'p_start_date': DateTime.utc(2000, 1, 1).toIso8601String(),
+              'p_end_date': priorPeriodEnd.toIso8601String(),
+            },
+          );
+          priorRetainedEarnings = _parseDouble(retainedEarningsResult) ?? 0.0;
+        }
+
         final netIncomeResult = await _databaseService.rpc(
           'calculate_net_income',
           params: {
@@ -249,7 +267,11 @@ class FinancialReportsService extends ChangeNotifier {
           '   Total Liabilities: \$${totalLiabilities.toStringAsFixed(2)}');
       debugPrint('   Total Equity: \$${totalEquity.toStringAsFixed(2)}');
       debugPrint(
-          '   Balanced: ${(totalAssets - (totalLiabilities + totalEquity)).abs() < 1.00}');
+          '   Prior Retained Earnings: \$${priorRetainedEarnings.toStringAsFixed(2)}');
+      debugPrint(
+          '   Period Net Income: \$${periodNetIncome.toStringAsFixed(2)}');
+      debugPrint(
+          '   Balanced: ${(totalAssets - (totalLiabilities + totalEquity + priorRetainedEarnings + periodNetIncome)).abs() < 1.00}');
 
       return BalanceSheet(
         startDate: periodStartDate ?? asOfDate,
@@ -270,6 +292,7 @@ class FinancialReportsService extends ChangeNotifier {
         totalLiabilities: totalLiabilities,
         equity: equity,
         totalEquity: totalEquity,
+        priorRetainedEarnings: priorRetainedEarnings,
         periodNetIncome: periodNetIncome,
       );
     } catch (e, stackTrace) {
@@ -467,6 +490,10 @@ class FinancialReportsService extends ChangeNotifier {
         accountCode: map['account_code']?.toString() ?? '',
         accountName: map['account_name']?.toString() ?? '',
         amount: _parseDouble(map['amount']) ?? 0,
+        breakdownKey: map['account_id']?.toString() ??
+            map['account_code']?.toString() ??
+            map['account_name']?.toString() ??
+            '',
       );
     }).toList();
   }

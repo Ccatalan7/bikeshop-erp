@@ -3,13 +3,87 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import '../../bikeshop/models/bikeshop_models.dart';
+import '../../bikeshop/services/bikeshop_service.dart';
+import '../../crm/models/crm_models.dart';
+import '../../crm/services/customer_service.dart';
 import '../../inventory/services/inventory_service.dart';
+import '../../purchases/models/purchase_invoice.dart';
+import '../../purchases/services/purchase_service.dart';
+import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
+import '../../../shared/models/supplier.dart';
+import '../../../shared/utils/chilean_utils.dart';
 
 /// Callback type for navigation actions the AI can trigger.
 /// The [route] is the path to navigate to (e.g. '/inventory/products').
 /// The [searchTerm] is an optional pre-filled search query.
 typedef AINavigationCallback = void Function(String route,
     {String? searchTerm});
+
+class AIAssistantActionCard {
+  const AIAssistantActionCard({
+    required this.kind,
+    required this.title,
+    required this.route,
+    this.eyebrow,
+    this.subtitle,
+    this.description,
+    this.ctaLabel = 'Abrir',
+    this.chips = const [],
+  });
+
+  final String kind;
+  final String title;
+  final String route;
+  final String? eyebrow;
+  final String? subtitle;
+  final String? description;
+  final String ctaLabel;
+  final List<String> chips;
+}
+
+class AIAssistantResponse {
+  const AIAssistantResponse({
+    required this.text,
+    this.cards = const [],
+  });
+
+  final String text;
+  final List<AIAssistantActionCard> cards;
+}
+
+class _TireWidthRange {
+  const _TireWidthRange({
+    required this.minWidth,
+    required this.maxWidth,
+  });
+
+  final double minWidth;
+  final double maxWidth;
+
+  double get span => maxWidth - minWidth;
+
+  String get label => '${_format(minWidth)}-${_format(maxWidth)}';
+
+  static String _format(double value) {
+    final rounded = value.toStringAsFixed(3);
+    return rounded
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+}
+
+class _WidthComparisonCandidate {
+  const _WidthComparisonCandidate({
+    required this.product,
+    required this.range,
+    required this.stock,
+  });
+
+  final Map<String, dynamic> product;
+  final _TireWidthRange range;
+  final double stock;
+}
 
 class AIAssistantService extends ChangeNotifier {
   static final AIAssistantService _instance = AIAssistantService._internal();
@@ -27,6 +101,12 @@ class AIAssistantService extends ChangeNotifier {
 
   /// SKUs from the last searchStock call, used to sync with inventory page.
   List<String>? _lastSearchSkus;
+  List<Map<String, dynamic>> _lastSearchResults = [];
+  String? _lastInventorySearchTerm;
+
+  static const int _stockFilterAll = 0;
+  static const int _stockFilterInStock = 1;
+  static const int _stockFilterOutOfStock = 3;
 
   bool get isLoading => _isLoading;
   List<Content> get history => _history;
@@ -111,20 +191,59 @@ class AIAssistantService extends ChangeNotifier {
     );
   }
 
-  Future<String> sendMessage(
+  Future<AIAssistantResponse> sendMessage(
     String message, {
     List<MechanicJob>? jobs,
+    CustomerService? customerService,
     InventoryService? inventoryService,
+    BikeshopService? bikeshopService,
+    PurchaseService? purchaseService,
+    SalesService? salesService,
     AINavigationCallback? onNavigate,
   }) async {
-    if (_model == null) {
-      return 'Error: API Key not configured. Please add GEMINI_API_KEY to .env file.';
-    }
-
     _isLoading = true;
     notifyListeners();
 
     try {
+      final entityCardResponse = await _tryHandleEntityCards(
+        message,
+        customerService: customerService,
+        bikeshopService: bikeshopService,
+        purchaseService: purchaseService,
+        salesService: salesService,
+      );
+      if (entityCardResponse != null) {
+        return entityCardResponse;
+      }
+
+      final inventoryRefinement = _tryHandleInventoryRefinement(
+        message,
+        inventoryService: inventoryService,
+        onNavigate: onNavigate,
+      );
+      if (inventoryRefinement != null) {
+        return _textResponse(inventoryRefinement);
+      }
+
+      final inventoryComparison = _tryHandleInventoryComparison(message);
+      if (inventoryComparison != null) {
+        return _textResponse(inventoryComparison);
+      }
+
+      final directInventorySearch = await _tryHandleDirectInventorySearch(
+        message,
+        inventoryService: inventoryService,
+        onNavigate: onNavigate,
+      );
+      if (directInventorySearch != null) {
+        return directInventorySearch;
+      }
+
+      if (_model == null) {
+        return _textResponse(
+            'Error: API Key not configured. Please add GEMINI_API_KEY to .env file.');
+      }
+
       // Initialize chat if not already started
       if (_chatSession == null) {
         final systemPrompt = _buildSystemPrompt(jobs ?? []);
@@ -145,6 +264,8 @@ class AIAssistantService extends ChangeNotifier {
         maxTurns--;
         final functionCalls = response.functionCalls;
         final functionResponses = <FunctionResponse>[];
+        Map<String, Object?>? inventorySearchResult;
+        Map<String, Object?>? inventoryNavigateResult;
 
         for (final call in functionCalls) {
           final name = call.name;
@@ -157,12 +278,14 @@ class AIAssistantService extends ChangeNotifier {
           if (name == 'searchStock') {
             result = await _toolSearchStock(
                 args['query'] as String?, inventoryService);
+            inventorySearchResult = result;
           } else if (name == 'navigateToInventory') {
             result = _toolNavigateToInventory(
               args['searchTerm'] as String?,
               inventoryService: inventoryService,
               onNavigate: onNavigate,
             );
+            inventoryNavigateResult = result;
           } else if (name == 'searchInternet') {
             result = await _toolSearchInternet(args['query'] as String?);
           } else {
@@ -170,6 +293,33 @@ class AIAssistantService extends ChangeNotifier {
           }
 
           functionResponses.add(FunctionResponse(name, result));
+        }
+
+        final shouldAutoNavigateToInventory = inventorySearchResult != null &&
+            inventoryNavigateResult == null &&
+            inventorySearchResult.containsKey('products') &&
+            ((inventorySearchResult['count'] as num?)?.toInt() ?? 0) > 0 &&
+            _lastInventorySearchTerm != null &&
+            _lastInventorySearchTerm!.isNotEmpty &&
+            onNavigate != null;
+
+        if (shouldAutoNavigateToInventory) {
+          inventoryNavigateResult = _toolNavigateToInventory(
+            _lastInventorySearchTerm,
+            inventoryService: inventoryService,
+            onNavigate: onNavigate,
+          );
+        }
+
+        final deterministicInventoryReply = _buildDeterministicInventoryReply(
+          inventorySearchResult,
+          inventoryNavigateResult,
+        );
+        if (deterministicInventoryReply != null) {
+          return _cardResponse(
+            deterministicInventoryReply,
+            cards: _buildInventoryCardsFromSearchResult(inventorySearchResult),
+          );
         }
 
         // Send tool results back to model
@@ -181,17 +331,1453 @@ class AIAssistantService extends ChangeNotifier {
       final text = response.text;
 
       if (text == null) {
-        return 'Sorry, I could not generate a response.';
+        return _textResponse('Sorry, I could not generate a response.');
       }
 
-      return text;
+      return _textResponse(text);
     } catch (e) {
       debugPrint('Error sending message to Gemini: $e');
-      return 'Error: $e';
+      return _textResponse('Error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  AIAssistantResponse _textResponse(
+    String text, {
+    List<AIAssistantActionCard> cards = const [],
+  }) {
+    return AIAssistantResponse(text: text, cards: cards);
+  }
+
+  AIAssistantResponse _cardResponse(
+    String text, {
+    required List<AIAssistantActionCard> cards,
+  }) {
+    final compact = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return AIAssistantResponse(text: compact, cards: cards);
+  }
+
+  Future<AIAssistantResponse?> _tryHandleEntityCards(
+    String message, {
+    CustomerService? customerService,
+    BikeshopService? bikeshopService,
+    PurchaseService? purchaseService,
+    SalesService? salesService,
+  }) async {
+    final purchaseInvoiceResponse = await _tryHandlePurchaseInvoiceCards(
+      message,
+      purchaseService: purchaseService,
+    );
+    if (purchaseInvoiceResponse != null) {
+      return purchaseInvoiceResponse;
+    }
+
+    final salesInvoiceResponse = await _tryHandleSalesInvoiceCards(
+      message,
+      salesService: salesService,
+    );
+    if (salesInvoiceResponse != null) {
+      return salesInvoiceResponse;
+    }
+
+    final customerResponse = await _tryHandleCustomerCards(
+      message,
+      customerService: customerService,
+    );
+    if (customerResponse != null) {
+      return customerResponse;
+    }
+
+    final supplierResponse = await _tryHandleSupplierCards(
+      message,
+      purchaseService: purchaseService,
+    );
+    if (supplierResponse != null) {
+      return supplierResponse;
+    }
+
+    final jobResponse = await _tryHandleJobCards(
+      message,
+      customerService: customerService,
+      bikeshopService: bikeshopService,
+    );
+    if (jobResponse != null) {
+      return jobResponse;
+    }
+
+    return null;
+  }
+
+  Future<AIAssistantResponse?> _tryHandleCustomerCards(
+    String message, {
+    CustomerService? customerService,
+  }) async {
+    if (customerService == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(message);
+    final mentionsCustomer =
+        normalized.contains('cliente') || normalized.contains('customer');
+
+    if (!mentionsCustomer) {
+      return null;
+    }
+
+    final wantsRecent = _wantsRecentEntityLookup(normalized);
+    final wantsDirectLookup = _isDirectEntityLookup(normalized);
+    if (!wantsRecent && !wantsDirectLookup) {
+      return null;
+    }
+
+    final searchTerm = _extractEntitySearchTerm(
+      message,
+      removePatterns: const [
+        'cliente',
+        'clientes',
+        'customer',
+        'customers',
+        'ficha',
+      ],
+    );
+
+    if (searchTerm.isEmpty && !wantsRecent) {
+      return null;
+    }
+
+    final allCustomers = await _loadCustomersForAi(customerService);
+    var customers = searchTerm.isNotEmpty
+        ? allCustomers
+            .where(
+                (customer) => _customerMatchesSearchTerm(searchTerm, customer))
+            .toList()
+        : allCustomers;
+
+    if (customers.isEmpty) {
+      if (searchTerm.isNotEmpty) {
+        return _textResponse(
+            'No encontré clientes que coincidan con "$searchTerm".');
+      }
+      return _textResponse('No encontré clientes para mostrar ahora mismo.');
+    }
+
+    customers = customers.where((customer) => customer.id != null).toList();
+    if (customers.isEmpty) {
+      return null;
+    }
+
+    customers.sort((a, b) {
+      if (searchTerm.isNotEmpty) {
+        final scoreA = _customerMatchScore(searchTerm, a);
+        final scoreB = _customerMatchScore(searchTerm, b);
+        if (scoreA != scoreB) {
+          return scoreB.compareTo(scoreA);
+        }
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+
+    final wantsMultiple = _wantsMultipleEntityResults(normalized);
+    final shouldReturnSingle =
+        !wantsMultiple && (wantsRecent || searchTerm.isNotEmpty);
+    final limited = customers.take(shouldReturnSingle ? 1 : 3).toList();
+    final cards = limited.map(_buildCustomerCard).toList();
+
+    if (limited.length == 1) {
+      final customer = limited.first;
+      final intro = wantsRecent && searchTerm.isEmpty
+          ? 'El cliente actualizado más reciente es ${customer.name}.'
+          : 'Encontré el cliente ${customer.name}.';
+      return _cardResponse(intro, cards: cards);
+    }
+
+    final headline = searchTerm.isNotEmpty
+        ? 'Encontré ${limited.length} clientes para "$searchTerm" que puedes abrir directo desde aquí.'
+        : 'Encontré ${limited.length} clientes recientes que puedes abrir directo desde aquí.';
+    return _cardResponse(headline, cards: cards);
+  }
+
+  Future<AIAssistantResponse?> _tryHandleSupplierCards(
+    String message, {
+    PurchaseService? purchaseService,
+  }) async {
+    if (purchaseService == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(message);
+    final mentionsSupplier = normalized.contains('proveedor') ||
+        normalized.contains('proveedores') ||
+        normalized.contains('supplier') ||
+        normalized.contains('suppliers');
+
+    if (!mentionsSupplier) {
+      return null;
+    }
+
+    final wantsRecent = _wantsRecentEntityLookup(normalized);
+    final wantsDirectLookup = _isDirectEntityLookup(normalized);
+    if (!wantsRecent && !wantsDirectLookup) {
+      return null;
+    }
+
+    final searchTerm = _extractEntitySearchTerm(
+      message,
+      removePatterns: const [
+        'proveedor',
+        'proveedores',
+        'supplier',
+        'suppliers',
+      ],
+    );
+
+    if (searchTerm.isEmpty && !wantsRecent) {
+      return null;
+    }
+
+    var suppliers = await purchaseService.getSuppliers();
+
+    if (searchTerm.isNotEmpty) {
+      suppliers = suppliers
+          .where((supplier) => _supplierMatchesSearchTerm(searchTerm, supplier))
+          .toList();
+    }
+
+    if (suppliers.isEmpty) {
+      if (searchTerm.isNotEmpty) {
+        return _textResponse(
+            'No encontré proveedores que coincidan con "$searchTerm".');
+      }
+      return _textResponse('No encontré proveedores para mostrar ahora mismo.');
+    }
+
+    suppliers.sort((a, b) {
+      if (searchTerm.isNotEmpty) {
+        final scoreA = _supplierMatchScore(searchTerm, a);
+        final scoreB = _supplierMatchScore(searchTerm, b);
+        if (scoreA != scoreB) {
+          return scoreB.compareTo(scoreA);
+        }
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+
+    final wantsMultiple = _wantsMultipleEntityResults(normalized);
+    final shouldReturnSingle =
+        !wantsMultiple && (wantsRecent || searchTerm.isNotEmpty);
+    final limited = suppliers.take(shouldReturnSingle ? 1 : 3).toList();
+    final cards = limited.map(_buildSupplierCard).toList();
+
+    if (limited.length == 1) {
+      final supplier = limited.first;
+      final intro = wantsRecent && searchTerm.isEmpty
+          ? 'El proveedor actualizado más reciente es ${supplier.name}.'
+          : 'Encontré el proveedor ${supplier.name}.';
+      return _cardResponse(intro, cards: cards);
+    }
+
+    final headline = searchTerm.isNotEmpty
+        ? 'Encontré ${limited.length} proveedores para "$searchTerm" que puedes abrir directo desde aquí.'
+        : 'Encontré ${limited.length} proveedores recientes que puedes abrir directo desde aquí.';
+    return _cardResponse(headline, cards: cards);
+  }
+
+  Future<AIAssistantResponse?> _tryHandleJobCards(
+    String message, {
+    CustomerService? customerService,
+    BikeshopService? bikeshopService,
+  }) async {
+    if (bikeshopService == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(message);
+    final mentionsJob = normalized.contains('pega') ||
+        normalized.contains('pegas') ||
+        normalized.contains('trabajo') ||
+        normalized.contains('trabajos') ||
+        normalized.contains('orden de trabajo') ||
+        normalized.contains('ordenes de trabajo') ||
+        normalized.contains('job') ||
+        normalized.contains('jobs');
+
+    if (!mentionsJob) {
+      return null;
+    }
+
+    final wantsRecent = _wantsRecentEntityLookup(normalized);
+    final wantsDirectLookup = _isDirectEntityLookup(normalized);
+    if (!wantsRecent && !wantsDirectLookup) {
+      return null;
+    }
+
+    final searchTerm = _extractEntitySearchTerm(
+      message,
+      removePatterns: const [
+        'pega',
+        'pegas',
+        'trabajo',
+        'trabajos',
+        'orden de trabajo',
+        'ordenes de trabajo',
+        'job',
+        'jobs',
+      ],
+    );
+
+    if (searchTerm.isEmpty && !wantsRecent) {
+      return null;
+    }
+
+    final customerNamesById = <String, String>{
+      for (final customer
+          in customerService?.cachedCustomers ?? const <Customer>[])
+        if (customer.id != null) customer.id!: customer.name,
+    };
+
+    final allCustomers = customerService != null
+        ? await _loadCustomersForAi(customerService)
+        : const <Customer>[];
+    final matchingCustomers = searchTerm.isNotEmpty
+        ? allCustomers
+            .where(
+                (customer) => _customerMatchesSearchTerm(searchTerm, customer))
+            .take(10)
+            .toList()
+        : const <Customer>[];
+
+    List<MechanicJob> candidateJobs;
+    if (searchTerm.isEmpty) {
+      candidateJobs = bikeshopService.hasJobsCache
+          ? bikeshopService.cachedJobs
+          : await bikeshopService.getJobs();
+    } else {
+      final cachedJobs = bikeshopService.hasJobsCache
+          ? bikeshopService.cachedJobs
+          : const <MechanicJob>[];
+      final customerLinkedJobs = <MechanicJob>[];
+      final seenCustomerLinkedJobIds = <String>{};
+
+      for (final customer in matchingCustomers) {
+        final customerId = customer.id;
+        if (customerId == null) continue;
+        customerNamesById[customerId] = customer.name;
+
+        final jobsForCustomer = cachedJobs.isNotEmpty
+            ? cachedJobs.where((job) => job.customerId == customerId).toList()
+            : await bikeshopService.getJobs(customerId: customerId);
+
+        for (final job in jobsForCustomer) {
+          final jobId = job.id;
+          if (jobId == null || seenCustomerLinkedJobIds.contains(jobId)) {
+            continue;
+          }
+          customerLinkedJobs.add(job);
+          seenCustomerLinkedJobIds.add(jobId);
+        }
+      }
+
+      candidateJobs = customerLinkedJobs;
+
+      final textMatchedJobs =
+          await bikeshopService.getJobs(searchTerm: searchTerm);
+      final seenJobIds =
+          candidateJobs.map((job) => job.id).whereType<String>().toSet();
+      for (final job in textMatchedJobs) {
+        final jobId = job.id;
+        if (jobId == null || seenJobIds.contains(jobId)) continue;
+        candidateJobs.add(job);
+        seenJobIds.add(jobId);
+      }
+    }
+
+    var jobs = candidateJobs.where((job) => job.id != null).toList();
+    if (searchTerm.isNotEmpty) {
+      jobs = jobs
+          .where((job) => _jobMatchesSearchTerm(
+                searchTerm,
+                job,
+                customerName: customerNamesById[job.customerId],
+              ))
+          .toList();
+    }
+
+    if (jobs.isEmpty) {
+      if (searchTerm.isNotEmpty) {
+        return _textResponse(
+            'No encontré pegas que coincidan con "$searchTerm".');
+      }
+      return _textResponse('No encontré pegas para mostrar ahora mismo.');
+    }
+
+    jobs.sort((a, b) {
+      if (searchTerm.isNotEmpty) {
+        final scoreA = _jobMatchScore(
+          searchTerm,
+          a,
+          customerName: customerNamesById[a.customerId],
+        );
+        final scoreB = _jobMatchScore(
+          searchTerm,
+          b,
+          customerName: customerNamesById[b.customerId],
+        );
+        if (scoreA != scoreB) {
+          return scoreB.compareTo(scoreA);
+        }
+      }
+      return b.arrivalDate.compareTo(a.arrivalDate);
+    });
+
+    final wantsMultiple = _wantsMultipleEntityResults(normalized);
+    final shouldReturnSingle =
+        !wantsMultiple && (wantsRecent || searchTerm.isNotEmpty);
+    final limited = jobs.take(shouldReturnSingle ? 1 : 3).toList();
+    final cards = limited
+        .map((job) => _buildJobCard(
+              job,
+              customerName: customerNamesById[job.customerId],
+            ))
+        .toList();
+
+    if (limited.length == 1) {
+      final job = limited.first;
+      final label = _jobCardTitle(job);
+      final intro = wantsRecent && searchTerm.isEmpty
+          ? 'La pega más reciente es $label.'
+          : 'Encontré la pega $label.';
+      return _cardResponse(intro, cards: cards);
+    }
+
+    final headline = searchTerm.isNotEmpty
+        ? 'Encontré ${limited.length} pegas para "$searchTerm" que puedes abrir directo desde aquí.'
+        : 'Encontré ${limited.length} pegas recientes que puedes abrir directo desde aquí.';
+    return _cardResponse(headline, cards: cards);
+  }
+
+  bool _wantsRecentEntityLookup(String normalizedMessage) {
+    return normalizedMessage.contains('ultima') ||
+        normalizedMessage.contains('ultim') ||
+        normalizedMessage.contains('last') ||
+        normalizedMessage.contains('latest') ||
+        normalizedMessage.contains('reciente');
+  }
+
+  bool _wantsMultipleEntityResults(String normalizedMessage) {
+    return normalizedMessage.contains('muestrame') ||
+        normalizedMessage.contains('listame') ||
+        normalizedMessage.contains('show me') ||
+        normalizedMessage.contains('all ') ||
+        normalizedMessage.contains('todos') ||
+        normalizedMessage.contains('todas');
+  }
+
+  bool _isDirectEntityLookup(String normalizedMessage) {
+    return _isDirectInvoiceLookup(normalizedMessage) ||
+        normalizedMessage.contains('trae') ||
+        normalizedMessage.contains('dame');
+  }
+
+  String _extractEntitySearchTerm(
+    String message, {
+    required List<String> removePatterns,
+  }) {
+    var normalized = _normalizeText(message);
+
+    final commonPatterns = <Pattern>[
+      RegExp(r'\bbuscame\b'),
+      RegExp(r'\bbusca\b'),
+      RegExp(r'\bmuestrame\b'),
+      RegExp(r'\bmostrame\b'),
+      RegExp(r'\bquiero ver\b'),
+      RegExp(r'\babre\b'),
+      RegExp(r'\babrir\b'),
+      RegExp(r'\bopen\b'),
+      RegExp(r'\bshow me\b'),
+      RegExp(r'\btraeme\b'),
+      RegExp(r'\btrae\b'),
+      RegExp(r'\bdame\b'),
+      RegExp(r'\bultima\b'),
+      RegExp(r'\bultimo\b'),
+      RegExp(r'\bultimas\b'),
+      RegExp(r'\bultimos\b'),
+      RegExp(r'\breciente\b'),
+      RegExp(r'\brecientes\b'),
+      RegExp(r'\bla\b'),
+      RegExp(r'\bel\b'),
+      RegExp(r'\blas\b'),
+      RegExp(r'\blos\b'),
+    ];
+
+    final entityPatterns = removePatterns
+        .map((value) => RegExp('\\b${RegExp.escape(value)}\\b'))
+        .toList();
+
+    for (final pattern in [...commonPatterns, ...entityPatterns]) {
+      normalized = normalized.replaceAll(pattern, ' ');
+    }
+
+    normalized = normalized.replaceFirst(RegExp(r'^\s*(de|del|para)\s+'), '');
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized;
+  }
+
+  bool _matchesSearchAcrossFields(
+    String searchTerm,
+    Iterable<String?> fields,
+  ) {
+    if (searchTerm.isEmpty) {
+      return true;
+    }
+
+    final haystack = _normalizeText(fields.whereType<String>().join(' '));
+    final tokens = _normalizeText(searchTerm)
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+    return tokens.every(haystack.contains);
+  }
+
+  int _fieldMatchScore(
+    String searchTerm,
+    String? rawValue, {
+    required int exactWeight,
+    required int containsWeight,
+    required int tokenWeight,
+  }) {
+    final value = _normalizeText(rawValue ?? '').trim();
+    final normalizedSearch = _normalizeText(searchTerm).trim();
+    if (value.isEmpty || normalizedSearch.isEmpty) {
+      return 0;
+    }
+
+    final compactValue = value.replaceAll(RegExp(r'[\s-]+'), '');
+    final compactSearch = normalizedSearch.replaceAll(RegExp(r'[\s-]+'), '');
+    final tokens = normalizedSearch
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+
+    var score = 0;
+    if (value == normalizedSearch || compactValue == compactSearch) {
+      score += exactWeight;
+    }
+    if (value.contains(normalizedSearch)) {
+      score += containsWeight;
+    }
+    for (final token in tokens) {
+      if (value.contains(token)) {
+        score += tokenWeight;
+      }
+    }
+    return score;
+  }
+
+  bool _customerMatchesSearchTerm(String searchTerm, Customer customer) {
+    return _matchesSearchAcrossFields(searchTerm, [
+      customer.name,
+      customer.rut,
+      customer.email,
+      customer.phone,
+      customer.address,
+      customer.region,
+    ]);
+  }
+
+  int _customerMatchScore(String searchTerm, Customer customer) {
+    return _fieldMatchScore(
+          searchTerm,
+          customer.name,
+          exactWeight: 900,
+          containsWeight: 260,
+          tokenWeight: 45,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          customer.rut,
+          exactWeight: 700,
+          containsWeight: 220,
+          tokenWeight: 30,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          customer.email,
+          exactWeight: 500,
+          containsWeight: 180,
+          tokenWeight: 24,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          customer.phone,
+          exactWeight: 450,
+          containsWeight: 160,
+          tokenWeight: 20,
+        );
+  }
+
+  Future<List<Customer>> _loadCustomersForAi(
+    CustomerService customerService,
+  ) async {
+    if (customerService.hasCustomersCache &&
+        customerService.cachedCustomers.isNotEmpty) {
+      return customerService.cachedCustomers
+          .where((customer) => customer.id != null)
+          .toList();
+    }
+
+    final customers = await customerService.getCustomers(forceRefresh: false);
+    return customers.where((customer) => customer.id != null).toList();
+  }
+
+  AIAssistantActionCard _buildCustomerCard(Customer customer) {
+    final subtitleParts = <String>[
+      if (customer.rut.trim().isNotEmpty) customer.rut.trim(),
+      if ((customer.email ?? '').trim().isNotEmpty) customer.email!.trim(),
+      if ((customer.phone ?? '').trim().isNotEmpty) customer.phone!.trim(),
+    ];
+
+    final descriptionParts = <String>[
+      if ((customer.address ?? '').trim().isNotEmpty) customer.address!.trim(),
+      if ((customer.region ?? '').trim().isNotEmpty) customer.region!.trim(),
+    ];
+
+    return AIAssistantActionCard(
+      kind: 'customer',
+      eyebrow: 'Cliente',
+      title: customer.name,
+      subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(' • '),
+      description:
+          descriptionParts.isEmpty ? null : descriptionParts.join(' • '),
+      route: '/clientes/${customer.id}',
+      ctaLabel: 'Abrir cliente',
+      chips: [customer.isActive ? 'Activo' : 'Inactivo'],
+    );
+  }
+
+  bool _supplierMatchesSearchTerm(String searchTerm, Supplier supplier) {
+    return _matchesSearchAcrossFields(searchTerm, [
+      supplier.name,
+      supplier.rut,
+      supplier.email,
+      supplier.phone,
+      supplier.contactPerson,
+      supplier.address,
+    ]);
+  }
+
+  int _supplierMatchScore(String searchTerm, Supplier supplier) {
+    return _fieldMatchScore(
+          searchTerm,
+          supplier.name,
+          exactWeight: 900,
+          containsWeight: 260,
+          tokenWeight: 45,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          supplier.rut,
+          exactWeight: 700,
+          containsWeight: 220,
+          tokenWeight: 30,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          supplier.email,
+          exactWeight: 500,
+          containsWeight: 180,
+          tokenWeight: 24,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          supplier.phone,
+          exactWeight: 450,
+          containsWeight: 160,
+          tokenWeight: 20,
+        );
+  }
+
+  AIAssistantActionCard _buildSupplierCard(Supplier supplier) {
+    final subtitleParts = <String>[
+      if ((supplier.rut ?? '').trim().isNotEmpty) supplier.rut!.trim(),
+      if ((supplier.contactPerson ?? '').trim().isNotEmpty)
+        supplier.contactPerson!.trim(),
+      if ((supplier.email ?? '').trim().isNotEmpty) supplier.email!.trim(),
+      if ((supplier.phone ?? '').trim().isNotEmpty) supplier.phone!.trim(),
+    ];
+
+    return AIAssistantActionCard(
+      kind: 'supplier',
+      eyebrow: 'Proveedor',
+      title: supplier.name,
+      subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(' • '),
+      description: (supplier.address ?? '').trim().isEmpty
+          ? null
+          : supplier.address!.trim(),
+      route: '/purchases/suppliers/${supplier.id}/edit',
+      ctaLabel: 'Abrir proveedor',
+      chips: [supplier.isActive ? 'Activo' : 'Inactivo'],
+    );
+  }
+
+  bool _jobMatchesSearchTerm(
+    String searchTerm,
+    MechanicJob job, {
+    String? customerName,
+  }) {
+    return _matchesSearchAcrossFields(searchTerm, [
+      _jobCardTitle(job),
+      customerName,
+      job.clientRequest,
+      job.diagnosis,
+      job.workPerformed,
+      job.notes,
+      job.assignedTechnicianName,
+    ]);
+  }
+
+  int _jobMatchScore(
+    String searchTerm,
+    MechanicJob job, {
+    String? customerName,
+  }) {
+    return _fieldMatchScore(
+          searchTerm,
+          _jobCardTitle(job),
+          exactWeight: 950,
+          containsWeight: 300,
+          tokenWeight: 55,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          customerName,
+          exactWeight: 700,
+          containsWeight: 240,
+          tokenWeight: 36,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          job.clientRequest,
+          exactWeight: 400,
+          containsWeight: 160,
+          tokenWeight: 24,
+        ) +
+        _fieldMatchScore(
+          searchTerm,
+          job.diagnosis,
+          exactWeight: 320,
+          containsWeight: 140,
+          tokenWeight: 20,
+        );
+  }
+
+  String _jobCardTitle(MechanicJob job) {
+    final number = (job.jobNumber ?? '').trim();
+    return number.isNotEmpty ? number : 'Pega sin número';
+  }
+
+  String _jobStatusLabel(MechanicJob job) {
+    final customStatus = job.customStatus?.name.trim();
+    if (customStatus != null && customStatus.isNotEmpty) {
+      return customStatus;
+    }
+    return job.status.displayName;
+  }
+
+  AIAssistantActionCard _buildJobCard(
+    MechanicJob job, {
+    String? customerName,
+  }) {
+    final subtitleParts = <String>[
+      if ((customerName ?? '').trim().isNotEmpty) customerName!.trim(),
+      'Ingreso ${ChileanUtils.formatDate(job.arrivalDate)}',
+    ];
+
+    final detail = (job.clientRequest ?? '').trim().isNotEmpty
+        ? job.clientRequest!.trim()
+        : (job.diagnosis ?? '').trim().isNotEmpty
+            ? job.diagnosis!.trim()
+            : null;
+
+    final descriptionParts = <String>[
+      if (detail != null) detail,
+      'Total ${ChileanUtils.formatCurrency(job.totalCost)}',
+    ];
+
+    return AIAssistantActionCard(
+      kind: 'job',
+      eyebrow: 'Pega',
+      title: _jobCardTitle(job),
+      subtitle: subtitleParts.join(' • '),
+      description: descriptionParts.join(' • '),
+      route: '/taller/pegas/${job.id}',
+      ctaLabel: 'Abrir pega',
+      chips: [
+        _jobStatusLabel(job),
+        if (job.isInvoiced) 'Facturada',
+        if (job.isPaid) 'Pagada',
+      ],
+    );
+  }
+
+  Future<AIAssistantResponse?> _tryHandleSalesInvoiceCards(
+    String message, {
+    SalesService? salesService,
+  }) async {
+    if (salesService == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(message);
+    final mentionsInvoice =
+        normalized.contains('factura') || normalized.contains('invoice');
+    final mentionsPurchase = normalized.contains('compra') ||
+        normalized.contains('purchase') ||
+        normalized.contains('proveedor');
+    final mentionsSales = normalized.contains('venta') ||
+        normalized.contains('sales') ||
+        normalized.contains('cliente') ||
+        normalized.contains('cobro') ||
+        normalized.contains('cobrar');
+
+    if (!mentionsInvoice || mentionsPurchase) {
+      return null;
+    }
+
+    final wantsUnpaid = normalized.contains('impag') ||
+        normalized.contains('unpaid') ||
+        normalized.contains('pendiente') ||
+        normalized.contains('sin pagar') ||
+        normalized.contains('no pagad') ||
+        normalized.contains('por cobrar');
+    final wantsOverdue =
+        normalized.contains('vencid') || normalized.contains('overdue');
+    final wantsRecent = normalized.contains('ultima') ||
+        normalized.contains('ultim') ||
+        normalized.contains('last') ||
+        normalized.contains('latest') ||
+        normalized.contains('reciente');
+    final extractedSearchTerm = _extractInvoiceSearchTerm(message);
+    final wantsDirectLookup =
+        extractedSearchTerm.isNotEmpty && _isDirectInvoiceLookup(normalized);
+
+    if (!wantsUnpaid && !wantsOverdue && !wantsRecent && !wantsDirectLookup) {
+      return null;
+    }
+
+    if (salesService.invoices.isEmpty) {
+      await salesService.loadInvoices();
+    }
+
+    final now = DateTime.now();
+    var filtered = salesService.invoices.where((invoice) {
+      if (invoice.status == InvoiceStatus.cancelled) return false;
+      if (wantsUnpaid && invoice.balance <= 0.01) return false;
+      if (wantsOverdue) {
+        final dueDate = invoice.dueDate;
+        if (dueDate == null ||
+            !dueDate.isBefore(now) ||
+            invoice.balance <= 0.01) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    if (extractedSearchTerm.isNotEmpty) {
+      filtered = filtered
+          .where((invoice) => _invoiceMatchesSearchTerm(
+                searchTerm: extractedSearchTerm,
+                invoiceNumber: invoice.invoiceNumber,
+                partyName: invoice.customerName,
+                reference: invoice.reference,
+              ))
+          .toList();
+    }
+
+    if (filtered.isEmpty) {
+      if (extractedSearchTerm.isNotEmpty) {
+        return _textResponse(
+            'No encontré facturas de venta que coincidan con "$extractedSearchTerm".');
+      }
+      if (wantsOverdue) {
+        return _textResponse(
+            'No encontré facturas de venta vencidas y pendientes en este momento.');
+      }
+      if (wantsUnpaid) {
+        return _textResponse(
+            'No encontré facturas de venta pendientes de cobro en este momento.');
+      }
+      return _textResponse('No encontré facturas de venta que coincidan.');
+    }
+
+    filtered.sort((a, b) {
+      if (extractedSearchTerm.isNotEmpty) {
+        final scoreA = _invoiceMatchScore(
+          searchTerm: extractedSearchTerm,
+          invoiceNumber: a.invoiceNumber,
+          partyName: a.customerName,
+          reference: a.reference,
+        );
+        final scoreB = _invoiceMatchScore(
+          searchTerm: extractedSearchTerm,
+          invoiceNumber: b.invoiceNumber,
+          partyName: b.customerName,
+          reference: b.reference,
+        );
+        if (scoreA != scoreB) {
+          return scoreB.compareTo(scoreA);
+        }
+      }
+
+      if (wantsOverdue) {
+        final aDue = a.dueDate ?? a.date;
+        final bDue = b.dueDate ?? b.date;
+        return aDue.compareTo(bDue);
+      }
+      return b.date.compareTo(a.date);
+    });
+
+    final wantsMultiple = normalized.contains('facturas') ||
+        normalized.contains('invoices') ||
+        normalized.contains('muestrame') ||
+        normalized.contains('listame') ||
+        normalized.contains('show me') ||
+        normalized.contains('all ');
+
+    final shouldReturnSingle = !wantsMultiple &&
+        (wantsRecent || _looksLikeInvoiceIdentifier(extractedSearchTerm));
+
+    final limited = filtered.take(shouldReturnSingle ? 1 : 3).toList();
+    final cards = limited.map(_buildSalesInvoiceCard).toList();
+
+    if (limited.length == 1) {
+      final invoice = limited.first;
+      final intro = wantsOverdue
+          ? 'La factura de venta vencida más urgente es ${invoice.invoiceNumber}.'
+          : wantsUnpaid
+              ? 'La última factura de venta pendiente es ${invoice.invoiceNumber}.'
+              : wantsDirectLookup
+                  ? 'Encontré la factura de venta ${invoice.invoiceNumber}.'
+                  : 'La factura de venta más reciente es ${invoice.invoiceNumber}.';
+      return _cardResponse(
+        intro,
+        cards: cards,
+      );
+    }
+
+    final headline = wantsOverdue
+        ? 'Encontré ${limited.length} facturas de venta vencidas que puedes abrir directo desde aquí.'
+        : wantsUnpaid
+            ? 'Encontré ${limited.length} facturas de venta pendientes que puedes abrir directo desde aquí.'
+            : wantsDirectLookup
+                ? 'Encontré ${limited.length} facturas de venta para "$extractedSearchTerm" que puedes abrir directo desde aquí.'
+                : extractedSearchTerm.isNotEmpty && !mentionsSales
+                    ? 'Encontré ${limited.length} facturas de venta para "$extractedSearchTerm" que puedes abrir directo desde aquí.'
+                    : 'Encontré ${limited.length} facturas de venta recientes que puedes abrir directo desde aquí.';
+
+    return _cardResponse(headline, cards: cards);
+  }
+
+  String _extractInvoiceSearchTerm(String message) {
+    var normalized = _normalizeText(message);
+
+    final patterns = <Pattern>[
+      RegExp(r'\bbuscame\b'),
+      RegExp(r'\bbusca\b'),
+      RegExp(r'\bmuestrame\b'),
+      RegExp(r'\bquiero ver\b'),
+      RegExp(r'\bultima\b'),
+      RegExp(r'\bultimo\b'),
+      RegExp(r'\bultimas\b'),
+      RegExp(r'\bultimos\b'),
+      RegExp(r'\breciente\b'),
+      RegExp(r'\brecientes\b'),
+      RegExp(r'\bultimas?\b'),
+      RegExp(r'\blast\b'),
+      RegExp(r'\blatest\b'),
+      RegExp(r'\bfactura\b'),
+      RegExp(r'\bfacturas\b'),
+      RegExp(r'\binvoice\b'),
+      RegExp(r'\binvoices\b'),
+      RegExp(r'\bde venta\b'),
+      RegExp(r'\bventa\b'),
+      RegExp(r'\bsales\b'),
+      RegExp(r'\bde compra\b'),
+      RegExp(r'\bcompra\b'),
+      RegExp(r'\bpurchase\b'),
+      RegExp(r'\bcliente\b'),
+      RegExp(r'\bproveedor\b'),
+      RegExp(r'\bimpaga\b'),
+      RegExp(r'\bimpagas\b'),
+      RegExp(r'\bimpago\b'),
+      RegExp(r'\bimpagos\b'),
+      RegExp(r'\bunpaid\b'),
+      RegExp(r'\bpendiente\b'),
+      RegExp(r'\bpendientes\b'),
+      RegExp(r'\bsin pagar\b'),
+      RegExp(r'\bpor pagar\b'),
+      RegExp(r'\bpor cobrar\b'),
+      RegExp(r'\bno pagada\b'),
+      RegExp(r'\bno pagado\b'),
+      RegExp(r'\bvencida\b'),
+      RegExp(r'\bvencidas\b'),
+      RegExp(r'\boverdue\b'),
+      RegExp(r'\bla\b'),
+      RegExp(r'\bel\b'),
+      RegExp(r'\blas\b'),
+      RegExp(r'\blos\b'),
+    ];
+
+    for (final pattern in patterns) {
+      normalized = normalized.replaceAll(pattern, ' ');
+    }
+
+    normalized = normalized.replaceFirst(RegExp(r'^\s*(de|del)\s+'), '');
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized;
+  }
+
+  bool _invoiceMatchesSearchTerm({
+    required String searchTerm,
+    required String invoiceNumber,
+    String? partyName,
+    String? reference,
+  }) {
+    if (searchTerm.isEmpty) return true;
+
+    final haystack = _normalizeText(
+      '$invoiceNumber ${partyName ?? ''} ${reference ?? ''}',
+    );
+    final tokens = searchTerm
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+
+    return tokens.every(haystack.contains);
+  }
+
+  bool _isDirectInvoiceLookup(String normalizedMessage) {
+    return normalizedMessage.contains('busc') ||
+        normalizedMessage.contains('muestr') ||
+        normalizedMessage.contains('mostra') ||
+        normalizedMessage.contains('quiero ver') ||
+        normalizedMessage.contains('abr') ||
+        normalizedMessage.contains('open');
+  }
+
+  bool _looksLikeInvoiceIdentifier(String searchTerm) {
+    if (searchTerm.isEmpty) return false;
+    final compact =
+        _normalizeText(searchTerm).replaceAll(RegExp(r'[\s-]+'), '');
+    return RegExp(r'^[a-z]{1,4}\d{2,}$').hasMatch(compact);
+  }
+
+  int _invoiceMatchScore({
+    required String searchTerm,
+    required String invoiceNumber,
+    String? partyName,
+    String? reference,
+  }) {
+    if (searchTerm.isEmpty) return 0;
+
+    final normalizedSearch = _normalizeText(searchTerm).trim();
+    final normalizedInvoice = _normalizeText(invoiceNumber).trim();
+    final normalizedParty = _normalizeText(partyName ?? '').trim();
+    final normalizedReference = _normalizeText(reference ?? '').trim();
+    final compactSearch = normalizedSearch.replaceAll(RegExp(r'[\s-]+'), '');
+    final compactInvoice = normalizedInvoice.replaceAll(RegExp(r'[\s-]+'), '');
+    final tokens = normalizedSearch
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+
+    var score = 0;
+
+    if (normalizedInvoice == normalizedSearch ||
+        compactInvoice == compactSearch) {
+      score += 1000;
+    }
+    if (normalizedReference == normalizedSearch) {
+      score += 700;
+    }
+    if (normalizedParty == normalizedSearch) {
+      score += 600;
+    }
+    if (normalizedInvoice.contains(normalizedSearch)) {
+      score += 350;
+    }
+    if (normalizedReference.contains(normalizedSearch)) {
+      score += 250;
+    }
+    if (normalizedParty.contains(normalizedSearch)) {
+      score += 200;
+    }
+
+    for (final token in tokens) {
+      if (normalizedInvoice.contains(token)) score += 70;
+      if (normalizedReference.contains(token)) score += 50;
+      if (normalizedParty.contains(token)) score += 35;
+    }
+
+    return score;
+  }
+
+  AIAssistantActionCard _buildSalesInvoiceCard(Invoice invoice) {
+    final customer = (invoice.customerName ?? 'Cliente sin nombre').trim();
+    final subtitle = [
+      customer,
+      'Fecha ${ChileanUtils.formatDate(invoice.date)}',
+      if (invoice.dueDate != null)
+        'Vence ${ChileanUtils.formatDate(invoice.dueDate!)}',
+    ].join(' • ');
+
+    final description =
+        'Total ${ChileanUtils.formatCurrency(invoice.total)} • Saldo ${ChileanUtils.formatCurrency(invoice.balance)}';
+
+    return AIAssistantActionCard(
+      kind: 'sales_invoice',
+      eyebrow: 'Factura de venta',
+      title: invoice.invoiceNumber,
+      subtitle: subtitle,
+      description: description,
+      route: '/sales/invoices/${invoice.id}',
+      ctaLabel: 'Abrir factura',
+      chips: [
+        _salesInvoiceStatusLabel(invoice.status),
+        if (invoice.balance > 0.01) 'Pendiente',
+        if (invoice.balance <= 0.01) 'Pagada',
+      ],
+    );
+  }
+
+  String _salesInvoiceStatusLabel(InvoiceStatus status) {
+    switch (status) {
+      case InvoiceStatus.draft:
+        return 'Borrador';
+      case InvoiceStatus.sent:
+        return 'Enviada';
+      case InvoiceStatus.confirmed:
+        return 'Confirmada';
+      case InvoiceStatus.paid:
+        return 'Pagada';
+      case InvoiceStatus.overdue:
+        return 'Vencida';
+      case InvoiceStatus.cancelled:
+        return 'Anulada';
+    }
+  }
+
+  Future<AIAssistantResponse?> _tryHandlePurchaseInvoiceCards(
+    String message, {
+    PurchaseService? purchaseService,
+  }) async {
+    if (purchaseService == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(message);
+    final mentionsInvoice =
+        normalized.contains('factura') || normalized.contains('invoice');
+    final mentionsPurchase = normalized.contains('compra') ||
+        normalized.contains('purchase') ||
+        normalized.contains('proveedor');
+
+    if (!mentionsInvoice || !mentionsPurchase) {
+      return null;
+    }
+
+    final wantsUnpaid = normalized.contains('impag') ||
+        normalized.contains('unpaid') ||
+        normalized.contains('pendiente') ||
+        normalized.contains('sin pagar') ||
+        normalized.contains('no pagad') ||
+        normalized.contains('por pagar');
+    final wantsOverdue =
+        normalized.contains('vencid') || normalized.contains('overdue');
+    final wantsRecent = normalized.contains('ultima') ||
+        normalized.contains('ultim') ||
+        normalized.contains('last') ||
+        normalized.contains('latest') ||
+        normalized.contains('reciente');
+    final extractedSearchTerm = _extractInvoiceSearchTerm(message);
+    final wantsDirectLookup =
+        extractedSearchTerm.isNotEmpty && _isDirectInvoiceLookup(normalized);
+
+    if (!wantsUnpaid && !wantsOverdue && !wantsRecent && !wantsDirectLookup) {
+      return null;
+    }
+
+    final invoices = await purchaseService.getPurchaseInvoices();
+    final now = DateTime.now();
+
+    var filtered = invoices.where((invoice) {
+      if (invoice.status == PurchaseInvoiceStatus.cancelled) return false;
+      if (wantsUnpaid && invoice.balance <= 0.01) return false;
+      if (wantsOverdue) {
+        final dueDate = invoice.dueDate;
+        if (dueDate == null ||
+            !dueDate.isBefore(now) ||
+            invoice.balance <= 0.01) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    if (extractedSearchTerm.isNotEmpty) {
+      filtered = filtered
+          .where((invoice) => _invoiceMatchesSearchTerm(
+                searchTerm: extractedSearchTerm,
+                invoiceNumber: invoice.invoiceNumber,
+                partyName: invoice.supplierName,
+                reference: invoice.reference,
+              ))
+          .toList();
+    }
+
+    if (filtered.isEmpty) {
+      if (extractedSearchTerm.isNotEmpty) {
+        return _textResponse(
+            'No encontré facturas de compra que coincidan con "$extractedSearchTerm".');
+      }
+      if (wantsOverdue) {
+        return _textResponse(
+            'No encontré facturas de compra vencidas y pendientes en este momento.');
+      }
+      if (wantsUnpaid) {
+        return _textResponse(
+            'No encontré facturas de compra pendientes de pago en este momento.');
+      }
+      return _textResponse('No encontré facturas de compra que coincidan.');
+    }
+
+    filtered.sort((a, b) {
+      if (extractedSearchTerm.isNotEmpty) {
+        final scoreA = _invoiceMatchScore(
+          searchTerm: extractedSearchTerm,
+          invoiceNumber: a.invoiceNumber,
+          partyName: a.supplierName,
+          reference: a.reference,
+        );
+        final scoreB = _invoiceMatchScore(
+          searchTerm: extractedSearchTerm,
+          invoiceNumber: b.invoiceNumber,
+          partyName: b.supplierName,
+          reference: b.reference,
+        );
+        if (scoreA != scoreB) {
+          return scoreB.compareTo(scoreA);
+        }
+      }
+
+      if (wantsOverdue) {
+        final aDue = a.dueDate ?? a.date;
+        final bDue = b.dueDate ?? b.date;
+        return aDue.compareTo(bDue);
+      }
+      return b.date.compareTo(a.date);
+    });
+
+    final wantsMultiple = normalized.contains('facturas') ||
+        normalized.contains('invoices') ||
+        normalized.contains('muestrame') ||
+        normalized.contains('muestrame') ||
+        normalized.contains('listame') ||
+        normalized.contains('show me') ||
+        normalized.contains('all ');
+
+    final shouldReturnSingle = !wantsMultiple &&
+        (wantsRecent || _looksLikeInvoiceIdentifier(extractedSearchTerm));
+
+    final limited = filtered.take(shouldReturnSingle ? 1 : 3).toList();
+    final cards = limited.map(_buildPurchaseInvoiceCard).toList();
+
+    if (limited.length == 1) {
+      final invoice = limited.first;
+      final intro = wantsOverdue
+          ? 'La factura de compra vencida más urgente es ${invoice.invoiceNumber}.'
+          : wantsUnpaid
+              ? 'La última factura de compra pendiente es ${invoice.invoiceNumber}.'
+              : wantsDirectLookup
+                  ? 'Encontré la factura de compra ${invoice.invoiceNumber}.'
+                  : 'La factura de compra más reciente es ${invoice.invoiceNumber}.';
+      return _cardResponse(
+        intro,
+        cards: cards,
+      );
+    }
+
+    final headline = wantsOverdue
+        ? 'Encontré ${limited.length} facturas de compra vencidas que puedes abrir directo desde aquí.'
+        : wantsUnpaid
+            ? 'Encontré ${limited.length} facturas de compra pendientes que puedes abrir directo desde aquí.'
+            : wantsDirectLookup
+                ? 'Encontré ${limited.length} facturas de compra para "$extractedSearchTerm" que puedes abrir directo desde aquí.'
+                : 'Encontré ${limited.length} facturas de compra recientes que puedes abrir directo desde aquí.';
+
+    return _cardResponse(headline, cards: cards);
+  }
+
+  AIAssistantActionCard _buildPurchaseInvoiceCard(PurchaseInvoice invoice) {
+    final supplier = (invoice.supplierName ?? 'Proveedor sin nombre').trim();
+    final subtitle = [
+      supplier,
+      'Fecha ${ChileanUtils.formatDate(invoice.date)}',
+      if (invoice.dueDate != null)
+        'Vence ${ChileanUtils.formatDate(invoice.dueDate!)}',
+    ].join(' • ');
+
+    final description =
+        'Total ${ChileanUtils.formatCurrency(invoice.total)} • Saldo ${ChileanUtils.formatCurrency(invoice.balance)}';
+
+    return AIAssistantActionCard(
+      kind: 'purchase_invoice',
+      eyebrow: 'Factura de compra',
+      title: invoice.invoiceNumber,
+      subtitle: subtitle,
+      description: description,
+      route: '/purchases/${invoice.id}',
+      ctaLabel: 'Abrir factura',
+      chips: [
+        invoice.status.displayName,
+        if (invoice.balance > 0.01) 'Pendiente',
+        if (invoice.balance <= 0.01) 'Pagada',
+      ],
+    );
+  }
+
+  String? _buildDeterministicInventoryReply(
+    Map<String, Object?>? searchResult,
+    Map<String, Object?>? navigateResult,
+  ) {
+    if (searchResult == null && navigateResult == null) {
+      return null;
+    }
+
+    if (searchResult != null && searchResult.containsKey('error')) {
+      return 'Error buscando en inventario: ${searchResult['error']}';
+    }
+
+    if (searchResult != null && searchResult.containsKey('result')) {
+      final raw = searchResult['result']?.toString();
+      if (raw != null && raw.isNotEmpty) {
+        return raw;
+      }
+    }
+
+    final productsRaw = searchResult?['products'];
+    final count = (searchResult?['count'] as num?)?.toInt() ?? 0;
+    if (productsRaw is! List || productsRaw.isEmpty) {
+      return navigateResult?['message']?.toString();
+    }
+
+    final products = productsRaw
+        .whereType<Map>()
+        .map(
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)))
+        .cast<Map<String, dynamic>>()
+        .toList();
+
+    final queryLabel = (() {
+      final raw = (navigateResult?['searchTerm'] ?? _lastInventorySearchTerm)
+          ?.toString()
+          .trim();
+      if (raw == null || raw.isEmpty) {
+        return 'tu búsqueda';
+      }
+      return '"$raw"';
+    })();
+
+    final inStockCount = products.where((product) {
+      final stock = (product['stock'] as num?)?.toDouble() ??
+          (product['inventory_qty'] as num?)?.toDouble() ??
+          0;
+      return stock > 0;
+    }).length;
+
+    final sampleNames = products
+        .take(2)
+        .map((product) => (product['name'] ?? 'Producto').toString().trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    final stockSentence = inStockCount == 0
+        ? 'Ahora mismo todos aparecen sin stock.'
+        : inStockCount == count
+            ? 'Todos aparecen con stock.'
+            : '$inStockCount de $count aparecen con stock ahora.';
+
+    final sampleSentence = sampleNames.isEmpty
+        ? 'Te dejé algunas coincidencias abajo.'
+        : sampleNames.length == 1
+            ? 'La principal coincidencia es ${sampleNames.first}.'
+            : 'Entre las primeras coincidencias están ${sampleNames.first} y ${sampleNames[1]}.';
+
+    final navigationSentence = navigateResult?['searchTerm'] != null
+        ? ' Ya abrí inventario con ese filtro.'
+        : '';
+
+    return 'Encontré $count resultados para $queryLabel. '
+        '$stockSentence $sampleSentence$navigationSentence';
+  }
+
+  List<AIAssistantActionCard> _buildInventoryCardsFromSearchResult(
+      Map<String, Object?>? searchResult) {
+    final productsRaw = searchResult?['products'];
+    if (productsRaw is! List || productsRaw.isEmpty) {
+      return const [];
+    }
+
+    final products = productsRaw
+        .whereType<Map>()
+        .map(
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)))
+        .cast<Map<String, dynamic>>()
+        .toList();
+
+    return products
+        .where((product) => (product['id'] ?? '').toString().isNotEmpty)
+        .take(5)
+        .map(_buildInventoryProductCard)
+        .toList();
+  }
+
+  AIAssistantActionCard _buildInventoryProductCard(
+      Map<String, dynamic> product) {
+    final brand = (product['brand'] ?? '').toString().trim();
+    final sku = (product['sku'] ?? '').toString().trim();
+    final category =
+        (product['category'] ?? product['category_name'] ?? '').toString();
+    final stock = (product['stock'] as num?)?.toDouble() ??
+        (product['inventory_qty'] as num?)?.toDouble() ??
+        0;
+    final location =
+        (product['location'] ?? product['warehouse_location'] ?? 'Unknown')
+            .toString();
+    final stockLabel =
+        stock % 1 == 0 ? stock.toInt().toString() : stock.toStringAsFixed(2);
+
+    final subtitle = [
+      if (brand.isNotEmpty) brand,
+      if (category.isNotEmpty) category,
+      if (sku.isNotEmpty) 'SKU $sku',
+    ].join(' • ');
+
+    return AIAssistantActionCard(
+      kind: 'inventory',
+      eyebrow: 'Producto',
+      title: (product['name'] ?? 'Producto').toString(),
+      subtitle: subtitle.isEmpty ? null : subtitle,
+      description:
+          'Precio ${ChileanUtils.formatCurrency((product['price'] as num?)?.toDouble() ?? 0)} • Stock $stockLabel • Ubicación $location',
+      route: '/inventory/products/${product['id']}/edit',
+      ctaLabel: 'Abrir producto',
+      chips: [
+        if (stock > 0) 'Con stock' else 'Sin stock',
+      ],
+    );
   }
 
   void resetChat() {
@@ -202,13 +1788,520 @@ class AIAssistantService extends ChangeNotifier {
 
   // --- Tool Implementations ---
 
+  bool _messageMentionsStockAvailable(String message) {
+    final normalized = _normalizeText(message);
+    return normalized.contains('con stock') ||
+        normalized.contains('en stock') ||
+        normalized.contains('que tengan stock') ||
+        normalized.contains('que tenga stock') ||
+        normalized.contains('disponible') ||
+        normalized.contains('disponibles') ||
+        normalized.contains('hay stock');
+  }
+
+  bool _messageMentionsOutOfStock(String message) {
+    final normalized = _normalizeText(message);
+    return normalized.contains('sin stock') ||
+        normalized.contains('agotado') ||
+        normalized.contains('agotados');
+  }
+
+  bool _containsExplicitInventoryTarget(String message) {
+    final normalized = _normalizeText(message);
+    const targetHints = [
+      'camara',
+      'llanta',
+      'cubierta',
+      'neumatico',
+      'rueda',
+      'aro',
+      'cassette',
+      'freno',
+      'cadena',
+      'manubrio',
+      'horquilla',
+      'pedal',
+      'masa',
+      'buje',
+      'rayos',
+      'piñon',
+      'pinon',
+    ];
+
+    return targetHints.any(normalized.contains);
+  }
+
+  String _normalizeInventoryLookupQuery(String query) {
+    var normalized = query.toLowerCase().trim();
+
+    final patterns = <Pattern>[
+      RegExp(r'\bbuscame\b'),
+      RegExp(r'\bbusca\b'),
+      RegExp(r'\bmu[eé]strame\b'),
+      RegExp(r'\bquiero ver\b'),
+      RegExp(r'\bnecesito\b'),
+      RegExp(r'\bsolo\b'),
+      RegExp(r'\bsolamente\b'),
+      RegExp(r'\bque tengan stock\b'),
+      RegExp(r'\bque tenga stock\b'),
+      RegExp(r'\bcon stock\b'),
+      RegExp(r'\ben stock\b'),
+      RegExp(r'\bdisponibles\b'),
+      RegExp(r'\bdisponible\b'),
+      RegExp(r'\bpor favor\b'),
+    ];
+
+    for (final pattern in patterns) {
+      normalized = normalized.replaceAll(pattern, ' ');
+    }
+
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized.isEmpty ? query.trim() : normalized;
+  }
+
+  String _normalizeText(String text) {
+    if (text.isEmpty) return text;
+
+    String normalized = text.toLowerCase();
+    normalized = normalized.replaceAll(RegExp(r'[áàäâ]'), 'a');
+    normalized = normalized.replaceAll(RegExp(r'[éèëê]'), 'e');
+    normalized = normalized.replaceAll(RegExp(r'[íìïî]'), 'i');
+    normalized = normalized.replaceAll(RegExp(r'[óòöô]'), 'o');
+    normalized = normalized.replaceAll(RegExp(r'[úùüû]'), 'u');
+    normalized = normalized.replaceAll(RegExp(r'[ñ]'), 'n');
+    normalized = normalized.replaceAll(RegExp(r'[ç]'), 'c');
+    return normalized;
+  }
+
+  String? _detectRequestedProductType(String query) {
+    final normalized = _normalizeText(query);
+    if (normalized.contains('camara')) return 'camara';
+    if (normalized.contains('llanta') || normalized.contains('aro')) {
+      return 'llanta';
+    }
+    if (normalized.contains('neumatico')) {
+      return 'neumatico';
+    }
+    if (normalized.contains('cubierta')) {
+      return 'cubierta';
+    }
+    if (normalized.contains('cassette')) return 'cassette';
+    if (normalized.contains('cadena')) return 'cadena';
+    if (normalized.contains('freno')) return 'freno';
+    return null;
+  }
+
+  bool _matchesRequestedProductType(
+      Map<String, dynamic> product, String requestedType) {
+    final haystack = _normalizeText(
+        '${product['name'] ?? ''} ${product['category_name'] ?? product['category'] ?? ''}');
+
+    switch (requestedType) {
+      case 'camara':
+        return haystack.contains('camara');
+      case 'llanta':
+        return haystack.contains('llanta') || haystack.contains('aro');
+      case 'neumatico':
+        return haystack.contains('neumatico') || haystack.contains('cubierta');
+      case 'cubierta':
+        return haystack.contains('cubierta') || haystack.contains('neumatico');
+      case 'cassette':
+        return haystack.contains('cassette');
+      case 'cadena':
+        return haystack.contains('cadena');
+      case 'freno':
+        return haystack.contains('freno');
+      default:
+        return true;
+    }
+  }
+
+  List<Map<String, dynamic>> _applyInventoryIntentFilters(
+    String originalQuery,
+    List<Map<String, dynamic>> results,
+  ) {
+    var filtered = List<Map<String, dynamic>>.from(results);
+
+    final requestedType = _detectRequestedProductType(originalQuery);
+    if (requestedType != null) {
+      filtered = filtered
+          .where(
+              (product) => _matchesRequestedProductType(product, requestedType))
+          .toList();
+    }
+
+    final wantsInStock = _messageMentionsStockAvailable(originalQuery);
+    final wantsOutOfStock = _messageMentionsOutOfStock(originalQuery);
+
+    if (wantsInStock) {
+      filtered = filtered.where((product) {
+        final stock = (product['inventory_qty'] as num?)?.toDouble() ??
+            (product['stock'] as num?)?.toDouble() ??
+            0;
+        return stock > 0;
+      }).toList();
+    } else if (wantsOutOfStock) {
+      filtered = filtered.where((product) {
+        final stock = (product['inventory_qty'] as num?)?.toDouble() ??
+            (product['stock'] as num?)?.toDouble() ??
+            0;
+        return stock <= 0;
+      }).toList();
+    }
+
+    return filtered;
+  }
+
+  List<String> _buildKeywordSearchQueries(String query) {
+    final normalized = _normalizeInventoryLookupQuery(query);
+    final simplified = _simplifyInventorySearchTerm(normalized);
+    final requestedType = _detectRequestedProductType(normalized);
+    final sizeMatch =
+        RegExp(r'\b(20|24|26|27\.5|27,5|29)\b').firstMatch(normalized);
+    final sizeToken = sizeMatch?.group(1)?.replaceAll(',', '.');
+
+    final queries = <String>{};
+
+    void addQuery(String base) {
+      final trimmedBase = base.trim();
+      if (trimmedBase.isEmpty) return;
+      final fullQuery = sizeToken != null && !trimmedBase.contains(sizeToken)
+          ? '$trimmedBase $sizeToken'
+          : trimmedBase;
+      queries.add(fullQuery.trim());
+    }
+
+    addQuery(normalized);
+    addQuery(simplified);
+
+    switch (requestedType) {
+      case 'neumatico':
+        addQuery('neumatico');
+        addQuery('cubierta');
+        break;
+      case 'cubierta':
+        addQuery('cubierta');
+        addQuery('neumatico');
+        break;
+      case 'llanta':
+        addQuery('llanta');
+        addQuery('aro');
+        break;
+      case 'camara':
+        addQuery('camara');
+        addQuery('tubo');
+        break;
+      default:
+        break;
+    }
+
+    return queries.toList();
+  }
+
+  String _resolveNavigationSearchTerm(String requestedSearchTerm) {
+    final normalizedRequested =
+        _simplifyInventorySearchTerm(requestedSearchTerm);
+
+    if (normalizedRequested.isNotEmpty) {
+      return normalizedRequested;
+    }
+
+    if (_lastSearchResults.isNotEmpty &&
+        _lastInventorySearchTerm != null &&
+        _lastInventorySearchTerm!.isNotEmpty) {
+      return _lastInventorySearchTerm!;
+    }
+
+    return normalizedRequested;
+  }
+
+  bool _messageLooksLikeDirectInventorySearch(String message) {
+    final normalized = _normalizeText(message);
+    if (!_containsExplicitInventoryTarget(normalized)) {
+      return false;
+    }
+
+    return normalized.contains('busc') ||
+        normalized.contains('muestr') ||
+        normalized.contains('mostrar') ||
+        normalized.contains('quiero ver') ||
+        normalized.contains('necesito') ||
+        normalized.contains('tienes') ||
+        normalized.contains('hay ') ||
+        normalized.startsWith('llanta ') ||
+        normalized.startsWith('camara ') ||
+        normalized.startsWith('neumatico ') ||
+        normalized.startsWith('cubierta ');
+  }
+
+  Future<AIAssistantResponse?> _tryHandleDirectInventorySearch(
+    String message, {
+    InventoryService? inventoryService,
+    AINavigationCallback? onNavigate,
+  }) async {
+    if (inventoryService == null) {
+      return null;
+    }
+
+    if (_messageAsksForWidthComparison(message) ||
+        !_messageLooksLikeDirectInventorySearch(message)) {
+      return null;
+    }
+
+    final searchResult = await _toolSearchStock(message, inventoryService);
+    Map<String, Object?>? navigateResult;
+
+    final count = (searchResult['count'] as num?)?.toInt() ?? 0;
+    if (count > 0 && onNavigate != null && _lastInventorySearchTerm != null) {
+      navigateResult = _toolNavigateToInventory(
+        _lastInventorySearchTerm,
+        inventoryService: inventoryService,
+        onNavigate: onNavigate,
+      );
+    }
+
+    final text =
+        _buildDeterministicInventoryReply(searchResult, navigateResult);
+    if (text == null) {
+      return null;
+    }
+
+    return _textResponse(
+      text,
+      cards: _buildInventoryCardsFromSearchResult(searchResult),
+    );
+  }
+
+  bool _messageAsksForWidthComparison(String message) {
+    final normalized = _normalizeText(message);
+    return (normalized.contains('rango') &&
+            (normalized.contains('ancho') ||
+                normalized.contains('neumatico') ||
+                normalized.contains('neumático') ||
+                normalized.contains('cubierta'))) ||
+        normalized.contains('mas ancho') ||
+        normalized.contains('más ancho') ||
+        normalized.contains('ancho maximo') ||
+        normalized.contains('ancho máximo') ||
+        normalized.contains('ancho max') ||
+        normalized.contains('ancho más grande') ||
+        normalized.contains('mas grande de ancho') ||
+        normalized.contains('acepte el neumatico mas ancho') ||
+        normalized.contains('acepte el neumático más ancho') ||
+        normalized.contains('mayor compatibilidad de ancho');
+  }
+
+  _TireWidthRange? _extractTireWidthRange(String text) {
+    final normalized = _normalizeText(text).replaceAll(',', '.');
+    final patterns = [
+      RegExp(
+          r'(?:^|[^0-9])(?:\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*(?:/|-)\s*(\d+(?:\.\d+)?)(?:[^0-9]|$)'),
+      RegExp(r'(\d+(?:\.\d+)?)\s*(?:/|-)\s*(\d+(?:\.\d+)?)'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(normalized);
+      if (match == null) {
+        continue;
+      }
+
+      final first = double.tryParse(match.group(1) ?? '');
+      final second = double.tryParse(match.group(2) ?? '');
+      if (first == null || second == null) {
+        continue;
+      }
+
+      final minWidth = first < second ? first : second;
+      final maxWidth = first > second ? first : second;
+
+      if (minWidth < 0.5 || maxWidth > 5) {
+        continue;
+      }
+
+      return _TireWidthRange(minWidth: minWidth, maxWidth: maxWidth);
+    }
+
+    return null;
+  }
+
+  String? _tryHandleInventoryComparison(String message) {
+    if (_lastSearchResults.isEmpty ||
+        !_messageAsksForWidthComparison(message)) {
+      return null;
+    }
+
+    var candidates = List<Map<String, dynamic>>.from(_lastSearchResults);
+    final wantsInStock = _messageMentionsStockAvailable(message);
+    final wantsOutOfStock = _messageMentionsOutOfStock(message);
+
+    if (wantsInStock) {
+      candidates = candidates.where((product) {
+        final stock = (product['stock'] as num?)?.toDouble() ??
+            (product['inventory_qty'] as num?)?.toDouble() ??
+            0;
+        return stock > 0;
+      }).toList();
+    } else if (wantsOutOfStock) {
+      candidates = candidates.where((product) {
+        final stock = (product['stock'] as num?)?.toDouble() ??
+            (product['inventory_qty'] as num?)?.toDouble() ??
+            0;
+        return stock <= 0;
+      }).toList();
+    }
+
+    final analyzed = candidates
+        .map((product) {
+          final name = (product['name'] ?? '').toString();
+          final range = _extractTireWidthRange(name);
+          if (range == null) {
+            return null;
+          }
+          final stock = (product['stock'] as num?)?.toDouble() ??
+              (product['inventory_qty'] as num?)?.toDouble() ??
+              0;
+          return _WidthComparisonCandidate(
+            product: product,
+            range: range,
+            stock: stock,
+          );
+        })
+        .whereType<_WidthComparisonCandidate>()
+        .toList();
+
+    if (analyzed.isEmpty) {
+      return null;
+    }
+
+    analyzed.sort((a, b) {
+      final maxCompare = b.range.maxWidth.compareTo(a.range.maxWidth);
+      if (maxCompare != 0) return maxCompare;
+      final spanCompare = b.range.span.compareTo(a.range.span);
+      if (spanCompare != 0) return spanCompare;
+      return b.stock.compareTo(a.stock);
+    });
+    final widestSupport = analyzed.first;
+
+    final bySpan = [...analyzed]..sort((a, b) {
+        final spanCompare = b.range.span.compareTo(a.range.span);
+        if (spanCompare != 0) return spanCompare;
+        final maxCompare = b.range.maxWidth.compareTo(a.range.maxWidth);
+        if (maxCompare != 0) return maxCompare;
+        return b.stock.compareTo(a.stock);
+      });
+    final widestSpan = bySpan.first;
+
+    final productName =
+        (widestSupport.product['name'] ?? 'Producto').toString();
+    final stockLabel = widestSupport.stock % 1 == 0
+        ? widestSupport.stock.toInt().toString()
+        : widestSupport.stock.toStringAsFixed(2);
+
+    if (widestSupport.product['sku'] == widestSpan.product['sku']) {
+      return 'De las opciones actuales, la que mejor aguanta neumáticos más anchos es $productName. '
+          'Su rango publicado es ${widestSupport.range.label}, así que llega hasta ${_TireWidthRange._format(widestSupport.range.maxWidth)}. '
+          'Además, es la que ofrece el mayor rango útil dentro de esta lista. Stock actual: $stockLabel.';
+    }
+
+    final spanProductName =
+        (widestSpan.product['name'] ?? 'Producto').toString();
+    return 'Revisando las medidas publicadas en los nombres: si por "mayor rango de ancho" te refieres a la que acepta neumáticos más anchos, la mejor opción es $productName, '
+        'porque va de ${widestSupport.range.label} y llega hasta ${_TireWidthRange._format(widestSupport.range.maxWidth)}. '
+        'Si lo interpretas como la mayor diferencia entre mínimo y máximo, entonces $spanProductName abre un poco más: ${widestSpan.range.label} '
+        '(amplitud ${_TireWidthRange._format(widestSpan.range.span)} frente a ${_TireWidthRange._format(widestSupport.range.span)}). '
+        'En tu captura, para montar el neumático más ancho la Maxxis es la correcta.';
+  }
+
+  String? _tryHandleInventoryRefinement(
+    String message, {
+    InventoryService? inventoryService,
+    AINavigationCallback? onNavigate,
+  }) {
+    if (_lastSearchResults.isEmpty || _lastInventorySearchTerm == null) {
+      return null;
+    }
+
+    final wantsInStock = _messageMentionsStockAvailable(message);
+    final wantsOutOfStock = _messageMentionsOutOfStock(message);
+
+    if (!wantsInStock && !wantsOutOfStock) {
+      return null;
+    }
+
+    // Only reuse the previous result set for true follow-up messages.
+    // If the user mentions a new product target (for example, switching from
+    // "camaras" to "llantas"), let the model perform a fresh search.
+    if (_containsExplicitInventoryTarget(message)) {
+      final requestedSearchTerm = _simplifyInventorySearchTerm(message);
+      if (requestedSearchTerm.isNotEmpty &&
+          requestedSearchTerm != _lastInventorySearchTerm) {
+        return null;
+      }
+    }
+
+    final filtered = _lastSearchResults.where((result) {
+      final stock = (result['stock'] as num?)?.toDouble() ??
+          (result['inventory_qty'] as num?)?.toDouble() ??
+          0;
+      if (wantsOutOfStock) {
+        return stock <= 0;
+      }
+      return stock > 0;
+    }).toList();
+
+    _lastSearchSkus = filtered
+        .map((r) => (r['sku'] ?? '').toString())
+        .where((sku) => sku.isNotEmpty)
+        .toList();
+
+    if (filtered.isNotEmpty) {
+      _lastSearchResults =
+          filtered.map((item) => Map<String, dynamic>.from(item)).toList();
+    }
+
+    if (inventoryService != null && onNavigate != null) {
+      final stockFilterIndex =
+          wantsOutOfStock ? _stockFilterOutOfStock : _stockFilterInStock;
+      inventoryService.applyExternalSearch(
+        _lastInventorySearchTerm!,
+        matchedSkus: _lastSearchSkus,
+        stockFilterIndex: stockFilterIndex,
+      );
+      onNavigate('/inventory/products', searchTerm: _lastInventorySearchTerm);
+    }
+
+    if (filtered.isEmpty) {
+      return wantsOutOfStock
+          ? 'Tomé la búsqueda anterior y la dejé solo en productos sin stock. No encontré coincidencias con ese criterio.'
+          : 'Tomé la búsqueda anterior y la dejé solo en productos con stock. No encontré coincidencias con ese criterio.';
+    }
+
+    final intro = wantsOutOfStock
+        ? 'Tomé la búsqueda anterior y la reduje solo a los que están sin stock.'
+        : 'Tomé la búsqueda anterior y la reduje solo a los que sí tienen stock.';
+    final sampleNames = filtered
+        .take(2)
+        .map((product) => (product['name'] ?? 'Producto').toString().trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    final sampleSentence = sampleNames.isEmpty
+        ? ''
+        : sampleNames.length == 1
+            ? ' Ejemplo: ${sampleNames.first}.'
+            : ' Ejemplos: ${sampleNames.first} y ${sampleNames[1]}.';
+
+    return '$intro Encontré ${filtered.length} coincidencias.$sampleSentence';
+  }
+
   Future<Map<String, Object?>> _toolSearchStock(
       String? query, InventoryService? inventory) async {
     if (query == null || query.isEmpty) return {'error': 'Query is empty'};
     if (inventory == null) return {'error': 'Inventory service not available'};
 
     try {
-      debugPrint('🔍 [AI] Combined search for: "$query"');
+      final lookupQuery = _normalizeInventoryLookupQuery(query);
+      debugPrint(
+          '🔍 [AI] Combined search for: "$query" (lookup: "$lookupQuery")');
 
       // Run BOTH searches in parallel for best results
       final List<Map<String, dynamic>> semanticResults = [];
@@ -216,12 +2309,12 @@ class AIAssistantService extends ChangeNotifier {
 
       // 1. Semantic search (high threshold = only relevant results)
       try {
-        final vector = await generateEmbedding(query);
+        final vector = await generateEmbedding(lookupQuery);
         if (vector != null) {
           final results = await inventory.searchProductsSemantic(vector);
           semanticResults.addAll(results);
           debugPrint(
-              '🧠 [AI] Semantic: ${results.length} results for "$query"');
+              '🧠 [AI] Semantic: ${results.length} results for "$lookupQuery"');
         }
       } catch (e) {
         debugPrint('⚠️ [AI] Semantic search failed: $e');
@@ -229,18 +2322,24 @@ class AIAssistantService extends ChangeNotifier {
 
       // 2. Keyword search
       try {
-        final products = await inventory.getProducts(searchTerm: query);
-        keywordResults.addAll(products.take(10).map((p) => {
-              'name': p.name,
-              'sku': p.sku,
-              'brand': p.brand ?? '',
-              'category_name': p.categoryName ?? '',
-              'price': p.price,
-              'inventory_qty': p.inventoryQty,
-              'warehouse_location': p.warehouseLocation ?? 'Unknown',
-              'source': 'keyword',
-            }));
-        debugPrint('🔤 [AI] Keyword: ${products.length} results for "$query"');
+        final keywordQueries = _buildKeywordSearchQueries(lookupQuery);
+        for (final keywordQuery in keywordQueries) {
+          final products =
+              await inventory.getProducts(searchTerm: keywordQuery);
+          keywordResults.addAll(products.take(30).map((p) => {
+                'id': p.id,
+                'name': p.name,
+                'sku': p.sku,
+                'brand': p.brand ?? '',
+                'category_name': p.categoryName ?? '',
+                'price': p.price,
+                'inventory_qty': p.inventoryQty,
+                'warehouse_location': p.warehouseLocation ?? 'Unknown',
+                'source': 'keyword',
+              }));
+        }
+        debugPrint(
+            '🔤 [AI] Keyword: ${keywordResults.length} raw results for "$lookupQuery"');
       } catch (e) {
         debugPrint('⚠️ [AI] Keyword search failed: $e');
       }
@@ -261,7 +2360,7 @@ class AIAssistantService extends ChangeNotifier {
       // cluster together. But text-based filtering (llanta vs camara) is
       // left to Gemini, which understands "32h" = "32 hoyos" = "32 agujeros".
       if (merged.isNotEmpty) {
-        final tokens = query.toLowerCase().split(RegExp(r'\s+'));
+        final tokens = lookupQuery.toLowerCase().split(RegExp(r'\s+'));
         final numericTokens =
             tokens.where((t) => RegExp(r'^\d+\.?\d*$').hasMatch(t)).toList();
 
@@ -285,8 +2384,11 @@ class AIAssistantService extends ChangeNotifier {
         }
       }
 
+      merged = _applyInventoryIntentFilters(query, merged);
+
       if (merged.isEmpty) {
         _lastSearchSkus = null;
+        _lastSearchResults = [];
         return {'result': 'No products found for "$query".'};
       }
 
@@ -298,10 +2400,12 @@ class AIAssistantService extends ChangeNotifier {
           .map((r) => (r['sku'] ?? '').toString())
           .where((sku) => sku.isNotEmpty)
           .toList();
+      _lastInventorySearchTerm = _simplifyInventorySearchTerm(lookupQuery);
 
       final summary = merged
           .take(15)
           .map((r) => {
+                'id': r['id'],
                 'name': r['name'] ?? 'Unknown',
                 'sku': r['sku'] ?? '',
                 'brand': r['brand'] ?? '',
@@ -311,6 +2415,9 @@ class AIAssistantService extends ChangeNotifier {
                 'location': r['warehouse_location'] ?? 'Unknown',
               })
           .toList();
+
+      _lastSearchResults =
+          summary.map((item) => Map<String, dynamic>.from(item)).toList();
 
       return {
         'count': merged.length,
@@ -356,23 +2463,27 @@ class AIAssistantService extends ChangeNotifier {
       return {'error': 'Navigation is not available in this context'};
     }
 
-    debugPrint('🧭 [AI] Navigating to inventory with search: "$searchTerm"');
+    final resolvedSearchTerm = _resolveNavigationSearchTerm(searchTerm);
+
+    debugPrint(
+        '🧭 [AI] Navigating to inventory with search: "$resolvedSearchTerm"');
+    _lastInventorySearchTerm = resolvedSearchTerm;
 
     // Set the saved search term AND signal any active listeners
     if (inventoryService != null) {
-      inventoryService.applyExternalSearch(searchTerm,
-          matchedSkus: _lastSearchSkus);
+      inventoryService.applyExternalSearch(resolvedSearchTerm,
+          matchedSkus: _lastSearchSkus, stockFilterIndex: _stockFilterAll);
     }
 
     // Trigger navigation (closes the dialog and navigates)
-    onNavigate('/inventory/products', searchTerm: searchTerm);
+    onNavigate('/inventory/products', searchTerm: resolvedSearchTerm);
 
     return {
       'success': true,
       'navigatedTo': '/inventory/products',
-      'searchTerm': searchTerm,
+      'searchTerm': resolvedSearchTerm,
       'message':
-          'Navigated to inventory and searched for "$searchTerm". The results are now displayed on screen.',
+          'Navigated to inventory and searched for "$resolvedSearchTerm". The results are now displayed on screen.',
     };
   }
 
@@ -465,7 +2576,9 @@ TOOL STRATEGY:
 
 2. STOCK & FOLLOW-UP AWARENESS:
    - Each result has a "stock" field. When the user asks "en stock" or "disponible", check the stock field.
-   - When the user refines a previous query (adds "en stock", "32h", a brand, etc.), FIRST check if you can answer from results you already have. Don't re-search if you already have the data.
+  - When the user refines a previous query (adds "en stock", "32h", a brand, etc.), FIRST refine the previous result set if possible. Don't re-search if you already have the data.
+  - If the user says things like "los que tengan stock", "solo con stock", or "solo disponibles", treat that as a refinement of the immediately previous inventory results, not as a brand new search.
+  - IMPORTANT: if the user mentions a different product type than the previous search (for example, they switch from "camaras" to "llantas"), that is a NEW search, not a refinement.
 
 3. INTERNET SEARCH FALLBACK (CRITICAL):
    - If the user asks about a specific bike model's specs (e.g. "qué llanta usa una trek xcaliber 8") AND `searchStock` returns no results or irrelevant results, you MUST use `searchInternet`.
@@ -481,10 +2594,40 @@ TOOL STRATEGY:
      - "repuestos de freno shimano" → navigate with "freno shimano"
      - "ruedas para BMX" → navigate with "llanta 20"
    - NEVER pass the raw user query to navigateToInventory. Always extract the simplest keyword.
+  - If the user is refining a previous inventory result set, keep the previous keyword and narrow the current result set instead of replacing it with a different loose search.
    - After navigating, briefly confirm (e.g., "También te llevé al inventario buscando 'llanta 29'").
 
 Current Jobs Context:
 $jobSummaries
 ''';
+  }
+
+  String _simplifyInventorySearchTerm(String query) {
+    final normalized = _normalizeText(query).trim();
+    final sizeMatch =
+        RegExp(r'\b(20|24|26|27\.5|27,5|29)\b').firstMatch(normalized);
+    final sizeToken = sizeMatch?.group(1)?.replaceAll(',', '.');
+
+    String base;
+    if (normalized.contains('camara')) {
+      base = 'camara';
+    } else if (normalized.contains('llanta')) {
+      base = 'llanta';
+    } else if (normalized.contains('neumatico')) {
+      base = 'neumatico';
+    } else if (normalized.contains('cubierta')) {
+      base = 'cubierta';
+    } else {
+      final tokens = normalized
+          .split(RegExp(r'\s+'))
+          .where((token) => token.isNotEmpty)
+          .toList();
+      base = tokens.take(2).join(' ');
+    }
+
+    if (sizeToken != null && !base.contains(sizeToken)) {
+      return '$base $sizeToken'.trim();
+    }
+    return base.trim();
   }
 }

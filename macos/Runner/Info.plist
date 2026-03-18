@@ -30,7 +30,11 @@
 	<string>NSApplication</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Esta aplicación necesita acceso a la cámara para escanear facturas.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Esta aplicación necesita acceso al micrófono para dictar mensajes al asistente.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Esta aplicación necesita acceso a la galería para seleccionar imágenes de facturas.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Esta aplicación necesita reconocimiento de voz para convertir tu audio en mensajes para el asistente.</string>
 </dict>
 </plist>

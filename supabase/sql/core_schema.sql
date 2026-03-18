@@ -4963,6 +4963,7 @@ begin
              from public.journal_entries
             where source_module = 'sales_payments'
               and source_reference = p_payment.id::text
+              and tenant_id = v_tenant_id
         )
     into v_exists;
 
@@ -5035,7 +5036,7 @@ begin
     v_description,
     'payment',
     'sales_payments',
-    v_invoice.invoice_number,
+    p_payment.id::text,
     'posted',
     p_payment.amount,
     p_payment.amount,
@@ -6192,7 +6193,11 @@ begin
     -- DELETE all payment journal entries for this invoice
     delete from public.journal_entries
     where source_module = 'sales_payments'
-      and source_reference = OLD.invoice_number;
+      and source_reference in (
+        select sp.id::text
+          from public.sales_payments sp
+         where sp.invoice_id = OLD.id
+      );
     
     raise notice '🔵 handle_sales_invoice_change: DELETE completed, now cascade trigger should fire';
     return OLD;
@@ -7582,7 +7587,7 @@ begin
            select 1
              from public.journal_entries
             where source_module = 'expenses'
-              and source_reference = v_expense.id::text
+              and source_reference = v_expense.expense_number
          )
     into v_exists;
 
@@ -7830,6 +7835,14 @@ begin
   if p_expense_id is null then
     return;
   end if;
+
+  delete from public.journal_entries
+   where source_module = 'expenses'
+     and source_reference = (
+       select e.expense_number
+         from public.expenses e
+        where e.id = p_expense_id
+     );
 
   delete from public.journal_entries
    where source_module = 'expenses'
@@ -10406,23 +10419,34 @@ begin
     a.name as account_name,
     case
       when a.type = 'asset' then
-        coalesce(sum(jl.debit_amount), 0) - coalesce(sum(jl.credit_amount), 0)
+        coalesce(b.total_debit, 0) - coalesce(b.total_credit, 0)
       when a.type in ('liability', 'equity') then
-        coalesce(sum(jl.credit_amount), 0) - coalesce(sum(jl.debit_amount), 0)
+        coalesce(b.total_credit, 0) - coalesce(b.total_debit, 0)
       else 0
     end::numeric(14,2) as amount
   from accounts a
-  left join journal_lines jl on jl.account_id = a.id AND jl.tenant_id = user_tenant_id()
-  left join journal_entries je on je.id = jl.entry_id
-    and je.entry_date <= p_as_of_date
-    and je.status = 'posted'
-    and je.tenant_id = user_tenant_id()
+  left join (
+    select
+      jl.tenant_id,
+      jl.account_id,
+      coalesce(sum(jl.debit_amount), 0) as total_debit,
+      coalesce(sum(jl.credit_amount), 0) as total_credit
+    from journal_lines jl
+    join journal_entries je
+      on je.id = jl.entry_id
+     and je.tenant_id = jl.tenant_id
+   where jl.tenant_id = user_tenant_id()
+     and je.tenant_id = user_tenant_id()
+     and je.status = 'posted'
+     and je.entry_date <= p_as_of_date
+   group by jl.tenant_id, jl.account_id
+  ) b on b.account_id = a.id and b.tenant_id = a.tenant_id
   where a.type in ('asset', 'liability', 'equity')
     and a.is_active = true
     and a.tenant_id = user_tenant_id()
-  group by a.id, a.code, a.name, a.type, a.category
-  having (coalesce(sum(jl.debit_amount), 0) <> 0 
-       or coalesce(sum(jl.credit_amount), 0) <> 0)
+  group by a.id, a.code, a.name, a.type, a.category, b.total_debit, b.total_credit
+  having (coalesce(b.total_debit, 0) <> 0 
+       or coalesce(b.total_credit, 0) <> 0)
   order by 
     case a.type 
       when 'asset' then 1 

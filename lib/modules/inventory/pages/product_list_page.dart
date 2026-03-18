@@ -172,7 +172,8 @@ class _ProductListPageState extends State<ProductListPage> {
 
   StreamSubscription? _scanSubscription;
   StreamSubscription<String>? _externalSearchSub;
-  List<String>? _aiMatchedSkus; // SKUs from AI search, used instead of keyword search
+  List<String>?
+      _aiMatchedSkus; // SKUs from AI search, used instead of keyword search
   bool _shouldRestoreState = false; // Local flag for this page instance
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
@@ -211,6 +212,11 @@ class _ProductListPageState extends State<ProductListPage> {
           _searchTerm = term;
           _searchController.text = term;
           _aiMatchedSkus = _inventoryService.aiMatchedSkus;
+          if (_inventoryService.aiStockFilterIndex != null) {
+            _stockFilter = StockFilter.values[_inventoryService
+                .aiStockFilterIndex!
+                .clamp(0, StockFilter.values.length - 1)];
+          }
         });
         _applyFilters(resetPagination: true);
       }
@@ -433,6 +439,7 @@ class _ProductListPageState extends State<ProductListPage> {
     _searchController.dispose();
     _tableScrollController.dispose();
     _scanSubscription?.cancel();
+    _externalSearchSub?.cancel();
     HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
     _hwScanTimer?.cancel();
     super.dispose();
@@ -755,7 +762,8 @@ class _ProductListPageState extends State<ProductListPage> {
     // 5. Search — use AI-matched SKUs if available, otherwise keyword search
     if (_aiMatchedSkus != null && _aiMatchedSkus!.isNotEmpty) {
       final skuSet = _aiMatchedSkus!.toSet();
-      filtered = filtered.where((product) => skuSet.contains(product.sku)).toList();
+      filtered =
+          filtered.where((product) => skuSet.contains(product.sku)).toList();
     } else if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((product) {
         return _matchesTokenSearch(_searchTerm, product);
@@ -2230,55 +2238,6 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildVerticalDivider(ThemeData theme) {
-    return Container(
-      height: 24,
-      width: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-    );
-  }
-
-  Widget _buildStatItem(
-    ThemeData theme,
-    String label,
-    String value,
-    IconData icon, {
-    Color? valueColor,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color:
-                (valueColor ?? theme.colorScheme.onSurface).withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon,
-              size: 16,
-              color: valueColor ?? theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant, fontSize: 11)),
-            Text(value,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: valueColor ?? theme.colorScheme.onSurface,
-                )),
-          ],
-        ),
-      ],
     );
   }
 

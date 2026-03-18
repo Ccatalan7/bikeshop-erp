@@ -9,6 +9,7 @@ import 'shared/themes/app_theme.dart';
 import 'main.dart'; // For AppScrollBehavior
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
+import 'shared/widgets/app_selection_scope.dart';
 
 class VinabikePublicRouterApp extends StatefulWidget {
   final AuthService authService;
@@ -72,9 +73,11 @@ class _VinabikePublicRouterAppState extends State<VinabikePublicRouterApp> {
         Locale('en', ''),
       ],
       locale: const Locale('es', ''),
-      builder: (context, child) => WindowZoomScope(
-        child: ScannerBridgeScope(
-          child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => AppSelectionScope(
+        child: WindowZoomScope(
+          child: ScannerBridgeScope(
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
     );

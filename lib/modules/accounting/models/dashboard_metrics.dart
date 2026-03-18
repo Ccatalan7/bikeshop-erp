@@ -41,13 +41,17 @@ class ExpenseBreakdownItem {
   final String accountCode;
   final String accountName;
   final double amount;
+  final String breakdownKey;
+  final bool isOther;
 
   ExpenseBreakdownItem({
     required this.accountId,
     required this.accountCode,
     required this.accountName,
     required this.amount,
-  });
+    String? breakdownKey,
+    this.isOther = false,
+  }) : breakdownKey = breakdownKey ?? accountId;
 
   double get displayAmount => amount.abs();
 }

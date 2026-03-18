@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/workspace_manager.dart';
 import '../services/auth_service.dart';
 import '../routes/app_router.dart';
+import 'app_selection_scope.dart';
 
 /// Container that manages multiple workspace instances using IndexedStack
 /// Each workspace has its own GoRouter instance and maintains its state
@@ -14,7 +15,7 @@ class WorkspaceContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
-    
+
     return IndexedStack(
       index: workspaceManager.activeIndex,
       sizing: StackFit.expand,
@@ -51,7 +52,7 @@ class _WorkspaceInstanceState extends State<_WorkspaceInstance>
   @override
   void initState() {
     super.initState();
-    
+
     // Create a dedicated router for this workspace
     final authService = context.read<AuthService>();
     _router = AppRouter.createRouter(
@@ -69,11 +70,14 @@ class _WorkspaceInstanceState extends State<_WorkspaceInstance>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    
+
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       theme: Theme.of(context), // Inherit theme from parent app
+      builder: (context, child) => AppSelectionScope(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/workspace_manager.dart';
 import '../services/auth_service.dart';
 import '../routes/app_router.dart';
+import 'app_selection_scope.dart';
 import 'workspace_tab_bar.dart';
 
 /// App-level workspace container - EXACT same pattern as demo
@@ -21,6 +22,9 @@ class AppWorkspaceContainer extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         routerConfig: AppRouter.createRouter(authService),
         theme: Theme.of(context),
+        builder: (context, child) => AppSelectionScope(
+          child: child ?? const SizedBox.shrink(),
+        ),
       );
     }
 
@@ -103,6 +107,9 @@ class _WorkspaceInstanceState extends State<_WorkspaceInstance>
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       theme: Theme.of(context),
+      builder: (context, child) => AppSelectionScope(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

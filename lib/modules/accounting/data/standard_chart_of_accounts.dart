@@ -201,16 +201,10 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
     description: 'Obligaciones comerciales pendientes con proveedores.',
   ),
   AccountDefinition(
-    code: '2150',
-    name: 'IVA Débito Fiscal',
-    type: AccountType.liability, // Changed from 'tax' - taxes collected = liability
-    category: AccountCategory.currentLiability,
-    description: 'IVA recaudado en ventas (19%).',
-  ),
-  AccountDefinition(
     code: '2120',
     name: 'IVA Crédito Fiscal',
-    type: AccountType.asset, // Changed from 'tax' - taxes paid = asset (refundable)
+    type: AccountType
+        .asset, // Changed from 'tax' - taxes paid = asset (refundable)
     category: AccountCategory.currentAsset,
     description: 'IVA pagado en compras (19%).',
   ),
@@ -247,7 +241,8 @@ const List<AccountDefinition> kStandardChartOfAccounts = [
   AccountDefinition(
     code: '2155',
     name: 'Retenciones y Aportes por Pagar',
-    type: AccountType.liability, // Changed from 'tax' - withholdings = liability
+    type:
+        AccountType.liability, // Changed from 'tax' - withholdings = liability
     category: AccountCategory.currentLiability,
     description:
         'Retenciones previsionales, de honorarios e impuestos a enterar.',
