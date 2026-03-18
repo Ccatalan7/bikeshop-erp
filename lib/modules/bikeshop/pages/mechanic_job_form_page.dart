@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -901,6 +902,122 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  int get _debugLocalPersistablePartCount {
+    return _bikeTabs.fold<int>(0, (sum, tab) {
+      return sum +
+          tab.partItems
+              .where((item) => item.displayName.trim().isNotEmpty)
+              .length;
+    });
+  }
+
+  int get _debugLocalPersistableServiceCount {
+    return _serviceItems
+        .where((item) => item.displayName.trim().isNotEmpty)
+        .length;
+  }
+
+  String _debugSummarizeLabels(Iterable<String> labels) {
+    final cleaned = labels
+        .map((label) => label.trim())
+        .where((label) => label.isNotEmpty)
+        .toList();
+
+    if (cleaned.isEmpty) {
+      return '-';
+    }
+
+    const maxLabels = 5;
+    if (cleaned.length <= maxLabels) {
+      return cleaned.join(' | ');
+    }
+
+    final remaining = cleaned.length - maxLabels;
+    return '${cleaned.take(maxLabels).join(' | ')} | +$remaining más';
+  }
+
+  Future<void> _debugLogPegaInvoiceSnapshot(
+    String stage, {
+    required String jobId,
+    String? invoiceId,
+  }) async {
+    if (!kDebugMode) {
+      return;
+    }
+
+    try {
+      final bikeshopService = Provider.of<BikeshopService>(
+        context,
+        listen: false,
+      );
+      final databaseService = Provider.of<DatabaseService>(
+        context,
+        listen: false,
+      );
+
+      final savedJob = await bikeshopService.getJobById(jobId);
+      final persistedItems = await bikeshopService.getJobItems(jobId);
+      final effectiveInvoiceId = invoiceId ?? savedJob?.invoiceId;
+
+      List<dynamic> invoiceItems = const [];
+      dynamic invoiceSubtotal;
+      dynamic invoiceTotal;
+
+      if (effectiveInvoiceId != null) {
+        final invoiceData = await databaseService.selectById(
+          'sales_invoices',
+          effectiveInvoiceId,
+        );
+        if (invoiceData != null) {
+          final rawItems = invoiceData['items'];
+          if (rawItems is List) {
+            invoiceItems = rawItems;
+          }
+          invoiceSubtotal = invoiceData['subtotal'];
+          invoiceTotal = invoiceData['total'];
+        }
+      }
+
+      final localLabels = <String>[
+        ..._bikeTabs.expand(
+          (tab) => tab.partItems.map((item) => item.displayName),
+        ),
+        ..._serviceItems.map((item) => item.displayName),
+      ];
+      final persistedLabels = persistedItems.map((item) => item.productName);
+      final invoiceLabels = invoiceItems.map((item) {
+        if (item is Map) {
+          return (item['product_name'] ?? '').toString();
+        }
+        return '';
+      });
+
+      debugPrint(
+        '🧪 [PEGA SAVE][$stage] '
+        'job=$jobId '
+        'invoice=${effectiveInvoiceId ?? '-'} '
+        'local_parts=$_debugLocalPersistablePartCount '
+        'local_services=$_debugLocalPersistableServiceCount '
+        'persisted_items=${persistedItems.length} '
+        'job_total=${savedJob?.totalCost} '
+        'invoice_items=${invoiceItems.length} '
+        'invoice_subtotal=$invoiceSubtotal '
+        'invoice_total=$invoiceTotal',
+      );
+      debugPrint(
+        '🧪 [PEGA SAVE][$stage] local_labels=${_debugSummarizeLabels(localLabels)}',
+      );
+      debugPrint(
+        '🧪 [PEGA SAVE][$stage] persisted_labels=${_debugSummarizeLabels(persistedLabels)}',
+      );
+      debugPrint(
+        '🧪 [PEGA SAVE][$stage] invoice_labels=${_debugSummarizeLabels(invoiceLabels)}',
+      );
+    } catch (e) {
+      debugPrint('🧪 [PEGA SAVE][$stage] debug snapshot failed: $e');
+    }
+  }
+
   Future<void> _saveJob() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1181,16 +1298,38 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      // AFTER all items are updated, sync to invoice if it exists
-      if (_existingJob?.invoiceId != null) {
-        debugPrint('🔄 Syncing job to invoice: ${_existingJob!.invoiceId}');
-        await bikeshopService.syncJobToInvoice(jobId);
-        await _updateInvoiceTaxTreatment(_existingJob!.invoiceId!);
-      }
+      await _debugLogPegaInvoiceSnapshot(
+        'before_invoice_phase',
+        jobId: jobId,
+      );
 
-      // Create invoice AFTER items are added (only for new jobs)
-      if (widget.jobId == null) {
-        await bikeshopService.createInvoiceFromJob(jobId);
+      // Sync invoice AFTER all items are written.
+      // For brand new jobs, the DB may already have linked an invoice,
+      // so always re-read the saved job before deciding whether to sync or create.
+      final savedJob = await bikeshopService.getJobById(jobId);
+      final linkedInvoiceId = savedJob?.invoiceId;
+
+      if (linkedInvoiceId != null) {
+        debugPrint('🔄 Syncing job to invoice: $linkedInvoiceId');
+        await bikeshopService.syncJobToInvoice(jobId);
+        await _updateInvoiceTaxTreatment(linkedInvoiceId);
+        await _debugLogPegaInvoiceSnapshot(
+          'after_invoice_sync',
+          jobId: jobId,
+          invoiceId: linkedInvoiceId,
+        );
+      } else {
+        debugPrint('🧾 No linked invoice yet, creating one after items save');
+        final createdInvoiceId =
+            await bikeshopService.createInvoiceFromJob(jobId);
+        if (createdInvoiceId != null) {
+          await _updateInvoiceTaxTreatment(createdInvoiceId);
+        }
+        await _debugLogPegaInvoiceSnapshot(
+          'after_invoice_create',
+          jobId: jobId,
+          invoiceId: createdInvoiceId,
+        );
       }
 
       if (mounted) {

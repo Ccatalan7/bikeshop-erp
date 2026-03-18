@@ -11708,9 +11708,10 @@ begin
   -- Ensure job totals are current before creating invoice
   perform public.recalculate_mechanic_job_costs(p_job_id);
 
-  -- If invoice already exists, don't create another
+  -- If invoice already exists, refresh it from the current job items and return it
   if v_job.invoice_id is not null then
-    raise notice 'Job % already has invoice %', p_job_id, v_job.invoice_id;
+    perform public.sync_job_to_invoice(p_job_id);
+    raise notice 'Job % already has invoice %, synced existing invoice', p_job_id, v_job.invoice_id;
     return v_job.invoice_id;
   end if;
   
@@ -11841,51 +11842,15 @@ end;
 $$;
 
 -- ============================================================================
--- AUTO-CREATE INVOICE TRIGGER FOR NEW PEGAS
+-- DO NOT AUTO-CREATE INVOICE ON PEGA INSERT
 -- ============================================================================
--- Automatically creates a draft invoice when a new pega is created
--- This ensures strong bidirectional linking from the moment of creation
+-- Creating the invoice before mechanic_job_items exist can persist empty draft
+-- invoices on the first save. The Flutter form now creates/syncs the invoice
+-- only after all items have been written.
 -- ============================================================================
 
-create or replace function public.auto_create_invoice_for_new_job()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_invoice_id uuid;
-begin
-  -- Only create invoice if customer is specified
-  if NEW.customer_id is not null then
-    -- Create draft invoice linked to this job
-    -- Job now exists in DB (AFTER INSERT), so function can query it
-    v_invoice_id := public.create_invoice_from_mechanic_job(NEW.id);
-    
-    -- Update the job record with the invoice_id
-    if v_invoice_id is not null then
-      update public.mechanic_jobs
-      set invoice_id = v_invoice_id,
-          is_invoiced = true
-      where id = NEW.id;
-      
-      raise notice 'Auto-created invoice % for new pega %', v_invoice_id, NEW.job_number;
-    end if;
-  end if;
-  
-  return NEW;
-end;
-$$;
-
--- Drop old trigger if exists
 drop trigger if exists trg_auto_create_invoice_for_job on public.mechanic_jobs;
-
--- Create trigger to auto-create invoice on pega INSERT
--- CHANGED TO AFTER INSERT so job exists in DB when function queries it
-create trigger trg_auto_create_invoice_for_job
-  after insert on public.mechanic_jobs
-  for each row
-  execute function public.auto_create_invoice_for_new_job();
+drop function if exists public.auto_create_invoice_for_new_job() cascade;
 
 -- ============================================================================
 -- SYNC INVOICE CHANGES BACK TO PEGA (Bidirectional Sync)
