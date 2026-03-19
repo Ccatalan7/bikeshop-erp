@@ -383,6 +383,9 @@ class SalesService extends ChangeNotifier {
       final updated = Invoice.fromJson(result);
       _upsertInvoice(updated);
 
+      // GUARD: Mark this invoice as "just saved" to ignore stale realtime updates for 5s
+      _justSavedInvoiceIds[invoiceId] = DateTime.now();
+
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
 

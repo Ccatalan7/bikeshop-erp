@@ -93,7 +93,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   InvoiceStatus _status = InvoiceStatus.draft;
   TaxTreatment _taxTreatment =
       TaxTreatment.noTax; // Default: no tax (cash/transfer common)
-  String? _paymentMethodHint; // 'card' or 'other' - for smart tax validation
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
   bool get _canEditFields => _status == InvoiceStatus.draft && _isEditing;
@@ -421,6 +420,27 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   void _applyInvoice(Invoice invoice) {
     if (!mounted) return;
+
+    // 🛡️ DATA LOSS PROTECTION: If the server returns an empty item list but we currently 
+    // have items in the editor, this is almost certainly a database sync race condition.
+    // We update the metadata (status, dates, etc.) but PRESERVE our current items.
+    if (invoice.items.isEmpty && _lineEntries.isNotEmpty) {
+      debugPrint(
+          '🚨 [InvoiceEditor] Server returned 0 items for invoice ${invoice.id}. PRESERVING local items to prevent data loss.');
+      setState(() {
+        _loadedInvoice = invoice.copyWith(
+          items: _lineEntries.map((e) => e.toInvoiceItem()).toList(),
+        );
+        _selectedCustomer = _selectedCustomer; // Keep customer
+        _issueDate = invoice.date;
+        _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
+        _status = invoice.status;
+        _taxTreatment = invoice.taxTreatment;
+        // Do NOT update _lineEntries from empty list
+      });
+      return;
+    }
+
     debugPrint(
         '🐛 [InvoiceEditor] Applying invoice: ${invoice.id}. Items: ${invoice.items.length}');
     // Log items for detail
@@ -592,13 +612,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
-  Future<void> _refreshInvoiceById(String invoiceId) async {
-    final refreshed =
-        await _salesService.fetchInvoice(invoiceId, refresh: true);
-    if (refreshed != null && mounted) {
-      _applyInvoice(refreshed);
-    }
-  }
 
   Future<void> _updateStatus(InvoiceStatus newStatus) async {
     final invoiceId = _currentInvoiceId;
@@ -614,34 +627,36 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       }
       return;
     }
+     // 🚀 UNIFIED ATOMIC SAVE: We set the new status locally and then call _saveInvoice
+    // This ensures that BOTH the new items AND the new status are sent in a single
+    // transaction to the database, eliminating race conditions with triggers.
+    final oldStatus = _status;
+    setState(() {
+      _status = newStatus;
+      _isUpdatingStatus = true;
+    });
 
-    if (newStatus == InvoiceStatus.confirmed &&
-        _paymentMethodHint == 'card' &&
-        _taxTreatment == TaxTreatment.noTax) {
-      setState(() => _taxTreatment = TaxTreatment.taxIncluded);
+    try {
       await _saveInvoice();
       if (!mounted) return;
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
 
-    setState(() => _isUpdatingStatus = true);
-    try {
-      final updated =
-          await _salesService.updateInvoiceStatus(invoiceId, newStatus);
-      if (updated != null && mounted) {
-        _applyInvoice(updated);
-        await _refreshInvoiceById(invoiceId);
-      } else if (mounted) {
-        await _refreshInvoiceById(invoiceId);
+      // If save failed (e.g. validation error or network issue), revert status
+      if (_isDirty) {
+        debugPrint('⚠️ [InvoiceEditor] Save failed or was aborted.');
+        setState(() {
+          _status = oldStatus;
+        });
+        return;
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Estado actualizado'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+
+      // Success!
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Factura marcada como ${newStatus.name}'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -650,6 +665,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             backgroundColor: Colors.red,
           ),
         );
+        setState(() {
+          _status = oldStatus;
+        });
       }
     } finally {
       if (mounted) {
@@ -973,11 +991,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             'invoice_id': saved.id,
           });
 
-          // FORCE SYNC: Now that the job is linked, ensure items are synced
-          // This fixes the race condition where the trigger fired BEFORE the link existed
-          if (saved.id != null) {
-            await _salesService.triggerInvoiceSync(saved.id!);
-          }
         } catch (e) {
           debugPrint('❌ Failed to link/sync invoice to job: $e');
         }
@@ -996,14 +1009,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       _applyInvoice(saved);
       _clearDirty(); // Save successful - clear dirty state
 
-      // FORCE SYNC: Ensure items are synced to any linked job (New OR Existing)
-      // This is safe to call even if no job is linked (the DB function just returns)
-      if (saved.id != null) {
-        // Don't await this to keep UI snappy, let it run in background
-        _salesService.triggerInvoiceSync(saved.id!).catchError((e) {
-          debugPrint('⚠️ [InvoiceEditor] Sync trigger warning: $e');
-        });
-      }
 
       if (widget.onSaved != null) {
         widget.onSaved!();
