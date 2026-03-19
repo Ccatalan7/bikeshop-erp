@@ -120,9 +120,16 @@ class SalesService extends ChangeNotifier {
   }
 
   Future<Invoice?> fetchInvoice(String id, {bool refresh = false}) async {
+    debugPrint(
+      '📥 [SalesService] fetchInvoice start | id=$id | refresh=$refresh | cacheSize=${_invoices.length}',
+    );
+
     if (!refresh) {
       for (final invoice in _invoices) {
         if (invoice.id == id) {
+          debugPrint(
+            '📦 [SalesService] fetchInvoice cache hit | id=$id | itemCount=${invoice.items.length} | subtotal=${invoice.subtotal} | total=${invoice.total}',
+          );
           return invoice;
         }
       }
@@ -130,8 +137,22 @@ class SalesService extends ChangeNotifier {
 
     try {
       final data = await _databaseService.selectById(_invoicesCollection, id);
-      if (data == null) return null;
+      if (data == null) {
+        debugPrint(
+            '⚠️ [SalesService] fetchInvoice returned null from DB | id=$id');
+        return null;
+      }
+
+      final rawItems = data['items'];
+      final rawItemsCount = rawItems is List ? rawItems.length : -1;
+      debugPrint(
+        '🗄️ [SalesService] fetchInvoice DB result | id=$id | rawItemsCount=$rawItemsCount | subtotal=${data['subtotal']} | total=${data['total']} | status=${data['status']}',
+      );
+
       final invoice = Invoice.fromJson(data);
+      debugPrint(
+        '✅ [SalesService] fetchInvoice parsed | id=$id | itemCount=${invoice.items.length} | subtotal=${invoice.subtotal} | total=${invoice.total}',
+      );
       _upsertInvoice(invoice);
       return invoice;
     } catch (e) {
@@ -146,6 +167,12 @@ class SalesService extends ChangeNotifier {
         ..remove('paid_amount')
         ..remove('balance');
       final isNew = invoice.id == null;
+
+      final payloadItems = payload['items'];
+      final payloadItemsCount = payloadItems is List ? payloadItems.length : -1;
+      debugPrint(
+        '💽 [SalesService] saveInvoice start | id=${invoice.id ?? 'NEW'} | isNew=$isNew | number=${invoice.invoiceNumber} | payloadItems=$payloadItemsCount | subtotal=${payload['subtotal']} | total=${payload['total']}',
+      );
 
       // Check for duplicate invoice number
       if (invoice.invoiceNumber.isNotEmpty) {
@@ -168,15 +195,51 @@ class SalesService extends ChangeNotifier {
       if (isNew) {
         // Add tenant_id for new invoices
         final invoiceData = _tenantService.addTenantId(payload);
+        final invoiceDataItems = invoiceData['items'];
+        final invoiceDataItemsCount =
+            invoiceDataItems is List ? invoiceDataItems.length : -1;
+        debugPrint(
+          '📤 [SalesService] insert invoice | tenantId=${invoiceData['tenant_id']} | items=$invoiceDataItemsCount',
+        );
         result =
             await _databaseService.insert(_invoicesCollection, invoiceData);
       } else {
+        debugPrint(
+          '📤 [SalesService] update invoice | id=${invoice.id} | items=$payloadItemsCount',
+        );
         result = await _databaseService.update(
             _invoicesCollection, invoice.id!, payload);
       }
 
+      final resultItems = result['items'];
+      final resultItemsCount = resultItems is List ? resultItems.length : -1;
+      debugPrint(
+        '📥 [SalesService] saveInvoice raw result | id=${result['id']} | items=$resultItemsCount | subtotal=${result['subtotal']} | total=${result['total']} | status=${result['status']}',
+      );
+
       final savedInvoice = Invoice.fromJson(result);
+      debugPrint(
+        '✅ [SalesService] saveInvoice parsed result | id=${savedInvoice.id ?? 'null'} | itemCount=${savedInvoice.items.length} | subtotal=${savedInvoice.subtotal} | total=${savedInvoice.total}',
+      );
       _upsertInvoice(savedInvoice);
+
+      // EXPLICIT SYNC: If this invoice is linked to a pega, sync items back to mechanic_job_items.
+      // This is a reliable fallback in addition to the DB trigger (trg_sales_invoices_change).
+      // The RPC ignores the flag guards since it runs outside the trigger transaction.
+      if (savedInvoice.id != null) {
+        try {
+          await _databaseService.supabase.rpc(
+            'sync_invoice_items_to_job',
+            params: {'p_invoice_id': savedInvoice.id},
+          );
+          debugPrint(
+              '🔁 [SalesService] sync_invoice_items_to_job called for ${savedInvoice.id}');
+        } catch (e) {
+          // Non-fatal: invoice was saved correctly, only pega sync failed
+          debugPrint(
+              '⚠️ [SalesService] sync_invoice_items_to_job failed (non-fatal): $e');
+        }
+      }
 
       // GUARD: Mark this invoice as "just saved" to ignore stale realtime updates for 5s
       if (savedInvoice.id != null) {

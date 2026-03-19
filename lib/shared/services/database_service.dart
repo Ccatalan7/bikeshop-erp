@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
 
+  SupabaseClient get supabase => _client;
+
   // Tables that should NOT have tenant_id auto-injected
   static const _excludedTables = {
     'tenants',

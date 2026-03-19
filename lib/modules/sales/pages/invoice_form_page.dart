@@ -23,6 +23,8 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
+import '../../bikeshop/models/bikeshop_models.dart';
+import '../../bikeshop/services/bikeshop_service.dart';
 import '../../inventory/pages/product_form_page.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -36,6 +38,17 @@ import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
+/// The main, full-screen page for creating and editing sales invoices.
+///
+/// **Usage Context:**
+/// This page is used for the dedicated `/sales/invoices/new` and `/sales/invoices/:id`
+/// routes. It provides the complete, expansive UI for managing an invoice.
+///
+/// **Important Note for Developers/AI:**
+/// If you are modifying the invoice form UI or core logic, you MUST apply the
+/// SAME changes to the embeddable version of this form located at
+/// `lib/modules/sales/widgets/sales_invoice_editor.dart`, which is used
+/// in side-panels and quick-edit views like the Calendar.
 class InvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
   final String? preselectedJobId;
@@ -78,6 +91,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   final List<Customer> _cachedCustomers = [];
   final List<Product> _cachedProducts = [];
   final List<_InvoiceLineEntry> _lineEntries = [];
+  final List<MechanicJobBike> _availableJobBikes = [];
+  String _debugBikeMessage = 'DEBUG: Init state';
+  String? _linkedJobId;
+  String? _linkedJobNumber;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -357,14 +374,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
 
       if (widget.invoiceId != null) {
+        debugPrint(
+          '🔄 [InvoiceFormPage] _initialize fetching existing invoice | invoiceId=${widget.invoiceId}',
+        );
         final invoice =
             await _salesService.fetchInvoice(widget.invoiceId!, refresh: true);
         if (invoice != null) {
+          debugPrint(
+            '✅ [InvoiceFormPage] _initialize fetched invoice | id=${invoice.id} | itemCount=${invoice.items.length} | subtotal=${invoice.subtotal} | total=${invoice.total}',
+          );
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
+        } else {
+          debugPrint(
+            '⚠️ [InvoiceFormPage] _initialize fetch returned null | invoiceId=${widget.invoiceId}',
+          );
         }
       } else {
-        // Fallback if preview number wasn't loaded (shouldn't happen with above logic)
         if (_invoiceNumberController.text.isEmpty) {
           _invoiceNumberController.text = await _previewInvoiceNumber();
         }
@@ -375,6 +401,77 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         } else if (widget.preselectedCustomerId != null) {
           _preselectCustomer(widget.preselectedCustomerId!);
         }
+      }
+
+      // Check if this invoice is linked to a job, to load bikes
+      // This MUST run outside the above blocks to catch existing invoices too!
+      final db = Provider.of<DatabaseService>(context, listen: false);
+      try {
+        if (widget.invoiceId != null) {
+          _debugBikeMessage =
+              'DEBUG: Querying mechanic_jobs for existing invoice ${widget.invoiceId}';
+          final jobDataList = await db.supabase
+              .from('mechanic_jobs')
+              .select('id, job_number')
+              .eq('invoice_id', widget.invoiceId!)
+              .limit(1);
+
+          if (jobDataList.isNotEmpty) {
+            final jobId = jobDataList.first['id'] as String;
+            _linkedJobId = jobId;
+            _linkedJobNumber = jobDataList.first['job_number']?.toString();
+            _debugBikeMessage =
+                'DEBUG: Found job $jobId for existing invoice, loading bikes...';
+            await _loadJobBikes(jobId);
+          } else if (_loadedInvoice != null) {
+            _debugBikeMessage =
+                'DEBUG: No direct job link for existing invoice, trying fallback...';
+            bool foundFallback = false;
+            for (final item in _loadedInvoice!.items) {
+              if (item.jobBikeId != null && item.jobBikeId!.isNotEmpty) {
+                _debugBikeMessage =
+                    'DEBUG: Fallback found jobBikeId ${item.jobBikeId}';
+                final bikeData = await db.supabase
+                    .from('mechanic_job_bikes')
+                    .select('job_id')
+                    .eq('id', item.jobBikeId!)
+                    .maybeSingle();
+                if (bikeData != null && bikeData['job_id'] != null) {
+                  final jobId = bikeData['job_id'] as String;
+                  _linkedJobId = jobId;
+                  try {
+                    final linkedJobData =
+                        await db.selectById('mechanic_jobs', jobId);
+                    _linkedJobNumber = linkedJobData?['job_number']?.toString();
+                  } catch (_) {}
+                  _debugBikeMessage =
+                      'DEBUG: Fallback resolved job $jobId, calling load';
+                  await _loadJobBikes(jobId);
+                  foundFallback = true;
+                  break;
+                }
+              }
+            }
+            if (!foundFallback) {
+              _debugBikeMessage =
+                  'DEBUG: Existing invoice fallback exhausted without finding job_id';
+            }
+          }
+        } else if (widget.preselectedJobId != null) {
+          _linkedJobId = widget.preselectedJobId;
+          try {
+            final linkedJob = await context
+                .read<BikeshopService>()
+                .getJobById(widget.preselectedJobId!);
+            _linkedJobNumber = linkedJob?.jobNumber;
+          } catch (_) {}
+          _debugBikeMessage =
+              'DEBUG: New invoice from job ${widget.preselectedJobId}, loading bikes...';
+          await _loadJobBikes(widget.preselectedJobId!);
+        }
+      } catch (e) {
+        debugPrint('Error loading job for invoice id: $e');
+        _debugBikeMessage = 'DEBUG: Catch block $e';
       }
     } catch (e) {
       if (mounted) {
@@ -395,6 +492,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   void _applyInvoice(Invoice invoice) {
     if (!mounted) return;
+
+    debugPrint(
+      '🧩 [InvoiceFormPage] _applyInvoice | id=${invoice.id ?? 'null'} | itemCount=${invoice.items.length} | subtotal=${invoice.subtotal} | total=${invoice.total} | customerId=${invoice.customerId ?? 'null'}',
+    );
+    for (var i = 0; i < invoice.items.length; i++) {
+      final item = invoice.items[i];
+      debugPrint(
+        '   ↳ applyItem[$i] productId=${item.productId ?? 'null'} | name="${item.productName}" | qty=${item.quantity} | unit=${item.unitPrice} | total=${item.lineTotal} | jobBikeId=${item.jobBikeId ?? 'null'}',
+      );
+    }
 
     _invoiceNumberController.text = invoice.invoiceNumber.isNotEmpty
         ? invoice.invoiceNumber
@@ -516,10 +623,36 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           if (jobNumber != null) {
             _referenceController.text = 'Pega $jobNumber';
           }
+          await _loadJobBikes(jobId);
         }
       }
     } catch (e) {
       debugPrint('Error loading job for invoice: $e');
+    }
+  }
+
+  Future<void> _loadJobBikes(String jobId) async {
+    try {
+      final bikeshopService = context.read<BikeshopService>();
+      _debugBikeMessage = 'DEBUG: Fetching bikes for $jobId';
+      final bikes = await bikeshopService.getJobBikes(jobId);
+      if (mounted) {
+        setState(() {
+          _debugBikeMessage =
+              'DEBUG: Loaded ${bikes.length} bikes from getJobBikes';
+          _availableJobBikes.clear();
+          _availableJobBikes.addAll(bikes);
+        });
+      } else {
+        _debugBikeMessage = 'DEBUG: Widget not mounted after getJobBikes';
+      }
+    } catch (e) {
+      debugPrint('Error loading bikes for job: $e');
+      if (mounted) {
+        setState(() {
+          _debugBikeMessage = 'DEBUG: Catch getJobBikes $e';
+        });
+      }
     }
   }
 
@@ -554,10 +687,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _refreshInvoiceById(String invoiceId) async {
+    debugPrint(
+        '🔁 [InvoiceFormPage] _refreshInvoiceById start | invoiceId=$invoiceId');
     final refreshed =
         await _salesService.fetchInvoice(invoiceId, refresh: true);
     if (refreshed != null && mounted) {
+      debugPrint(
+        '✅ [InvoiceFormPage] _refreshInvoiceById fetched | id=${refreshed.id} | itemCount=${refreshed.items.length} | subtotal=${refreshed.subtotal} | total=${refreshed.total}',
+      );
       _applyInvoice(refreshed);
+    } else {
+      debugPrint(
+        '⚠️ [InvoiceFormPage] _refreshInvoiceById got null or widget unmounted | invoiceId=$invoiceId',
+      );
     }
   }
 
@@ -983,7 +1125,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _saveInvoice() async {
+    debugPrint(
+      '💾 [InvoiceFormPage] Save tapped | invoiceId=${widget.invoiceId ?? _loadedInvoice?.id ?? 'NEW'} | lineEntries=${_lineEntries.length} | selectedCustomer=${_selectedCustomer?.id ?? 'null'}',
+    );
+
     if (_selectedCustomer == null) {
+      debugPrint('❌ [InvoiceFormPage] Save aborted: no selected customer');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Selecciona un cliente antes de guardar.'),
@@ -994,6 +1141,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
 
     if (_lineEntries.isEmpty) {
+      debugPrint('❌ [InvoiceFormPage] Save aborted: _lineEntries is empty');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Agrega al menos un producto a la factura.'),
@@ -1004,11 +1152,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
 
     if (!_formKey.currentState!.validate()) {
+      debugPrint('❌ [InvoiceFormPage] Save aborted: form validation failed');
       return;
     }
 
     final customerId = _selectedCustomer!.id;
     if (customerId == null || customerId.isEmpty) {
+      debugPrint(
+          '❌ [InvoiceFormPage] Save aborted: selected customer id is null/empty');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content:
@@ -1024,7 +1175,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         .map((entry) => entry.toInvoiceItem())
         .toList();
 
+    debugPrint(
+      '🧾 [InvoiceFormPage] Built items from form | originalEntries=${_lineEntries.length} | validItems=${items.length}',
+    );
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      debugPrint(
+        '   ↳ item[$i] productId=${item.productId ?? 'null'} | name="${item.productName}" | qty=${item.quantity} | unit=${item.unitPrice} | total=${item.lineTotal} | jobBikeId=${item.jobBikeId ?? 'null'}',
+      );
+    }
+
     if (items.isEmpty) {
+      debugPrint(
+          '❌ [InvoiceFormPage] Save aborted: items list is empty after filtering');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No hay líneas válidas para guardar.'),
@@ -1036,8 +1199,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
+      debugPrint('❌ [InvoiceFormPage] Save aborted: tenantId is null');
       throw Exception('User does not have a tenant_id. Cannot proceed.');
     }
+
+    debugPrint(
+      '🏢 [InvoiceFormPage] Tenant resolved | tenantId=$tenantId | customerId=$customerId | preselectedJobId=${widget.preselectedJobId ?? 'null'} | loadedInvoiceId=${_loadedInvoice?.id ?? 'null'}',
+    );
 
     // For NEW invoices (no ID yet), generate the ACTUAL number now
     // This is when the counter actually increments
@@ -1045,6 +1213,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     if (_loadedInvoice?.id == null && widget.invoiceId == null) {
       invoiceNumber = await _generateInvoiceNumber();
       _invoiceNumberController.text = invoiceNumber;
+      debugPrint(
+          '🧮 [InvoiceFormPage] Generated new invoice number: $invoiceNumber');
     }
 
     final invoice = Invoice(
@@ -1068,10 +1238,25 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       items: items,
     );
 
+    debugPrint(
+      '📦 [InvoiceFormPage] Saving invoice payload | id=${invoice.id ?? 'NEW'} | number=${invoice.invoiceNumber} | subtotal=${invoice.subtotal} | iva=${invoice.ivaAmount} | total=${invoice.total} | itemCount=${invoice.items.length} | status=${invoice.status.name}',
+    );
+
     setState(() => _isSaving = true);
 
     try {
+      debugPrint('🚀 [InvoiceFormPage] Calling SalesService.saveInvoice()');
       final saved = await _salesService.saveInvoice(invoice);
+      debugPrint(
+        '✅ [InvoiceFormPage] Save completed | savedId=${saved.id ?? 'null'} | number=${saved.invoiceNumber} | itemCount=${saved.items.length} | subtotal=${saved.subtotal} | iva=${saved.ivaAmount} | total=${saved.total}',
+      );
+      for (var i = 0; i < saved.items.length; i++) {
+        final item = saved.items[i];
+        debugPrint(
+          '   ↳ savedItem[$i] productId=${item.productId ?? 'null'} | name="${item.productName}" | qty=${item.quantity} | unit=${item.unitPrice} | total=${item.lineTotal} | jobBikeId=${item.jobBikeId ?? 'null'}',
+        );
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1081,20 +1266,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       );
 
       if (widget.invoiceId == null && saved.id != null) {
+        debugPrint(
+            '🧭 [InvoiceFormPage] New invoice saved, navigating to /sales/invoices/${saved.id}');
         // Navigate to the saved invoice detail page
         context.go('/sales/invoices/${saved.id}');
         return;
       }
 
+      debugPrint(
+          '📝 [InvoiceFormPage] Applying saved invoice back into form state');
       _applyInvoice(saved);
-
-      // Sync descriptions (and all items) to the linked Pega job, if any
-      if (saved.id != null) {
-        _salesService.triggerInvoiceSync(saved.id!).catchError((e) {
-          debugPrint('⚠️ [InvoiceFormPage] Sync trigger warning: $e');
-        });
-      }
     } catch (e) {
+      debugPrint('❌ [InvoiceFormPage] Save failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1105,6 +1288,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
     } finally {
       if (mounted) {
+        debugPrint(
+            '🏁 [InvoiceFormPage] Save flow finished, clearing _isSaving');
         setState(() => _isSaving = false);
       }
     }
@@ -1594,6 +1779,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                           title: 'Resumen',
                           children: [_buildSummary(theme)],
                         ),
+                        if (_linkedJobId != null) ...[
+                          const SizedBox(height: 16),
+                          _buildSectionCard(
+                            theme,
+                            icon: Icons.build_circle_outlined,
+                            title: 'Trabajo Vinculado',
+                            children: [_buildLinkedJobCard(theme)],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1637,6 +1831,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   title: 'Resumen',
                   children: [_buildSummary(theme)],
                 ),
+                if (_linkedJobId != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.build_circle_outlined,
+                    title: 'Trabajo Vinculado',
+                    children: [_buildLinkedJobCard(theme)],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
@@ -1706,6 +1909,55 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ...children,
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedJobCard(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        border: Border.all(color: Colors.blue[300]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.build_circle, color: Colors.blue[700]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Trabajo: ${_linkedJobNumber ?? "Cargando número..."}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue[900],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Acceso rápido a la pega relacionada con esta factura.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: _linkedJobId == null
+                ? null
+                : () => context.push('/taller/pegas/${_linkedJobId!}'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Ver Trabajo'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[700],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2265,6 +2517,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant),
                         ),
+                      if (_availableJobBikes.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: _buildBikeSelector(theme, entry),
+                        ),
                     ],
                   ),
                 ),
@@ -2401,6 +2658,93 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  Widget _buildBikeSelector(ThemeData theme, _InvoiceLineEntry entry) {
+    if (_availableJobBikes.isEmpty) {
+      // For debugging/UX: if it's empty but we expect it, show a disabled selector
+      return Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        margin: const EdgeInsets.only(top: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            value: null,
+            isExpanded: true,
+            hint: Text(_debugBikeMessage,
+                style: TextStyle(
+                    fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
+            icon: Icon(Icons.pedal_bike,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+            items: const [],
+            onChanged: null,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _availableJobBikes.any((b) => b.id == entry.line.jobBikeId)
+              ? entry.line.jobBikeId
+              : null,
+          isExpanded: true,
+          hint: Text('General / Venta',
+              style: TextStyle(
+                  fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
+          icon: Icon(Icons.pedal_bike,
+              size: 14, color: theme.colorScheme.primary),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text('General / Venta',
+                  style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic)),
+            ),
+            ..._availableJobBikes.map((bike) {
+              return DropdownMenuItem<String?>(
+                value: bike.id,
+                child: Text(bike.displayName,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              );
+            }),
+          ],
+          onChanged: _canEditFields
+              ? (String? newBikeId) {
+                  setState(() {
+                    entry.line.jobBikeId = newBikeId;
+                    if (newBikeId == null) {
+                      entry.line.bikeName = null;
+                    } else {
+                      final bike = _availableJobBikes
+                          .firstWhere((b) => b.id == newBikeId);
+                      entry.line.bikeName = bike.displayName;
+                    }
+                    _handleLinesChanged();
+                  });
+                }
+              : null,
+        ),
+      ),
+    );
+  }
+
   /// Builds a single line row using the universal LineRowWrapper.
   /// Hover state is managed locally inside the wrapper, preventing SmartProductField rebuilds.
   Widget _buildCompactLineRow(
@@ -2419,17 +2763,22 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       indexColumnWidth: _colIndexWidth,
       actionsColumnWidth: _colActionsWidth,
       columns: [
-        // Product details column - uses CACHED widget from entry
         LineColumn(
           expanded: true,
           minWidth: 250,
           padding: const EdgeInsets.all(12),
-          child: entry.buildSmartProductField(
-            context,
-            theme,
-            _canEditFields,
-            () {}, // No setState needed - hover is local to wrapper
-            () => _autoAddEmptyLineIfNeeded(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              entry.buildSmartProductField(
+                context,
+                theme,
+                _canEditFields,
+                () {}, // No setState needed - hover is local to wrapper
+                () => _autoAddEmptyLineIfNeeded(),
+              ),
+              _buildBikeSelector(theme, entry),
+            ],
           ),
         ),
 
@@ -3174,8 +3523,8 @@ class _InvoiceLine {
   String?
       description; // Custom notes for line item (mutable so listener can update)
   final bool isCatalogProduct; // Track if catalog vs ad-hoc
-  final String? jobBikeId; // Multi-bike sync metadata
-  final String? bikeName; // Multi-bike sync metadata
+  String? jobBikeId; // Multi-bike sync metadata
+  String? bikeName; // Multi-bike sync metadata
   double quantity;
   double unitPrice;
   double discount;

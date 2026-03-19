@@ -11732,16 +11732,25 @@ begin
   -- Add items (products + services) from mechanic_job_items
   for v_job_item in
     select 
-      product_id,
-      service_product_id,
-      product_name,
-      quantity,
-      unit_price,
-      total_price,
-      item_type
-    from public.mechanic_job_items
-    where job_id = p_job_id
-    order by created_at
+      mji.product_id,
+      mji.service_product_id,
+      mji.product_name,
+      mji.product_sku,
+      mji.quantity,
+      mji.unit_price,
+      mji.total_price,
+      mji.item_type,
+      mji.notes,
+      mji.job_bike_id,
+      coalesce(
+        nullif(concat_ws(' ', b.brand, b.model), ''),
+        'Bicicleta'
+      ) as bike_name
+    from public.mechanic_job_items mji
+    left join public.mechanic_job_bikes mjb on mjb.id = mji.job_bike_id
+    left join public.bikes b on b.id = mjb.bike_id
+    where mji.job_id = p_job_id
+    order by mji.created_at
   loop
     v_item_counter := v_item_counter + 1;
 
@@ -11752,11 +11761,17 @@ begin
                          else coalesce(v_job_item.product_id::text, '')
                     end,
       'product_name', v_job_item.product_name,
+      'product_sku', coalesce(v_job_item.product_sku, ''),
+      'description', coalesce(v_job_item.notes, ''),
+      'item_type', coalesce(v_job_item.item_type, 'product'),
+      'is_catalog_product', case when v_job_item.item_type = 'adhoc' then false else true end,
       'quantity', v_job_item.quantity,
       'unit_price', v_job_item.unit_price,
       'discount', 0,
       'line_total', coalesce(v_job_item.total_price, v_job_item.quantity * v_job_item.unit_price, 0),
-      'cost', 0
+      'cost', 0,
+      'job_bike_id', v_job_item.job_bike_id,
+      'bike_name', v_job_item.bike_name
     );
 
     v_subtotal := v_subtotal + coalesce(v_job_item.total_price, v_job_item.quantity * v_job_item.unit_price, 0);
@@ -11906,15 +11921,12 @@ begin
 end;
 $$;
 
--- Drop old trigger if exists
+-- ⚠️ REMOVED: trg_sync_invoice_to_job caused flag conflict with handle_sales_invoice_change
+-- Both triggers tried to call sync_invoice_items_to_job, setting syncing_invoice_to_job='true'
+-- which caused the OTHER trigger's call to skip. Result: no sync happened.
+-- Solution: handle_sales_invoice_change already calls sync_invoice_items_to_job correctly.
+-- The Flutter service also calls sync_invoice_items_to_job explicitly after saveInvoice.
 drop trigger if exists trg_sync_invoice_to_job on public.sales_invoices;
-
--- Create trigger to sync invoice changes to job
-create trigger trg_sync_invoice_to_job
-  after update of items on public.sales_invoices
-  for each row
-  when (OLD.items is distinct from NEW.items)
-  execute function public.sync_invoice_to_job_on_change();
 
 -- ============================================================================
 -- CRITICAL: BI-DIRECTIONAL PEGA ↔ INVOICE SYNC
@@ -11943,8 +11955,15 @@ declare
   v_line_total numeric(12,2);
   v_tenant_id uuid;
   v_job_bike_id uuid;
-  v_default_bike_id uuid;
+  v_item_count integer := 0;
 begin
+  -- Prevent circular sync in either direction
+  if current_setting('app.syncing_invoice_to_job', true) = 'true' or
+     current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    raise notice 'sync_invoice_items_to_job: skipping due to active sync flag';
+    return;
+  end if;
+
   -- Prevent circular sync: if we're already deep in triggers, skip
   if pg_trigger_depth() > 2 then
     raise notice 'sync_invoice_items_to_job: trigger depth too deep (%), skipping to prevent circular sync', pg_trigger_depth();
@@ -11974,17 +11993,24 @@ begin
   -- Get tenant_id from invoice
   v_tenant_id := v_invoice.tenant_id;
   
-  -- Get the default (first) bike for items without a specific bike assignment
-  select id into v_default_bike_id
-  from mechanic_job_bikes
-  where job_id = v_job_id
-  order by order_index
-  limit 1;
+  -- ============================================================
+  -- CRITICAL FIX (Mar 19, 2026): Disable row triggers on mechanic_job_items
+  -- during the sync to prevent:
+  --   1) Cascading trigger chains (5+ triggers per INSERT) that cause
+  --      savepoint/set_config interactions to lose the sync guard flag
+  --   2) Redundant cost recalculations (we calculate costs ourselves below)
+  --   3) auto_parse_item_description side-effects during sync
+  --   4) Back-sync attempts to invoice via statement-level triggers
+  -- We re-enable triggers in a finally-style block to guarantee cleanup.
+  -- This function is SECURITY DEFINER so it has permission to alter triggers.
+  -- ============================================================
+  alter table mechanic_job_items disable trigger user;
   
-  -- Set a flag to prevent reverse sync
+  -- Set sync flag (transaction-scoped, NOT savepoint-scoped)
+  -- Using is_local=true is fine here because we no longer have BEGIN/EXCEPTION savepoints
   perform set_config('app.syncing_invoice_to_job', 'true', true);
   
-  -- Delete existing job items (we'll recreate them from invoice)
+  -- Delete existing job items (no triggers fire — they are disabled)
   delete from mechanic_job_items where job_id = v_job_id;
   
   -- Process each invoice item
@@ -11996,19 +12022,20 @@ begin
     v_line_total := coalesce((v_item->>'line_total')::numeric, v_quantity * v_unit_price, 0);
     v_product_name := v_item->>'product_name';
 
-    -- Resolve job_bike_id from item JSON, fallback to default bike
+    -- Resolve job_bike_id from item JSON.
+    -- If the invoice item has no bike assigned (null / empty), keep it NULL in mechanic_job_items
+    -- so the item appears as "General" (not forcibly assigned to the first bike).
     v_job_bike_id := nullif(v_item->>'job_bike_id', '')::uuid;
-    if v_job_bike_id is null then
-      v_job_bike_id := v_default_bike_id;
-    else
-      -- Validate the bike still exists for this job
+    if v_job_bike_id is not null then
+      -- Validate the bike still exists for this job; if not, clear it (don't fallback to default)
       if not exists (
         select 1 from mechanic_job_bikes 
         where id = v_job_bike_id and job_id = v_job_id
       ) then
-        v_job_bike_id := v_default_bike_id;
+        v_job_bike_id := null;
       end if;
     end if;
+    -- v_job_bike_id remains NULL for "General / no bike" items — this is intentional.
 
     -- Determine product info (if exists)
     v_product_type := null;
@@ -12028,6 +12055,11 @@ begin
       v_labor_cost := v_labor_cost + v_line_total;
     else
       v_parts_cost := v_parts_cost + v_line_total;
+    end if;
+
+    -- Calculate total_price inline (BEFORE trigger trg_calculate_mechanic_job_item_total is disabled)
+    if v_quantity is null or v_quantity = 0 then
+      v_quantity := 1;
     end if;
 
     insert into mechanic_job_items (
@@ -12053,7 +12085,7 @@ begin
       case when v_product_type = 'service' then null else v_product_id end,
       coalesce(v_product_name, v_item->>'product_name'),
       coalesce(v_item->>'product_sku', ''),
-      case when v_quantity is null or v_quantity = 0 then 1 else v_quantity end,
+      v_quantity,
       v_unit_price,
       v_line_total,
       coalesce(v_item->>'description', ''),
@@ -12063,11 +12095,13 @@ begin
       now(),
       now()
     );
+    
+    v_item_count := v_item_count + 1;
   end loop;
   
   v_subtotal := v_parts_cost + v_labor_cost;
   
-  -- Update job costs
+  -- Update job costs directly (no trigger cascades since we calculated everything)
   update mechanic_jobs
   set 
     labor_cost = v_labor_cost,
@@ -12078,12 +12112,42 @@ begin
     tax_amount = v_invoice.iva_amount,
     updated_at = now()
   where id = v_job_id;
+
+  -- Update per-bike costs if multi-bike job
+  update mechanic_job_bikes mjb
+  set 
+    parts_cost = coalesce(sub.parts_cost, 0),
+    labor_cost = coalesce(sub.labor_cost, 0),
+    subtotal = coalesce(sub.parts_cost, 0) + coalesce(sub.labor_cost, 0),
+    updated_at = now()
+  from (
+    select 
+      mji.job_bike_id,
+      sum(case when coalesce(mji.item_type, 'product') <> 'service' then mji.total_price else 0 end) as parts_cost,
+      sum(case when coalesce(mji.item_type, 'product') = 'service' then mji.total_price else 0 end) as labor_cost
+    from mechanic_job_items mji
+    where mji.job_id = v_job_id
+      and mji.job_bike_id is not null
+    group by mji.job_bike_id
+  ) sub
+  where mjb.id = sub.job_bike_id
+    and mjb.job_id = v_job_id;
+
+  -- Re-enable triggers (ALWAYS runs, even if error above would propagate)
+  alter table mechanic_job_items enable trigger user;
   
   -- Clear the sync flag
   perform set_config('app.syncing_invoice_to_job', '', true);
   
-  raise notice 'Synced invoice % items to job % (parts: $%, labor: $%)', 
-    p_invoice_id, v_job_id, v_parts_cost, v_labor_cost;
+  raise notice 'Synced invoice % items to job %: % items (parts: $%, labor: $%)', 
+    p_invoice_id, v_job_id, v_item_count, v_parts_cost, v_labor_cost;
+    
+exception
+  when others then
+    -- CRITICAL: Re-enable triggers even on error to prevent table being stuck
+    alter table mechanic_job_items enable trigger user;
+    perform set_config('app.syncing_invoice_to_job', '', true);
+    raise;
 end;
 $$;
 
@@ -13005,10 +13069,29 @@ declare
   v_invoice_id uuid;
   v_syncing_flag text;
 begin
+  -- 🚫 DISABLED AUTO BACK-SYNC (Mar 19, 2026)
+  -- Root cause: after invoice -> job sync, additional mechanic_job_items side effects
+  -- (auto-parse, adhoc/task cleanup, row/statement trigger cascades) can still mutate
+  -- mechanic_job_items and then overwrite sales_invoices.items with a partial snapshot.
+  --
+  -- The invoice editor is the source of truth when editing invoices, so we must not
+  -- auto-propagate every mechanic_job_items statement back into sales_invoices.
+  --
+  -- Explicit/manual flows can still call public.sync_job_to_invoice(p_job_id) when
+  -- a user intentionally edits the pega/job and wants to push those changes to invoice.
+  raise notice 'sync_job_items_to_invoice_statement: auto back-sync disabled to prevent invoice item loss';
+  return null;
+
   -- Check if we're currently syncing invoice → job (prevent circular sync)
   v_syncing_flag := current_setting('app.syncing_invoice_to_job', true);
   if v_syncing_flag = 'true' then
     raise notice 'sync_job_items_to_invoice_statement: skipping due to invoice→job sync in progress';
+    return null;
+  end if;
+
+  -- Extra guard: if either sync direction is active, don't propagate statement-level changes
+  if current_setting('app.syncing_job_to_invoice', true) = 'true' then
+    raise notice 'sync_job_items_to_invoice_statement: skipping due to job→invoice sync in progress';
     return null;
   end if;
 
@@ -13063,6 +13146,12 @@ create trigger trg_mechanic_job_items_sync_invoice_delete
   after delete on mechanic_job_items
   referencing old table as old_table
   for each statement execute procedure public.sync_job_items_to_invoice_statement();
+
+-- GUARD: Drop rogue trigger from FIX_CALENDAR_VIEW_SYNC.sql that overwrites invoice items
+-- This trigger was created by a standalone patch and causes invoice item loss race condition.
+-- See: supabase/migrations/20260320_drop_rogue_mechanic_jobs_sync_trigger.sql
+drop trigger if exists trg_mechanic_jobs_sync_invoice_update on mechanic_jobs;
+drop function if exists public.sync_job_changes_to_invoice_statement();
 
 -- Trigger: Auto-update updated_at timestamp
 create or replace function public.set_updated_at()

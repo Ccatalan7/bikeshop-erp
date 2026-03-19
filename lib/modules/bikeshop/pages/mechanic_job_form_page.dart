@@ -55,8 +55,14 @@ class _BikeTabData {
   bool requiresApproval = false;
   bool approvedByCustomer = false;
 
-  _BikeTabData({String? tabId, this.bike, this.jobBikeId})
-      : tabId = tabId ?? DateTime.now().microsecondsSinceEpoch.toString();
+  final bool isGeneralTab;
+
+  _BikeTabData({
+    String? tabId,
+    this.bike,
+    this.jobBikeId,
+    this.isGeneralTab = false,
+  }) : tabId = tabId ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   void dispose() {
     clientRequestController.dispose();
@@ -65,7 +71,10 @@ class _BikeTabData {
     technicianNotesController.dispose();
   }
 
-  String get displayName => bike?.displayName ?? 'Nueva Bicicleta';
+  String get displayName {
+    if (isGeneralTab) return 'General / Venta';
+    return bike?.displayName ?? 'Nueva Bicicleta';
+  }
 
   double get subtotal =>
       partItems.fold(0, (sum, item) => sum + item.quantity * item.unitPrice);
@@ -164,6 +173,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   List<String> _imageUrls = [];
   List<({Uint8List bytes, String name})> _newImages = [];
   bool _isUploadingImage = false;
+  String? _linkedInvoiceNumber;
 
   // Edit mode
   MechanicJob? _existingJob;
@@ -171,6 +181,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   @override
   void initState() {
     super.initState();
+    // Prevent a blank/partial form from flashing before the async edit load starts.
+    // This avoids the "form opens fast, then shows loader again" flicker.
+    _isLoading = true;
     // Defer initialization to avoid "setState() or markNeedsBuild() called during build"
     // when services trigger notifyListeners() synchronously
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialData());
@@ -193,10 +206,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Future<void> _loadInitialData() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
@@ -204,6 +213,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<InventoryService>(context, listen: false);
       final jobStatusService =
           Provider.of<JobStatusService>(context, listen: false);
+
+      // 🚀 Cache-first hydration: paint with in-memory data immediately,
+      // then refresh in the background-critical path only as needed.
+      if (mounted) {
+        setState(() {
+          if (customerService.hasCustomersCache && _customers.isEmpty) {
+            _customers = List<Customer>.from(customerService.cachedCustomers);
+          }
+          if (inventoryService.hasLoaded && _products.isEmpty) {
+            _products = List<Product>.from(inventoryService.products.take(50));
+            _serviceProducts = inventoryService.products
+                .where((p) => p.productType == ProductType.service)
+                .toList();
+          }
+        });
+      }
 
       // Load data in parallel to speed up form opening
       // Optimization: Fetch only a limited number initially, search will handle the rest
@@ -216,13 +241,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       List<Customer> customers = results[0] as List<Customer>;
       List<Product> products = results[1] as List<Product>;
 
-      // If we have a specific customerId, ensure that customer is loaded
-      final targetCustomerId = widget.customerId ??
-          (widget.jobId != null
-              ? (await Provider.of<BikeshopService>(context, listen: false)
-                      .getJobById(widget.jobId!))
-                  ?.customerId
-              : null);
+      // If we have a specific customerId, ensure that customer is loaded.
+      // For edit mode, _loadExistingJob() will fetch the job once and load the customer,
+      // so avoid a second getJobById() here on the critical open path.
+      final targetCustomerId = widget.customerId;
 
       if (targetCustomerId != null) {
         final hasCustomer = customers.any((c) => c.id == targetCustomerId);
@@ -235,10 +257,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      // We still need service products for the "Service" dropdowns
-      // Fetch them specifically as they are usually few
-      final serviceProducts =
-          await inventoryService.getProductsByType(ProductType.service);
+      // We still need service products for the "Service" dropdowns.
+      // If product cache is already hydrated, derive them locally and skip another fetch.
+      final serviceProducts = inventoryService.hasLoaded
+          ? inventoryService.products
+              .where((p) => p.productType == ProductType.service)
+              .toList()
+          : await inventoryService.getProductsByType(ProductType.service);
 
       final customStatuses = jobStatusService.activeStatuses;
       debugPrint('📋 Loaded ${customStatuses.length} custom statuses');
@@ -319,6 +344,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       debugPrint('✅ Job loaded: ${job.jobNumber}');
 
+      String? linkedInvoiceNumber;
+      if (job.invoiceId != null) {
+        try {
+          final invoiceData =
+              await Provider.of<DatabaseService>(context, listen: false)
+                  .selectById('sales_invoices', job.invoiceId!);
+          linkedInvoiceNumber = invoiceData?['invoice_number']?.toString();
+        } catch (e) {
+          debugPrint(
+              '⚠️ Could not load linked invoice number for ${job.invoiceId}: $e');
+        }
+      }
+
       // Load customer and bikes
       // Ensure customer is in our list (might not be in the initial top 50)
       Customer? customer;
@@ -338,42 +376,69 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         await _selectCustomer(customer);
       }
 
-      // Load all job items (parts + services)
-      final allItems = await bikeshopService.getJobItems(job.id!);
+      // Load all related job data in parallel
+      final relatedResults = await Future.wait([
+        bikeshopService.getJobItems(job.id!),
+        bikeshopService.getJobBikes(job.id!),
+      ]);
 
-      // Load multi-bike data from mechanic_job_bikes
-      final jobBikes = await bikeshopService.getJobBikes(job.id!);
+      final allItems = relatedResults[0] as List<MechanicJobItem>;
+      final jobBikes = relatedResults[1] as List<MechanicJobBike>;
       debugPrint('📦 Loaded ${jobBikes.length} job bikes');
 
       // Load tax treatment from job
       TaxTreatment loadedTaxTreatment = job.taxTreatment;
       debugPrint('✅ Tax treatment loaded: $loadedTaxTreatment');
 
+      final Map<String, Product?> productCache = {
+        for (final product in _products) product.id: product,
+      };
+
+      final missingProductIds = allItems
+          .map((item) => item.productId)
+          .whereType<String>()
+          .where((id) => !productCache.containsKey(id))
+          .toSet()
+          .toList();
+
+      if (missingProductIds.isNotEmpty) {
+        final fetchedProducts = await Future.wait(
+          missingProductIds.map((id) async {
+            try {
+              return MapEntry(id, await inventoryService.getProductById(id));
+            } catch (e) {
+              debugPrint('⚠️ Could not fetch product $id: $e');
+              return MapEntry<String, Product?>(id, null);
+            }
+          }),
+        );
+
+        for (final entry in fetchedProducts) {
+          productCache[entry.key] = entry.value;
+        }
+      }
+
       // Helper to find/create product for an item
       Future<Product?> getProductForItem(MechanicJobItem item) async {
         if (item.productId == null) return null;
 
-        try {
-          return _products.firstWhere((p) => p.id == item.productId);
-        } catch (_) {
-          try {
-            return await inventoryService.getProductById(item.productId!);
-          } catch (e) {
-            debugPrint('⚠️ Could not fetch product ${item.productId}: $e');
-            return Product(
-              id: item.productId!,
-              name: item.productName,
-              sku: item.productSku ?? 'N/A',
-              price: item.unitPrice,
-              cost: 0,
-              stockQuantity: 0,
-              category: ProductCategory.other,
-              productType: ProductType.product,
-              createdAt: DateTime.now(),
-              updatedAt: DateTime.now(),
-            );
-          }
+        final cached = productCache[item.productId!];
+        if (cached != null) {
+          return cached;
         }
+
+        return Product(
+          id: item.productId!,
+          name: item.productName,
+          sku: item.productSku ?? 'N/A',
+          price: item.unitPrice,
+          cost: 0,
+          stockQuantity: 0,
+          category: ProductCategory.other,
+          productType: ProductType.product,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
       }
 
       // Build bike tabs from job bikes data
@@ -412,15 +477,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.approvedByCustomer = jobBike.approvedByCustomer;
 
           // Load items for this specific bike
-          // Logic updated to handle legacy items (null jobBikeId):
-          // If this is the first bike in the list, we also include orphan items
-          final isFirstTab = loadedBikeTabs.isEmpty; // It's about to be added
-
-          final bikeItems = allItems.where((item) {
-            final matchesId = item.jobBikeId == jobBike.id;
-            final isLegacyOrphan = item.jobBikeId == null && isFirstTab;
-            return matchesId || isLegacyOrphan;
-          }).toList();
+          // Load items for this specific bike
+          final bikeItems =
+              allItems.where((item) => item.jobBikeId == jobBike.id).toList();
 
           for (final item in bikeItems) {
             final product = await getProductForItem(item);
@@ -439,6 +498,25 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           debugPrint(
               '✅ Loaded bike tab: ${bike.displayName} with ${tab.partItems.length} items');
         }
+
+        // Add General Tab for orphan items
+        final generalTab =
+            _BikeTabData(isGeneralTab: true, tabId: 'general_tab');
+        final orphanItems =
+            allItems.where((item) => item.jobBikeId == null).toList();
+        for (final item in orphanItems) {
+          final product = await getProductForItem(item);
+          generalTab.partItems.add(_JobPartItem(
+            id: item.id,
+            product: product,
+            name: item.productName,
+            isCatalogProduct: item.productId != null,
+            quantity: item.quantity.toInt(),
+            unitPrice: item.unitPrice,
+            notes: item.notes,
+          ));
+        }
+        loadedBikeTabs.add(generalTab);
       } else {
         // Legacy single-bike job: create one tab from job data
         final bike = _bikes.firstWhereOrNull((b) => b.id == job.bikeId);
@@ -469,8 +547,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
 
           loadedBikeTabs.add(tab);
+
+          // Also load orphan items (job_bike_id = null) into General tab for legacy jobs.
+          // These can arrive via invoice sync — ignore them means they get wiped on next save.
+          final legacyGeneralTab =
+              _BikeTabData(isGeneralTab: true, tabId: 'general_tab');
+          final legacyOrphanItems =
+              allItems.where((item) => item.jobBikeId == null).toList();
+          for (final item in legacyOrphanItems) {
+            final product = await getProductForItem(item);
+            legacyGeneralTab.partItems.add(_JobPartItem(
+              id: item.id,
+              product: product,
+              name: item.productName,
+              isCatalogProduct: item.productId != null,
+              quantity: item.quantity.toInt(),
+              unitPrice: item.unitPrice,
+              notes: item.notes,
+            ));
+          }
+          loadedBikeTabs.add(legacyGeneralTab);
           debugPrint(
-              '✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items');
+              '✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items, General tab: ${legacyGeneralTab.partItems.length} orphan items');
         }
       }
 
@@ -494,6 +592,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _selectedDeadline = job.deliveryDeadline;
           _selectedArrivalDate = job.arrivalDate;
           _taxTreatment = loadedTaxTreatment;
+          _linkedInvoiceNumber = linkedInvoiceNumber;
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text = '';
 
@@ -627,8 +726,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     setState(() {
       final newTab = _BikeTabData(bike: bike);
-      _bikeTabs.add(newTab);
-      _selectedBikeTabIndex = _bikeTabs.length - 1;
+      final generalTabIndex = _bikeTabs.indexWhere((t) => t.isGeneralTab);
+
+      if (generalTabIndex != -1) {
+        // Insert before general tab
+        _bikeTabs.insert(generalTabIndex, newTab);
+        _selectedBikeTabIndex = generalTabIndex;
+      } else {
+        _bikeTabs.add(newTab);
+        if (_bikeTabs.length == 1) {
+          _bikeTabs.add(_BikeTabData(isGeneralTab: true, tabId: 'general_tab'));
+        }
+        _selectedBikeTabIndex = _bikeTabs.length - 2;
+      }
 
       // Also set legacy single bike (for backward compat)
       _selectedBike = bike;
@@ -637,7 +747,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   /// Remove a bike tab
   void _removeBikeTab(int index) {
-    if (_bikeTabs.length <= 1) {
+    if (_bikeTabs[index].isGeneralTab)
+      return; // Prevent removing the General tab
+
+    final regularTabsCount = _bikeTabs.where((t) => !t.isGeneralTab).length;
+    if (regularTabsCount <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Debe haber al menos una bicicleta')),
       );
@@ -1218,6 +1332,50 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Save each bike tab
       for (int i = 0; i < _bikeTabs.length; i++) {
         final tab = _bikeTabs[i];
+
+        if (tab.isGeneralTab) {
+          // Save General tab parts with jobBikeId = null
+          for (final item in tab.partItems) {
+            if (item.name.isEmpty) continue; // Skip empty rows
+
+            final quantity = item.quantity.toDouble();
+            final unitPrice = item.unitPrice;
+            final jobItem = MechanicJobItem(
+              jobId: jobId,
+              jobBikeId: null, // General items have no bike
+              tenantId: tenantId,
+              productId: item.product?.id,
+              productName: item.name,
+              productSku: item.sku ?? '',
+              quantity: quantity,
+              unitPrice: unitPrice,
+              totalPrice: quantity * unitPrice,
+              itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+              notes: item.notes,
+            );
+            final created = await bikeshopService.createJobItem(jobItem);
+
+            // Auto-generate tasks from product description if available
+            if (item.product != null &&
+                item.product!.description != null &&
+                item.product!.description!.isNotEmpty &&
+                created.id != null) {
+              try {
+                await taskService.generateAutoTasksFromDescription(
+                  jobId: jobId,
+                  parentItemId: created.id!,
+                  description: item.product!.description!,
+                );
+                debugPrint('✅ Auto-tasks generated for ${item.name}');
+              } catch (e) {
+                debugPrint(
+                    '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+              }
+            }
+          }
+          continue; // Skip MechanicJobBike creation
+        }
+
         if (tab.bike?.id == null) {
           debugPrint('⚠️ Skipping bike tab $i - no bike ID');
           continue;
@@ -2264,7 +2422,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     child: _buildInvoiceSection(),
                   ),
                 ],
-                // Service details panel (mobile) 
+                // Service details panel (mobile)
                 if (_selectedServiceItem != null) ...[
                   const SizedBox(height: 16),
                   _buildSectionCard(
@@ -2338,7 +2496,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
             child: LayoutBuilder(builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 600;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2359,15 +2516,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
-                      // Bike tabs on the right side of header - ONLY defaults to this on desktop
-                      if (hasBikeTabs && !isNarrow) ...[
-                        const SizedBox(width: 12),
-                        _buildInlineBikeTabs(theme),
-                      ],
                     ],
                   ),
-                  // Mobile bike tabs below title
-                  if (hasBikeTabs && isNarrow) ...[
+                  if (hasBikeTabs) ...[
                     const SizedBox(height: 12),
                     _buildInlineBikeTabs(theme),
                   ],
@@ -2386,132 +2537,83 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
-  /// Compact inline bike tabs for the card header
+  /// Full-width bike tab bar — sits below the card title, above content.
   Widget _buildInlineBikeTabs(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ..._bikeTabs.asMap().entries.map((entry) {
-              final index = entry.key;
-              final tab = entry.value;
-              final isSelected = index == _selectedBikeTabIndex;
+    final primary = theme.colorScheme.primary;
+    final onSurface = theme.colorScheme.onSurfaceVariant;
+    final dividerColor = theme.colorScheme.outlineVariant.withOpacity(0.5);
 
-              return Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => setState(() => _selectedBikeTabIndex = index),
-                    borderRadius: BorderRadius.circular(8),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? theme.colorScheme.surface
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        border: isSelected
-                            ? Border(
-                                top: BorderSide(
-                                    color: theme.colorScheme.primary, width: 3),
-                              )
-                            : Border.all(color: Colors.transparent, width: 0),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.06),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.pedal_bike,
-                            size: 14,
-                            color: isSelected
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            tab.bike?.displayName ?? 'Bici ${index + 1}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: isSelected
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (_bikeTabs.length > 1) ...[
-                            const SizedBox(width: 8),
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () =>
-                                    _confirmRemoveBike(index, tab.displayName),
-                                borderRadius: BorderRadius.circular(12),
-                                hoverColor:
-                                    theme.colorScheme.error.withOpacity(0.1),
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 14,
-                                    color: theme.colorScheme.onSurfaceVariant
-                                        .withOpacity(0.6),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Thin divider above tab bar
+        Divider(height: 1, thickness: 1, color: dividerColor),
+        // Tab bar row
+        Container(
+          color: theme.colorScheme.surfaceContainerLowest,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ..._bikeTabs.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final tab = entry.value;
+                    final isSelected = index == _selectedBikeTabIndex;
+
+                    // Hide the General tab when it has no items
+                    if (tab.isGeneralTab && tab.partItems.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final label = tab.isGeneralTab
+                        ? 'General'
+                        : (tab.bike?.displayName ?? 'Bici ${index + 1}');
+                    final icon = tab.isGeneralTab
+                        ? Icons.shopping_bag_outlined
+                        : Icons.pedal_bike_outlined;
+                    final canClose = !tab.isGeneralTab &&
+                        _bikeTabs.where((t) => !t.isGeneralTab).length > 1;
+
+                    return _BikeTabButton(
+                      label: label,
+                      icon: icon,
+                      isSelected: isSelected,
+                      canClose: canClose,
+                      onTap: () =>
+                          setState(() => _selectedBikeTabIndex = index),
+                      onClose: () => _confirmRemoveBike(index, label),
+                      primaryColor: primary,
+                      inactiveColor: onSurface,
+                    );
+                  }),
+                  // Add bike button — vertically centered, subtle
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Tooltip(
+                      message: 'Agregar bicicleta',
+                      child: InkWell(
+                        onTap: _showAddBikeSelector,
+                        borderRadius: BorderRadius.circular(6),
+                        hoverColor: primary.withOpacity(0.08),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 10),
+                          child: Icon(Icons.add, size: 16, color: primary),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }),
-            // Add bike button
-            Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: _showAddBikeSelector,
-                borderRadius: BorderRadius.circular(8),
-                hoverColor: theme.colorScheme.primary.withOpacity(0.1),
-                child: Container(
-                  padding: const EdgeInsets.all(7),
-                  child: Icon(
-                    Icons.add,
-                    size: 18,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+        // Bottom divider
+        Divider(height: 1, thickness: 1, color: dividerColor),
+      ],
     );
   }
 
@@ -2566,6 +2668,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               final index = entry.key;
               final tab = entry.value;
               final isSelected = index == _selectedBikeTabIndex;
+              // Hide General tab chip when empty
+              if (tab.isGeneralTab && tab.partItems.isEmpty) {
+                return const SizedBox.shrink();
+              }
 
               return _BrowserStyleBikeTab(
                 label: tab.displayName,
@@ -2988,94 +3094,98 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
 
         // ========== PER-BIKE FIELDS (from current tab) ==========
-        // Using keys to force widget recreation when tab changes
-        const SizedBox(height: 16),
-        TextFormField(
-          key: ValueKey('clientRequest_${currentTab?.tabId ?? "legacy"}'),
-          controller:
-              currentTab?.clientRequestController ?? _clientRequestController,
-          decoration: const InputDecoration(
-            labelText: 'Solicitud del cliente',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.comment),
-            hintText: 'Ej: Ruidos en la cadena, frenos suaves...',
-          ),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          key: ValueKey('diagnosis_${currentTab?.tabId ?? "legacy"}'),
-          controller: diagnosisCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Diagnóstico',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.description),
-            hintText: 'Descripción técnica del problema...',
-          ),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          key: ValueKey('workRequested_${currentTab?.tabId ?? "legacy"}'),
-          controller: workRequestedCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Trabajos a realizar',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.build),
-            hintText: 'Ej: Cambio de cadena, ajuste de frenos, lubricación...',
-          ),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          key: ValueKey('techNotes_${currentTab?.tabId ?? "legacy"}'),
-          controller: techNotesCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Notas del técnico',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.notes),
-            hintText: 'Notas internas...',
-          ),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          key: ValueKey('checkboxes_${currentTab?.tabId ?? "legacy"}'),
-          children: [
-            Expanded(
-              child: CheckboxListTile(
-                title: const Text('Requiere aprobación del cliente'),
-                value: requiresApproval,
-                onChanged: (value) {
-                  setState(() {
-                    if (currentTab != null) {
-                      currentTab.requiresApproval = value ?? false;
-                    } else {
-                      _requiresApproval = value ?? false;
-                    }
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
+        if (!(currentTab?.isGeneralTab ?? false)) ...[
+          // Using keys to force widget recreation when tab changes
+          const SizedBox(height: 16),
+          TextFormField(
+            key: ValueKey('clientRequest_${currentTab?.tabId ?? "legacy"}'),
+            controller:
+                currentTab?.clientRequestController ?? _clientRequestController,
+            decoration: const InputDecoration(
+              labelText: 'Solicitud del cliente',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.comment),
+              hintText: 'Ej: Ruidos en la cadena, frenos suaves...',
             ),
-            Expanded(
-              child: CheckboxListTile(
-                title: const Text('Trabajo de garantía'),
-                value: isWarranty,
-                onChanged: (value) {
-                  setState(() {
-                    if (currentTab != null) {
-                      currentTab.isWarrantyWork = value ?? false;
-                    } else {
-                      _isWarrantyJob = value ?? false;
-                    }
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            key: ValueKey('diagnosis_${currentTab?.tabId ?? "legacy"}'),
+            controller: diagnosisCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Diagnóstico',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.description),
+              hintText: 'Descripción técnica del problema...',
             ),
-          ],
-        ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            key: ValueKey('workRequested_${currentTab?.tabId ?? "legacy"}'),
+            controller: workRequestedCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Trabajos a realizar',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.build),
+              hintText:
+                  'Ej: Cambio de cadena, ajuste de frenos, lubricación...',
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            key: ValueKey('techNotes_${currentTab?.tabId ?? "legacy"}'),
+            controller: techNotesCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Notas del técnico',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.notes),
+              hintText: 'Notas internas...',
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            key: ValueKey('checkboxes_${currentTab?.tabId ?? "legacy"}'),
+            children: [
+              Expanded(
+                child: CheckboxListTile(
+                  title: const Text('Requiere aprobación del cliente'),
+                  value: requiresApproval,
+                  onChanged: (value) {
+                    setState(() {
+                      if (currentTab != null) {
+                        currentTab.requiresApproval = value ?? false;
+                      } else {
+                        _requiresApproval = value ?? false;
+                      }
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ),
+              Expanded(
+                child: CheckboxListTile(
+                  title: const Text('Trabajo de garantía'),
+                  value: isWarranty,
+                  onChanged: (value) {
+                    setState(() {
+                      if (currentTab != null) {
+                        currentTab.isWarrantyWork = value ?? false;
+                      } else {
+                        _isWarrantyJob = value ?? false;
+                      }
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ),
+            ],
+          ),
+          // ========== END PER-BIKE FIELDS ==========
+        ],
       ],
     );
   }
@@ -3974,7 +4084,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// The currently selected service item (for sidebar detail)
   _JobPartItem? get _selectedServiceItem {
     if (_selectedServiceIndex == null) return null;
-    if (_selectedServiceIndex! < 0 || _selectedServiceIndex! >= _currentPartItems.length) return null;
+    if (_selectedServiceIndex! < 0 ||
+        _selectedServiceIndex! >= _currentPartItems.length) return null;
     final item = _currentPartItems[_selectedServiceIndex!];
     return item.hasWizardAnswers ? item : null;
   }
@@ -4047,7 +4158,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      color:
+                          theme.colorScheme.primaryContainer.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -4068,7 +4180,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
+              color:
+                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -4153,7 +4266,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Factura: ${_existingJob?.invoiceId ?? "N/A"}',
+                  'Factura: ${_linkedInvoiceNumber ?? _existingJob?.invoiceId ?? "N/A"}',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -4268,87 +4381,111 @@ class _PartItemRowState extends State<_PartItemRow> {
       onTap: widget.onTap,
       behavior: HitTestBehavior.translucent,
       child: LineRowWrapper(
-      index: widget.index,
-      canMoveUp: !widget.isFirst,
-      canMoveDown: !widget.isLast,
-      onMoveUp: widget.onMoveUp,
-      onMoveDown: widget.onMoveDown,
-      onRemove: widget.onRemove,
-      canEdit: true,
-      indexColumnWidth: widget.indexWidth,
-      actionsColumnWidth: widget.actionsWidth,
-      showDeleteButton: true,
-      columns: [
-        // Product Autocomplete Column
-        LineColumn(
-          expanded: true,
-          minWidth: 250,
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (item.product?.isService == true) ...[
-                _ServiceLineBadge(item: item),
-                const SizedBox(height: 6),
-              ],
-              SmartProductField(
-                initialData: ProductFieldData(
-                  product: item.product,
-                  productName: item.displayName,
-                  productSku: item.product?.sku,
-                  isCatalogProduct: item.isCatalogProduct,
-                  description: item.hasWizardAnswers ? null : item.notes,
+        index: widget.index,
+        canMoveUp: !widget.isFirst,
+        canMoveDown: !widget.isLast,
+        onMoveUp: widget.onMoveUp,
+        onMoveDown: widget.onMoveDown,
+        onRemove: widget.onRemove,
+        canEdit: true,
+        indexColumnWidth: widget.indexWidth,
+        actionsColumnWidth: widget.actionsWidth,
+        showDeleteButton: true,
+        columns: [
+          // Product Autocomplete Column
+          LineColumn(
+            expanded: true,
+            minWidth: 250,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (item.product?.isService == true) ...[
+                  _ServiceLineBadge(item: item),
+                  const SizedBox(height: 6),
+                ],
+                SmartProductField(
+                  initialData: ProductFieldData(
+                    product: item.product,
+                    productName: item.displayName,
+                    productSku: item.product?.sku,
+                    isCatalogProduct: item.isCatalogProduct,
+                    description: item.hasWizardAnswers ? null : item.notes,
+                  ),
+                  hintText: 'Buscar por nombre...',
+                  allowCustomItems: true,
+                  showCost:
+                      false, // Job form usually shows price to customer, not cost
+                  onProductChanged: (selection) {
+                    if (selection == null) {
+                      // Clear product
+                      widget.onChanged(item.copyWith(
+                        clearProduct: true,
+                        name: '',
+                        isCatalogProduct: true,
+                        notes: '',
+                      ));
+                    } else if (selection.isCatalogProduct &&
+                        selection.product != null) {
+                      // Catalog product
+                      widget.onChanged(item.copyWith(
+                        product: selection.product,
+                        name: selection.productName ?? '',
+                        isCatalogProduct: true,
+                        // Only update price if it's a new selection, not a desc update
+                        unitPrice: selection.price > 0
+                            ? selection.price
+                            : item.unitPrice,
+                        notes: selection.description,
+                      ));
+                    } else {
+                      // Ad-hoc item
+                      widget.onChanged(item.copyWith(
+                        clearProduct: true,
+                        name: selection.productName ?? '',
+                        isCatalogProduct: false,
+                        unitPrice: item.unitPrice,
+                        notes: selection.description,
+                      ));
+                    }
+                  },
                 ),
-                hintText: 'Buscar por nombre...',
-                allowCustomItems: true,
-                showCost:
-                    false, // Job form usually shows price to customer, not cost
-                onProductChanged: (selection) {
-                  if (selection == null) {
-                    // Clear product
-                    widget.onChanged(item.copyWith(
-                      clearProduct: true,
-                      name: '',
-                      isCatalogProduct: true,
-                      notes: '',
-                    ));
-                  } else if (selection.isCatalogProduct &&
-                      selection.product != null) {
-                    // Catalog product
-                    widget.onChanged(item.copyWith(
-                      product: selection.product,
-                      name: selection.productName ?? '',
-                      isCatalogProduct: true,
-                      // Only update price if it's a new selection, not a desc update
-                      unitPrice: selection.price > 0
-                          ? selection.price
-                          : item.unitPrice,
-                      notes: selection.description,
-                    ));
-                  } else {
-                    // Ad-hoc item
-                    widget.onChanged(item.copyWith(
-                      clearProduct: true,
-                      name: selection.productName ?? '',
-                      isCatalogProduct: false,
-                      unitPrice: item.unitPrice,
-                      notes: selection.description,
-                    ));
-                  }
+              ],
+            ),
+          ),
+
+          // Quantity Column
+          LineColumn(
+            width: widget.quantityWidth,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Center(
+              child: TextFormField(
+                initialValue: item.quantity.toString(),
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (value) {
+                  final newQty = int.tryParse(value) ?? 1;
+                  widget.onChanged(item.copyWith(quantity: newQty));
                 },
               ),
-            ],
+            ),
           ),
-        ),
 
-        // Quantity Column
-        LineColumn(
-          width: widget.quantityWidth,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Center(
+          // Price Column
+          LineColumn(
+            width: widget.priceWidth,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: TextFormField(
-              initialValue: item.quantity.toString(),
+              initialValue: item.unitPrice.toStringAsFixed(0),
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium,
@@ -4357,56 +4494,33 @@ class _PartItemRowState extends State<_PartItemRow> {
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 border: OutlineInputBorder(),
+                prefixText: '\$ ',
               ),
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+              ],
               onChanged: (value) {
-                final newQty = int.tryParse(value) ?? 1;
-                widget.onChanged(item.copyWith(quantity: newQty));
+                final newPrice = double.tryParse(value) ?? 0;
+                widget.onChanged(item.copyWith(unitPrice: newPrice));
               },
             ),
           ),
-        ),
 
-        // Price Column
-        LineColumn(
-          width: widget.priceWidth,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: TextFormField(
-            initialValue: item.unitPrice.toStringAsFixed(0),
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              border: OutlineInputBorder(),
-              prefixText: '\$ ',
+          // Total Column
+          LineColumn(
+            width: widget.totalWidth,
+            showRightBorder: false,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                  .format(item.quantity * item.unitPrice),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.right,
             ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-            ],
-            onChanged: (value) {
-              final newPrice = double.tryParse(value) ?? 0;
-              widget.onChanged(item.copyWith(unitPrice: newPrice));
-            },
           ),
-        ),
-
-        // Total Column
-        LineColumn(
-          width: widget.totalWidth,
-          showRightBorder: false,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Text(
-            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                .format(item.quantity * item.unitPrice),
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 }
@@ -4517,7 +4631,6 @@ class _ServiceLineBadge extends StatelessWidget {
     );
   }
 }
-
 
 class _JobServiceItem {
   final Product? serviceProduct;
@@ -5657,6 +5770,129 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                 const SizedBox(width: 22), // Placeholder for close button width
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BikeTabButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final bool canClose;
+  final VoidCallback onTap;
+  final VoidCallback? onClose;
+  final Color primaryColor;
+  final Color inactiveColor;
+
+  const _BikeTabButton({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.canClose,
+    required this.onTap,
+    required this.primaryColor,
+    required this.inactiveColor,
+    this.onClose,
+  });
+
+  @override
+  State<_BikeTabButton> createState() => _BikeTabButtonState();
+}
+
+class _BikeTabButtonState extends State<_BikeTabButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final showClose = widget.canClose &&
+        widget.onClose != null &&
+        (_isHovered || widget.isSelected);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? widget.primaryColor.withOpacity(0.08)
+                  : Colors.transparent,
+              border: Border(
+                bottom: BorderSide(
+                  color: widget.isSelected
+                      ? widget.primaryColor
+                      : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: widget.isSelected
+                      ? widget.primaryColor
+                      : widget.inactiveColor,
+                ),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Text(
+                    widget.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight:
+                          widget.isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: widget.isSelected
+                          ? theme.colorScheme.onSurface
+                          : widget.inactiveColor,
+                    ),
+                  ),
+                ),
+                if (widget.canClose) ...[
+                  const SizedBox(width: 8),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 140),
+                    opacity: showClose ? 1 : 0,
+                    child: IgnorePointer(
+                      ignoring: !showClose,
+                      child: InkWell(
+                        onTap: widget.onClose,
+                        borderRadius: BorderRadius.circular(999),
+                        hoverColor: theme.colorScheme.error.withOpacity(0.12),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: showClose
+                                ? theme.colorScheme.surfaceContainerHighest
+                                    .withOpacity(0.6)
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close,
+                            size: 13,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

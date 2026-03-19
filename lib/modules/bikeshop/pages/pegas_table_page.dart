@@ -34,7 +34,6 @@ import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import 'bike_form_dialog.dart';
 
-
 /// Modern, professional Pegas management with advanced data table
 class PegasTablePage extends StatefulWidget {
   const PegasTablePage({super.key});
@@ -1845,8 +1844,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                         ),
                         ButtonSegment(
                           value: 'delivered',
-                          label:
-                              Text('Entregados', style: TextStyle(fontSize: 13)),
+                          label: Text('Entregados',
+                              style: TextStyle(fontSize: 13)),
                         ),
                         ButtonSegment(
                           value: 'warranty_completed',
@@ -3293,24 +3292,35 @@ class _PegasTablePageState extends State<PegasTablePage>
         return const Text('-');
 
       case 'job_number':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              job.jobNumber ?? 'Sin #',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.push('/taller/pegas/${job.id}'),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    job.jobNumber ?? 'Sin #',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    DateFormat('dd/MM/yy').format(job.arrivalDate),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              DateFormat('dd/MM/yy').format(job.arrivalDate),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
+          ),
         );
 
       case 'customer':
@@ -4121,6 +4131,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               job.invoiceId != null ? () => _openInvoice(job.invoiceId!) : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            constraints: const BoxConstraints(maxWidth: 110),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(6),
@@ -4130,7 +4141,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.max,
               children: [
                 Icon(
                   icon,
@@ -4138,15 +4149,20 @@ class _PegasTablePageState extends State<PegasTablePage>
                   color: textColor,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                    decoration:
-                        job.invoiceId != null ? TextDecoration.underline : null,
-                    decorationColor: textColor.withValues(alpha: 0.3),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                      decoration: job.invoiceId != null
+                          ? TextDecoration.underline
+                          : null,
+                      decorationColor: textColor.withValues(alpha: 0.3),
+                    ),
                   ),
                 ),
               ],
@@ -4178,60 +4194,63 @@ class _PegasTablePageState extends State<PegasTablePage>
                     )
                   : null,
               padding: const EdgeInsets.all(2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (imageUrl != null) ...[
-                    isImg
-                        ? HoverZoomImage(imageUrl: imageUrl, size: 32)
-                        : Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.grey.shade300),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 56),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (imageUrl != null) ...[
+                      isImg
+                          ? HoverZoomImage(imageUrl: imageUrl, size: 32)
+                          : Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: const Icon(Icons.insert_drive_file,
+                                  size: 16, color: Colors.blueGrey),
                             ),
-                            child: const Icon(Icons.insert_drive_file,
-                                size: 16, color: Colors.blueGrey),
+                      if (count > 1) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                    if (count > 1) ...[
-                      const SizedBox(width: 4),
+                          child: Text(
+                            '+${count - 1}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ] else
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
+                          border: Border.all(
+                              color: Colors.grey.shade300,
+                              style: BorderStyle.solid),
                           borderRadius: BorderRadius.circular(4),
+                          color: Colors.grey.shade50,
                         ),
-                        child: Text(
-                          '+${count - 1}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade700,
-                          ),
+                        child: Center(
+                          child: Icon(Icons.add,
+                              size: 16, color: Colors.grey.shade400),
                         ),
                       ),
-                    ],
-                  ] else
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                            color: Colors.grey.shade300,
-                            style: BorderStyle.solid),
-                        borderRadius: BorderRadius.circular(4),
-                        color: Colors.grey.shade50,
-                      ),
-                      child: Center(
-                        child: Icon(Icons.add,
-                            size: 16, color: Colors.grey.shade400),
-                      ),
-                    ),
-                ],
-              ),
+                  ],
+                ),
+              ), // ConstrainedBox
             ),
           ),
         );
