@@ -24,6 +24,8 @@ import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/smart_task_service.dart';
+import '../services/service_wizard_service.dart';
+import '../widgets/service_wizard_dialog.dart';
 import '../../../shared/services/image_service.dart'; // Add ImageService import
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
@@ -139,6 +141,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Parts and services
   final List<_JobPartItem> _partItems = [];
   final List<_JobServiceItem> _serviceItems = [];
+
+  // Service wizard
+  final _serviceWizardService = ServiceWizardService();
+  int? _selectedServiceIndex; // Index into _currentPartItems for sidebar detail
 
   // Key to reset autocomplete field after adding product
   int _partAutocompleteKey = 0;
@@ -754,8 +760,36 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return tab != null ? tab.partItems : _partItems;
   }
 
-  void _addCatalogPart(Product product) {
+  Future<void> _addCatalogPart(Product product) async {
     // Always add as new line (allow duplicates on different lines)
+    String? notes;
+    Map<String, dynamic>? wizardAnswers;
+    ServiceWizardProfile? wizardProfile;
+
+    // Show service wizard for service products
+    if (product.isService && mounted) {
+      // Load profile in background (non-blocking)
+      final profile = await _serviceWizardService
+          .getProfileForProduct(product.id)
+          .catchError((_) => null);
+
+      if (!mounted) return;
+
+      final result = await showServiceWizardDialog(
+        context,
+        productName: product.name,
+        productIsService: true,
+        profile: profile,
+      );
+
+      if (result != null) {
+        notes = result.summary.isNotEmpty ? result.summary : null;
+        wizardAnswers = result.answers.isNotEmpty ? result.answers : null;
+        wizardProfile = profile;
+      }
+    }
+
+    if (!mounted) return;
     setState(() {
       _currentPartItems.add(_JobPartItem(
         product: product,
@@ -763,9 +797,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         isCatalogProduct: true,
         quantity: 1,
         unitPrice: product.price,
-        notes: null,
+        notes: notes,
+        wizardAnswers: wizardAnswers,
+        wizardProfile: wizardProfile,
       ));
       _partAutocompleteKey++; // Reset autocomplete field
+      if (wizardAnswers != null) {
+        _selectedServiceIndex = _currentPartItems.length - 1;
+      }
     });
   }
 
@@ -2148,6 +2187,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             child: _buildInvoiceSection(),
                           ),
                         ],
+                        // Service details panel (only when a service is selected)
+                        if (_selectedServiceItem != null) ...[
+                          const SizedBox(height: 16),
+                          _buildSectionCard(
+                            theme,
+                            icon: Icons.build_circle_outlined,
+                            title: 'Detalle de Servicio',
+                            child: _buildServiceDetailsPanel(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -2213,6 +2262,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     icon: Icons.receipt_outlined,
                     title: 'Factura Vinculada',
                     child: _buildInvoiceSection(),
+                  ),
+                ],
+                // Service details panel (mobile) 
+                if (_selectedServiceItem != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.build_circle_outlined,
+                    title: 'Detalle de Servicio',
+                    child: _buildServiceDetailsPanel(),
                   ),
                 ],
               ],
@@ -3306,7 +3365,48 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           });
         }
       },
+      onEditWizard: item.product?.isService == true
+          ? () => _editServiceWizard(itemIndex)
+          : null,
+      onTap: () {
+        if (item.hasWizardAnswers) {
+          setState(() => _selectedServiceIndex = itemIndex);
+        }
+      },
     );
+  }
+
+  /// Re-open the service wizard for an existing service line with pre-filled answers
+  Future<void> _editServiceWizard(int itemIndex) async {
+    final item = _currentPartItems[itemIndex];
+    if (item.product == null) return;
+
+    // Use cached profile, or re-fetch if missing
+    ServiceWizardProfile? profile = item.wizardProfile;
+    profile ??= await _serviceWizardService
+        .getProfileForProduct(item.product!.id)
+        .catchError((_) => null);
+
+    if (!mounted) return;
+
+    final result = await showServiceWizardDialog(
+      context,
+      productName: item.product!.name,
+      productIsService: true,
+      profile: profile,
+      initialAnswers: item.wizardAnswers,
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _currentPartItems[itemIndex] = item.copyWith(
+          notes: result.summary.isNotEmpty ? result.summary : null,
+          wizardAnswers: result.answers.isNotEmpty ? result.answers : null,
+          wizardProfile: profile,
+        );
+        _selectedServiceIndex = itemIndex;
+      });
+    }
   }
 
   Widget _buildLaborSection() {
@@ -3871,6 +3971,171 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
+  /// The currently selected service item (for sidebar detail)
+  _JobPartItem? get _selectedServiceItem {
+    if (_selectedServiceIndex == null) return null;
+    if (_selectedServiceIndex! < 0 || _selectedServiceIndex! >= _currentPartItems.length) return null;
+    final item = _currentPartItems[_selectedServiceIndex!];
+    return item.hasWizardAnswers ? item : null;
+  }
+
+  Widget _buildServiceDetailsPanel() {
+    final theme = Theme.of(context);
+    final item = _selectedServiceItem;
+    if (item == null) return const SizedBox.shrink();
+    return _buildServiceDetailCard(theme, item);
+  }
+
+  Widget _buildServiceDetailCard(ThemeData theme, _JobPartItem item) {
+    final answers = item.wizardAnswers ?? {};
+    final profile = item.wizardProfile;
+    final questions = profile?.questions ?? [];
+    final itemIndex = _currentPartItems.indexOf(item);
+
+    // Build answer key→value pairs
+    final answerPairs = <MapEntry<String, String>>[];
+    for (final q in questions) {
+      final val = answers[q.key];
+      if (val == null || val.toString().isEmpty) continue;
+      if (q.key == '_notes') continue;
+
+      String displayValue;
+      if (val is bool) {
+        displayValue = val ? 'Sí' : 'No';
+      } else if (val is List) {
+        if (val.isEmpty) continue;
+        displayValue = val.map((v) {
+          return ServiceWizardService.resolveLabel(q, v.toString());
+        }).join(', ');
+      } else {
+        displayValue = ServiceWizardService.resolveLabel(q, val.toString());
+      }
+      answerPairs.add(MapEntry(q.label, displayValue));
+    }
+
+    final notes = answers['_notes'] as String?;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header: service name + edit button
+        Row(
+          children: [
+            Icon(
+              Icons.build_circle,
+              size: 16,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item.displayName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (itemIndex >= 0)
+              Tooltip(
+                message: 'Editar configuración',
+                child: InkWell(
+                  onTap: () => _editServiceWizard(itemIndex),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      size: 14,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        // Answer details
+        if (answerPairs.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: answerPairs.map((pair) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          pair.key,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          pair.value,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+
+        // Notes
+        if (notes != null && notes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.sticky_note_2_outlined,
+                size: 13,
+                color: theme.colorScheme.tertiary.withOpacity(0.7),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  notes,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: theme.colorScheme.onSurface.withOpacity(0.65),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildInvoiceSection() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -3936,6 +4201,8 @@ class _PartItemRow extends StatefulWidget {
   final VoidCallback onRemove;
   final VoidCallback onMoveUp;
   final VoidCallback onMoveDown;
+  final VoidCallback? onEditWizard;
+  final VoidCallback? onTap;
   final double indexWidth;
   final double quantityWidth;
   final double priceWidth;
@@ -3953,6 +4220,8 @@ class _PartItemRow extends StatefulWidget {
     required this.onRemove,
     required this.onMoveUp,
     required this.onMoveDown,
+    this.onEditWizard,
+    this.onTap,
     required this.indexWidth,
     required this.quantityWidth,
     required this.priceWidth,
@@ -3995,7 +4264,10 @@ class _PartItemRowState extends State<_PartItemRow> {
     final theme = Theme.of(context);
     final item = widget.item;
 
-    return LineRowWrapper(
+    return GestureDetector(
+      onTap: widget.onTap,
+      behavior: HitTestBehavior.translucent,
+      child: LineRowWrapper(
       index: widget.index,
       canMoveUp: !widget.isFirst,
       canMoveDown: !widget.isLast,
@@ -4008,57 +4280,65 @@ class _PartItemRowState extends State<_PartItemRow> {
       showDeleteButton: true,
       columns: [
         // Product Autocomplete Column
-        // Product Autocomplete Column
         LineColumn(
           expanded: true,
           minWidth: 250,
           padding: const EdgeInsets.all(12),
-          child: SmartProductField(
-            initialData: ProductFieldData(
-              product: item.product,
-              productName: item.displayName,
-              productSku: item.product?.sku,
-              isCatalogProduct: item.isCatalogProduct,
-              description: item.notes,
-            ),
-            hintText: 'Buscar por nombre...',
-            allowCustomItems: true,
-            showCost:
-                false, // Job form usually shows price to customer, not cost
-            onProductChanged: (selection) {
-              if (selection == null) {
-                // Clear product
-                widget.onChanged(item.copyWith(
-                  clearProduct: true,
-                  name: '',
-                  isCatalogProduct: true,
-                  notes: '',
-                ));
-              } else if (selection.isCatalogProduct &&
-                  selection.product != null) {
-                // Catalog product
-                widget.onChanged(item.copyWith(
-                  product: selection.product,
-                  name: selection.productName ?? '',
-                  isCatalogProduct: true,
-                  // Only update price if it's a new selection, not a desc update
-                  unitPrice:
-                      selection.price > 0 ? selection.price : item.unitPrice,
-                  notes: selection.description,
-                ));
-              } else {
-                // Ad-hoc item
-                widget.onChanged(item.copyWith(
-                  clearProduct: true,
-                  name: selection.productName ?? '',
-                  isCatalogProduct: false,
-                  // Keep existing price for ad-hoc unless explicitly changed (not supported by field directly)
-                  // SmartProductField sends 0 for price on description-only updates
-                  unitPrice: item.unitPrice,
-                  notes: selection.description,
-                ));
-              }
-            },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (item.product?.isService == true) ...[
+                _ServiceLineBadge(item: item),
+                const SizedBox(height: 6),
+              ],
+              SmartProductField(
+                initialData: ProductFieldData(
+                  product: item.product,
+                  productName: item.displayName,
+                  productSku: item.product?.sku,
+                  isCatalogProduct: item.isCatalogProduct,
+                  description: item.hasWizardAnswers ? null : item.notes,
+                ),
+                hintText: 'Buscar por nombre...',
+                allowCustomItems: true,
+                showCost:
+                    false, // Job form usually shows price to customer, not cost
+                onProductChanged: (selection) {
+                  if (selection == null) {
+                    // Clear product
+                    widget.onChanged(item.copyWith(
+                      clearProduct: true,
+                      name: '',
+                      isCatalogProduct: true,
+                      notes: '',
+                    ));
+                  } else if (selection.isCatalogProduct &&
+                      selection.product != null) {
+                    // Catalog product
+                    widget.onChanged(item.copyWith(
+                      product: selection.product,
+                      name: selection.productName ?? '',
+                      isCatalogProduct: true,
+                      // Only update price if it's a new selection, not a desc update
+                      unitPrice: selection.price > 0
+                          ? selection.price
+                          : item.unitPrice,
+                      notes: selection.description,
+                    ));
+                  } else {
+                    // Ad-hoc item
+                    widget.onChanged(item.copyWith(
+                      clearProduct: true,
+                      name: selection.productName ?? '',
+                      isCatalogProduct: false,
+                      unitPrice: item.unitPrice,
+                      notes: selection.description,
+                    ));
+                  }
+                },
+              ),
+            ],
           ),
         ),
 
@@ -4126,6 +4406,7 @@ class _PartItemRowState extends State<_PartItemRow> {
           ),
         ),
       ],
+    ),
     );
   }
 }
@@ -4139,6 +4420,12 @@ class _JobPartItem {
   double unitPrice;
   String? notes;
 
+  /// Answers captured from the service wizard (only for service products)
+  Map<String, dynamic>? wizardAnswers;
+
+  /// Cached wizard profile for re-editing without re-fetching from DB
+  ServiceWizardProfile? wizardProfile;
+
   _JobPartItem({
     String? id,
     this.product,
@@ -4147,10 +4434,14 @@ class _JobPartItem {
     required this.quantity,
     required this.unitPrice,
     this.notes,
+    this.wizardAnswers,
+    this.wizardProfile,
   }) : id = id ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   String get displayName => product?.name ?? name;
   String? get sku => product?.sku;
+  bool get hasWizardAnswers =>
+      wizardAnswers != null && wizardAnswers!.isNotEmpty;
 
   /// Create a copy with the same ID (for preserving widget keys)
   _JobPartItem copyWith({
@@ -4160,7 +4451,10 @@ class _JobPartItem {
     int? quantity,
     double? unitPrice,
     String? notes,
+    Map<String, dynamic>? wizardAnswers,
+    ServiceWizardProfile? wizardProfile,
     bool clearProduct = false,
+    bool clearWizard = false,
   }) {
     return _JobPartItem(
       id: id, // Keep same ID!
@@ -4170,9 +4464,60 @@ class _JobPartItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       notes: notes ?? this.notes,
+      wizardAnswers: clearWizard ? null : (wizardAnswers ?? this.wizardAnswers),
+      wizardProfile: clearWizard ? null : (wizardProfile ?? this.wizardProfile),
     );
   }
 }
+
+/// Badge shown at the top of a service line item row.
+class _ServiceLineBadge extends StatelessWidget {
+  final _JobPartItem item;
+  const _ServiceLineBadge({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasAnswers = item.hasWizardAnswers;
+    final color =
+        hasAnswers ? theme.colorScheme.primary : theme.colorScheme.secondary;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color.withOpacity(0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasAnswers ? Icons.build_circle : Icons.build_circle_outlined,
+                size: 11,
+                color: color,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                hasAnswers ? 'Servicio configurado' : 'Servicio',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 class _JobServiceItem {
   final Product? serviceProduct;

@@ -26,6 +26,7 @@ import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 import '../widgets/set_configuration_widget.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
+import '../services/spec_engine_service.dart';
 
 class ProductFormPage extends StatefulWidget {
   final String? productId;
@@ -95,12 +96,23 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   StreamSubscription? _scanSubscription;
 
+  // ── Ficha Técnica (Spec Engine) ──────────────────────────────────────────
+  SpecTemplate? _specTemplate;
+  Map<String, dynamic> _specValues = {};
+  bool _isLoadingSpecs = false;
+
   late TabController _tabController;
+  int _prevTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _prevTabIndex = _tabController.index);
+      }
+    });
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
         listen: false);
@@ -530,6 +542,11 @@ class _ProductFormPageState extends State<ProductFormPage>
         if (_isSet && product.id != null) {
           await _loadSetComponents(product.id!);
         }
+
+        // Load Ficha Técnica spec template and saved values
+        if (product.categoryId != null) {
+          _loadSpecTemplate(product.categoryId!, productId: product.id);
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -541,6 +558,24 @@ class _ProductFormPageState extends State<ProductFormPage>
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadSpecTemplate(String categoryId, {String? productId}) async {
+    if (mounted) setState(() => _isLoadingSpecs = true);
+    try {
+      final template =
+          await SpecEngineService.instance.getTemplateForCategory(categoryId);
+      if (!mounted) return;
+      final values = (template != null && productId != null)
+          ? await SpecEngineService.instance.getProductSpecValues(productId)
+          : <String, dynamic>{};
+      setState(() {
+        _specTemplate = template;
+        _specValues = values;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoadingSpecs = false);
     }
   }
 
@@ -886,6 +921,19 @@ class _ProductFormPageState extends State<ProductFormPage>
       // Create component products if this is a set
       if (_isSet && _setComponents.isNotEmpty && savedProduct.id != null) {
         await _createSetComponentProducts(savedProduct);
+      }
+
+      // Save Ficha Técnica spec values
+      if (_specTemplate != null && savedProduct.id != null) {
+        final tenantId = await TenantService().getTenantId();
+        if (tenantId != null) {
+          await SpecEngineService.instance.saveProductSpecValues(
+            productId: savedProduct.id!,
+            tenantId: tenantId,
+            template: _specTemplate!,
+            values: _specValues,
+          );
+        }
       }
 
       _notifySharedInventory();
@@ -1349,9 +1397,10 @@ class _ProductFormPageState extends State<ProductFormPage>
   Widget _buildForm(ThemeData theme) {
     return Form(
       key: _formKey,
-      child: Column(
-        children: [
-          Container(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 1080;
+          final tabBar = Container(
             color: theme.colorScheme.surface,
             margin: const EdgeInsets.only(bottom: 16),
             child: TabBar(
@@ -1370,154 +1419,147 @@ class _ProductFormPageState extends State<ProductFormPage>
                   icon: Icon(Icons.language),
                   text: 'Tienda Online',
                 ),
+                Tab(
+                  icon: Icon(Icons.tune),
+                  text: 'Ficha Técnica',
+                ),
               ],
             ),
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return TabBarView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  controller: _tabController,
-                  children: [
-                    SingleChildScrollView(
-                      padding: const EdgeInsets.only(bottom: 100),
-                      child: _buildGeneralTab(theme, constraints),
+          );
+
+          final leftContent = ListenableBuilder(
+            listenable: _tabController,
+            builder: (context, _) {
+              final goingRight = _tabController.index >= _prevTabIndex;
+              final Widget tabView;
+              switch (_tabController.index) {
+                case 0:
+                  tabView = SingleChildScrollView(
+                    key: const ValueKey(0),
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildGeneralTabLeft(theme),
+                        // On narrow screens, sidebar cards appear inline
+                        if (!isWide) ...[
+                          const SizedBox(height: 16),
+                          _buildRightSidebar(theme),
+                        ],
+                      ],
                     ),
-                    _buildWebsiteTab(theme),
+                  );
+                case 1:
+                  tabView = _buildWebsiteTab(theme, key: const ValueKey(1));
+                case 2:
+                  tabView = _buildSpecTab(theme, key: const ValueKey(2));
+                default:
+                  tabView = const SizedBox.shrink(key: ValueKey(-1));
+              }
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  alignment: Alignment.topLeft,
+                  children: [
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
                   ],
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+                transitionBuilder: (child, animation) {
+                  final isEntering =
+                      child.key == ValueKey(_tabController.index);
+                  final slideIn = Tween<Offset>(
+                    begin: isEntering
+                        ? Offset(goingRight ? 0.06 : -0.06, 0)
+                        : Offset(goingRight ? -0.06 : 0.06, 0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ));
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slideIn, child: child),
+                  );
+                },
+                child: tabView,
+              );
+            },
+          );
+
+          if (isWide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      tabBar,
+                      Expanded(child: leftContent),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: _buildRightSidebar(theme),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          // Narrow layout: everything stacked, right sidebar inside general tab
+          return Column(
+            children: [
+              tabBar,
+              Expanded(child: leftContent),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildGeneralTab(ThemeData theme, BoxConstraints constraints) {
-    // print('DEBUG: Building General Tab');
-    final isWide = constraints.maxWidth > 1080;
-
-    if (isWide) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Child Product Banner (Wide)
-                if (_isChildProduct)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.tertiary),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.extension,
-                            color: theme.colorScheme.onTertiaryContainer),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Componente de Set',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: theme.colorScheme.onTertiaryContainer,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                'Este producto es parte de un set (${_existingProduct?.componentLabel ?? "Componente"}).',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onTertiaryContainer,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.description_outlined,
-                  title: 'Información básica',
-                  children: _buildBasicInfoFields(theme),
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.attach_money_outlined,
-                  title: 'Precios y márgenes',
-                  children: _buildPricingFields(theme),
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.text_snippet_outlined,
-                  title: 'Descripción del producto',
-                  children: _buildDescriptionFields(theme),
-                ),
-                // Only show set configuration for products, not services AND not child products
-                if (_selectedProductType != ProductType.service &&
-                    !_isChildProduct) ...[
-                  const SizedBox(height: 16),
-                  _buildSectionCard(
-                    theme,
-                    icon: Icons.inventory_2_outlined,
-                    title: 'Configuración de Juego/Set',
-                    children: _buildSetConfigurationFields(theme),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          SizedBox(
-            width: 360,
-            child: Column(
-              children: [
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.image_outlined,
-                  title: 'Imágenes',
-                  children: _buildMediaFields(theme),
-                ),
-                // Only show inventory for products, not services
-                if (_selectedProductType != ProductType.service) ...[
-                  const SizedBox(height: 16),
-                  _buildSectionCard(
-                    theme,
-                    icon: Icons.inventory_outlined,
-                    title: 'Inventario',
-                    children: _buildInventoryFields(theme),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.settings_outlined,
-                  title: 'Estado y visibilidad',
-                  children: _buildStatusFields(theme),
-                ),
-              ],
-            ),
+  /// Right sidebar — always visible on wide screens (images, inventory, status).
+  Widget _buildRightSidebar(ThemeData theme) {
+    return Column(
+      children: [
+        _buildSectionCard(
+          theme,
+          icon: Icons.image_outlined,
+          title: 'Imágenes',
+          children: _buildMediaFields(theme),
+        ),
+        if (_selectedProductType != ProductType.service) ...[
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.inventory_outlined,
+            title: 'Inventario',
+            children: _buildInventoryFields(theme),
           ),
         ],
-      );
-    }
+        const SizedBox(height: 16),
+        _buildSectionCard(
+          theme,
+          icon: Icons.settings_outlined,
+          title: 'Estado y visibilidad',
+          children: _buildStatusFields(theme),
+        ),
+      ],
+    );
+  }
 
+  /// Left column content for the General tab (wide layout).
+  /// On narrow screens this includes the sidebar cards too (via [_buildGeneralTab]).
+  Widget _buildGeneralTabLeft(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Child Product Banner (Narrow)
+        // Child Product Banner
         if (_isChildProduct)
           Container(
             margin: const EdgeInsets.only(bottom: 16),
@@ -1564,33 +1606,9 @@ class _ProductFormPageState extends State<ProductFormPage>
         const SizedBox(height: 16),
         _buildSectionCard(
           theme,
-          icon: Icons.image_outlined,
-          title: 'Imágenes',
-          children: _buildMediaFields(theme),
-        ),
-        const SizedBox(height: 16),
-        _buildSectionCard(
-          theme,
           icon: Icons.attach_money_outlined,
           title: 'Precios y márgenes',
           children: _buildPricingFields(theme),
-        ),
-        const SizedBox(height: 16),
-        // Only show inventory for products, not services
-        if (_selectedProductType != ProductType.service)
-          _buildSectionCard(
-            theme,
-            icon: Icons.inventory_outlined,
-            title: 'Inventario',
-            children: _buildInventoryFields(theme),
-          ),
-        if (_selectedProductType != ProductType.service)
-          const SizedBox(height: 16),
-        _buildSectionCard(
-          theme,
-          icon: Icons.settings_outlined,
-          title: 'Estado y visibilidad',
-          children: _buildStatusFields(theme),
         ),
         const SizedBox(height: 16),
         _buildSectionCard(
@@ -1614,8 +1632,249 @@ class _ProductFormPageState extends State<ProductFormPage>
     );
   }
 
-  Widget _buildWebsiteTab(ThemeData theme) {
+  // ── Ficha Técnica tab ──────────────────────────────────────────────────
+
+  Widget _buildSpecTab(ThemeData theme, {Key? key}) {
+    if (_isLoadingSpecs) {
+      return Center(key: key, child: const CircularProgressIndicator());
+    }
+
+    if (_specTemplate == null) {
+      return Center(
+        key: key,
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.tune_outlined,
+                  size: 48, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text(
+                'Sin ficha técnica',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _selectedCategoryId == null
+                    ? 'Asigna una categoría al producto para ver su ficha técnica.'
+                    : 'Esta categoría no tiene ficha técnica configurada.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final template = _specTemplate!;
+    final sections = template.sections;
+    final sectionLabels = <String, String>{
+      'identification': 'Identificación',
+      'compatibility': 'Compatibilidad',
+      'specs': 'Especificaciones',
+      'hydraulic': 'Sistema Hidráulico',
+      'mounting': 'Montaje',
+      'features': 'Características',
+      'installation': 'Instalación',
+      'general': 'General',
+    };
+
     return SingleChildScrollView(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Template name chip
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                Icon(Icons.tune, size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  template.name,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final section in sections)
+            ..._buildSpecSection(
+              theme: theme,
+              section: section,
+              label: sectionLabels[section] ?? section,
+              template: template,
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildSpecSection({
+    required ThemeData theme,
+    required String section,
+    required String label,
+    required SpecTemplate template,
+  }) {
+    final fields = template
+        .fieldsForSection(section)
+        .where((f) => f.isVisible(_specValues))
+        .toList();
+    if (fields.isEmpty) return [];
+
+    const sectionIcons = <String, IconData>{
+      'hydraulic': Icons.water_drop_outlined,
+      'identification': Icons.label_outline,
+      'compatibility': Icons.link_outlined,
+      'specs': Icons.tune,
+      'mounting': Icons.build_outlined,
+      'features': Icons.star_outline,
+      'installation': Icons.handyman_outlined,
+      'general': Icons.list_alt_outlined,
+    };
+
+    final fieldWidgets = <Widget>[];
+    for (int i = 0; i < fields.length; i++) {
+      fieldWidgets.add(_buildSpecField(theme: theme, field: fields[i]));
+      if (i < fields.length - 1) fieldWidgets.add(const SizedBox(height: 16));
+    }
+
+    return [
+      _buildSectionCard(
+        theme,
+        icon: sectionIcons[section] ?? Icons.tune,
+        title: label,
+        children: fieldWidgets,
+      ),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Widget _buildSpecField({
+    required ThemeData theme,
+    required SpecTemplateField field,
+  }) {
+    final def = field.definition;
+    if (def == null) return const SizedBox.shrink();
+
+    final currentValue = _specValues[def.key];
+    final label = def.label + (field.isRequired ? ' *' : '');
+
+    switch (def.dataType) {
+      case 'boolean':
+        return Row(
+          children: [
+            Expanded(
+              child: Text(label, style: theme.textTheme.bodyMedium),
+            ),
+            Switch(
+              value: currentValue == true ||
+                  currentValue?.toString().toLowerCase() == 'true',
+              onChanged: (v) =>
+                  setState(() => _specValues = {..._specValues, def.key: v}),
+            ),
+          ],
+        );
+
+      case 'single_select':
+        return DropdownButtonFormField<String>(
+          value: currentValue?.toString(),
+          decoration: InputDecoration(
+            labelText: label,
+            suffixText: def.unit,
+          ),
+          items: def.options
+              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+              .toList(),
+          onChanged: (v) =>
+              setState(() => _specValues = {..._specValues, def.key: v}),
+        );
+
+      case 'multi_select':
+        final selected = (currentValue is List)
+            ? Set<String>.from(currentValue.map((e) => e.toString()))
+            : (currentValue != null ? {currentValue.toString()} : <String>{});
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: def.options.map((o) {
+                final isSelected = selected.contains(o);
+                return FilterChip(
+                  label: Text(o),
+                  selected: isSelected,
+                  onSelected: (v) {
+                    final next = Set<String>.from(selected);
+                    if (v) {
+                      next.add(o);
+                    } else {
+                      next.remove(o);
+                    }
+                    setState(() =>
+                        _specValues = {..._specValues, def.key: next.toList()});
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        );
+
+      case 'number':
+        return TextFormField(
+          initialValue: currentValue?.toString() ?? '',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: label,
+            suffixText: def.unit,
+          ),
+          validator: field.isRequired
+              ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+              : null,
+          onChanged: (v) {
+            final parsed = double.tryParse(v);
+            setState(
+                () => _specValues = {..._specValues, def.key: parsed ?? v});
+          },
+        );
+
+      default: // text
+        return TextFormField(
+          initialValue: currentValue?.toString() ?? '',
+          decoration: InputDecoration(
+            labelText: label,
+            suffixText: def.unit,
+          ),
+          validator: field.isRequired
+              ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+              : null,
+          onChanged: (v) =>
+              setState(() => _specValues = {..._specValues, def.key: v.trim()}),
+        );
+    }
+  }
+
+  Widget _buildWebsiteTab(ThemeData theme, {Key? key}) {
+    return SingleChildScrollView(
+      key: key,
       padding: const EdgeInsets.only(top: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

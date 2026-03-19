@@ -20722,3 +20722,547 @@ begin
   return coalesce(v_result, jsonb_build_object('id', p_user_id, 'name', 'Soporte', 'avatar_url', null, 'role', 'employee'));
 end;
 $$;
+
+-- ============================================================================
+-- SPEC ENGINE: Technical Templates + Service Profiles
+-- Added: 2026-03-18
+-- See: supabase/migrations/20260318_spec_engine.sql for full deployment SQL
+-- ============================================================================
+
+-- spec_definitions: reusable field definitions (tenant_id NULL = system)
+create table if not exists spec_definitions (
+  id                       uuid        primary key default gen_random_uuid(),
+  tenant_id                uuid        references tenants(id) on delete cascade,
+  key                      text        not null,
+  label                    text        not null,
+  description              text,
+  data_type                text        not null default 'text'
+                             check (data_type in ('text','number','boolean','single_select','multi_select','range','json')),
+  unit                     text,
+  allowed_values           jsonb       not null default '[]',
+  validation_rules         jsonb       not null default '{}',
+  is_filterable            boolean     not null default false,
+  is_required_by_default   boolean     not null default false,
+  is_compatibility_relevant boolean    not null default false,
+  is_customer_visible      boolean     not null default true,
+  is_mechanic_visible      boolean     not null default true,
+  group_name               text,
+  sort_order               integer     not null default 0,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+create unique index if not exists idx_spec_definitions_system_key on spec_definitions (key) where tenant_id is null;
+create unique index if not exists idx_spec_definitions_tenant_key on spec_definitions (tenant_id, key) where tenant_id is not null;
+create index if not exists idx_spec_definitions_tenant on spec_definitions (tenant_id);
+alter table spec_definitions enable row level security;
+drop policy if exists "spec_definitions_select" on spec_definitions;
+drop policy if exists "spec_definitions_insert" on spec_definitions;
+drop policy if exists "spec_definitions_update" on spec_definitions;
+drop policy if exists "spec_definitions_delete" on spec_definitions;
+create policy "spec_definitions_select" on spec_definitions for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "spec_definitions_insert" on spec_definitions for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "spec_definitions_update" on spec_definitions for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "spec_definitions_delete" on spec_definitions for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- spec_templates: ficha técnica schemas (tenant_id NULL = system)
+create table if not exists spec_templates (
+  id               uuid        primary key default gen_random_uuid(),
+  tenant_id        uuid        references tenants(id) on delete cascade,
+  key              text        not null,
+  name             text        not null,
+  technical_family text        not null,
+  description      text,
+  default_tags     jsonb       not null default '[]',
+  is_active        boolean     not null default true,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create unique index if not exists idx_spec_templates_system_key on spec_templates (key) where tenant_id is null;
+create unique index if not exists idx_spec_templates_tenant_key on spec_templates (tenant_id, key) where tenant_id is not null;
+create index if not exists idx_spec_templates_tenant on spec_templates (tenant_id);
+create index if not exists idx_spec_templates_family on spec_templates (technical_family) where tenant_id is null;
+alter table spec_templates enable row level security;
+drop policy if exists "spec_templates_select" on spec_templates;
+drop policy if exists "spec_templates_insert" on spec_templates;
+drop policy if exists "spec_templates_update" on spec_templates;
+drop policy if exists "spec_templates_delete" on spec_templates;
+create policy "spec_templates_select" on spec_templates for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "spec_templates_insert" on spec_templates for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "spec_templates_update" on spec_templates for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "spec_templates_delete" on spec_templates for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- spec_template_fields: links definitions to templates with ordering and visibility rules
+create table if not exists spec_template_fields (
+  id                  uuid        primary key default gen_random_uuid(),
+  tenant_id           uuid        references tenants(id) on delete cascade,
+  template_id         uuid        not null references spec_templates(id) on delete cascade,
+  spec_definition_id  uuid        not null references spec_definitions(id) on delete cascade,
+  is_required         boolean     not null default false,
+  section_key         text        not null default 'general',
+  sort_order          integer     not null default 0,
+  default_value_json  jsonb,
+  visibility_rules    jsonb       not null default '[]',
+  helper_text         text,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  unique (template_id, spec_definition_id)
+);
+create index if not exists idx_spec_template_fields_template on spec_template_fields (template_id);
+create index if not exists idx_spec_template_fields_definition on spec_template_fields (spec_definition_id);
+alter table spec_template_fields enable row level security;
+drop policy if exists "spec_template_fields_select" on spec_template_fields;
+drop policy if exists "spec_template_fields_insert" on spec_template_fields;
+drop policy if exists "spec_template_fields_update" on spec_template_fields;
+drop policy if exists "spec_template_fields_delete" on spec_template_fields;
+create policy "spec_template_fields_select" on spec_template_fields for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "spec_template_fields_insert" on spec_template_fields for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "spec_template_fields_update" on spec_template_fields for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "spec_template_fields_delete" on spec_template_fields for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- category_tech_mappings: maps business categories to technical families + templates
+create table if not exists category_tech_mappings (
+  id               uuid        primary key default gen_random_uuid(),
+  tenant_id        uuid        not null references tenants(id) on delete cascade,
+  category_id      uuid        not null references product_categories(id) on delete cascade,
+  technical_family text        not null,
+  template_id      uuid        references spec_templates(id) on delete set null,
+  default_tags     jsonb       not null default '[]',
+  status           text        not null default 'active' check (status in ('active','pending')),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  unique (tenant_id, category_id)
+);
+create index if not exists idx_category_tech_mappings_tenant on category_tech_mappings (tenant_id);
+create index if not exists idx_category_tech_mappings_category on category_tech_mappings (category_id);
+create index if not exists idx_category_tech_mappings_template on category_tech_mappings (template_id);
+alter table category_tech_mappings enable row level security;
+drop policy if exists "category_tech_mappings_select" on category_tech_mappings;
+drop policy if exists "category_tech_mappings_insert" on category_tech_mappings;
+drop policy if exists "category_tech_mappings_update" on category_tech_mappings;
+drop policy if exists "category_tech_mappings_delete" on category_tech_mappings;
+create policy "category_tech_mappings_select" on category_tech_mappings for select to authenticated using (tenant_id = public.user_tenant_id());
+create policy "category_tech_mappings_insert" on category_tech_mappings for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "category_tech_mappings_update" on category_tech_mappings for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "category_tech_mappings_delete" on category_tech_mappings for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- product_spec_values: actual technical values per product
+create table if not exists product_spec_values (
+  id                  uuid        primary key default gen_random_uuid(),
+  tenant_id           uuid        not null references tenants(id) on delete cascade,
+  product_id          uuid        not null references products(id) on delete cascade,
+  spec_definition_id  uuid        not null references spec_definitions(id) on delete cascade,
+  value_text          text,
+  value_number        numeric,
+  value_boolean       boolean,
+  value_option        text,
+  value_json          jsonb,
+  display_value       text,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  unique (tenant_id, product_id, spec_definition_id)
+);
+create index if not exists idx_product_spec_values_tenant on product_spec_values (tenant_id);
+create index if not exists idx_product_spec_values_product on product_spec_values (product_id);
+create index if not exists idx_product_spec_values_product_def on product_spec_values (product_id, spec_definition_id);
+create index if not exists idx_product_spec_values_filterable on product_spec_values (spec_definition_id, value_option) where value_option is not null;
+alter table product_spec_values enable row level security;
+drop policy if exists "product_spec_values_select" on product_spec_values;
+drop policy if exists "product_spec_values_insert" on product_spec_values;
+drop policy if exists "product_spec_values_update" on product_spec_values;
+drop policy if exists "product_spec_values_delete" on product_spec_values;
+create policy "product_spec_values_select" on product_spec_values for select to authenticated using (tenant_id = public.user_tenant_id());
+create policy "product_spec_values_insert" on product_spec_values for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "product_spec_values_update" on product_spec_values for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "product_spec_values_delete" on product_spec_values for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_profiles: operational behavior for a billable service product
+create table if not exists service_profiles (
+  id                        uuid        primary key default gen_random_uuid(),
+  tenant_id                 uuid        references tenants(id) on delete cascade,
+  key                       text        not null,
+  name                      text        not null,
+  service_family            text        not null,
+  description               text,
+  customer_summary_template text,
+  mechanic_summary_template text,
+  is_active                 boolean     not null default true,
+  created_at                timestamptz not null default now(),
+  updated_at                timestamptz not null default now()
+);
+create unique index if not exists idx_service_profiles_system_key on service_profiles (key) where tenant_id is null;
+create unique index if not exists idx_service_profiles_tenant_key on service_profiles (tenant_id, key) where tenant_id is not null;
+create index if not exists idx_service_profiles_tenant on service_profiles (tenant_id);
+create index if not exists idx_service_profiles_family on service_profiles (service_family) where tenant_id is null;
+alter table service_profiles enable row level security;
+drop policy if exists "service_profiles_select" on service_profiles;
+drop policy if exists "service_profiles_insert" on service_profiles;
+drop policy if exists "service_profiles_update" on service_profiles;
+drop policy if exists "service_profiles_delete" on service_profiles;
+create policy "service_profiles_select" on service_profiles for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "service_profiles_insert" on service_profiles for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "service_profiles_update" on service_profiles for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "service_profiles_delete" on service_profiles for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_product_profile_mappings: links service products to their profiles
+create table if not exists service_product_profile_mappings (
+  id                 uuid        primary key default gen_random_uuid(),
+  tenant_id          uuid        not null references tenants(id) on delete cascade,
+  product_id         uuid        not null references products(id) on delete cascade,
+  service_profile_id uuid        not null references service_profiles(id) on delete cascade,
+  status             text        not null default 'active' check (status in ('active','pending')),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  unique (tenant_id, product_id)
+);
+create index if not exists idx_svc_product_map_tenant on service_product_profile_mappings (tenant_id);
+create index if not exists idx_svc_product_map_product on service_product_profile_mappings (product_id);
+create index if not exists idx_svc_product_map_profile on service_product_profile_mappings (service_profile_id);
+alter table service_product_profile_mappings enable row level security;
+drop policy if exists "svc_product_map_select" on service_product_profile_mappings;
+drop policy if exists "svc_product_map_insert" on service_product_profile_mappings;
+drop policy if exists "svc_product_map_update" on service_product_profile_mappings;
+drop policy if exists "svc_product_map_delete" on service_product_profile_mappings;
+create policy "svc_product_map_select" on service_product_profile_mappings for select to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_product_map_insert" on service_product_profile_mappings for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "svc_product_map_update" on service_product_profile_mappings for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_product_map_delete" on service_product_profile_mappings for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_profile_targets: what a service can target (brake, wheel, hub, etc.)
+create table if not exists service_profile_targets (
+  id                    uuid        primary key default gen_random_uuid(),
+  tenant_id             uuid        references tenants(id) on delete cascade,
+  service_profile_id    uuid        not null references service_profiles(id) on delete cascade,
+  target_family         text        not null,
+  target_position_mode  text        not null default 'none'
+                          check (target_position_mode in ('none','front_rear','left_right','both_allowed')),
+  target_rules          jsonb       not null default '{}',
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+create index if not exists idx_svc_profile_targets_profile on service_profile_targets (service_profile_id);
+alter table service_profile_targets enable row level security;
+drop policy if exists "svc_profile_targets_select" on service_profile_targets;
+drop policy if exists "svc_profile_targets_insert" on service_profile_targets;
+drop policy if exists "svc_profile_targets_update" on service_profile_targets;
+drop policy if exists "svc_profile_targets_delete" on service_profile_targets;
+create policy "svc_profile_targets_select" on service_profile_targets for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "svc_profile_targets_insert" on service_profile_targets for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "svc_profile_targets_update" on service_profile_targets for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_profile_targets_delete" on service_profile_targets for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_profile_questions: guided wizard questions per service
+create table if not exists service_profile_questions (
+  id                  uuid        primary key default gen_random_uuid(),
+  tenant_id           uuid        references tenants(id) on delete cascade,
+  service_profile_id  uuid        not null references service_profiles(id) on delete cascade,
+  key                 text        not null,
+  label               text        not null,
+  question_type       text        not null
+                        check (question_type in ('single_select','multi_select','text','number','boolean','product_picker')),
+  is_required         boolean     not null default false,
+  is_advanced         boolean     not null default false,
+  sort_order          integer     not null default 0,
+  options_json        jsonb       not null default '[]',
+  visibility_rules    jsonb       not null default '[]',
+  default_answer_json jsonb,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  unique (service_profile_id, key)
+);
+create index if not exists idx_svc_profile_questions_profile on service_profile_questions (service_profile_id);
+alter table service_profile_questions enable row level security;
+drop policy if exists "svc_profile_questions_select" on service_profile_questions;
+drop policy if exists "svc_profile_questions_insert" on service_profile_questions;
+drop policy if exists "svc_profile_questions_update" on service_profile_questions;
+drop policy if exists "svc_profile_questions_delete" on service_profile_questions;
+create policy "svc_profile_questions_select" on service_profile_questions for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "svc_profile_questions_insert" on service_profile_questions for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "svc_profile_questions_update" on service_profile_questions for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_profile_questions_delete" on service_profile_questions for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_profile_part_rules: what parts to suggest based on question answers
+create table if not exists service_profile_part_rules (
+  id                      uuid        primary key default gen_random_uuid(),
+  tenant_id               uuid        references tenants(id) on delete cascade,
+  service_profile_id      uuid        not null references service_profiles(id) on delete cascade,
+  rule_name               text        not null,
+  conditions_json         jsonb       not null default '[]',
+  suggested_category_ids  jsonb       not null default '[]',
+  suggested_product_ids   jsonb       not null default '[]',
+  default_quantity        integer     not null default 1,
+  is_required             boolean     not null default false,
+  sort_order              integer     not null default 0,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+create index if not exists idx_svc_profile_part_rules_profile on service_profile_part_rules (service_profile_id);
+alter table service_profile_part_rules enable row level security;
+drop policy if exists "svc_profile_part_rules_select" on service_profile_part_rules;
+drop policy if exists "svc_profile_part_rules_insert" on service_profile_part_rules;
+drop policy if exists "svc_profile_part_rules_update" on service_profile_part_rules;
+drop policy if exists "svc_profile_part_rules_delete" on service_profile_part_rules;
+create policy "svc_profile_part_rules_select" on service_profile_part_rules for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "svc_profile_part_rules_insert" on service_profile_part_rules for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "svc_profile_part_rules_update" on service_profile_part_rules for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_profile_part_rules_delete" on service_profile_part_rules for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- service_profile_task_templates: mechanic task checklist per service
+create table if not exists service_profile_task_templates (
+  id                 uuid        primary key default gen_random_uuid(),
+  tenant_id          uuid        references tenants(id) on delete cascade,
+  service_profile_id uuid        not null references service_profiles(id) on delete cascade,
+  task_name          text        not null,
+  task_description   text,
+  sort_order         integer     not null default 0,
+  conditions_json    jsonb       not null default '[]',
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create index if not exists idx_svc_profile_task_templates_profile on service_profile_task_templates (service_profile_id);
+alter table service_profile_task_templates enable row level security;
+drop policy if exists "svc_profile_task_templates_select" on service_profile_task_templates;
+drop policy if exists "svc_profile_task_templates_insert" on service_profile_task_templates;
+drop policy if exists "svc_profile_task_templates_update" on service_profile_task_templates;
+drop policy if exists "svc_profile_task_templates_delete" on service_profile_task_templates;
+create policy "svc_profile_task_templates_select" on service_profile_task_templates for select to authenticated using (tenant_id is null or tenant_id = public.user_tenant_id());
+create policy "svc_profile_task_templates_insert" on service_profile_task_templates for insert to authenticated with check (tenant_id = public.user_tenant_id());
+create policy "svc_profile_task_templates_update" on service_profile_task_templates for update to authenticated using (tenant_id = public.user_tenant_id());
+create policy "svc_profile_task_templates_delete" on service_profile_task_templates for delete to authenticated using (tenant_id = public.user_tenant_id());
+
+-- ============================================================
+-- SERVICE WIZARD: SYSTEM-LEVEL PROFILES (SEED DATA)
+-- These are global presets (tenant_id = NULL) readable by all tenants.
+-- To link a specific product to a profile, insert into
+-- service_product_profile_mappings per tenant.
+-- ============================================================
+
+-- Hydraulic Brake Bleed
+insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
+values (
+  '00000000-0001-0000-0000-000000000001',
+  null,
+  'hydraulic_brake_bleed',
+  'Sangrado de Freno Hidráulico',
+  'brakes',
+  'Purga y relleno de sistema de freno hidráulico',
+  'Sangrado {{which_wheel}}, fluido {{fluid_type}}',
+  'Sangrado {{which_wheel}} · Fluido: {{fluid_type}} · Pastillas: {{pad_condition}}'
+)
+on conflict (id) do nothing;
+
+-- Questions for hydraulic_brake_bleed
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0001-0001-0000-000000000001', null, '00000000-0001-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas ruedas"}]'::jsonb),
+  ('00000000-0001-0001-0000-000000000002', null, '00000000-0001-0000-0000-000000000001',
+   'fluid_type', 'Tipo de fluido', 'single_select', true, 20,
+   '[{"value":"mineral","label":"Aceite mineral"},{"value":"dot3","label":"DOT 3"},{"value":"dot4","label":"DOT 4"},{"value":"dot51","label":"DOT 5.1"}]'::jsonb),
+  ('00000000-0001-0001-0000-000000000003', null, '00000000-0001-0000-0000-000000000001',
+   'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
+   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
+  ('00000000-0001-0001-0000-000000000004', null, '00000000-0001-0000-0000-000000000001',
+   'replace_pads', '¿Reemplazar pastillas?', 'boolean', false, 40, '[]'::jsonb),
+  ('00000000-0001-0001-0000-000000000005', null, '00000000-0001-0000-0000-000000000001',
+   'rotor_condition', 'Estado del disco/rotor', 'single_select', false, 50,
+   '[{"value":"ok","label":"Buen estado"},{"value":"glazed","label":"Cristalizado"},{"value":"warped","label":"Combado / deformado"},{"value":"replace","label":"Requiere reemplazo"}]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Chain Cleaning & Lubrication
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description)
+values (
+  '00000000-0002-0000-0000-000000000001',
+  null,
+  'chain_lube',
+  'Limpieza y Lubricación de Cadena',
+  'drivetrain',
+  'Limpieza profunda y lubricación de cadena, piñones y platos'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0002-0001-0000-000000000001', null, '00000000-0002-0000-0000-000000000001',
+   'lube_type', 'Tipo de lubricante', 'single_select', true, 10,
+   '[{"value":"dry","label":"Seco (polvo / poca lluvia)"},{"value":"wet","label":"Húmedo (lluvia / barro)"},{"value":"ceramic","label":"Cerámico (alto rendimiento)"},{"value":"wax","label":"Cera"}]'::jsonb),
+  ('00000000-0002-0001-0000-000000000002', null, '00000000-0002-0000-0000-000000000001',
+   'chain_wear', 'Desgaste de la cadena', 'single_select', false, 20,
+   '[{"value":"ok","label":"OK (< 0.5%)"},{"value":"worn","label":"Desgastada (0.5-0.75%) - reemplazar pronto"},{"value":"replace","label":"Muy desgastada (> 0.75%) - cambiar ahora"}]'::jsonb),
+  ('00000000-0002-0001-0000-000000000003', null, '00000000-0002-0000-0000-000000000001',
+   'derailleur_check', '¿Revisar derailleur?', 'boolean', false, 30, '[]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Derailleur / Gear Adjustment
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description)
+values (
+  '00000000-0003-0000-0000-000000000001',
+  null,
+  'derailleur_adjustment',
+  'Ajuste de Cambios',
+  'drivetrain',
+  'Ajuste y calibración de desviadores delantero y trasero'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0003-0001-0000-000000000001', null, '00000000-0003-0000-0000-000000000001',
+   'derailleurs', '¿Qué desviadores?', 'multi_select', true, 10,
+   '[{"value":"rear","label":"Trasero"},{"value":"front","label":"Delantero"}]'::jsonb),
+  ('00000000-0003-0001-0000-000000000002', null, '00000000-0003-0000-0000-000000000001',
+   'cable_condition', 'Estado de cables', 'single_select', false, 20,
+   '[{"value":"ok","label":"OK"},{"value":"frayed","label":"Deshilachados - reemplazar"},{"value":"replace","label":"Ya reemplazados"}]'::jsonb),
+  ('00000000-0003-0001-0000-000000000003', null, '00000000-0003-0000-0000-000000000001',
+   'include_housing', '¿Incluye funda de cables?', 'boolean', false, 30, '[]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Wheel Truing
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description)
+values (
+  '00000000-0004-0000-0000-000000000001',
+  null,
+  'wheel_truing',
+  'Centrado de Rueda',
+  'wheels',
+  'Centrado y tensado de radios'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0004-0001-0000-000000000001', null, '00000000-0004-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+  ('00000000-0004-0001-0000-000000000002', null, '00000000-0004-0000-0000-000000000001',
+   'rim_damage', 'Daño en el aro', 'single_select', false, 20,
+   '[{"value":"none","label":"Sin daño visible"},{"value":"minor","label":"Leve - centrado posible"},{"value":"major","label":"Grave - puede requerir reemplazo"}]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Piston Clean & Reset (Limpieza y Elongación de Pistones)
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
+values (
+  '00000000-0005-0000-0000-000000000001',
+  null,
+  'piston_clean_and_reset',
+  'Limpieza y Elongación de Pistones',
+  'brakes',
+  'Limpieza y elongación de pistones de freno hidráulico',
+  'Pistones {{which_wheel}}, contaminación {{contamination_level}}',
+  'Pistones {{which_wheel}} · Contaminación: {{contamination_level}} · Sellos: {{replace_seals}}'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0005-0001-0000-000000000001', null, '00000000-0005-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+  ('00000000-0005-0001-0000-000000000002', null, '00000000-0005-0000-0000-000000000001',
+   'piston_count', 'Número de pistones', 'single_select', false, 20,
+   '[{"value":"2","label":"2 pistones"},{"value":"4","label":"4 pistones"}]'::jsonb),
+  ('00000000-0005-0001-0000-000000000003', null, '00000000-0005-0000-0000-000000000001',
+   'contamination_level', 'Nivel de contaminación', 'single_select', false, 30,
+   '[{"value":"none","label":"Sin contaminación"},{"value":"light","label":"Leve"},{"value":"moderate","label":"Moderada"},{"value":"severe","label":"Severa"}]'::jsonb),
+  ('00000000-0005-0001-0000-000000000004', null, '00000000-0005-0000-0000-000000000001',
+   'replace_seals', '¿Reemplazar sellos?', 'boolean', false, 40, '[]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Brake Adjustment (Regulación de Freno)
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
+values (
+  '00000000-0006-0000-0000-000000000001',
+  null,
+  'brake_adjustment',
+  'Regulación de Freno',
+  'brakes',
+  'Ajuste y regulación de frenos mecánicos o hidráulicos',
+  'Regulación {{which_wheel}}, tipo {{brake_type}}',
+  'Regulación {{which_wheel}} · Tipo: {{brake_type}} · Fundas: {{includes_cable_housing}}'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0006-0001-0000-000000000001', null, '00000000-0006-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+  ('00000000-0006-0001-0000-000000000002', null, '00000000-0006-0000-0000-000000000001',
+   'brake_type', 'Tipo de freno', 'single_select', true, 20,
+   '[{"value":"mech_disc","label":"Mecánico (disco)"},{"value":"rim","label":"Llanta (rim)"},{"value":"hydraulic","label":"Hidráulico"}]'::jsonb),
+  ('00000000-0006-0001-0000-000000000003', null, '00000000-0006-0000-0000-000000000001',
+   'includes_cable_housing', '¿Incluye fundas y piolas?', 'boolean', false, 30, '[]'::jsonb),
+  ('00000000-0006-0001-0000-000000000004', null, '00000000-0006-0000-0000-000000000001',
+   'pad_condition', 'Estado de las pastillas', 'single_select', false, 40,
+   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- General Brake Service (Mantención de Freno)
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
+values (
+  '00000000-0007-0000-0000-000000000001',
+  null,
+  'brake_service_general',
+  'Mantención de Freno',
+  'brakes',
+  'Mantención general del sistema de freno',
+  'Mantención {{which_wheel}}, tipo {{brake_type}}',
+  'Mantención {{which_wheel}} · Tipo: {{brake_type}} · Pastillas: {{pad_condition}}'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0007-0001-0000-000000000001', null, '00000000-0007-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+  ('00000000-0007-0001-0000-000000000002', null, '00000000-0007-0000-0000-000000000001',
+   'brake_type', 'Tipo de freno', 'single_select', true, 20,
+   '[{"value":"mech_disc","label":"Mecánico (disco)"},{"value":"rim","label":"Llanta (rim)"},{"value":"hydraulic","label":"Hidráulico"}]'::jsonb),
+  ('00000000-0007-0001-0000-000000000003', null, '00000000-0007-0000-0000-000000000001',
+   'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
+   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
+  ('00000000-0007-0001-0000-000000000004', null, '00000000-0007-0000-0000-000000000001',
+   'fluid_check', '¿Revisar nivel de fluido hidráulico?', 'boolean', false, 40, '[]'::jsonb)
+on conflict (id) do nothing;
+
+-- ============================================================
+-- Rotor Truing (Centrado de Rotor)
+-- ============================================================
+insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
+values (
+  '00000000-0008-0000-0000-000000000001',
+  null,
+  'rotor_truing',
+  'Centrado de Rotor',
+  'brakes',
+  'Centrado y ajuste de disco/rotor de freno',
+  'Centrado rotor {{which_wheel}}',
+  'Rotor {{which_wheel}} · Daño: {{damage_level}}'
+)
+on conflict (id) do nothing;
+
+insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
+values
+  ('00000000-0008-0001-0000-000000000001', null, '00000000-0008-0000-0000-000000000001',
+   'which_wheel', '¿Qué rueda?', 'single_select', true, 10,
+   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+  ('00000000-0008-0001-0000-000000000002', null, '00000000-0008-0000-0000-000000000001',
+   'rotor_size', 'Tamaño del rotor', 'single_select', false, 20,
+   '[{"value":"140","label":"140 mm"},{"value":"160","label":"160 mm"},{"value":"180","label":"180 mm"},{"value":"203","label":"203 mm"}]'::jsonb),
+  ('00000000-0008-0001-0000-000000000003', null, '00000000-0008-0000-0000-000000000001',
+   'damage_level', 'Nivel de daño del rotor', 'single_select', false, 30,
+   '[{"value":"minor","label":"Leve - centrado posible"},{"value":"moderate","label":"Moderado"},{"value":"severe","label":"Severo - puede requerir reemplazo"}]'::jsonb)
+on conflict (id) do nothing;
