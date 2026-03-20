@@ -525,16 +525,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           child: Column(
             children: [
               // Search bar
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  border: Border(
-                    bottom: BorderSide(color: theme.dividerColor),
-                  ),
-                ),
-                child: _buildSearchBar(),
-              ),
+              _buildSearchBar(),
               // Invoice cards list
               Expanded(
                 child: _buildInvoiceCardsList(invoices),
@@ -556,7 +547,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             onHorizontalDragEnd: (_) => _saveListPaneWidth(_listPaneWidth),
             child: Container(
               width: 1,
-              color: theme.dividerColor,
+              color: Colors.grey[300],
             ),
           ),
         ),
@@ -847,47 +838,37 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Widget _buildSearchBar([bool isMobile = false]) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchTerm = value),
-            decoration: InputDecoration(
-              hintText: 'Buscar por número, proveedor o RUT...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _searchTerm.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 20),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchTerm = '');
-                      },
-                    )
-                  : null,
-              isDense: true,
-              filled: true,
-              fillColor: Theme.of(context).brightness == Brightness.dark
-                  ? Theme.of(context).colorScheme.surfaceContainerHighest
-                  : Colors.grey[50],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Theme.of(context).dividerColor),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por número, proveedor o RUT...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _searchController.clear();
+                            _searchTerm = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                isDense: true,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Theme.of(context).dividerColor),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    BorderSide(color: Theme.of(context).colorScheme.primary),
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              onChanged: (value) => setState(() => _searchTerm = value),
             ),
           ),
-        ),
         if (!isMobile) ...[
           const SizedBox(width: 8),
           PopupMenuButton<String>(
@@ -933,7 +914,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               .read<PurchaseService>()
               .getPurchaseInvoices(forceRefresh: true),
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1142,7 +1124,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   : Colors.blue[50])
               : null,
           border: Border(
-            bottom: BorderSide(color: theme.dividerColor, width: 1),
+            bottom: BorderSide(color: isDark ? theme.dividerColor : Colors.grey[200]!, width: 1),
           ),
         ),
         child: Row(
@@ -1411,12 +1393,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   Widget _buildStatusChip(PurchaseInvoiceStatus status) {
     final labels = {
-      PurchaseInvoiceStatus.draft: 'Borrador',
-      PurchaseInvoiceStatus.sent: 'Enviada',
-      PurchaseInvoiceStatus.confirmed: 'Confirmada',
-      PurchaseInvoiceStatus.received: 'Recibida',
-      PurchaseInvoiceStatus.paid: 'Pagada',
-      PurchaseInvoiceStatus.cancelled: 'Anulada',
+      PurchaseInvoiceStatus.draft: 'BORRADOR',
+      PurchaseInvoiceStatus.sent: 'ENVIADA',
+      PurchaseInvoiceStatus.confirmed: 'CONFIRMADA',
+      PurchaseInvoiceStatus.received: 'RECIBIDA',
+      PurchaseInvoiceStatus.paid: 'PAGADA',
+      PurchaseInvoiceStatus.cancelled: 'ANULADA',
     };
 
     final colors = {
@@ -1431,17 +1413,343 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final color = colors[status] ?? Colors.grey;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(3),
       ),
       child: Text(
-        labels[status] ?? status.name,
+        labels[status] ?? status.name.toUpperCase(),
         style: TextStyle(
           color: color,
-          fontSize: 11,
+          fontSize: 10.5,
           fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // STATUS TRANSITION LOGIC
+  // ============================================================
+
+  Future<void> _updateStatus(PurchaseInvoice invoice, PurchaseInvoiceStatus newStatus) async {
+    if (invoice.id == null) return;
+
+    final purchaseService = context.read<PurchaseService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final updated = await purchaseService.updateInvoiceStatus(
+        invoice.id!,
+        newStatus,
+      );
+
+      if (!mounted) return;
+
+      if (updated != null) {
+        setState(() => _selectedInvoice = updated);
+      }
+
+      String message;
+      switch (newStatus) {
+        case PurchaseInvoiceStatus.sent:
+          message = 'Factura enviada al proveedor';
+          break;
+        case PurchaseInvoiceStatus.confirmed:
+          message = 'Factura confirmada';
+          break;
+        case PurchaseInvoiceStatus.received:
+          message = 'Factura marcada como recibida. Inventario actualizado.';
+          break;
+        case PurchaseInvoiceStatus.draft:
+          message = 'Factura revertida a borrador';
+          break;
+        default:
+          message = 'Estado actualizado';
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error al actualizar estado: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _openPaymentForm(PurchaseInvoice invoice) async {
+    if (invoice.id == null) return;
+
+    final didRegisterPayment = await context.push<bool>(
+      '/purchases/invoices/${invoice.id}/payment',
+    ) ?? false;
+
+    if (didRegisterPayment && mounted) {
+      final invoices = await context.read<PurchaseService>().getPurchaseInvoices(forceRefresh: true);
+      final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
+      if (mounted) {
+        setState(() => _selectedInvoice = updated);
+      }
+    }
+  }
+
+  Future<void> _undoLastPayment(PurchaseInvoice invoice) async {
+    if (invoice.id == null) return;
+
+    final purchaseService = context.read<PurchaseService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Get all payments for this invoice
+    final payments = await purchaseService.getPaymentsForInvoice(invoice.id!);
+    if (payments.isEmpty) {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No hay pagos para deshacer'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    // Get the last payment
+    payments.sort((a, b) => b.date.compareTo(a.date));
+    final lastPayment = payments.first;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deshacer pago'),
+        content: Text(
+          'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
+          'y su asiento contable asociado.\n\n'
+          'Este cambio se reflejará instantáneamente. ¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar pago'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await purchaseService.deletePayment(lastPayment.id!);
+      if (mounted) {
+        final invoices = await purchaseService.getPurchaseInvoices(forceRefresh: true);
+        final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
+        if (mounted) {
+          setState(() => _selectedInvoice = updated);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Pago eliminado correctamente'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error al eliminar el pago: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ============================================================
+  // WORKFLOW BANNER
+  // ============================================================
+
+  Widget _buildWorkflowBanner(PurchaseInvoice invoice) {
+    if (invoice.id == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
+    String? nextActionLabel;
+    String? subLabel;
+    VoidCallback? onActionPressed;
+    final List<Widget> secondaryActions = [];
+
+    final effectiveBalance = invoice.total - invoice.paidAmount;
+
+    switch (invoice.status) {
+      case PurchaseInvoiceStatus.draft:
+        nextActionLabel = 'Enviar';
+        subLabel = 'Envía la orden al proveedor.';
+        onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.sent);
+        break;
+
+      case PurchaseInvoiceStatus.sent:
+        nextActionLabel = 'Confirmar';
+        subLabel = 'Confirma la recepción o aceptación por el proveedor.';
+        onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.confirmed);
+        secondaryActions.add(
+          OutlinedButton.icon(
+            onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.draft),
+            icon: const Icon(Icons.undo, size: 16),
+            label: const Text('Volver a borrador'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        );
+        break;
+
+      case PurchaseInvoiceStatus.confirmed:
+        secondaryActions.add(
+          OutlinedButton.icon(
+            onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.sent),
+            icon: const Icon(Icons.undo, size: 16),
+            label: const Text('Volver a enviado'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        );
+
+        if (invoice.prepaymentModel) {
+          if (effectiveBalance <= 0) {
+            nextActionLabel = 'Marcar como Recibida';
+            subLabel = 'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
+            onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+          } else {
+            nextActionLabel = 'Registrar pago';
+            subLabel = 'Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}. Debes pagar antes de recibir los productos.';
+            onActionPressed = () => _openPaymentForm(invoice);
+          }
+        } else {
+          nextActionLabel = 'Marcar como Recibida';
+          subLabel = 'Confirma la recepción física para ingresar al inventario antes del pago.';
+          onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+        }
+        break;
+
+      case PurchaseInvoiceStatus.received:
+        if (invoice.prepaymentModel && effectiveBalance <= 0) {
+          subLabel = 'Productos recibidos e inventario actualizado tras el prepago.';
+          secondaryActions.add(
+            OutlinedButton.icon(
+              onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.paid),
+              icon: const Icon(Icons.undo, size: 16),
+              label: const Text('Volver a pagada'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          );
+        } else {
+          if (effectiveBalance > 0) {
+            nextActionLabel = 'Registrar pago';
+            subLabel = 'Productos recibidos. Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}.';
+            onActionPressed = () => _openPaymentForm(invoice);
+          } else {
+            subLabel = 'Productos recibidos e inventario actualizado.';
+          }
+          secondaryActions.add(
+            OutlinedButton.icon(
+              onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.confirmed),
+              icon: const Icon(Icons.undo, size: 16),
+              label: const Text('Volver a confirmada'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          );
+        }
+        break;
+
+      case PurchaseInvoiceStatus.paid:
+        subLabel = 'Esta factura ha sido pagada en su totalidad.';
+        if (invoice.prepaymentModel) {
+          nextActionLabel = 'Marcar como Recibida';
+          subLabel = 'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
+          onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+        }
+
+        secondaryActions.add(
+          OutlinedButton.icon(
+            onPressed: () => _undoLastPayment(invoice),
+            icon: const Icon(Icons.history, size: 16),
+            label: const Text('Deshacer pago'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red[700],
+              side: BorderSide(color: Colors.red[100]!),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        );
+        break;
+
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.info_outline, color: primaryColor, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'FLUJO DE TRABAJO',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: primaryColor.withOpacity(0.8),
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  Text(
+                    subLabel,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            ...secondaryActions.map((action) => Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: action,
+                )),
+            if (nextActionLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: FilledButton(
+                  onPressed: onActionPressed,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: invoice.status == PurchaseInvoiceStatus.sent ? Colors.green[600] : primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  child: Text(nextActionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -1453,6 +1761,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       child: Column(
         children: [
           _buildActionBar(invoice),
+          _buildWorkflowBanner(invoice),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {

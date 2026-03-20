@@ -1814,24 +1814,41 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             );
           }
         } else if (_status == PurchaseInvoiceStatus.received) {
-          // Received (standard workflow): Can register payment
-          actionButtons.add(
-            OutlinedButton.icon(
-              onPressed: _isUpdatingStatus
-                  ? null
-                  : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
-              icon: const Icon(Icons.undo_outlined),
-              label: const Text('Volver a confirmado'),
-            ),
-          );
-          actionButtons.add(const SizedBox(width: 8));
-          actionButtons.add(
-            FilledButton.icon(
-              onPressed: _openPaymentForm,
-              icon: const Icon(Icons.payments_outlined),
-              label: const Text('Registrar pago'),
-            ),
-          );
+          // Received workflow
+          final effectiveBalance = _total - (_loadedInvoice?.paidAmount ?? 0);
+          final isPrepayment = _isPrepaymentModel;
+
+          if (isPrepayment && effectiveBalance <= 0) {
+            actionButtons.add(
+              OutlinedButton.icon(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(PurchaseInvoiceStatus.paid),
+                icon: const Icon(Icons.undo_outlined),
+                label: const Text('Volver a pagada'),
+              ),
+            );
+          } else {
+            actionButtons.add(
+              OutlinedButton.icon(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(PurchaseInvoiceStatus.confirmed),
+                icon: const Icon(Icons.undo_outlined),
+                label: const Text('Volver a confirmada'),
+              ),
+            );
+            if (effectiveBalance > 0) {
+              actionButtons.add(const SizedBox(width: 8));
+              actionButtons.add(
+                FilledButton.icon(
+                  onPressed: _openPaymentForm,
+                  icon: const Icon(Icons.payments_outlined),
+                  label: const Text('Registrar pago'),
+                ),
+              );
+            }
+          }
         } else if (_status == PurchaseInvoiceStatus.paid) {
           // Paid: Can undo payment or mark as received (prepayment only)
           final isPrepayment = _isPrepaymentModel;
