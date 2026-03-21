@@ -50,7 +50,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   ExpenseDocumentType _documentType = ExpenseDocumentType.invoice;
   Account? _selectedAccount;
   ExpenseCategory? _selectedCategory;
-  PaymentMethod? _selectedPaymentMethod;
+  String? _selectedPaymentMethodId;
   shared_supplier.Supplier? _selectedSupplier;
 
   List<Account> _accounts = const [];
@@ -62,6 +62,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   @override
   void initState() {
     super.initState();
+    _amountController.addListener(_handleFormValueChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -69,6 +70,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   @override
   void dispose() {
+    _amountController.removeListener(_handleFormValueChanged);
     _amountController.dispose();
     _descriptionController.dispose();
     _referenceController.dispose();
@@ -126,6 +128,22 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     return _recentExpenses
         .where((expense) => expense.paymentStatus != ExpensePaymentStatus.paid)
         .fold<double>(0, (sum, expense) => sum + expense.balance);
+  }
+
+  PaymentMethod? get _selectedPaymentMethod {
+    final selectedId = _selectedPaymentMethodId;
+    if (selectedId == null) return null;
+
+    for (final method in _paymentMethods) {
+      if (method.id == selectedId) return method;
+    }
+
+    return null;
+  }
+
+  void _handleFormValueChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   int get _pendingExpenseCount {
@@ -187,7 +205,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         _selectedAccount ??= _resolveDefaultAccount(allAccounts);
         _selectedCategory ??=
             _resolveDefaultCategory(categories, _selectedAccount);
-        _selectedPaymentMethod ??= _resolveDefaultPaymentMethod(methods);
+        _selectedPaymentMethodId = _resolveSelectedPaymentMethodId(methods);
 
         _bannerMessage = 'Próximo folio: $nextNumber';
         _isLoading = false;
@@ -233,6 +251,19 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       if (match.isNotEmpty) return match.first;
     }
     return methods.first;
+  }
+
+  String? _resolveSelectedPaymentMethodId(List<PaymentMethod> methods) {
+    if (methods.isEmpty) return null;
+
+    final currentId = _selectedPaymentMethodId;
+    if (currentId != null) {
+      for (final method in methods) {
+        if (method.id == currentId) return currentId;
+      }
+    }
+
+    return _resolveDefaultPaymentMethod(methods)?.id;
   }
 
   Future<void> _pickExpenseDate() async {
@@ -301,11 +332,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     }
 
     final description = _descriptionController.text.trim();
-    if (description.isEmpty) {
-      _showMessage('Agrega una descripción corta para el gasto.',
-          isError: true);
-      return;
-    }
 
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
@@ -339,7 +365,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         totalAmount: _totalAmount,
         amountPaid: _totalAmount,
         balance: 0,
-        notes: description,
+        notes: description.isEmpty ? null : description,
         reference: _referenceController.text.trim().isEmpty
             ? null
             : _referenceController.text.trim(),
@@ -356,7 +382,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             accountId: _selectedAccount!.id!,
             accountCode: _selectedAccount!.code,
             accountName: _selectedAccount!.name,
-            description: description,
+            description: description.isEmpty ? null : description,
             quantity: 1,
             unitPrice: _netAmount,
             subtotal: _netAmount,
@@ -412,21 +438,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   String _formatDate(DateTime date) {
     return DateFormat('dd/MM', 'es_CL').format(date);
-  }
-
-  String _documentTypeLabel(ExpenseDocumentType type) {
-    switch (type) {
-      case ExpenseDocumentType.invoice:
-        return 'Factura';
-      case ExpenseDocumentType.receipt:
-        return 'Boleta';
-      case ExpenseDocumentType.ticket:
-        return 'Ticket';
-      case ExpenseDocumentType.reimbursement:
-        return 'Reembolso';
-      case ExpenseDocumentType.other:
-        return 'Otro';
-    }
   }
 
   String _paymentStatusLabel(ExpensePaymentStatus status) {
@@ -794,6 +805,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
             ],
+            onChanged: (_) => _handleFormValueChanged(),
             decoration: InputDecoration(
               labelText: 'Monto total',
               hintText: '45.000',
@@ -884,8 +896,9 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                       .toList(),
                   onChanged: _isSaving
                       ? null
-                      : (method) =>
-                          setState(() => _selectedPaymentMethod = method),
+                      : (method) => setState(
+                            () => _selectedPaymentMethodId = method?.id,
+                          ),
                 ),
               ),
             ],

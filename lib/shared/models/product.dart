@@ -24,7 +24,7 @@ class Product {
   final String? model;
   final Map<String, String> specifications;
   final String? supplierId;
-  final String? supplierName;
+  final String? supplierName; // Denormalized supplier name
   final String? supplierReference;
   final String? supplierCode; // Código Proveedor
   final String? manufacturer;

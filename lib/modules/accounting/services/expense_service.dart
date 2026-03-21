@@ -62,7 +62,9 @@ class ExpenseService extends ChangeNotifier {
     for (var i = 0; i < expenseIds.length; i += chunkSize) {
       final chunk = expenseIds.sublist(
         i,
-        (i + chunkSize) > expenseIds.length ? expenseIds.length : (i + chunkSize),
+        (i + chunkSize) > expenseIds.length
+            ? expenseIds.length
+            : (i + chunkSize),
       );
       final rows = await _databaseService.select(
         'expense_payments',
@@ -193,6 +195,21 @@ class ExpenseService extends ChangeNotifier {
 
       final saved = Expense.fromJson(stored);
       await _syncExpenseLines(saved.id!, saved.tenantId, expense.lines);
+
+      if (saved.postingStatus == ExpensePostingStatus.posted) {
+        await _databaseService.rpc(
+          'recalculate_expense_totals',
+          params: {'p_expense_id': saved.id},
+        );
+        await _databaseService.rpc(
+          'delete_expense_journal_entry',
+          params: {'p_expense_id': saved.id},
+        );
+        await _databaseService.rpc(
+          'create_expense_journal_entry',
+          params: {'p_expense_id': saved.id},
+        );
+      }
 
       // Payments are handled via dedicated endpoints to maintain audit trail.
       // Attachments are managed separately as well.

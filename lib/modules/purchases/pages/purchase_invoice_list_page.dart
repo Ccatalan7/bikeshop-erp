@@ -5,7 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/models/payment_method.dart';
+import '../../../shared/services/payment_method_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -39,6 +43,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   String _selectedStatus = 'all'; // all, draft, pending, paid, overdue
 
   PurchaseInvoice? _selectedInvoice;
+  // When true, the right pane shows the inline payment form instead of the PDF
+  bool _showingPaymentForm = false;
+  // Payment form state
+  final _paymentFormKey = GlobalKey<FormState>();
+  final _paymentAmountController = TextEditingController();
+  final _paymentReferenceController = TextEditingController();
+  final _paymentNotesController = TextEditingController();
+  PaymentMethod? _selectedPaymentMethod;
+  DateTime _paymentDate = DateTime.now();
+  bool _isSavingPayment = false;
+  bool _isLoadingPaymentMethods = false;
+  List<PaymentMethod> _paymentMethods = [];
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
   static const double _maxListPaneWidth = 900.0;
@@ -97,6 +113,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     _searchController.dispose();
     _headerScrollController.dispose();
     _bodyScrollController.dispose();
+    _paymentAmountController.dispose();
+    _paymentReferenceController.dispose();
+    _paymentNotesController.dispose();
     super.dispose();
   }
 
@@ -767,6 +786,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 // Desktop: Select
                 setState(() {
                   _selectedInvoice = invoice;
+                  _showingPaymentForm = false;
                 });
               }
             },
@@ -869,51 +889,51 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               onChanged: (value) => setState(() => _searchTerm = value),
             ),
           ),
-        if (!isMobile) ...[
+          if (!isMobile) ...[
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.view_column_outlined),
+              tooltip: 'Columnas',
+              itemBuilder: (context) {
+                return _visibleColumns.keys.map((column) {
+                  return CheckedPopupMenuItem<String>(
+                    value: column,
+                    checked: _visibleColumns[column] ?? false,
+                    child: Text(column == 'date'
+                        ? 'Fecha'
+                        : column == 'invoice_number'
+                            ? 'N° Factura'
+                            : column == 'supplier'
+                                ? 'Proveedor'
+                                : column == 'status'
+                                    ? 'Estado'
+                                    : column == 'total'
+                                        ? 'Total'
+                                        : column == 'balance'
+                                            ? 'Saldo'
+                                            : column),
+                  );
+                }).toList();
+              },
+              onSelected: (column) {
+                setState(() {
+                  _visibleColumns[column] = !(_visibleColumns[column] ?? false);
+                });
+                SharedPreferences.getInstance().then((prefs) {
+                  prefs.setBool('purchase_invoice_visible_$column',
+                      _visibleColumns[column] ?? false);
+                });
+              },
+            ),
+          ],
           const SizedBox(width: 8),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.view_column_outlined),
-            tooltip: 'Columnas',
-            itemBuilder: (context) {
-              return _visibleColumns.keys.map((column) {
-                return CheckedPopupMenuItem<String>(
-                  value: column,
-                  checked: _visibleColumns[column] ?? false,
-                  child: Text(column == 'date'
-                      ? 'Fecha'
-                      : column == 'invoice_number'
-                          ? 'N° Factura'
-                          : column == 'supplier'
-                              ? 'Proveedor'
-                              : column == 'status'
-                                  ? 'Estado'
-                                  : column == 'total'
-                                      ? 'Total'
-                                      : column == 'balance'
-                                          ? 'Saldo'
-                                          : column),
-                );
-              }).toList();
-            },
-            onSelected: (column) {
-              setState(() {
-                _visibleColumns[column] = !(_visibleColumns[column] ?? false);
-              });
-              SharedPreferences.getInstance().then((prefs) {
-                prefs.setBool('purchase_invoice_visible_$column',
-                    _visibleColumns[column] ?? false);
-              });
-            },
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () => context
+                .read<PurchaseService>()
+                .getPurchaseInvoices(forceRefresh: true),
           ),
-        ],
-        const SizedBox(width: 8),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Actualizar',
-          onPressed: () => context
-              .read<PurchaseService>()
-              .getPurchaseInvoices(forceRefresh: true),
-        ),
         ],
       ),
     );
@@ -1113,6 +1133,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       onTap: () {
         setState(() {
           _selectedInvoice = isSelected ? null : invoice;
+          _showingPaymentForm = false;
         });
       },
       hoverColor: isDark ? Colors.grey[800] : Colors.grey[50],
@@ -1124,7 +1145,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   : Colors.blue[50])
               : null,
           border: Border(
-            bottom: BorderSide(color: isDark ? theme.dividerColor : Colors.grey[200]!, width: 1),
+            bottom: BorderSide(
+                color: isDark ? theme.dividerColor : Colors.grey[200]!,
+                width: 1),
           ),
         ),
         child: Row(
@@ -1434,7 +1457,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   // STATUS TRANSITION LOGIC
   // ============================================================
 
-  Future<void> _updateStatus(PurchaseInvoice invoice, PurchaseInvoiceStatus newStatus) async {
+  Future<void> _updateStatus(
+      PurchaseInvoice invoice, PurchaseInvoiceStatus newStatus) async {
     if (invoice.id == null) return;
 
     final purchaseService = context.read<PurchaseService>();
@@ -1476,24 +1500,123 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Error al actualizar estado: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Error al actualizar estado: $e'),
+            backgroundColor: Colors.red),
       );
     }
   }
 
   Future<void> _openPaymentForm(PurchaseInvoice invoice) async {
     if (invoice.id == null) return;
+    // Load payment methods
+    setState(() {
+      _isLoadingPaymentMethods = true;
+      _showingPaymentForm = true;
+      _paymentDate = DateTime.now();
+      _paymentAmountController.text = '';
+      _paymentReferenceController.text = '';
+      _paymentNotesController.text = '';
+      _selectedPaymentMethod = null;
+    });
+    final paymentMethodService = context.read<PaymentMethodService>();
+    await paymentMethodService.loadPaymentMethods();
+    if (mounted) {
+      setState(() {
+        _isLoadingPaymentMethods = false;
+        _paymentMethods = paymentMethodService.paymentMethods;
+        if (_paymentMethods.isNotEmpty) {
+          _selectedPaymentMethod = _paymentMethods.first;
+        }
+        // Pre-fill the balance
+        final balance = invoice.total - invoice.paidAmount;
+        _paymentAmountController.text =
+            balance > 0 ? balance.toStringAsFixed(0) : '';
+      });
+    }
+  }
 
-    final didRegisterPayment = await context.push<bool>(
-      '/purchases/invoices/${invoice.id}/payment',
-    ) ?? false;
+  double _effectiveBalance(PurchaseInvoice invoice) {
+    final b = invoice.balance;
+    if (b > 0) return b;
+    final calculated = invoice.total - invoice.paidAmount;
+    return calculated < 0 ? 0 : calculated;
+  }
 
-    if (didRegisterPayment && mounted) {
-      final invoices = await context.read<PurchaseService>().getPurchaseInvoices(forceRefresh: true);
-      final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
+  Future<void> _submitInlinePayment(PurchaseInvoice invoice) async {
+    if (!(_paymentFormKey.currentState?.validate() ?? false)) return;
+    if (_selectedPaymentMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un método de pago.')),
+      );
+      return;
+    }
+    final rawAmount = _paymentAmountController.text
+        .trim()
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+    final amount = double.tryParse(rawAmount);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un monto válido.')),
+      );
+      return;
+    }
+    final balance = _effectiveBalance(invoice);
+    if (amount.round() - balance.round() > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'El pago no puede exceder el saldo (${ChileanUtils.formatCurrency(balance)})')),
+      );
+      return;
+    }
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) return;
+
+    setState(() => _isSavingPayment = true);
+    try {
+      final payment = PurchasePayment(
+        tenantId: tenantId,
+        invoiceId: invoice.id!,
+        paymentMethodId: _selectedPaymentMethod!.id,
+        amount: amount > balance ? balance : amount,
+        date: _paymentDate,
+        reference: _paymentReferenceController.text.trim().isEmpty
+            ? null
+            : _paymentReferenceController.text.trim(),
+        notes: _paymentNotesController.text.trim().isEmpty
+            ? null
+            : _paymentNotesController.text.trim(),
+      );
+      await context.read<PurchaseService>().createPayment(payment);
+
       if (mounted) {
-        setState(() => _selectedInvoice = updated);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Pago registrado correctamente'),
+              backgroundColor: Colors.green),
+        );
+        // Refresh and go back to PDF view
+        final invoices = await context
+            .read<PurchaseService>()
+            .getPurchaseInvoices(forceRefresh: true);
+        final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
+        setState(() {
+          _selectedInvoice = updated;
+          _showingPaymentForm = false;
+        });
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('No se pudo registrar el pago: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingPayment = false);
     }
   }
 
@@ -1508,7 +1631,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     if (payments.isEmpty) {
       if (mounted) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No hay pagos para deshacer'), backgroundColor: Colors.orange),
+          const SnackBar(
+              content: Text('No hay pagos para deshacer'),
+              backgroundColor: Colors.orange),
         );
       }
       return;
@@ -1546,19 +1671,24 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     try {
       await purchaseService.deletePayment(lastPayment.id!);
       if (mounted) {
-        final invoices = await purchaseService.getPurchaseInvoices(forceRefresh: true);
+        final invoices =
+            await purchaseService.getPurchaseInvoices(forceRefresh: true);
         final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
         if (mounted) {
           setState(() => _selectedInvoice = updated);
           messenger.showSnackBar(
-            const SnackBar(content: Text('Pago eliminado correctamente'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('Pago eliminado correctamente'),
+                backgroundColor: Colors.green),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Error al eliminar el pago: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error al eliminar el pago: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -1585,16 +1715,19 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       case PurchaseInvoiceStatus.draft:
         nextActionLabel = 'Enviar';
         subLabel = 'Envía la orden al proveedor.';
-        onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.sent);
+        onActionPressed =
+            () => _updateStatus(invoice, PurchaseInvoiceStatus.sent);
         break;
 
       case PurchaseInvoiceStatus.sent:
         nextActionLabel = 'Confirmar';
         subLabel = 'Confirma la recepción o aceptación por el proveedor.';
-        onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.confirmed);
+        onActionPressed =
+            () => _updateStatus(invoice, PurchaseInvoiceStatus.confirmed);
         secondaryActions.add(
           OutlinedButton.icon(
-            onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.draft),
+            onPressed: () =>
+                _updateStatus(invoice, PurchaseInvoiceStatus.draft),
             icon: const Icon(Icons.undo, size: 16),
             label: const Text('Volver a borrador'),
             style: OutlinedButton.styleFrom(
@@ -1619,48 +1752,59 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         if (invoice.prepaymentModel) {
           if (effectiveBalance <= 0) {
             nextActionLabel = 'Marcar como Recibida';
-            subLabel = 'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
-            onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+            subLabel =
+                'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
+            onActionPressed =
+                () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
           } else {
             nextActionLabel = 'Registrar pago';
-            subLabel = 'Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}. Debes pagar antes de recibir los productos.';
+            subLabel =
+                'Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}. Debes pagar antes de recibir los productos.';
             onActionPressed = () => _openPaymentForm(invoice);
           }
         } else {
           nextActionLabel = 'Marcar como Recibida';
-          subLabel = 'Confirma la recepción física para ingresar al inventario antes del pago.';
-          onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+          subLabel =
+              'Confirma la recepción física para ingresar al inventario antes del pago.';
+          onActionPressed =
+              () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
         }
         break;
 
       case PurchaseInvoiceStatus.received:
         if (invoice.prepaymentModel && effectiveBalance <= 0) {
-          subLabel = 'Productos recibidos e inventario actualizado tras el prepago.';
+          subLabel =
+              'Productos recibidos e inventario actualizado tras el prepago.';
           secondaryActions.add(
             OutlinedButton.icon(
-              onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.paid),
+              onPressed: () =>
+                  _updateStatus(invoice, PurchaseInvoiceStatus.paid),
               icon: const Icon(Icons.undo, size: 16),
               label: const Text('Volver a pagada'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
             ),
           );
         } else {
           if (effectiveBalance > 0) {
             nextActionLabel = 'Registrar pago';
-            subLabel = 'Productos recibidos. Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}.';
+            subLabel =
+                'Productos recibidos. Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}.';
             onActionPressed = () => _openPaymentForm(invoice);
           } else {
             subLabel = 'Productos recibidos e inventario actualizado.';
           }
           secondaryActions.add(
             OutlinedButton.icon(
-              onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.confirmed),
+              onPressed: () =>
+                  _updateStatus(invoice, PurchaseInvoiceStatus.confirmed),
               icon: const Icon(Icons.undo, size: 16),
               label: const Text('Volver a confirmada'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
             ),
           );
@@ -1671,8 +1815,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         subLabel = 'Esta factura ha sido pagada en su totalidad.';
         if (invoice.prepaymentModel) {
           nextActionLabel = 'Marcar como Recibida';
-          subLabel = 'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
-          onActionPressed = () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+          subLabel =
+              'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
+          onActionPressed =
+              () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
         }
 
         secondaryActions.add(
@@ -1743,10 +1889,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 child: FilledButton(
                   onPressed: onActionPressed,
                   style: FilledButton.styleFrom(
-                    backgroundColor: invoice.status == PurchaseInvoiceStatus.sent ? Colors.green[600] : primaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    backgroundColor:
+                        invoice.status == PurchaseInvoiceStatus.sent
+                            ? Colors.green[600]
+                            : primaryColor,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                   ),
-                  child: Text(nextActionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text(nextActionLabel,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ),
           ],
@@ -1761,35 +1913,267 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       child: Column(
         children: [
           _buildActionBar(invoice),
-          _buildWorkflowBanner(invoice),
+          if (!_showingPaymentForm) _buildWorkflowBanner(invoice),
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final double availableWidth = constraints.maxWidth - 40;
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Container(
-                    width: availableWidth,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+            child: _showingPaymentForm
+                ? _buildInlinePaymentForm(invoice)
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final double availableWidth = constraints.maxWidth - 40;
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Container(
+                          width: availableWidth,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _buildInvoiceDocument(invoice, availableWidth),
                         ),
-                      ],
-                    ),
-                    child: _buildInvoiceDocument(invoice, availableWidth),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildInlinePaymentForm(PurchaseInvoice invoice) {
+    final theme = Theme.of(context);
+    final balance = _effectiveBalance(invoice);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Form(
+            key: _paymentFormKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Volver a la factura',
+                      onPressed: () =>
+                          setState(() => _showingPaymentForm = false),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Registrar pago',
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Balance breakdown card
+                Card(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildPaymentRow('Total factura:',
+                            ChileanUtils.formatCurrency(invoice.total), theme),
+                        const SizedBox(height: 4),
+                        _buildPaymentRow(
+                            'Pagado:',
+                            ChileanUtils.formatCurrency(invoice.paidAmount),
+                            theme),
+                        const Divider(height: 16),
+                        _buildPaymentRow(
+                          'Saldo pendiente:',
+                          ChileanUtils.formatCurrency(balance),
+                          theme,
+                          isBold: true,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Amount
+                TextFormField(
+                  controller: _paymentAmountController,
+                  decoration: const InputDecoration(
+                      labelText: 'Monto', prefixText: '\$ '),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty)
+                      return 'Ingresa el monto del pago';
+                    final parsed = double.tryParse(
+                        value.trim().replaceAll('.', '').replaceAll(',', '.'));
+                    if (parsed == null || parsed <= 0) return 'Monto inválido';
+                    if (parsed.round() - balance.round() > 1)
+                      return 'No puede superar el saldo';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Payment method
+                if (_isLoadingPaymentMethods)
+                  const LinearProgressIndicator()
+                else if (_paymentMethods.isEmpty)
+                  const Text('No hay métodos de pago disponibles',
+                      style: TextStyle(color: Colors.red))
+                else
+                  DropdownButtonFormField<PaymentMethod>(
+                    value: _selectedPaymentMethod,
+                    decoration:
+                        const InputDecoration(labelText: 'Medio de pago'),
+                    items: _paymentMethods
+                        .map((m) => DropdownMenuItem(
+                              value: m,
+                              child: Row(
+                                children: [
+                                  Icon(_paymentMethodIcon(m.icon), size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(m.name),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _selectedPaymentMethod = v),
+                    validator: (v) =>
+                        v == null ? 'Selecciona un método de pago' : null,
+                  ),
+                const SizedBox(height: 12),
+
+                // Date
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _paymentDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) setState(() => _paymentDate = picked);
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                        labelText: 'Fecha de pago',
+                        border: OutlineInputBorder()),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.event),
+                        const SizedBox(width: 8),
+                        Text(ChileanUtils.formatDate(_paymentDate)),
+                        const Spacer(),
+                        const Icon(Icons.keyboard_arrow_down),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Reference
+                TextFormField(
+                  controller: _paymentReferenceController,
+                  decoration: InputDecoration(
+                    labelText: _selectedPaymentMethod?.requiresReference == true
+                        ? 'Referencia *'
+                        : 'Referencia',
+                    hintText: 'Número de transferencia, comprobante, etc.',
+                  ),
+                  validator: (value) {
+                    if (_selectedPaymentMethod?.requiresReference == true &&
+                        (value == null || value.trim().isEmpty)) {
+                      return 'Este método de pago requiere una referencia';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Notes
+                TextFormField(
+                  controller: _paymentNotesController,
+                  decoration:
+                      const InputDecoration(labelText: 'Notas internas'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 24),
+
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () =>
+                          setState(() => _showingPaymentForm = false),
+                      child: const Text('Cancelar'),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: _isSavingPayment
+                          ? null
+                          : () => _submitInlinePayment(invoice),
+                      icon: _isSavingPayment
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.check),
+                      label: const Text('Registrar pago'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentRow(String label, String value, ThemeData theme,
+      {bool isBold = false, Color? color}) {
+    final style = isBold
+        ? theme.textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.bold, color: color)
+        : theme.textTheme.bodyLarge?.copyWith(color: color);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [Text(label, style: style), Text(value, style: style)],
+    );
+  }
+
+  IconData _paymentMethodIcon(String? iconName) {
+    switch (iconName?.toLowerCase()) {
+      case 'cash':
+        return Icons.attach_money;
+      case 'bank':
+        return Icons.account_balance;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'receipt':
+        return Icons.receipt;
+      default:
+        return Icons.payment;
+    }
   }
 
   Widget _buildActionBar(PurchaseInvoice invoice) {

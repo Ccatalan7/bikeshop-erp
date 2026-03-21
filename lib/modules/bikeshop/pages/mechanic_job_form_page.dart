@@ -5326,6 +5326,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
   Timer? _debounce;
   bool _isSearching = false;
   bool _showCreateForm = false;
+  Customer? _editingCustomer;
 
   // Form controllers
   final TextEditingController _nameController = TextEditingController();
@@ -5370,6 +5371,46 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
     });
   }
 
+  void _populateFormFromCustomer(Customer customer) {
+    _nameController.text = customer.name;
+    _rutController.text = customer.rut;
+    _emailController.text = customer.email ?? '';
+    _phoneController.text = customer.phone ?? '';
+    _addressController.text = customer.address ?? '';
+  }
+
+  void _clearForm() {
+    _nameController.clear();
+    _rutController.clear();
+    _emailController.clear();
+    _phoneController.clear();
+    _addressController.clear();
+  }
+
+  void _startCreateCustomer() {
+    setState(() {
+      _showCreateForm = true;
+      _editingCustomer = null;
+      _clearForm();
+    });
+  }
+
+  void _startEditCustomer(Customer customer) {
+    setState(() {
+      _showCreateForm = true;
+      _editingCustomer = customer;
+      _populateFormFromCustomer(customer);
+    });
+  }
+
+  void _closeForm() {
+    setState(() {
+      _showCreateForm = false;
+      _editingCustomer = null;
+      _clearForm();
+    });
+  }
+
   Future<void> _handleCreateCustomer() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5381,7 +5422,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
       return;
     }
 
-    final customer = await _createCustomerWithData({
+    final customer = await _saveCustomerWithData({
       'name': _nameController.text.trim(),
       'rut': _rutController.text.trim(),
       'email': _emailController.text.trim(),
@@ -5394,41 +5435,75 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
     }
   }
 
-  Future<Customer?> _createCustomerWithData(Map<String, String> data) async {
+  Future<Customer?> _saveCustomerWithData(Map<String, String> data) async {
     try {
       final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
+      if (tenantId == null || tenantId.isEmpty) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
 
-      final customer = Customer(
-        tenantId: tenantId,
-        name: data['name']!,
-        rut: data['rut'] ?? '',
-        email: data['email']?.isEmpty == true ? null : data['email'],
-        phone: data['phone']?.isEmpty == true ? null : data['phone'],
-        address: data['address']?.isEmpty == true ? null : data['address'],
-      );
-
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
-      final created = await customerService.createCustomer(customer);
+      final isEditing = _editingCustomer != null;
 
-      // Add to list
+      final normalizedRut = (data['rut'] ?? '').trim();
+      final normalizedEmail = (data['email'] ?? '').trim();
+      final normalizedPhone = (data['phone'] ?? '').trim();
+      final normalizedAddress = (data['address'] ?? '').trim();
+
+      final saved = isEditing
+          ? await customerService.updateCustomer(
+              _editingCustomer!.copyWith(
+                name: data['name']!,
+                rut: normalizedRut,
+                email: normalizedEmail.isEmpty ? null : normalizedEmail,
+                phone: normalizedPhone.isEmpty ? null : normalizedPhone,
+                address: normalizedAddress.isEmpty ? null : normalizedAddress,
+                updatedAt: DateTime.now(),
+              ),
+            )
+          : await customerService.createCustomer(
+              Customer(
+                tenantId: tenantId,
+                name: data['name']!,
+                rut: normalizedRut,
+                email: normalizedEmail.isEmpty ? null : normalizedEmail,
+                phone: normalizedPhone.isEmpty ? null : normalizedPhone,
+                address: normalizedAddress.isEmpty ? null : normalizedAddress,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+            );
+
       setState(() {
-        _customers.add(created);
+        final existingIndex =
+            _customers.indexWhere((item) => item.id == saved.id);
+        if (existingIndex >= 0) {
+          _customers[existingIndex] = saved;
+        } else {
+          _customers.add(saved);
+        }
+        _customers.sort(
+          (left, right) => left.name.toLowerCase().compareTo(
+                right.name.toLowerCase(),
+              ),
+        );
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Cliente "${created.name}" creado exitosamente'),
+            content: Text(
+              isEditing
+                  ? 'Cliente "${saved.name}" actualizado exitosamente'
+                  : 'Cliente "${saved.name}" creado exitosamente',
+            ),
             backgroundColor: Colors.green,
           ),
         );
       }
 
-      return created;
+      return saved;
     } catch (e) {
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5446,219 +5521,384 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
     final theme = Theme.of(context);
 
     return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: theme.colorScheme.surface,
       insetPadding: const EdgeInsets.all(16),
-      child: Container(
-        width: 600,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        width: 650,
+        // When showing the form vertically, constraint height smoothly
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
+          minHeight: 400,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
+            // Clean Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.person_search,
-                    color: theme.colorScheme.onPrimary,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Seleccionar Cliente',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.onPrimary,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _showCreateForm ? Icons.person_add : Icons.people_alt,
+                      color: theme.colorScheme.onPrimaryContainer,
+                      size: 20,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _showCreateForm
+                          ? (_editingCustomer != null
+                              ? 'Editar Cliente'
+                              : 'Nuevo Cliente')
+                          : 'Seleccionar Cliente',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                   IconButton(
-                    icon: Icon(Icons.close, color: theme.colorScheme.onPrimary),
+                    icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Cerrar',
                   ),
                 ],
               ),
             ),
+            const Divider(height: 1),
 
-            // Content
+            // Content Area (Switches between List and Form)
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Search field
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        labelText: 'Buscar cliente',
-                        hintText: 'Buscar por nombre, RUT, email...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onChanged: _onSearchChanged,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Toggle button
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _showCreateForm = !_showCreateForm;
-                          if (!_showCreateForm) {
-                            // Clear form when collapsing
-                            _nameController.clear();
-                            _rutController.clear();
-                            _emailController.clear();
-                            _phoneController.clear();
-                            _addressController.clear();
-                          }
-                        });
-                      },
-                      icon: Icon(_showCreateForm
-                          ? Icons.expand_less
-                          : Icons.person_add),
-                      label: Text(
-                          _showCreateForm ? 'Cancelar' : 'Crear cliente nuevo'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                    ),
-
-                    // Inline create form
-                    if (_showCreateForm) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color:
-                              theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            TextField(
-                              controller: _nameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nombre *',
-                                hintText: 'Nombre completo',
-                                isDense: true,
-                              ),
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _rutController,
-                              decoration: const InputDecoration(
-                                labelText: 'RUT',
-                                hintText: '12.345.678-9',
-                                isDense: true,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _emailController,
-                              decoration: const InputDecoration(
-                                labelText: 'Email',
-                                hintText: 'cliente@ejemplo.com',
-                                isDense: true,
-                              ),
-                              keyboardType: TextInputType.emailAddress,
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _phoneController,
-                              decoration: const InputDecoration(
-                                labelText: 'Teléfono',
-                                hintText: '+56 9 1234 5678',
-                                isDense: true,
-                              ),
-                              keyboardType: TextInputType.phone,
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _addressController,
-                              decoration: const InputDecoration(
-                                labelText: 'Dirección',
-                                hintText: 'Calle, número, comuna',
-                                isDense: true,
-                              ),
-                              maxLines: 2,
-                            ),
-                            const SizedBox(height: 16),
-                            FilledButton.icon(
-                              onPressed: _handleCreateCustomer,
-                              icon: const Icon(Icons.check),
-                              label: const Text('Crear y Seleccionar'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 16),
-                    if (_isSearching)
-                      const LinearProgressIndicator(minHeight: 2),
-
-                    // Customer list (only show when not creating)
-                    if (!_showCreateForm)
-                      Container(
-                        height: 400,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.2),
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: _customers.isEmpty
-                            ? const Center(
-                                child: Text('No se encontraron clientes'))
-                            : ListView.separated(
-                                itemCount: _customers.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final customer = _customers[index];
-                                  return ListTile(
-                                    title: Text(customer.name),
-                                    subtitle: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (customer.rut.isNotEmpty)
-                                          Text('RUT: ${customer.rut}'),
-                                        if ((customer.email ?? '').isNotEmpty)
-                                          Text(customer.email!),
-                                        if ((customer.phone ?? '').isNotEmpty)
-                                          Text(customer.phone!),
-                                      ],
-                                    ),
-                                    onTap: () =>
-                                        Navigator.of(context).pop(customer),
-                                  );
-                                },
-                              ),
-                      ),
-                  ],
-                ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _showCreateForm
+                    ? _buildFormView(theme)
+                    : _buildListView(theme),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildListView(ThemeData theme) {
+    return Column(
+      key: const ValueKey('list_view'),
+      children: [
+        // Action Bar (Search + Add Button)
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por nombre, RUT, email...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest
+                        .withOpacity(0.3),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: _startCreateCustomer,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nuevo'),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Progress Indicator
+        if (_isSearching)
+          const LinearProgressIndicator(minHeight: 2)
+        else
+          const Divider(height: 1),
+
+        // Table Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Nombre',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Contacto',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48), // Space for edit button
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+
+        // Table Body
+        Expanded(
+          child: _customers.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.search_off,
+                          size: 48, color: theme.colorScheme.outline),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No se encontraron clientes',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.zero,
+                  itemCount: _customers.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final customer = _customers[index];
+                    return InkWell(
+                      onTap: () => Navigator.of(context).pop(customer),
+                      hoverColor:
+                          theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        child: Row(
+                          children: [
+                            // Name & Document
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    customer.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500),
+                                  ),
+                                  if (customer.rut.isNotEmpty)
+                                    Text(
+                                      customer.rut,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // Contact Info
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (customer.phone?.isNotEmpty == true)
+                                    Text(
+                                      customer.phone!,
+                                      style: theme.textTheme.bodySmall,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (customer.email?.isNotEmpty == true)
+                                    Text(
+                                      customer.email!,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (customer.phone?.isEmpty != false &&
+                                      customer.email?.isEmpty != false)
+                                    Text(
+                                      'Sin contacto',
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.outline,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // Actions
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              color: theme.colorScheme.outline,
+                              tooltip: 'Editar cliente',
+                              onPressed: () => _startEditCustomer(customer),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormView(ThemeData theme) {
+    return Column(
+      key: const ValueKey('form_view'),
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _nameController,
+                        label: 'Nombre Completo *',
+                        icon: Icons.person_outline,
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _rutController,
+                        label: 'RUT o Documento',
+                        icon: Icons.badge_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _phoneController,
+                        label: 'Teléfono',
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _emailController,
+                        label: 'Email',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _addressController,
+                  label: 'Dirección (Opcional)',
+                  icon: Icons.location_on_outlined,
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _closeForm,
+                child: const Text('Cancelar'),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: _handleCreateCustomer,
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Guardar y Seleccionar'),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }

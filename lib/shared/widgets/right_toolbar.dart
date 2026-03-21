@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
 import 'quick_access_expense_rail.dart';
 import 'quick_sale_panel.dart';
@@ -8,6 +10,7 @@ import 'quick_task_panel.dart';
 /// The tools available in the right toolbar.
 /// Add new entries here to extend the toolbar with more tools.
 enum ToolbarTool {
+  newJob,
   quickSale,
   expenses,
   tasks,
@@ -58,6 +61,12 @@ class _RightToolbarState extends State<RightToolbar> {
   bool get _isExpanded => _activeTool != null;
 
   void _selectTool(ToolbarTool tool) {
+    if (tool == ToolbarTool.newJob) {
+      context
+          .read<WorkspaceManager>()
+          .navigateActiveWorkspace('/taller/pegas/nueva');
+      return;
+    }
     setState(() {
       if (_activeTool == tool) {
         _activeTool = null; // toggle off
@@ -75,6 +84,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   String _toolTitle(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.newJob:
+        return 'Nueva Pega';
       case ToolbarTool.quickSale:
         return 'Venta Rápida';
       case ToolbarTool.expenses:
@@ -88,6 +99,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   IconData _toolIcon(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.newJob:
+        return Icons.build_circle_outlined;
       case ToolbarTool.quickSale:
         return Icons.flash_on;
       case ToolbarTool.expenses:
@@ -101,6 +114,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   Widget _toolPanel(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.newJob:
+        return const SizedBox.shrink();
       case ToolbarTool.quickSale:
         return const QuickSalePanel();
       case ToolbarTool.expenses:
