@@ -24,6 +24,7 @@ class Product {
   final String? model;
   final Map<String, String> specifications;
   final String? supplierId;
+  final String? supplierName;
   final String? supplierReference;
   final String? supplierCode; // Código Proveedor
   final String? manufacturer;
@@ -91,6 +92,7 @@ class Product {
     this.model,
     this.specifications = const {},
     this.supplierId,
+    this.supplierName,
     this.supplierReference,
     this.supplierCode,
     this.manufacturer,
@@ -169,6 +171,7 @@ class Product {
       specifications:
           Map<String, String>.from(json['specifications'] as Map? ?? {}),
       supplierId: json['supplier_id'] as String?,
+      supplierName: json['supplier_name'] as String?,
       supplierReference: json['supplier_reference'] as String?,
       supplierCode: json['supplier_code'] as String?,
       manufacturer: json['manufacturer'] as String?,
@@ -263,6 +266,7 @@ class Product {
       'model': model,
       'specifications': specifications,
       'supplier_id': supplierId,
+      'supplier_name': supplierName,
       'supplier_reference': supplierReference,
       'supplier_code': supplierCode,
       'manufacturer': manufacturer,
@@ -333,6 +337,7 @@ class Product {
     String? model,
     Map<String, String>? specifications,
     String? supplierId,
+    String? supplierName,
     String? supplierReference,
     String? supplierCode,
     String? manufacturer,
@@ -397,6 +402,7 @@ class Product {
       model: model ?? this.model,
       specifications: specifications ?? this.specifications,
       supplierId: supplierId ?? this.supplierId,
+      supplierName: supplierName ?? this.supplierName,
       supplierReference: supplierReference ?? this.supplierReference,
       supplierCode: supplierCode ?? this.supplierCode,
       manufacturer: manufacturer ?? this.manufacturer,
