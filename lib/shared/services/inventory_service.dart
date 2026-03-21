@@ -442,6 +442,7 @@ class InventoryService extends ChangeNotifier {
       specifications:
           Map<String, String>.from(json['specifications'] as Map? ?? {}),
       supplierId: json['supplier_id']?.toString(),
+      supplierName: json['supplier_name'] as String?,
       supplierReference: json['supplier_reference'] as String?,
       supplierCode: json['supplier_code']?.toString(),
       manufacturer: json['manufacturer'] as String?,

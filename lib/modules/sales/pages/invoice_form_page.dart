@@ -92,6 +92,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   final List<Product> _cachedProducts = [];
   final List<_InvoiceLineEntry> _lineEntries = [];
   final List<MechanicJobBike> _availableJobBikes = [];
+  String? _defaultJobBikeId; // Global default bike for new line items
   String _debugBikeMessage = 'DEBUG: Init state';
   String? _linkedJobId;
   String? _linkedJobNumber;
@@ -1008,6 +1009,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       isCatalogProduct: true,
     );
 
+    if (_defaultJobBikeId != null) {
+      final bike = _availableJobBikes
+          .where((b) => b.id == _defaultJobBikeId)
+          .firstOrNull;
+      if (bike != null) {
+        line.jobBikeId = bike.id;
+        line.bikeName = bike.displayName;
+      }
+    }
+
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
 
@@ -1030,6 +1041,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       isCatalogProduct: false,
       description: description,
     );
+
+    if (_defaultJobBikeId != null) {
+      final bike = _availableJobBikes
+          .where((b) => b.id == _defaultJobBikeId)
+          .firstOrNull;
+      if (bike != null) {
+        line.jobBikeId = bike.id;
+        line.bikeName = bike.displayName;
+      }
+    }
 
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
@@ -1059,6 +1080,17 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         cost: 0,
         isCatalogProduct: false,
       );
+
+      // Pre-assign the global default bike if one is selected
+      if (_defaultJobBikeId != null) {
+        final bike = _availableJobBikes
+            .where((b) => b.id == _defaultJobBikeId)
+            .firstOrNull;
+        if (bike != null) {
+          line.jobBikeId = bike.id;
+          line.bikeName = bike.displayName;
+        }
+      }
 
       // Create entry with shouldAutoFocus=true so the product field auto-focuses and shows overlay
       final entry = _InvoiceLineEntry(line, shouldAutoFocus: true);
@@ -1747,6 +1779,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                           theme,
                           icon: Icons.shopping_basket_outlined,
                           title: 'Productos y servicios',
+                          trailing: _buildDefaultBikeDropdown(theme),
                           children: [_buildLineItemsSection(theme)],
                         ),
                         const SizedBox(height: 16),
@@ -1815,6 +1848,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   theme,
                   icon: Icons.shopping_basket_outlined,
                   title: 'Productos y servicios',
+                  trailing: _buildDefaultBikeDropdown(theme),
                   children: [_buildLineItemsSection(theme)],
                 ),
                 const SizedBox(height: 16),
@@ -1881,6 +1915,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     required IconData icon,
     required String title,
     required List<Widget> children,
+    Widget? trailing,
   }) {
     return Card(
       elevation: 0,
@@ -1903,6 +1938,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
+                if (trailing != null) ...[
+                  const Spacer(),
+                  trailing,
+                ],
               ],
             ),
             const SizedBox(height: 20),
@@ -2658,6 +2697,83 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  /// Global default bike dropdown shown in the "Productos y servicios" header.
+  /// When a bike is selected here, all newly added line items are pre-assigned to it.
+  Widget _buildDefaultBikeDropdown(ThemeData theme) {
+    if (_availableJobBikes.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _defaultJobBikeId != null
+            ? theme.colorScheme.primaryContainer.withOpacity(0.6)
+            : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _defaultJobBikeId != null
+              ? theme.colorScheme.primary.withOpacity(0.4)
+              : theme.colorScheme.outline.withOpacity(0.3),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _availableJobBikes.any((b) => b.id == _defaultJobBikeId)
+              ? _defaultJobBikeId
+              : null,
+          hint: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.pedal_bike,
+                  size: 13, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text('Agregar a...',
+                  style: TextStyle(
+                      fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface),
+          icon: Icon(Icons.expand_more_rounded,
+              size: 14,
+              color: _defaultJobBikeId != null
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant),
+          isDense: true,
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text('General / Venta',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic)),
+            ),
+            ..._availableJobBikes.map((bike) => DropdownMenuItem<String?>(
+                  value: bike.id,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.pedal_bike,
+                          size: 13, color: theme.colorScheme.primary),
+                      const SizedBox(width: 6),
+                      Text(bike.displayName,
+                          style: const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                )),
+          ],
+          onChanged: _canEditFields
+              ? (String? newId) {
+                  setState(() => _defaultJobBikeId = newId);
+                }
+              : null,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBikeSelector(ThemeData theme, _InvoiceLineEntry entry) {
     if (_availableJobBikes.isEmpty) {
       // For debugging/UX: if it's empty but we expect it, show a disabled selector
@@ -2776,6 +2892,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 _canEditFields,
                 () {}, // No setState needed - hover is local to wrapper
                 () => _autoAddEmptyLineIfNeeded(),
+                defaultJobBikeId: _defaultJobBikeId,
+                availableJobBikes: _availableJobBikes,
               ),
               _buildBikeSelector(theme, entry),
             ],
@@ -3662,7 +3780,9 @@ class _InvoiceLineEntry {
   bool? _cachedCanEdit;
 
   Widget buildSmartProductField(BuildContext context, ThemeData theme,
-      bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
+      bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd,
+      {String? defaultJobBikeId,
+      List<MechanicJobBike> availableJobBikes = const []}) {
     // Return cached widget if nothing meaningful changed
     // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
     if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
@@ -3701,6 +3821,15 @@ class _InvoiceLineEntry {
           product = selection.product;
           productNameController.text = selection.productName ?? '';
           productSkuController.text = selection.productSku ?? '';
+          if (line.jobBikeId == null && defaultJobBikeId != null) {
+            final bike = availableJobBikes
+                .where((b) => b.id == defaultJobBikeId)
+                .firstOrNull;
+            if (bike != null) {
+              line.jobBikeId = bike.id;
+              line.bikeName = bike.displayName;
+            }
+          }
           if (selection.price > 0) {
             unitPriceController.text = selection.price.toStringAsFixed(0);
           }
