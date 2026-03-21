@@ -612,6 +612,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   Widget _buildProductTile(Product product, ThemeData theme) {
+    // Only relevant for stockable products — services have no stock concept
     final hasStock = product.stockQuantity > 0;
     bool isHovered = false;
 
@@ -748,47 +749,51 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: hasStock
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              hasStock
-                                  ? Icons.check_circle_outline
-                                  : Icons.error_outline,
-                              size: 14,
-                              color: hasStock
-                                  ? theme.colorScheme.onPrimaryContainer
-                                  : theme.colorScheme.onErrorContainer,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              hasStock
-                                  ? '${product.stockQuantity} ${product.unit.name}'
-                                  : 'Sin stock',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                  // Services have no stock concept — hide the badge entirely
+                  if (product.trackStock) ...[
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: hasStock
+                                ? theme.colorScheme.primaryContainer
+                                : theme.colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                hasStock
+                                    ? Icons.check_circle_outline
+                                    : Icons.error_outline,
+                                size: 14,
                                 color: hasStock
                                     ? theme.colorScheme.onPrimaryContainer
                                     : theme.colorScheme.onErrorContainer,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Text(
+                                hasStock
+                                    ? '${product.stockQuantity} ${product.unit.name}'
+                                    : 'Sin stock',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: hasStock
+                                      ? theme.colorScheme.onPrimaryContainer
+                                      : theme.colorScheme.onErrorContainer,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ] else
+                    const Expanded(child: SizedBox()),
                   const SizedBox(width: 16),
                   SizedBox(
                     width: 120,
