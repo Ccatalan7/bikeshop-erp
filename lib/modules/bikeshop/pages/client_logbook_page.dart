@@ -29,7 +29,8 @@ class ClientLogbookPage extends StatefulWidget {
   State<ClientLogbookPage> createState() => _ClientLogbookPageState();
 }
 
-class _ClientLogbookPageState extends State<ClientLogbookPage> {
+class _ClientLogbookPageState extends State<ClientLogbookPage>
+    with SingleTickerProviderStateMixin {
   Customer? _customer;
   List<Bike> _bikes = [];
   List<MechanicJob> _jobs = [];
@@ -37,7 +38,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   Loyalty? _loyalty;
   bool _isLoading = true;
   String? _error;
-  late int _initialTabIndex;
+
+  late TabController _tabController;
+
   final TextEditingController _bikeSearchController = TextEditingController();
   final TextEditingController _jobSearchController = TextEditingController();
   final TextEditingController _timelineSearchController =
@@ -48,7 +51,37 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   String _bikeSortKey = 'recent';
   String _jobSortKey = 'arrival_desc';
   String _timelineSortKey = 'date_desc';
-  JobViewFilter _jobViewFilter = JobViewFilter.active;
+  JobViewFilter _jobViewFilter = JobViewFilter.completed;
+  final ScrollController _headerScrollController = ScrollController();
+  final ScrollController _bodyScrollController = ScrollController();
+
+  // ── Column sort (column-header click) ──
+  String?
+      _bikeSortCol; // 'name' | 'serial' | 'registered' | 'last_delivery' | 'jobs'
+  bool _bikeSortAsc = true;
+  String?
+      _jobSortCol; // 'number' | 'bike' | 'request' | 'status' | 'date' | 'total'
+  bool _jobSortAsc = false;
+  String? _timelineSortCol; // 'desc' | 'ref' | 'tech' | 'date'
+  bool _timelineSortAsc = false;
+
+  // ── Column widths (bikes) ──
+  double _bikeColSerial = 150;
+  double _bikeColRegistered = 100;
+  double _bikeColDelivery = 120;
+  double _bikeColJobs = 80;
+
+  // ── Column widths (jobs) ──
+  double _jobColNumber = 108;
+  double _jobColBike = 140;
+  double _jobColStatus = 110;
+  double _jobColDate = 90;
+  double _jobColTotal = 80;
+
+  // ── Column widths (timeline) ──
+  double _tlColRef = 150;
+  double _tlColTech = 120;
+  double _tlColDate = 130;
   Map<String, Bike> _bikeIndex = {};
   Map<String, List<MechanicJob>> _jobsByBike = {};
   Map<String, MechanicJob> _jobIndex = {};
@@ -57,8 +90,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   static const Map<String, String> _bikeSortLabels = {
     'recent': 'Más recientes',
     'name': 'Nombre (A-Z)',
-    'jobs_desc': 'Más pegas',
-    'jobs_asc': 'Menos pegas',
+    'jobs_desc': 'Más trabajos',
+    'jobs_asc': 'Menos trabajos',
   };
   static const Map<String, String> _jobSortLabels = {
     'arrival_desc': 'Ingresadas recientes',
@@ -71,25 +104,42 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     'date_asc': 'Más antiguas',
   };
 
-  static const List<String> _tabKeys = [
-    'resumen',
-    'bicicletas',
-    'pegas',
-    'historial'
-  ];
-
   @override
   void initState() {
     super.initState();
+    // Resolve initial tab
+    int initialIndex = 0;
+    if (widget.initialTab == 'pegas') initialIndex = 1;
+    if (widget.initialTab == 'historial') initialIndex = 2;
+    _tabController =
+        TabController(length: 3, vsync: this, initialIndex: initialIndex);
+
     _bikeSearchController.addListener(_handleBikeSearchChanged);
     _jobSearchController.addListener(_handleJobSearchChanged);
     _timelineSearchController.addListener(_handleTimelineSearchChanged);
-    _initialTabIndex = _resolveInitialTab(widget.initialTab);
+
+    _headerScrollController.addListener(() {
+      if (_bodyScrollController.hasClients &&
+          _bodyScrollController.offset != _headerScrollController.offset) {
+        _bodyScrollController.jumpTo(_headerScrollController.offset);
+      }
+    });
+
+    _bodyScrollController.addListener(() {
+      if (_headerScrollController.hasClients &&
+          _headerScrollController.offset != _bodyScrollController.offset) {
+        _headerScrollController.jumpTo(_bodyScrollController.offset);
+      }
+    });
+
     _loadData();
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
+    _headerScrollController.dispose();
+    _bodyScrollController.dispose();
     _bikeSearchController.removeListener(_handleBikeSearchChanged);
     _jobSearchController.removeListener(_handleJobSearchChanged);
     _timelineSearchController.removeListener(_handleTimelineSearchChanged);
@@ -97,27 +147,6 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     _jobSearchController.dispose();
     _timelineSearchController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(covariant ClientLogbookPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.initialTab != oldWidget.initialTab) {
-      final newIndex = _resolveInitialTab(widget.initialTab);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final controller = DefaultTabController.maybeOf(context);
-        if (controller != null && controller.index != newIndex) {
-          controller.animateTo(newIndex);
-        }
-      });
-    }
-  }
-
-  int _resolveInitialTab(String? key) {
-    if (key == null) return 0;
-    final normalized = key.toLowerCase();
-    final index = _tabKeys.indexOf(normalized);
-    return index >= 0 ? index : 0;
   }
 
   void _handleBikeSearchChanged() {
@@ -252,25 +281,67 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       );
     }).toList();
 
-    filtered.sort((a, b) {
-      switch (_bikeSortKey) {
-        case 'name':
-          return a.displayName.toLowerCase().compareTo(
-                b.displayName.toLowerCase(),
-              );
-        case 'jobs_desc':
-          final aCount = _totalJobsForBike(a.id);
-          final bCount = _totalJobsForBike(b.id);
-          return bCount.compareTo(aCount);
-        case 'jobs_asc':
-          final aCount = _totalJobsForBike(a.id);
-          final bCount = _totalJobsForBike(b.id);
-          return aCount.compareTo(bCount);
-        case 'recent':
-        default:
-          return b.updatedAt.compareTo(a.updatedAt);
-      }
-    });
+    if (_bikeSortCol != null) {
+      filtered.sort((a, b) {
+        int cmp;
+        switch (_bikeSortCol!) {
+          case 'name':
+            cmp = a.displayName
+                .toLowerCase()
+                .compareTo(b.displayName.toLowerCase());
+            break;
+          case 'serial':
+            cmp = (a.serialNumber ?? '').compareTo(b.serialNumber ?? '');
+            break;
+          case 'registered':
+            cmp = a.createdAt.compareTo(b.createdAt);
+            break;
+          case 'last_delivery':
+            final aD = _jobs
+                .where((j) => j.bikeId == a.id && j.deliveredAt != null)
+                .fold<DateTime?>(
+                    null,
+                    (p, j) => p == null || j.deliveredAt!.isAfter(p)
+                        ? j.deliveredAt
+                        : p);
+            final bD = _jobs
+                .where((j) => j.bikeId == b.id && j.deliveredAt != null)
+                .fold<DateTime?>(
+                    null,
+                    (p, j) => p == null || j.deliveredAt!.isAfter(p)
+                        ? j.deliveredAt
+                        : p);
+            cmp = (aD ?? DateTime(0)).compareTo(bD ?? DateTime(0));
+            break;
+          case 'jobs':
+            cmp = _totalJobsForBike(a.id).compareTo(_totalJobsForBike(b.id));
+            break;
+          default:
+            cmp = 0;
+        }
+        return _bikeSortAsc ? cmp : -cmp;
+      });
+    } else {
+      filtered.sort((a, b) {
+        switch (_bikeSortKey) {
+          case 'name':
+            return a.displayName.toLowerCase().compareTo(
+                  b.displayName.toLowerCase(),
+                );
+          case 'jobs_desc':
+            final aCount = _totalJobsForBike(a.id);
+            final bCount = _totalJobsForBike(b.id);
+            return bCount.compareTo(aCount);
+          case 'jobs_asc':
+            final aCount = _totalJobsForBike(a.id);
+            final bCount = _totalJobsForBike(b.id);
+            return aCount.compareTo(bCount);
+          case 'recent':
+          default:
+            return b.updatedAt.compareTo(a.updatedAt);
+        }
+      });
+    }
 
     return filtered;
   }
@@ -311,19 +382,50 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     }
 
     final result = filtered.toList();
-    result.sort((a, b) {
-      switch (_jobSortKey) {
-        case 'arrival_asc':
-          return a.arrivalDate.compareTo(b.arrivalDate);
-        case 'cost_desc':
-          return b.totalCost.compareTo(a.totalCost);
-        case 'cost_asc':
-          return a.totalCost.compareTo(b.totalCost);
-        case 'arrival_desc':
-        default:
-          return b.arrivalDate.compareTo(a.arrivalDate);
-      }
-    });
+    if (_jobSortCol != null) {
+      result.sort((a, b) {
+        int cmp;
+        switch (_jobSortCol!) {
+          case 'number':
+            cmp = (a.jobNumber ?? '').compareTo(b.jobNumber ?? '');
+            break;
+          case 'bike':
+            final aBike = _bikeIndex[a.bikeId]?.displayName ?? '';
+            final bBike = _bikeIndex[b.bikeId]?.displayName ?? '';
+            cmp = aBike.compareTo(bBike);
+            break;
+          case 'request':
+            cmp = (a.clientRequest ?? '').compareTo(b.clientRequest ?? '');
+            break;
+          case 'status':
+            cmp = a.status.displayName.compareTo(b.status.displayName);
+            break;
+          case 'date':
+            cmp = a.arrivalDate.compareTo(b.arrivalDate);
+            break;
+          case 'total':
+            cmp = a.totalCost.compareTo(b.totalCost);
+            break;
+          default:
+            cmp = 0;
+        }
+        return _jobSortAsc ? cmp : -cmp;
+      });
+    } else {
+      result.sort((a, b) {
+        switch (_jobSortKey) {
+          case 'arrival_asc':
+            return a.arrivalDate.compareTo(b.arrivalDate);
+          case 'cost_desc':
+            return b.totalCost.compareTo(a.totalCost);
+          case 'cost_asc':
+            return a.totalCost.compareTo(b.totalCost);
+          case 'arrival_desc':
+          default:
+            return b.arrivalDate.compareTo(a.arrivalDate);
+        }
+      });
+    }
 
     return result;
   }
@@ -342,6 +444,66 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
             job.status != JobStatus.entregado &&
             job.status != JobStatus.cancelado)
         .length;
+  }
+
+  double _tableViewportWidth(BoxConstraints constraints) {
+    final viewportWidth = constraints.maxWidth;
+    if (viewportWidth.isFinite && viewportWidth > 0) return viewportWidth;
+    return MediaQuery.of(context).size.width - 32;
+  }
+
+  double _bikeTableWidth(double viewportWidth) {
+    final fixedWidth = 52 +
+        _bikeColSerial +
+        _bikeColRegistered +
+        _bikeColDelivery +
+        _bikeColJobs +
+        44;
+    final desiredWidth = fixedWidth + 320;
+    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  }
+
+  double _jobTableWidth(double viewportWidth) {
+    final fixedWidth = 4 +
+        _jobColNumber +
+        _jobColBike +
+        _jobColStatus +
+        _jobColDate +
+        _jobColTotal +
+        44;
+    final desiredWidth = fixedWidth + 320;
+    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  }
+
+  double _timelineTableWidth(double viewportWidth) {
+    final fixedWidth = 52 + _tlColRef + _tlColTech + _tlColDate;
+    final desiredWidth = fixedWidth + 360;
+    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  }
+
+  double _bikeNameColumnWidth(double tableWidth) {
+    return tableWidth -
+        (52 +
+            _bikeColSerial +
+            _bikeColRegistered +
+            _bikeColDelivery +
+            _bikeColJobs +
+            44);
+  }
+
+  double _jobRequestColumnWidth(double tableWidth) {
+    return tableWidth -
+        (4 +
+            _jobColNumber +
+            _jobColBike +
+            _jobColStatus +
+            _jobColDate +
+            _jobColTotal +
+            44);
+  }
+
+  double _timelineDescriptionColumnWidth(double tableWidth) {
+    return tableWidth - (52 + _tlColRef + _tlColTech + _tlColDate);
   }
 
   String _jobFilterLabel(JobViewFilter filter) {
@@ -403,15 +565,42 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     }
 
     final result = filtered.toList();
-    result.sort((a, b) {
-      switch (_timelineSortKey) {
-        case 'date_asc':
-          return a.createdAt.compareTo(b.createdAt);
-        case 'date_desc':
-        default:
-          return b.createdAt.compareTo(a.createdAt);
-      }
-    });
+    if (_timelineSortCol != null) {
+      result.sort((a, b) {
+        int cmp;
+        final aJob = a.jobId.isNotEmpty ? _jobIndex[a.jobId] : null;
+        final bJob = b.jobId.isNotEmpty ? _jobIndex[b.jobId] : null;
+        switch (_timelineSortCol!) {
+          case 'desc':
+            final aDesc = a.description ?? _getDefaultDescription(a.eventType);
+            final bDesc = b.description ?? _getDefaultDescription(b.eventType);
+            cmp = aDesc.compareTo(bDesc);
+            break;
+          case 'ref':
+            cmp = (aJob?.jobNumber ?? '').compareTo(bJob?.jobNumber ?? '');
+            break;
+          case 'tech':
+            cmp = (a.createdByName ?? '').compareTo(b.createdByName ?? '');
+            break;
+          case 'date':
+            cmp = a.createdAt.compareTo(b.createdAt);
+            break;
+          default:
+            cmp = 0;
+        }
+        return _timelineSortAsc ? cmp : -cmp;
+      });
+    } else {
+      result.sort((a, b) {
+        switch (_timelineSortKey) {
+          case 'date_asc':
+            return a.createdAt.compareTo(b.createdAt);
+          case 'date_desc':
+          default:
+            return b.createdAt.compareTo(a.createdAt);
+        }
+      });
+    }
 
     return result;
   }
@@ -513,30 +702,146 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     );
   }
 
-  Widget _buildContent() {
-    final initialIndex = _initialTabIndex.clamp(0, _tabKeys.length - 1);
+  // ─────────────────────────────────────────────
+  // MAIN LAYOUT
+  // ─────────────────────────────────────────────
 
-    return DefaultTabController(
-      length: _tabKeys.length,
-      initialIndex: initialIndex,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+  Widget _buildContent() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Left panel: fixed identity column ──
+        SizedBox(
+          width: 256,
+          child: _buildLeftPanel(),
+        ),
+        // ── Vertical divider ──
+        const VerticalDivider(width: 1, thickness: 1),
+        // ── Right panel: tabbed content area ──
+        Expanded(
+          child: _buildRightPanel(),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // LEFT PANEL  (compact identity card + stats)
+  // ─────────────────────────────────────────────
+
+  Widget _buildLeftPanel() {
+    final theme = Theme.of(context);
+    final c = _customer!;
+    final totalJobs = _jobs.length;
+    final activeJobs = _jobs
+        .where((j) =>
+            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
+        .length;
+    final completedJobs =
+        _jobs.where((j) => j.status == JobStatus.entregado).length;
+    final totalSpent = _jobs
+        .where((j) => j.status == JobStatus.entregado)
+        .fold(0.0, (sum, j) => sum + j.totalCost);
+
+    return Container(
+      color: theme.scaffoldBackgroundColor,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCustomerHeader(),
-            const SizedBox(height: 24),
-            _buildTabBar(),
+            // ── Identity ──
+            Center(
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: Text(
+                  c.name.substring(0, 1).toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              c.name,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (_loyalty != null) ...[
+              const SizedBox(height: 6),
+              Center(child: _buildLoyaltyBadge()),
+            ],
+
+            const SizedBox(height: 20),
+
+            // ── Contact info ──
+            if (c.phone != null && c.phone!.isNotEmpty)
+              _buildInfoRow(Icons.phone_outlined, c.phone!),
+            if (c.email != null && c.email!.isNotEmpty)
+              _buildInfoRow(Icons.email_outlined, c.email!),
+            if (c.rut.isNotEmpty) _buildInfoRow(Icons.badge_outlined, c.rut),
+            if (c.address != null && c.address!.isNotEmpty)
+              _buildInfoRow(Icons.place_outlined, c.address!),
+
+            const SizedBox(height: 20),
+            Divider(thickness: 1, color: theme.dividerColor),
             const SizedBox(height: 16),
-            Expanded(
-              child: TabBarView(
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildSummaryTab(),
-                  _buildBikesTab(),
-                  _buildJobsTab(),
-                  _buildTimelineTab(),
-                ],
+
+            // ── Stats ──
+            _buildStatRow('Bicicletas', _bikes.length.toString()),
+            _buildStatRow('Total trabajos', totalJobs.toString()),
+            _buildStatRow('En curso', activeJobs.toString(),
+                highlight: activeJobs > 0),
+            _buildStatRow('Entregadas', completedJobs.toString()),
+            _buildStatRow(
+              'Total ingresado',
+              NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                  .format(totalSpent),
+            ),
+            _buildStatRow(
+              'Cliente desde',
+              DateFormat('MMM yyyy', 'es').format(c.createdAt),
+            ),
+
+            if (_loyalty != null) ...[
+              const SizedBox(height: 16),
+              Divider(thickness: 1, color: theme.dividerColor),
+              const SizedBox(height: 16),
+              _buildLoyaltySection(),
+            ],
+
+            const SizedBox(height: 24),
+            Divider(thickness: 1, color: theme.dividerColor),
+            const SizedBox(height: 16),
+
+            // ── Actions ──
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () =>
+                    context.push('/taller/pegas/nueva?customer_id=${c.id}'),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Nuevo Trabajo'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => context
+                    .push('/clientes/${c.id}/editar')
+                    .then((_) => _loadData()),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Editar Cliente'),
               ),
             ),
           ],
@@ -545,300 +850,1016 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     );
   }
 
-  Widget _buildCustomerHeader() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Row(
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 15, color: Colors.grey[500]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey[700]),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, {bool highlight = false}) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: highlight ? theme.colorScheme.primary : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoyaltyBadge() {
+    if (_loyalty == null) return const SizedBox.shrink();
+    final color = _getLoyaltyColor(_loyalty!.tier);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(_getLoyaltyIcon(_loyalty!.tier), size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          _getLoyaltyTierName(_loyalty!.tier),
+          style: TextStyle(
+              fontSize: 11, color: color, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoyaltySection() {
+    if (_loyalty == null) return const SizedBox.shrink();
+    final color = _getLoyaltyColor(_loyalty!.tier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            // Avatar
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Text(
-                _customer!.name.substring(0, 1).toUpperCase(),
-                style: TextStyle(
-                  fontSize: 32,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            Icon(_getLoyaltyIcon(_loyalty!.tier), size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(
+              _getLoyaltyTierName(_loyalty!.tier),
+              style: TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
             ),
-            const SizedBox(width: 24),
-            // Customer Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _customer!.name,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_customer!.phone != null)
-                    Row(
-                      children: [
-                        Icon(Icons.phone, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 8),
-                        Text(
-                          _customer!.phone!,
-                          style: TextStyle(color: Colors.grey[700]),
-                        ),
-                      ],
-                    ),
-                  if (_customer!.email != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.email, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 8),
-                        Text(
-                          _customer!.email!,
-                          style: TextStyle(color: Colors.grey[700]),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (_customer!.rut.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.badge, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 8),
-                        Text(
-                          'RUT: ${_customer!.rut}',
-                          style: TextStyle(color: Colors.grey[700]),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+            const Spacer(),
+            Text(
+              '${_loyalty!.points} pts',
+              style: TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
             ),
-            // Actions
-            Column(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => context
-                      .push('/taller/pegas/nueva?customer_id=${_customer!.id}'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Nuevo Trabajo'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      context.push('/clientes/${_customer!.id}/editar'),
-                  icon: const Icon(Icons.edit),
-                  label: const Text('Editar Cliente'),
-                ),
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
+              onSelected: (value) {
+                if (value == 'add') _showAddPointsDialog();
+                if (value == 'redeem') _showRedeemPointsDialog();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'add', child: Text('Agregar puntos')),
+                PopupMenuItem(value: 'redeem', child: Text('Canjear puntos')),
               ],
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildTabBar() {
+  // ─────────────────────────────────────────────
+  // RIGHT PANEL  (tabbed content)
+  // ─────────────────────────────────────────────
+
+  Widget _buildRightPanel() {
     final theme = Theme.of(context);
+    final activeJobs = _jobs
+        .where((j) =>
+            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
+        .length;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
-        color: theme.colorScheme.surface,
-      ),
-      child: TabBar(
-        labelColor: theme.colorScheme.primary,
-        unselectedLabelColor: theme.textTheme.bodyMedium?.color,
-        labelStyle:
-            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-        indicatorSize: TabBarIndicatorSize.tab,
-        indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          color: theme.colorScheme.primary.withOpacity(0.12),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Tab bar row with context actions ──
+        Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: theme.dividerColor),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Bicicletas'),
+                        if (_bikes.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(_bikes.length),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Trabajos'),
+                        if (_jobs.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(
+                            _jobs.length,
+                            highlight: activeJobs > 0,
+                            highlightValue: activeJobs,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Historial'),
+                        if (_timeline.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(_timeline.length),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Context-sensitive action button per tab
+              AnimatedBuilder(
+                animation: _tabController,
+                builder: (context, _) {
+                  if (_tabController.index == 0) {
+                    return TextButton.icon(
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) =>
+                              BikeFormDialog(customerId: widget.customerId),
+                        );
+                        if (ok == true) _loadData();
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Agregar Bicicleta'),
+                    );
+                  }
+                  if (_tabController.index == 1) {
+                    return TextButton.icon(
+                      onPressed: () => context.push(
+                          '/taller/pegas/nueva?customer_id=${_customer!.id}'),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Nuevo Trabajo'),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
+          ),
         ),
-        tabs: const [
-          Tab(icon: Icon(Icons.dashboard_outlined), text: 'Resumen'),
-          Tab(icon: Icon(Icons.pedal_bike_outlined), text: 'Bicicletas'),
-          Tab(icon: Icon(Icons.build_outlined), text: 'Pegas'),
-          Tab(icon: Icon(Icons.timeline_outlined), text: 'Historial'),
-        ],
+
+        // ── Tab views ──
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildBikesTab(),
+              _buildJobsTab(),
+              _buildTimelineTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabCount(int count,
+      {bool highlight = false, int? highlightValue}) {
+    final theme = Theme.of(context);
+    final display =
+        (highlight && highlightValue != null) ? highlightValue : count;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: highlight
+            ? theme.colorScheme.primary.withOpacity(0.12)
+            : Colors.grey.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        display.toString(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: highlight ? theme.colorScheme.primary : Colors.grey[600],
+        ),
       ),
     );
   }
 
-  Widget _buildSummaryTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildStatistics(),
-          const SizedBox(height: 24),
-          _buildContactCard(),
-          if (_loyalty != null) ...[
-            const SizedBox(height: 24),
-            _buildLoyaltyCard(),
-          ],
-        ],
-      ),
-    );
-  }
+  // ─────────────────────────────────────────────
+  // BIKES TAB
+  // ─────────────────────────────────────────────
 
   Widget _buildBikesTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: _buildBikesSection(),
+    final filteredBikes = _getFilteredBikes();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Inline toolbar ──
+        _buildTabToolbar(
+          searchController: _bikeSearchController,
+          searchHint: 'Buscar por marca, modelo o serie…',
+          sortKey: _bikeSortKey,
+          sortLabels: _bikeSortLabels,
+          onSortChanged: (v) => setState(() => _bikeSortKey = v),
+          statusText: filteredBikes.length == _bikes.length
+              ? '${_bikes.length} bicicletas'
+              : '${filteredBikes.length} de ${_bikes.length}',
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportWidth = _tableViewportWidth(constraints);
+            final tableWidth = _bikeTableWidth(viewportWidth);
+
+            return Container(
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: SingleChildScrollView(
+                controller: _headerScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 52),
+                      SizedBox(
+                        width: _bikeNameColumnWidth(tableWidth),
+                        child: _buildSortableHeader(
+                          'MARCA / MODELO',
+                          'name',
+                          _bikeSortCol,
+                          _bikeSortAsc,
+                          (col, asc) => setState(() {
+                            _bikeSortCol = col;
+                            _bikeSortAsc = asc;
+                          }),
+                          leftPad: 12,
+                        ),
+                      ),
+                      _buildResizableHeader(
+                        label: 'SERIE',
+                        colKey: 'serial',
+                        width: _bikeColSerial,
+                        sortCol: _bikeSortCol,
+                        sortAsc: _bikeSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _bikeSortCol = col;
+                          _bikeSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _bikeColSerial =
+                            (_bikeColSerial + d).clamp(60, 300)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'REGISTRADA',
+                        colKey: 'registered',
+                        width: _bikeColRegistered,
+                        sortCol: _bikeSortCol,
+                        sortAsc: _bikeSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _bikeSortCol = col;
+                          _bikeSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _bikeColRegistered =
+                            (_bikeColRegistered + d).clamp(60, 200)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'ÚLT. ENTREGA',
+                        colKey: 'last_delivery',
+                        width: _bikeColDelivery,
+                        sortCol: _bikeSortCol,
+                        sortAsc: _bikeSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _bikeSortCol = col;
+                          _bikeSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _bikeColDelivery =
+                            (_bikeColDelivery + d).clamp(60, 200)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'TRABAJOS',
+                        colKey: 'jobs',
+                        width: _bikeColJobs,
+                        sortCol: _bikeSortCol,
+                        sortAsc: _bikeSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _bikeSortCol = col;
+                          _bikeSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _bikeColJobs = (_bikeColJobs + d).clamp(50, 160)),
+                      ),
+                      const SizedBox(width: 44),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: filteredBikes.isEmpty
+              ? _buildEmptyState(
+                  _bikes.isEmpty
+                      ? 'Sin bicicletas registradas'
+                      : 'Ninguna bicicleta coincide',
+                  Icons.pedal_bike_outlined,
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final viewportWidth = _tableViewportWidth(constraints);
+                    final tableWidth = _bikeTableWidth(viewportWidth);
+
+                    return SingleChildScrollView(
+                      controller: _bodyScrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: ListView.builder(
+                          itemCount: filteredBikes.length,
+                          itemBuilder: (_, i) => _buildBikeTableRow(
+                              filteredBikes[i], i.isEven, tableWidth),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
+
+  // ─────────────────────────────────────────────
+  // JOBS TAB
+  // ─────────────────────────────────────────────
 
   Widget _buildJobsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: _buildJobsSection(),
+    final filteredJobs = _getFilteredJobs();
+    final activeCount = _jobs
+        .where((j) =>
+            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
+        .length;
+    final completedCount =
+        _jobs.where((j) => j.status == JobStatus.entregado).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Toolbar with filter chips ──
+        _buildTabToolbar(
+          searchController: _jobSearchController,
+          searchHint: 'Buscar por número, técnico o nota…',
+          sortKey: _jobSortKey,
+          sortLabels: _jobSortLabels,
+          onSortChanged: (v) => setState(() => _jobSortKey = v),
+          statusText: filteredJobs.length == _jobs.length
+              ? '${_jobs.length} trabajos'
+              : '${filteredJobs.length} de ${_jobs.length}',
+          trailing: Row(
+            children: JobViewFilter.values.map((filter) {
+              final selected = _jobViewFilter == filter;
+              int? count;
+              if (filter == JobViewFilter.active) count = activeCount;
+              if (filter == JobViewFilter.completed) count = completedCount;
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _buildFilterToggle(
+                  _jobFilterLabel(filter),
+                  selected,
+                  () => setState(() => _jobViewFilter = filter),
+                  count: (count != null && count > 0) ? count : null,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportWidth = _tableViewportWidth(constraints);
+            final tableWidth = _jobTableWidth(viewportWidth);
+
+            return Container(
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: SingleChildScrollView(
+                controller: _headerScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      _buildResizableHeader(
+                        label: 'N° TRABAJO',
+                        colKey: 'number',
+                        width: _jobColNumber,
+                        sortCol: _jobSortCol,
+                        sortAsc: _jobSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _jobSortCol = col;
+                          _jobSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _jobColNumber = (_jobColNumber + d).clamp(60, 200)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'BICICLETA',
+                        colKey: 'bike',
+                        width: _jobColBike,
+                        sortCol: _jobSortCol,
+                        sortAsc: _jobSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _jobSortCol = col;
+                          _jobSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _jobColBike = (_jobColBike + d).clamp(60, 300)),
+                      ),
+                      SizedBox(
+                        width: _jobRequestColumnWidth(tableWidth),
+                        child: _buildSortableHeader(
+                          'SOLICITUD',
+                          'request',
+                          _jobSortCol,
+                          _jobSortAsc,
+                          (col, asc) => setState(() {
+                            _jobSortCol = col;
+                            _jobSortAsc = asc;
+                          }),
+                          leftPad: 12,
+                        ),
+                      ),
+                      _buildResizableHeader(
+                        label: 'ESTADO',
+                        colKey: 'status',
+                        width: _jobColStatus,
+                        sortCol: _jobSortCol,
+                        sortAsc: _jobSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _jobSortCol = col;
+                          _jobSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _jobColStatus = (_jobColStatus + d).clamp(60, 220)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'FECHA',
+                        colKey: 'date',
+                        width: _jobColDate,
+                        sortCol: _jobSortCol,
+                        sortAsc: _jobSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _jobSortCol = col;
+                          _jobSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _jobColDate = (_jobColDate + d).clamp(60, 180)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'TOTAL',
+                        colKey: 'total',
+                        width: _jobColTotal,
+                        sortCol: _jobSortCol,
+                        sortAsc: _jobSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _jobSortCol = col;
+                          _jobSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() =>
+                            _jobColTotal = (_jobColTotal + d).clamp(50, 160)),
+                      ),
+                      const SizedBox(width: 44),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: filteredJobs.isEmpty
+              ? _buildEmptyState(
+                  _jobs.isEmpty
+                      ? 'Sin trabajos registrados'
+                      : 'Ningún trabajo coincide',
+                  Icons.build_outlined,
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final viewportWidth = _tableViewportWidth(constraints);
+                    final tableWidth = _jobTableWidth(viewportWidth);
+
+                    return SingleChildScrollView(
+                      controller: _bodyScrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: ListView.builder(
+                          itemCount: filteredJobs.length,
+                          itemBuilder: (_, i) => _buildJobTableRow(
+                              filteredJobs[i], i.isEven, tableWidth),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
+
+  // ─────────────────────────────────────────────
+  // TIMELINE TAB
+  // ─────────────────────────────────────────────
 
   Widget _buildTimelineTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: _buildTimelineSection(),
-    );
-  }
+    final filteredTimeline = _getFilteredTimeline();
+    final allTypes = TimelineEventType.values;
+    final allSelected = _timelineTypeFilters.length == allTypes.length;
+    final filterSummary = allSelected
+        ? 'Todos los tipos'
+        : '${_timelineTypeFilters.length}/${allTypes.length} tipos';
 
-  Widget _buildContactCard() {
-    if (_customer == null) return const SizedBox.shrink();
-
-    final entries = <Widget>[];
-
-    if (_customer!.phone != null && _customer!.phone!.isNotEmpty) {
-      entries.add(_buildContactRow(Icons.phone, 'Teléfono', _customer!.phone!));
-    }
-    if (_customer!.email != null && _customer!.email!.isNotEmpty) {
-      entries.add(
-          _buildContactRow(Icons.email_outlined, 'Email', _customer!.email!));
-    }
-    if (_customer!.address != null && _customer!.address!.isNotEmpty) {
-      entries.add(_buildContactRow(
-          Icons.home_outlined, 'Dirección', _customer!.address!));
-    }
-    if (_customer!.region != null && _customer!.region!.isNotEmpty) {
-      entries.add(
-          _buildContactRow(Icons.map_outlined, 'Región', _customer!.region!));
-    }
-
-    if (entries.isEmpty) {
-      entries.add(
-        const ListTile(
-          leading: Icon(Icons.info_outline),
-          title: Text('Sin información de contacto registrada'),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Información de contacto',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ...entries,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContactRow(IconData icon, String label, String value) {
-    final theme = Theme.of(context);
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: theme.colorScheme.primary),
-      title: Text(label,
-          style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600])),
-      subtitle: Text(value,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _buildLoyaltyCard() {
-    final theme = Theme.of(context);
-    final color = _getLoyaltyColor(_loyalty!.tier);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: Icon(_getLoyaltyIcon(_loyalty!.tier),
-                      color: color, size: 28),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTabToolbar(
+          searchController: _timelineSearchController,
+          searchHint: 'Buscar evento, técnico o bicicleta…',
+          sortKey: _timelineSortKey,
+          sortLabels: _timelineSortLabels,
+          onSortChanged: (v) => setState(() => _timelineSortKey = v),
+          statusText: filteredTimeline.length == _timeline.length
+              ? '${_timeline.length} eventos'
+              : '${filteredTimeline.length} de ${_timeline.length}',
+          trailing: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _showTimelineFilterSheet,
+                icon: Icon(
+                  allSelected ? Icons.filter_list_off : Icons.filter_list,
+                  size: 16,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                label: Text(filterSummary),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              if (!allSelected) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Restablecer filtros',
+                  icon: const Icon(Icons.refresh, size: 18),
+                  onPressed: () => setState(() {
+                    _timelineTypeFilters = allTypes.toSet();
+                    _timelineSearchController.clear();
+                    _timelineSortKey = 'date_desc';
+                  }),
+                ),
+              ],
+            ],
+          ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportWidth = _tableViewportWidth(constraints);
+            final tableWidth = _timelineTableWidth(viewportWidth);
+
+            return Container(
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: SingleChildScrollView(
+                controller: _headerScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Row(
                     children: [
-                      Text(
-                        _getLoyaltyTierName(_loyalty!.tier),
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      const SizedBox(width: 52),
+                      SizedBox(
+                        width: _timelineDescriptionColumnWidth(tableWidth),
+                        child: _buildSortableHeader(
+                          'DESCRIPCIÓN',
+                          'desc',
+                          _timelineSortCol,
+                          _timelineSortAsc,
+                          (col, asc) => setState(() {
+                            _timelineSortCol = col;
+                            _timelineSortAsc = asc;
+                          }),
+                          leftPad: 12,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_loyalty!.points} puntos acumulados',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: theme.colorScheme.primary),
+                      _buildResizableHeader(
+                        label: 'TRABAJO / BICI',
+                        colKey: 'ref',
+                        width: _tlColRef,
+                        sortCol: _timelineSortCol,
+                        sortAsc: _timelineSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _timelineSortCol = col;
+                          _timelineSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(
+                            () => _tlColRef = (_tlColRef + d).clamp(80, 300)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'TÉCNICO',
+                        colKey: 'tech',
+                        width: _tlColTech,
+                        sortCol: _timelineSortCol,
+                        sortAsc: _timelineSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _timelineSortCol = col;
+                          _timelineSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(
+                            () => _tlColTech = (_tlColTech + d).clamp(60, 250)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'FECHA',
+                        colKey: 'date',
+                        width: _tlColDate,
+                        sortCol: _timelineSortCol,
+                        sortAsc: _timelineSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _timelineSortCol = col;
+                          _timelineSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(
+                            () => _tlColDate = (_tlColDate + d).clamp(80, 220)),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showAddPointsDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar puntos'),
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: filteredTimeline.isEmpty
+              ? _buildEmptyState(
+                  _timeline.isEmpty
+                      ? 'Sin eventos registrados'
+                      : 'Ningún evento coincide',
+                  Icons.history_outlined,
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final viewportWidth = _tableViewportWidth(constraints);
+                    final tableWidth = _timelineTableWidth(viewportWidth);
+
+                    return SingleChildScrollView(
+                      controller: _bodyScrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: ListView.builder(
+                          itemCount: filteredTimeline.length,
+                          itemBuilder: (_, i) => _buildTimelineTableRow(
+                              filteredTimeline[i], i.isEven, tableWidth),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // SHARED TAB TOOLBAR
+  // ─────────────────────────────────────────────
+
+  Widget _buildTabToolbar({
+    required TextEditingController searchController,
+    required String searchHint,
+    required String sortKey,
+    required Map<String, String> sortLabels,
+    required ValueChanged<String> onSortChanged,
+    required String statusText,
+    Widget? trailing,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // Search
+              SizedBox(
+                width: 300,
+                height: 36,
+                child: TextField(
+                  controller: searchController,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: searchHint,
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: theme.dividerColor),
+                    ),
+                    filled: true,
+                    fillColor: theme.scaffoldBackgroundColor,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showRedeemPointsDialog,
-                    icon: const Icon(Icons.redeem),
-                    label: const Text('Canjear puntos'),
+              ),
+              const SizedBox(width: 8),
+              // Sort
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  border: Border.all(color: Colors.grey[350]!),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: sortKey,
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[800]),
+                    isDense: true,
+                    icon: Icon(Icons.unfold_more,
+                        size: 16, color: Colors.grey[500]),
+                    items: sortLabels.entries
+                        .map((e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(e.value,
+                                style: TextStyle(
+                                    fontSize: 12.5, color: Colors.grey[800]))))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) onSortChanged(v);
+                    },
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 16),
+              Text(statusText,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              const Spacer(),
+              if (trailing != null) trailing,
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResizableHeader({
+    required String label,
+    required String colKey,
+    required double width,
+    required String? sortCol,
+    required bool sortAsc,
+    required void Function(String col, bool asc) onSort,
+    required void Function(double delta) onResize,
+  }) {
+    final isActive = sortCol == colKey;
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => onSort(colKey, isActive ? !sortAsc : true),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isActive ? Colors.blue[700] : Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isActive)
+                    Icon(
+                      sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 11,
+                      color: Colors.blue[700],
+                    ),
+                ],
+              ),
             ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: (d) => onResize(d.delta.dx),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: Container(
+                width: 8,
+                height: double.infinity,
+                color: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    width: 1,
+                    height: 20,
+                    color: Colors.grey[300],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortableHeader(
+    String label,
+    String colKey,
+    String? sortCol,
+    bool sortAsc,
+    void Function(String col, bool asc) onSort, {
+    double leftPad = 0,
+  }) {
+    final isActive = sortCol == colKey;
+    return InkWell(
+      onTap: () => onSort(colKey, isActive ? !sortAsc : true),
+      child: Container(
+        height: 36,
+        padding: EdgeInsets.only(left: leftPad, right: 12),
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isActive ? Colors.blue[700] : const Color(0xFF9E9E9E),
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (isActive) ...[
+              const SizedBox(width: 4),
+              Icon(
+                sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                size: 11,
+                color: Colors.blue[700],
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFilterToggle(
+    String label,
+    bool selected,
+    VoidCallback onTap, {
+    int? count,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? Colors.blue[50] : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: selected ? Colors.blue[300]! : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.blue[700] : Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (count != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: selected ? Colors.blue[100] : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.blue[700] : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          Text(message,
+              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+        ],
       ),
     );
   }
@@ -1039,628 +2060,182 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     ).then((_) => controller.dispose());
   }
 
-  Widget _buildStatistics() {
-    final totalJobs = _jobs.length;
-    final activeJobs = _jobs
-        .where((j) =>
-            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
-        .length;
-    final completedJobs =
-        _jobs.where((j) => j.status == JobStatus.entregado).length;
-    final totalSpent = _jobs
-        .where((j) => j.status == JobStatus.entregado)
-        .fold(0.0, (sum, j) => sum + j.totalCost);
-
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.two_wheeler,
-            label: 'Bicicletas',
-            value: _bikes.length.toString(),
-            color: Colors.blue,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.build,
-            label: 'Total Pegas',
-            value: totalJobs.toString(),
-            color: Colors.purple,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.pending_actions,
-            label: 'Activas',
-            value: activeJobs.toString(),
-            color: Colors.orange,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.check_circle,
-            label: 'Completadas',
-            value: completedJobs.toString(),
-            color: Colors.green,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.attach_money,
-            label: 'Total Gastado',
-            value: NumberFormat.currency(
-              symbol: '\$',
-              decimalDigits: 0,
-            ).format(totalSpent),
-            color: Colors.teal,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBikesSection() {
-    final filteredBikes = _getFilteredBikes();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Bicicletas Registradas',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () async {
-                final result = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => BikeFormDialog(
-                    customerId: widget.customerId,
-                  ),
-                );
-
-                if (result == true) {
-                  // Reload data after adding bike
-                  _loadData();
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar Bicicleta'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildBikeFilters(
-          total: _bikes.length,
-          filtered: filteredBikes.length,
-        ),
-        const SizedBox(height: 16),
-        if (filteredBikes.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.directions_bike,
-                        size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      _bikes.isEmpty
-                          ? 'No hay bicicletas registradas'
-                          : 'No encontramos bicicletas que coincidan',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 1.5,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: filteredBikes.length,
-            itemBuilder: (context, index) =>
-                _buildBikeCard(filteredBikes[index]),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildBikeCard(Bike bike) {
+  Widget _buildBikeTableRow(Bike bike, bool isEven, double tableWidth) {
     final jobsForBike = _totalJobsForBike(bike.id);
-    final activeJobsForBike = _activeJobsForBike(bike.id);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.pedal_bike,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    bike.displayName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  icon:
-                      Icon(Icons.more_vert, color: Colors.grey[600], size: 20),
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _editBike(bike);
-                    } else if (value == 'delete') {
-                      _confirmDeleteBike(bike);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit, size: 20),
-                          SizedBox(width: 8),
-                          Text('Editar'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 20, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (bike.serialNumber != null) ...[
-              Text(
-                'S/N: ${bike.serialNumber}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 4),
-            ],
-            Text(
-              bike.bikeType?.displayName ?? 'N/A',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: activeJobsForBike > 0
-                        ? Colors.orange[100]
-                        : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$jobsForBike pegas',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: activeJobsForBike > 0
-                          ? Colors.orange[900]
-                          : Colors.grey[700],
-                    ),
-                  ),
-                ),
-                if (bike.isUnderWarranty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.verified_user,
-                            size: 12, color: Colors.green[900]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Garantía',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.green[900]),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBikeFilters({required int total, required int filtered}) {
+    final activeJobsCount = _activeJobsForBike(bike.id);
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _bikeSearchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar bicicleta',
-                      hintText: 'Marca, modelo o n° de serie',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String>(
-                    value: _bikeSortKey,
-                    decoration: const InputDecoration(labelText: 'Ordenar por'),
-                    items: _bikeSortLabels.entries
-                        .map(
-                          (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _bikeSortKey = value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              filtered == total
-                  ? '$total bicicletas registradas'
-                  : '$filtered de $total bicicletas coinciden',
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJobsSection() {
-    final filteredJobs = _getFilteredJobs();
-    final activeCount = _jobs
+    final lastDelivered = _jobs
         .where((j) =>
-            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
-        .length;
-    final completedCount =
-        _jobs.where((j) => j.status == JobStatus.entregado).length;
+            j.bikeId == bike.id &&
+            j.status == JobStatus.entregado &&
+            j.deliveredAt != null)
+        .fold<DateTime?>(
+            null,
+            (prev, j) => prev == null || j.deliveredAt!.isAfter(prev)
+                ? j.deliveredAt
+                : prev);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _jobViewFilter = JobViewFilter.all;
+          _jobSearchController.text = bike.displayName;
+          _jobSearchTerm = bike.displayName;
+        });
+        _tabController.animateTo(1);
+      },
+      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+          ),
+        ),
+        child: Row(
           children: [
-            Text(
-              'Pegas del Taller',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 36,
+              child: Icon(
+                Icons.pedal_bike,
+                size: 18,
+                color: theme.colorScheme.primary.withOpacity(0.65),
+              ),
             ),
-            Wrap(
-              spacing: 8,
-              children: [
-                _buildJobSummaryChip(
-                  label: 'Activas',
-                  count: activeCount,
-                  color: Colors.orange,
-                ),
-                _buildJobSummaryChip(
-                  label: 'Entregadas',
-                  count: completedCount,
-                  color: Colors.green,
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildJobFilters(
-          total: _jobs.length,
-          filtered: filteredJobs.length,
-        ),
-        const SizedBox(height: 16),
-        if (filteredJobs.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
+            SizedBox(
+              width: _bikeNameColumnWidth(tableWidth),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.auto_fix_high,
-                        size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
                     Text(
-                      _jobs.isEmpty
-                          ? 'Este cliente aún no tiene pegas registradas'
-                          : 'No encontramos pegas que coincidan',
-                      style: TextStyle(color: Colors.grey[600]),
+                      bike.displayName,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          color: Colors.black87),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    if (bike.bikeType != null)
+                      Text(
+                        bike.bikeType!.displayName,
+                        style:
+                            TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+                      ),
                   ],
                 ),
               ),
             ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredJobs.length,
-            itemBuilder: (context, index) => _buildJobCard(filteredJobs[index]),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildJobFilters({required int total, required int filtered}) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _jobSearchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar pega',
-                      hintText: 'Número, técnico o nota',
-                      prefixIcon: Icon(Icons.search),
+            SizedBox(
+              width: _bikeColSerial,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  bike.serialNumber?.isNotEmpty == true
+                      ? bike.serialNumber!
+                      : '—',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _bikeColRegistered,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  DateFormat('dd MMM yyyy', 'es').format(bike.createdAt),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _bikeColDelivery,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  lastDelivered != null
+                      ? DateFormat('dd MMM yyyy', 'es').format(lastDelivered)
+                      : '—',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: lastDelivered != null
+                        ? Colors.grey[700]
+                        : Colors.grey[400],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _bikeColJobs,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: activeJobsCount > 0
+                            ? Colors.orange[50]
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        jobsForBike.toString(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: activeJobsCount > 0
+                              ? Colors.orange[700]
+                              : Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (bike.isUnderWarranty) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.verified_user,
+                          size: 14, color: Colors.green[600]),
+                    ],
+                  ],
                 ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String>(
-                    value: _jobSortKey,
-                    decoration: const InputDecoration(labelText: 'Ordenar por'),
-                    items: _jobSortLabels.entries
-                        .map(
-                          (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _jobSortKey = value);
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: JobViewFilter.values.map((filter) {
-                final selected = _jobViewFilter == filter;
-                return ChoiceChip(
-                  label: Text(_jobFilterLabel(filter)),
-                  selected: selected,
-                  onSelected: (value) {
-                    if (!value) return;
-                    setState(() => _jobViewFilter = filter);
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              filtered == total
-                  ? '$total pegas registradas'
-                  : '$filtered de $total pegas coinciden',
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJobSummaryChip({
-    required String label,
-    required int count,
-    required Color color,
-  }) {
-    final theme = Theme.of(context);
-    return Chip(
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.3)),
-      label: Text(
-        '$label: $count',
-        style: theme.textTheme.bodySmall?.copyWith(color: color),
-      ),
-    );
-  }
-
-  Widget _buildTimelineFilters({required int total, required int filtered}) {
-    final theme = Theme.of(context);
-    final allTypes = TimelineEventType.values;
-    final allSelected = _timelineTypeFilters.length == allTypes.length;
-    final defaultSort = _timelineSortKey == 'date_desc';
-    final hasFiltersApplied =
-        _timelineSearchTerm.isNotEmpty || !defaultSort || !allSelected;
-    final filterSummary = allSelected
-        ? 'Todos los tipos'
-        : '${_timelineTypeFilters.length} de ${allTypes.length} tipos seleccionados';
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _timelineSearchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar en historial',
-                      hintText: 'Evento, técnico o bicicleta',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String>(
-                    value: _timelineSortKey,
-                    decoration:
-                        const InputDecoration(labelText: 'Ordenar eventos'),
-                    items: _timelineSortLabels.entries
-                        .map(
-                          (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _timelineSortKey = value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.filter_list, size: 18, color: theme.hintColor),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    filterSummary,
-                    style: theme.textTheme.bodySmall,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: _showTimelineFilterSheet,
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: const Text('Filtrar por tipo'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text(
-                  filtered == total
-                      ? '$total eventos registrados'
-                      : '$filtered de $total eventos coinciden',
-                  style: theme.textTheme.bodySmall,
-                ),
-                if (hasFiltersApplied) ...[
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _timelineSearchController.clear();
-                        _timelineSearchTerm = '';
-                        _timelineSortKey = 'date_desc';
-                        _timelineTypeFilters = allTypes.toSet();
-                      });
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Restablecer filtros'),
-                  ),
+            SizedBox(
+              width: 44,
+              child: PopupMenuButton<String>(
+                icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                tooltip: 'Opciones',
+                onSelected: (value) {
+                  if (value == 'edit') _editBike(bike);
+                  if (value == 'delete') _confirmDeleteBike(bike);
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Editar'),
+                      ])),
+                  const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(children: [
+                        Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                        SizedBox(width: 10),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ])),
                 ],
-              ],
+              ),
             ),
           ],
         ),
@@ -1668,30 +2243,121 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     );
   }
 
-  Widget _buildTimelineMetaChip({
-    required IconData icon,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.grey[700]),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[800],
-            ),
+  Widget _buildTimelineTableRow(
+      MechanicJobTimeline event, bool isEven, double tableWidth) {
+    final icon = _timelineIcon(event.eventType);
+    final color = _timelineColor(event.eventType);
+    final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
+    final bike = job != null ? _bikeIndex[job.bikeId] : null;
+    final defaultDescription = _getDefaultDescription(event.eventType);
+
+    return InkWell(
+      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 14),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: _timelineDescriptionColumnWidth(tableWidth),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.description ?? defaultDescription,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (event.oldValue != null || event.newValue != null)
+                      Text(
+                        '${event.oldValue ?? ''} → ${event.newValue ?? ''}',
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: Colors.grey[500],
+                            fontStyle: FontStyle.italic),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _tlColRef,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (job != null)
+                      Text(
+                        (job.jobNumber?.isNotEmpty ?? false)
+                            ? 'Trabajo ${job.jobNumber}'
+                            : '—',
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (bike != null)
+                      Text(
+                        bike.displayName,
+                        style:
+                            TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (job == null && bike == null)
+                      Text('—',
+                          style:
+                              TextStyle(fontSize: 13, color: Colors.grey[400])),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _tlColTech,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  event.createdByName ?? '—',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _tlColDate,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Text(
+                  DateFormat('dd/MM/yyyy HH:mm').format(event.createdAt),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1818,163 +2484,126 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     }
   }
 
-  Widget _buildJobCard(MechanicJob job) {
+  Widget _buildJobTableRow(MechanicJob job, bool isEven, double tableWidth) {
     final bike = _getBikeForJob(job);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () => context.push('/taller/pegas/${job.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // Job number
-                  Text(
-                    job.jobNumber ?? 'Sin número',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Priority badge
-                  _buildPriorityBadge(job.priority),
-                  const SizedBox(width: 12),
-                  // Status badge
-                  _buildStatusBadge(job.status),
-                  const Spacer(),
-                  // Cost
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.green[300]!),
-                    ),
-                    child: Text(
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                          .format(_getJobDisplayTotal(job)),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[900],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Bike info
-              Row(
-                children: [
-                  Icon(Icons.pedal_bike, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Text(
-                    bike.displayName,
-                    style: TextStyle(color: Colors.grey[700]),
-                  ),
-                ],
-              ),
-              if (job.clientRequest != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  job.clientRequest!,
-                  style: TextStyle(color: Colors.grey[600]),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              const SizedBox(height: 12),
-              // Dates
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Ingreso: ${DateFormat('dd/MM/yyyy').format(job.arrivalDate)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  if (job.deliveryDeadline != null) ...[
-                    const SizedBox(width: 16),
-                    Icon(
-                      Icons.event,
-                      size: 14,
-                      color: job.isOverdue ? Colors.red : Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Entrega: ${DateFormat('dd/MM/yyyy').format(job.deliveryDeadline!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: job.isOverdue ? Colors.red : Colors.grey[600],
-                        fontWeight:
-                            job.isOverdue ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                  if (job.assignedTechnicianName != null) ...[
-                    const Spacer(),
-                    Icon(Icons.person, size: 14, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      job.assignedTechnicianName!,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPriorityBadge(JobPriority priority) {
-    Color color;
-    IconData icon;
-
-    switch (priority) {
+    final Color priorityColor;
+    switch (job.priority) {
       case JobPriority.urgente:
-        color = Colors.red;
-        icon = Icons.warning;
+        priorityColor = Colors.red;
         break;
       case JobPriority.alta:
-        color = Colors.orange;
-        icon = Icons.priority_high;
-        break;
-      case JobPriority.normal:
-        color = Colors.blue;
-        icon = Icons.circle;
+        priorityColor = Colors.orange;
         break;
       case JobPriority.baja:
-        color = Colors.grey;
-        icon = Icons.circle_outlined;
+        priorityColor = Colors.grey;
         break;
+      default:
+        priorityColor = Colors.blue;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            priority.displayName,
-            style: TextStyle(
-                fontSize: 12, color: color, fontWeight: FontWeight.bold),
+    return InkWell(
+      onTap: () => context.push('/taller/pegas/${job.id}'),
+      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 52,
+              color: priorityColor.withOpacity(0.65),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: _jobColNumber - 16,
+              child: Text(
+                job.jobNumber ?? '—',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(
+              width: _jobColBike,
+              child: Text(
+                bike.displayName,
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(
+              width: _jobRequestColumnWidth(tableWidth),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  job.clientRequest?.isNotEmpty == true
+                      ? job.clientRequest!
+                      : '—',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: _jobColStatus,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _buildStatusBadge(job.status),
+              ),
+            ),
+            SizedBox(
+              width: _jobColDate,
+              child: Text(
+                DateFormat('dd/MM/yy').format(job.arrivalDate),
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ),
+            SizedBox(
+              width: _jobColTotal,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                      .format(_getJobDisplayTotal(job)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 44,
+              child: PopupMenuButton<String>(
+                icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                tooltip: 'Opciones',
+                onSelected: (value) {
+                  if (value == 'open') {
+                    context.push('/taller/pegas/${job.id}');
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'open',
+                      child: Row(children: [
+                        Icon(Icons.open_in_new, size: 18),
+                        SizedBox(width: 10),
+                        Text('Ver Detalle'),
+                      ])),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2037,151 +2666,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     );
   }
 
-  Widget _buildTimelineSection() {
-    final filteredTimeline = _getFilteredTimeline();
-    final totalEvents = _timeline.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Historial Completo',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 16),
-        _buildTimelineFilters(
-          total: totalEvents,
-          filtered: filteredTimeline.length,
-        ),
-        const SizedBox(height: 16),
-        if (filteredTimeline.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.timeline, size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      totalEvents == 0
-                          ? 'No hay eventos registrados'
-                          : 'No encontramos eventos que coincidan',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredTimeline.length,
-            itemBuilder: (context, index) =>
-                _buildTimelineItem(filteredTimeline[index]),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTimelineItem(MechanicJobTimeline event) {
-    final icon = _timelineIcon(event.eventType);
-    final color = _timelineColor(event.eventType);
-    final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
-    final bike = job != null ? _bikeIndex[job.bikeId] : null;
-    final defaultDescription = _getDefaultDescription(event.eventType);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.description ?? defaultDescription,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        DateFormat('dd/MM/yyyy HH:mm').format(event.createdAt),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                      if (event.createdByName != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '• ${event.createdByName}',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (event.oldValue != null || event.newValue != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '${event.oldValue ?? ''} → ${event.newValue ?? ''}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                          fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                  if (job != null || bike != null) ...[
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 6,
-                      children: [
-                        if (job != null)
-                          _buildTimelineMetaChip(
-                            icon: Icons.build,
-                            label: (job.jobNumber?.isNotEmpty ?? false)
-                                ? 'Pega ${job.jobNumber}'
-                                : 'Pega sin número',
-                          ),
-                        if (bike != null)
-                          _buildTimelineMetaChip(
-                            icon: Icons.pedal_bike,
-                            label: bike.displayName,
-                          ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _getDefaultDescription(TimelineEventType eventType) {
     var description = 'Evento';
 
     switch (eventType) {
       case TimelineEventType.created:
-        description = 'Pega creada';
+        description = 'Trabajo creado';
         break;
       case TimelineEventType.statusChanged:
         description = 'Estado cambiado';
@@ -2244,6 +2734,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   }
 
   Future<void> _confirmDeleteBike(Bike bike) async {
+    final bikeshopService =
+        Provider.of<BikeshopService>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2280,8 +2772,6 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
 
     if (confirmed == true && bike.id != null) {
       try {
-        final bikeshopService =
-            Provider.of<BikeshopService>(context, listen: false);
         await bikeshopService.deleteBike(bike.id!);
 
         if (mounted) {
