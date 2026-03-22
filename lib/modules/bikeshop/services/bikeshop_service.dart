@@ -461,7 +461,8 @@ class BikeshopService extends ChangeNotifier {
     try {
       if (!isFilteredQuery) _isLoadingJobs = true;
 
-      // Join with job_statuses to get custom status details
+      // Join with job_statuses only. Subject data is hydrated separately so
+      // the app does not depend on a deployed PostgREST relationship cache.
       var query = Supabase.instance.client.from('mechanic_jobs').select('''
         *,
         job_status:job_statuses(*)
@@ -493,6 +494,8 @@ class BikeshopService extends ChangeNotifier {
       var jobs = data
           .map((json) => MechanicJob.fromJson(json as Map<String, dynamic>))
           .toList();
+
+      jobs = await _hydrateJobSubjects(jobs);
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         final searchLower = searchTerm.toLowerCase();
@@ -528,7 +531,8 @@ class BikeshopService extends ChangeNotifier {
     try {
       if (id.isEmpty) return null;
 
-      // Join with job_statuses to get custom status details
+      // Join with job_statuses only. Subject data is hydrated separately so
+      // the app works before the FK relationship is deployed/refreshed.
       final data = await Supabase.instance.client
           .from('mechanic_jobs')
           .select('''
@@ -539,10 +543,49 @@ class BikeshopService extends ChangeNotifier {
           .isFilter('deleted_at', null) // Filter out soft-deleted
           .maybeSingle();
 
-      return data != null ? MechanicJob.fromJson(data) : null;
+      if (data == null) return null;
+      final hydrated = await _hydrateJobSubjects([
+        MechanicJob.fromJson(data),
+      ]);
+      return hydrated.isNotEmpty ? hydrated.first : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
       rethrow;
+    }
+  }
+
+  Future<List<MechanicJob>> _hydrateJobSubjects(List<MechanicJob> jobs) async {
+    final subjectIds = jobs
+        .map((job) => job.subjectId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (subjectIds.isEmpty) return jobs;
+
+    try {
+      final subjectRows = await Supabase.instance.client
+          .from('job_subjects')
+          .select()
+          .inFilter('id', subjectIds) as List<dynamic>;
+
+      final subjectById = {
+        for (final row in subjectRows)
+          (JobSubject.fromJson(row)).id!: JobSubject.fromJson(row)
+      };
+
+      return jobs
+          .map((job) => job.copyWith(
+                subjectData:
+                    job.subjectId != null ? subjectById[job.subjectId!] : null,
+              ))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Could not hydrate job subjects: $e');
+      }
+      return jobs;
     }
   }
 
@@ -1183,7 +1226,7 @@ class BikeshopService extends ChangeNotifier {
   /// Fetch a complete job with joined data and update the cache surgically
   Future<void> _fetchAndUpdateJob(String jobId) async {
     try {
-      // Fetch with joins - same query structure as getJobs()
+      // Fetch with job_status join only. Subject data is hydrated separately.
       final data =
           await Supabase.instance.client.from('mechanic_jobs').select('''
             *,
@@ -1191,10 +1234,12 @@ class BikeshopService extends ChangeNotifier {
           ''').eq('id', jobId).isFilter('deleted_at', null).maybeSingle();
 
       if (data != null) {
-        final job = MechanicJob.fromJson(data);
+        final hydrated = await _hydrateJobSubjects([
+          MechanicJob.fromJson(data),
+        ]);
+        final job = hydrated.first;
         _surgicalUpdateJob(job);
-        debugPrint(
-            '🔧 [BikeshopService] Surgical update (with joins): ${job.jobNumber}');
+        debugPrint('🔧 [BikeshopService] Surgical update: ${job.jobNumber}');
 
         if (!mounted) return;
         notifyListeners();
@@ -1384,6 +1429,154 @@ class BikeshopService extends ChangeNotifier {
       debugPrint('🔥 Permanently deleted job: $jobId');
     } catch (e) {
       if (kDebugMode) print('Error permanently deleting job: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // JOB SUBJECTS CRUD (per-tenant component catalog)
+  // ============================================================
+
+  List<JobSubject>? _cachedSubjects;
+
+  List<JobSubject> get cachedSubjects => _cachedSubjects ?? [];
+
+  void invalidateSubjectsCache() {
+    _cachedSubjects = null;
+  }
+
+  Future<List<JobSubject>> getJobSubjects({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedSubjects != null) return _cachedSubjects!;
+    try {
+      final data = await Supabase.instance.client
+          .from('job_subjects')
+          .select()
+          .eq('is_active', true)
+          .order('category')
+          .order('sort_order')
+          .order('name') as List<dynamic>;
+      _cachedSubjects = data
+          .map((j) => JobSubject.fromJson(j as Map<String, dynamic>))
+          .toList();
+      return _cachedSubjects!;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job subjects: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<JobSubject>> getAllJobSubjects() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('job_subjects')
+          .select()
+          .order('category')
+          .order('sort_order')
+          .order('name') as List<dynamic>;
+      return data
+          .map((j) => JobSubject.fromJson(j as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching all job subjects: $e');
+      rethrow;
+    }
+  }
+
+  Future<JobSubject> createJobSubject(JobSubject subject) async {
+    try {
+      final payload = subject.toJson();
+      if ((payload['tenant_id'] as String?)?.isEmpty ?? false) {
+        payload.remove('tenant_id');
+      }
+      final data = await _db.insert('job_subjects', payload);
+      invalidateSubjectsCache();
+      return JobSubject.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating job subject: $e');
+      rethrow;
+    }
+  }
+
+  Future<JobSubject> updateJobSubject(JobSubject subject) async {
+    try {
+      final payload = subject.toJson(forUpdate: true);
+      if ((payload['tenant_id'] as String?)?.isEmpty ?? false) {
+        payload.remove('tenant_id');
+      }
+      final data = await _db.update('job_subjects', subject.id!, payload);
+      invalidateSubjectsCache();
+      return JobSubject.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error updating job subject: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteJobSubject(String subjectId) async {
+    try {
+      await _db.delete('job_subjects', subjectId);
+      invalidateSubjectsCache();
+    } catch (e) {
+      if (kDebugMode) print('Error deleting job subject: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // JOB TYPE CONVERSION METHODS
+  // ============================================================
+
+  /// Convert a warranty or quotation job into a regular service job (in-place).
+  /// Updates the existing job record — preserves the job number and history.
+  Future<MechanicJob> convertToServiceJob(String jobId) async {
+    try {
+      await Supabase.instance.client.from('mechanic_jobs').update({
+        'job_type': 'service',
+        // 'warranty_outcome': null, // PRESERVE to leave a footprint that this came from a warranty
+        'quotation_status': null,
+        'quotation_valid_until': null,
+        'is_warranty_job': false,
+        'converted_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', jobId);
+      invalidateJobsCache();
+      _debouncedNotify();
+      final updated = await getJobById(jobId);
+      if (updated == null)
+        throw Exception('Job not found after conversion: $jobId');
+      return updated;
+    } catch (e) {
+      if (kDebugMode) print('Error converting job to service: $e');
+      rethrow;
+    }
+  }
+
+  /// Update the warranty outcome of a job
+  Future<void> updateWarrantyOutcome(
+      String jobId, WarrantyOutcome outcome) async {
+    try {
+      await Supabase.instance.client
+          .from('mechanic_jobs')
+          .update({'warranty_outcome': outcome.dbValue}).eq('id', jobId);
+      invalidateJobsCache();
+      _debouncedNotify();
+    } catch (e) {
+      if (kDebugMode) print('Error updating warranty outcome: $e');
+      rethrow;
+    }
+  }
+
+  /// Update the quotation status of a job
+  Future<void> updateQuotationStatus(
+      String jobId, QuotationStatus status) async {
+    try {
+      await Supabase.instance.client
+          .from('mechanic_jobs')
+          .update({'quotation_status': status.dbValue}).eq('id', jobId);
+      invalidateJobsCache();
+      _debouncedNotify();
+    } catch (e) {
+      if (kDebugMode) print('Error updating quotation status: $e');
       rethrow;
     }
   }

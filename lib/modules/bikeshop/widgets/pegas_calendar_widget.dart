@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -244,9 +243,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         bikeModel = loadedBike?.model;
       } else {
         try {
-          loadedBike = await bikeshopService.getBikeById(job.bikeId);
-          bikeBrand = loadedBike?.brand;
-          bikeModel = loadedBike?.model;
+          if (job.bikeId != null) {
+            loadedBike = await bikeshopService.getBikeById(job.bikeId!);
+            bikeBrand = loadedBike?.brand;
+            bikeModel = loadedBike?.model;
+          } else {
+            bikeBrand = job.subjectData?.name ?? job.jobType.displayName;
+            bikeModel = '';
+          }
         } catch (e) {
           bikeBrand = 'Bici no encontrada';
           bikeModel = '';

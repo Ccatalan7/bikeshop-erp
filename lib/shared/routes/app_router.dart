@@ -51,6 +51,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         InvoiceListPage,
         InvoicePaymentPage,
         JobStatusesPage,
+        JobSubjectsPage,
         JournalEntryFormPage,
         JournalEntryListPage,
         KeyboardScannerPage,
@@ -1456,13 +1457,25 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/taller/sujetos',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.JobSubjectsPage(),
+          ),
+        ),
+        GoRoute(
           path: '/taller/pegas/nueva',
           pageBuilder: (context, state) {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
               erp.loadLibrary(),
-              () => erp.MechanicJobFormPage(),
+              () => erp.MechanicJobFormPage(
+                customerId: state.uri.queryParameters['customer_id'],
+                initialJobType: state.uri.queryParameters['type'],
+              ),
             );
           },
         ),

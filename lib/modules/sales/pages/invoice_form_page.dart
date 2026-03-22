@@ -1290,6 +1290,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
 
       if (!mounted) return;
+
+      // If this invoice was created from a mechanic job, write the link back
+      if (_linkedJobId != null &&
+          saved.id != null &&
+          widget.invoiceId == null) {
+        try {
+          final db = Provider.of<DatabaseService>(context, listen: false);
+          await db.supabase
+              .from('mechanic_jobs')
+              .update({'invoice_id': saved.id}).eq('id', _linkedJobId!);
+          debugPrint(
+              '🔗 [InvoiceFormPage] Linked invoice ${saved.id} to job $_linkedJobId');
+        } catch (e) {
+          debugPrint('⚠️ [InvoiceFormPage] Could not link invoice to job: $e');
+        }
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Borrador guardado correctamente'),

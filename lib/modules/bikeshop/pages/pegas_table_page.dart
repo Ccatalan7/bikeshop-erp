@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:io' show File;
 import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -1690,17 +1689,87 @@ class _PegasTablePageState extends State<PegasTablePage>
                 child: const Icon(Icons.add, size: 20),
               )
             else
-              FilledButton.tonalIcon(
-                onPressed: () {
-                  _markNeedsRefresh();
-                  context.push('/taller/pegas/nueva');
-                },
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('Nuevo Trabajo'),
-              ),
+              _buildNewJobDropdown(),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildNewJobDropdown() {
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () {
+                _markNeedsRefresh();
+                context.push('/taller/pegas/nueva');
+              },
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('Nuevo Trabajo'),
+              style: FilledButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(8),
+                    bottomLeft: Radius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            FilledButton.tonal(
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              style: FilledButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(8),
+                    bottomRight: Radius.circular(8),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(32, 40),
+              ),
+              child: const Icon(Icons.arrow_drop_down, size: 20),
+            ),
+          ],
+        );
+      },
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.build, size: 18),
+          child: const Text('Servicio normal'),
+          onPressed: () {
+            _markNeedsRefresh();
+            context.push('/taller/pegas/nueva?type=service');
+          },
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.verified_user, size: 18),
+          child: const Text('Garantía'),
+          onPressed: () {
+            _markNeedsRefresh();
+            context.push('/taller/pegas/nueva?type=warranty');
+          },
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.request_quote, size: 18),
+          child: const Text('Presupuesto'),
+          onPressed: () {
+            _markNeedsRefresh();
+            context.push('/taller/pegas/nueva?type=quotation');
+          },
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.build_circle, size: 18),
+          child: const Text('Ítem / Accesorio'),
+          onPressed: () {
+            _markNeedsRefresh();
+            context.push('/taller/pegas/nueva?type=item_service');
+          },
+        ),
+      ],
     );
   }
 
@@ -2028,6 +2097,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                 tooltip: 'Personalizar columnas',
               ),
 
+              if (_filteredJobs.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(width: 1, height: 24, color: Colors.grey.shade300),
+                const SizedBox(width: 16),
+                _buildJobTypeCounters(),
+              ],
+
               const Spacer(),
 
               // Stats - sum invoice totals, paid, and outstanding
@@ -2093,6 +2169,54 @@ class _PegasTablePageState extends State<PegasTablePage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildJobTypeCounters() {
+    final bicycles = _filteredJobs.where((j) => j.bikeId != null).length;
+    final items = _filteredJobs
+        .where((j) => j.jobType == JobType.itemService || j.bikeId == null)
+        .length;
+    final warranties = _filteredJobs
+        .where((j) => j.jobType == JobType.warranty || j.isWarrantyJob)
+        .length;
+    final quotations =
+        _filteredJobs.where((j) => j.jobType == JobType.quotation).length;
+
+    Widget simpleCount(IconData icon, String label, int count) {
+      if (count == 0) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(right: 16.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: Colors.grey.shade500),
+            const SizedBox(width: 6),
+            Text(
+              '$label: ',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: Colors.grey.shade800,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        simpleCount(Icons.directions_bike, 'Bicicletas', bicycles),
+        simpleCount(Icons.build, 'Ítems', items),
+        simpleCount(Icons.shield, 'Garantías', warranties),
+        simpleCount(Icons.description, 'Cotizaciones', quotations),
+      ],
     );
   }
 
@@ -2928,15 +3052,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _uploadFilesForJob(MechanicJob job, List<XFile> files) async {
-    if (job.customerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Error: No se puede adjuntar archivos a un trabajo sin cliente asignado')),
-      );
-      return;
-    }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Subiendo archivos...')),
     );
@@ -2970,15 +3085,6 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _uploadFileBytesForJob(
       MechanicJob job, Uint8List bytes, String name) async {
-    if (job.customerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Error: No se puede adjuntar archivos a un trabajo sin cliente asignado')),
-      );
-      return;
-    }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Subiendo archivo...')),
     );
@@ -3187,7 +3293,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       case 'status':
         // Clickable status indicator with color - uses custom status color
-        final statusColor = _getJobStatusColor(job);
+        final statusColor = job.colorValue;
         return InkWell(
           onTap: () => _showStatusMenu(job),
           borderRadius: BorderRadius.circular(12),
@@ -3536,6 +3642,47 @@ class _PegasTablePageState extends State<PegasTablePage>
           );
         }
 
+        // Non-bike job: show subject/item instead of bike
+        if (job.bikeId == null ||
+            (job.jobType == JobType.itemService && job.subjectData != null)) {
+          final subjectName = job.subjectData?.name ?? job.subjectNotes ?? '—';
+          final subjectNotes = (job.subjectData != null &&
+                  job.subjectNotes != null &&
+                  job.subjectNotes!.isNotEmpty)
+              ? job.subjectNotes
+              : null;
+          final subjectIcon = _jobTypeIcon(job.jobType);
+          return Row(
+            children: [
+              Icon(subjectIcon,
+                  size: 28, color: Theme.of(context).colorScheme.secondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(subjectName,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis),
+                    if (subjectNotes != null)
+                      Text(subjectNotes,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
         // Single bike - normal display
         final bikeName = bike?.displayName ?? 'N/A';
         final bikeImageUrl = bike?.imageUrl;
@@ -3634,9 +3781,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (isPerBikeDetail) {
           // Use per-bike status if set, otherwise fall back to job status
           final bikeStatus = jobBike.customStatus;
-          final statusColor = bikeStatus != null
-              ? bikeStatus.colorValue
-              : _getJobStatusColor(job);
+          final statusColor =
+              bikeStatus != null ? bikeStatus.colorValue : job.colorValue;
           final statusName = bikeStatus?.name ?? job.statusDisplayName;
           return InkWell(
             onTap: () => _showBikeStatusMenu(job, jobBike),
@@ -3678,7 +3824,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
 
         // Single bike job: show job-level status
-        final statusColor = _getJobStatusColor(job);
+        final statusColor = job.colorValue;
         final statusName = job.statusDisplayName;
         final statusUpdatedAt = job.statusUpdatedAt;
         return InkWell(
@@ -4039,6 +4185,96 @@ class _PegasTablePageState extends State<PegasTablePage>
       case 'invoice':
         // Clickable invoice with full status display
         if (job.invoiceId == null && !job.isInvoiced) {
+          // Warranty job: show green "Garantía" badge instead of "Generar"
+          if (job.jobType == JobType.warranty) {
+            final outcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
+            final Color badgeColor;
+            final String badgeLabel;
+            switch (outcome) {
+              case WarrantyOutcome.covered:
+                badgeColor = Colors.green;
+                badgeLabel = 'Garantía ✓';
+                break;
+              case WarrantyOutcome.notCovered:
+                badgeColor = Colors.red;
+                badgeLabel = 'No cubierto';
+                break;
+              case WarrantyOutcome.pending:
+                badgeColor = Colors.green;
+                badgeLabel = 'Garantía';
+                break;
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: badgeColor.withValues(alpha: 0.5), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_user, size: 13, color: badgeColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    badgeLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: badgeColor,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Quotation job: show quotation status chip
+          if (job.jobType == JobType.quotation) {
+            final qStatus = job.quotationStatus ?? QuotationStatus.pending;
+            final Color badgeColor;
+            switch (qStatus) {
+              case QuotationStatus.approved:
+                badgeColor = Colors.green;
+                break;
+              case QuotationStatus.rejected:
+              case QuotationStatus.expired:
+                badgeColor = Colors.red;
+                break;
+              case QuotationStatus.pending:
+                badgeColor = Colors.orange;
+                break;
+            }
+            return InkWell(
+              onTap: () => _createInvoiceForJob(job),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: badgeColor.withValues(alpha: 0.4), width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.request_quote, size: 13, color: badgeColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Presupuesto',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
           return InkWell(
             onTap: () => _createInvoiceForJob(job),
             child: Container(
@@ -4286,6 +4522,18 @@ class _PegasTablePageState extends State<PegasTablePage>
               tooltip: 'Más',
               iconSize: 16,
               itemBuilder: (context) => [
+                if (job.jobType == JobType.warranty ||
+                    job.jobType == JobType.quotation)
+                  const PopupMenuItem(
+                    value: 'convert',
+                    child: Row(
+                      children: [
+                        Icon(Icons.transform, size: 18),
+                        SizedBox(width: 8),
+                        Text('Convertir a Normal'),
+                      ],
+                    ),
+                  ),
                 const PopupMenuItem(
                   value: 'complete',
                   child: Row(
@@ -4308,7 +4556,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ],
               onSelected: (value) {
-                if (value == 'complete') {
+                if (value == 'convert') {
+                  _convertToService(job);
+                } else if (value == 'complete') {
                   _markJobAsComplete(job);
                 } else if (value == 'delete') {
                   _confirmDelete(job);
@@ -4867,6 +5117,91 @@ class _PegasTablePageState extends State<PegasTablePage>
         '/sales/invoices/new?job_id=${job.id}&customer_id=${job.customerId}');
   }
 
+  Future<void> _convertToService(MechanicJob job) async {
+    final typeLabel =
+        job.jobType == JobType.warranty ? 'garantía' : 'presupuesto';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.transform, size: 28),
+        title: const Text('Convertir a Servicio Cobrable'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${job.jobNumber} dejará de ser un trabajo de $typeLabel y pasará a ser un '
+              'servicio normal cobrable al cliente.',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'Podrás generar la factura inmediatamente después.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.transform, size: 16),
+            label: const Text('Convertir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      _startLocalOperation();
+      try {
+        final updated = await _bikeshopService.convertToServiceJob(job.id!);
+        if (mounted) {
+          // Optimistic update in local list
+          setState(() {
+            final index = _jobs.indexWhere((j) => j.id == job.id);
+            if (index != -1) _jobs[index] = updated;
+            _applyFiltersAndSort();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${job.jobNumber} convertido a servicio cobrable'),
+              duration: const Duration(seconds: 8),
+              backgroundColor: Colors.green.shade700,
+              action: SnackBarAction(
+                label: 'Generar Factura',
+                textColor: Colors.white,
+                onPressed: () => context.push(
+                  '/sales/invoices/new?job_id=${job.id}&customer_id=${job.customerId}',
+                ),
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Error al convertir: $e'),
+                backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        _endLocalOperation();
+      }
+    }
+  }
+
   Future<void> _markJobAsComplete(MechanicJob job) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -5035,6 +5370,73 @@ class _PegasTablePageState extends State<PegasTablePage>
         onStatusSelected: (status) async {
           Navigator.pop(dialogContext);
           await _updateJobToCustomStatus(job, status);
+        },
+        onWarrantyOutcomeSelected: (outcome) async {
+          Navigator.pop(dialogContext);
+          _startLocalOperation();
+          try {
+            await _bikeshopService.updateWarrantyOutcome(job.id!, outcome);
+            if (mounted) {
+              setState(() {
+                final index = _jobs.indexWhere((j) => j.id == job.id);
+                if (index != -1) {
+                  _jobs[index] = job.copyWith(
+                      warrantyOutcome: outcome, updatedAt: DateTime.now());
+                }
+                _applyFiltersAndSort();
+              });
+              // When warranty is rejected, offer to convert to a paid service job
+              if (outcome == WarrantyOutcome.notCovered) {
+                showDialog<void>(
+                  context: context,
+                  barrierColor: Colors.transparent,
+                  builder: (ctx) => _NotCoveredConvertDialog(
+                    jobNumber: job.jobNumber ?? '',
+                    onConvert: () {
+                      Navigator.pop(ctx);
+                      final current = _jobs.firstWhere(
+                        (j) => j.id == job.id,
+                        orElse: () => job,
+                      );
+                      _convertToService(current);
+                    },
+                    onDismiss: () => Navigator.pop(ctx),
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Error: $e'), backgroundColor: Colors.red));
+            }
+          } finally {
+            _endLocalOperation();
+          }
+        },
+        onQuotationStatusSelected: (qStatus) async {
+          Navigator.pop(dialogContext);
+          _startLocalOperation();
+          try {
+            await _bikeshopService.updateQuotationStatus(job.id!, qStatus);
+            if (mounted) {
+              setState(() {
+                final index = _jobs.indexWhere((j) => j.id == job.id);
+                if (index != -1) {
+                  _jobs[index] = job.copyWith(
+                      quotationStatus: qStatus, updatedAt: DateTime.now());
+                }
+                _applyFiltersAndSort();
+              });
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Error: $e'), backgroundColor: Colors.red));
+            }
+          } finally {
+            _endLocalOperation();
+          }
         },
       ),
     );
@@ -5728,14 +6130,17 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  /// Gets status color - prefers custom status color, falls back to legacy
-  Color _getJobStatusColor(MechanicJob job) {
-    // Use custom status color if available
-    if (job.customStatus != null) {
-      return job.customStatus!.colorValue;
+  IconData _jobTypeIcon(JobType type) {
+    switch (type) {
+      case JobType.warranty:
+        return Icons.verified_user;
+      case JobType.quotation:
+        return Icons.request_quote;
+      case JobType.itemService:
+        return Icons.build_circle;
+      case JobType.service:
+        return Icons.pedal_bike;
     }
-    // Fallback to legacy color mapping
-    return _getLegacyStatusColor(job.status);
   }
 
   /// Legacy status color mapping (for backward compatibility)
@@ -6867,11 +7272,15 @@ class _StatusManagerDialog extends StatefulWidget {
   final MechanicJob job;
   final JobStatusService jobStatusService;
   final Function(JobStatusCustom) onStatusSelected;
+  final Future<void> Function(WarrantyOutcome)? onWarrantyOutcomeSelected;
+  final Future<void> Function(QuotationStatus)? onQuotationStatusSelected;
 
   const _StatusManagerDialog({
     required this.job,
     required this.jobStatusService,
     required this.onStatusSelected,
+    this.onWarrantyOutcomeSelected,
+    this.onQuotationStatusSelected,
   });
 
   @override
@@ -7040,7 +7449,22 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             width: 360,
             child: _isEditMode
                 ? _buildEditForm()
-                : _buildStatusList(statusesByPhase, currentStatusId),
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.job.jobType == JobType.warranty)
+                        _buildWarrantyOutcomeSection(),
+                      if (widget.job.jobType == JobType.quotation)
+                        _buildQuotationStatusSection(),
+                      if (widget.job.jobType == JobType.warranty ||
+                          widget.job.jobType == JobType.quotation)
+                        const Divider(height: 16),
+                      Flexible(
+                          child: _buildStatusList(
+                              statusesByPhase, currentStatusId)),
+                    ],
+                  ),
           ),
           actions: _isEditMode
               ? [
@@ -7056,6 +7480,176 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                 ],
         );
       },
+    );
+  }
+
+  Widget _buildWarrantyOutcomeSection() {
+    final current = widget.job.warrantyOutcome ?? WarrantyOutcome.pending;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Resultado de Garantía',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Row(
+          children: WarrantyOutcome.values.map((outcome) {
+            final isSelected = outcome == current;
+            final Color color = switch (outcome) {
+              WarrantyOutcome.covered => Colors.green,
+              WarrantyOutcome.notCovered => Colors.red,
+              WarrantyOutcome.pending => Colors.orange,
+            };
+            final String label = switch (outcome) {
+              WarrantyOutcome.covered => 'Cubierto',
+              WarrantyOutcome.notCovered => 'No cubierto',
+              WarrantyOutcome.pending => 'Pendiente',
+            };
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: widget.onWarrantyOutcomeSelected != null
+                      ? () => widget.onWarrantyOutcomeSelected!(outcome)
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? color : Colors.grey.shade300,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 18,
+                          color: isSelected ? color : Colors.grey,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected ? color : Colors.grey.shade600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuotationStatusSection() {
+    final current = widget.job.quotationStatus ?? QuotationStatus.pending;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Estado del Presupuesto',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Row(
+          children: QuotationStatus.values.map((qStatus) {
+            final isSelected = qStatus == current;
+            final Color color = switch (qStatus) {
+              QuotationStatus.approved => Colors.green,
+              QuotationStatus.rejected => Colors.red,
+              QuotationStatus.expired => Colors.grey,
+              QuotationStatus.pending => Colors.orange,
+            };
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: widget.onQuotationStatusSelected != null
+                      ? () => widget.onQuotationStatusSelected!(qStatus)
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? color : Colors.grey.shade300,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          size: 16,
+                          color: isSelected ? color : Colors.grey,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          qStatus.displayName,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected ? color : Colors.grey.shade600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -7781,6 +8375,88 @@ class _DualDeadlineDialogState extends State<_DualDeadlineDialog> {
               color: Colors.grey.shade400,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Floating block shown after marking a warranty as "not covered"
+// ---------------------------------------------------------------------------
+class _NotCoveredConvertDialog extends StatelessWidget {
+  final String jobNumber;
+  final VoidCallback onConvert;
+  final VoidCallback onDismiss;
+
+  const _NotCoveredConvertDialog({
+    required this.jobNumber,
+    required this.onConvert,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(16),
+          color: theme.colorScheme.surfaceContainerHigh,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.shield_outlined,
+                      color: Colors.red.shade700, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Garantía rechazada — $jobNumber',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '¿Cobrar el servicio al cliente?',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: onDismiss,
+                  child: const Text('No'),
+                ),
+                const SizedBox(width: 4),
+                FilledButton.icon(
+                  onPressed: onConvert,
+                  icon: const Icon(Icons.attach_money, size: 16),
+                  label: const Text('Cobrar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -757,6 +757,226 @@ enum JobPriority {
 }
 
 // ============================================================
+// JOB TYPE, WARRANTY OUTCOME, QUOTATION STATUS ENUMS
+// ============================================================
+
+enum JobType {
+  service,
+  warranty,
+  quotation,
+  itemService;
+
+  String get displayName {
+    switch (this) {
+      case JobType.service:
+        return 'Servicio';
+      case JobType.warranty:
+        return 'Garantía';
+      case JobType.quotation:
+        return 'Presupuesto';
+      case JobType.itemService:
+        return 'Componente';
+    }
+  }
+
+  String get dbValue {
+    switch (this) {
+      case JobType.service:
+        return 'service';
+      case JobType.warranty:
+        return 'warranty';
+      case JobType.quotation:
+        return 'quotation';
+      case JobType.itemService:
+        return 'item_service';
+    }
+  }
+
+  static JobType fromDbValue(String? value) {
+    switch (value) {
+      case 'warranty':
+        return JobType.warranty;
+      case 'quotation':
+        return JobType.quotation;
+      case 'item_service':
+        return JobType.itemService;
+      default:
+        return JobType.service;
+    }
+  }
+}
+
+enum WarrantyOutcome {
+  pending,
+  covered,
+  notCovered;
+
+  String get displayName {
+    switch (this) {
+      case WarrantyOutcome.pending:
+        return 'Pendiente';
+      case WarrantyOutcome.covered:
+        return 'Cubierto';
+      case WarrantyOutcome.notCovered:
+        return 'No cubierto';
+    }
+  }
+
+  String get dbValue {
+    switch (this) {
+      case WarrantyOutcome.pending:
+        return 'pending';
+      case WarrantyOutcome.covered:
+        return 'covered';
+      case WarrantyOutcome.notCovered:
+        return 'not_covered';
+    }
+  }
+
+  static WarrantyOutcome fromDbValue(String? value) {
+    switch (value) {
+      case 'covered':
+        return WarrantyOutcome.covered;
+      case 'not_covered':
+        return WarrantyOutcome.notCovered;
+      default:
+        return WarrantyOutcome.pending;
+    }
+  }
+}
+
+enum QuotationStatus {
+  pending,
+  approved,
+  rejected,
+  expired;
+
+  String get displayName {
+    switch (this) {
+      case QuotationStatus.pending:
+        return 'Pendiente';
+      case QuotationStatus.approved:
+        return 'Aprobado';
+      case QuotationStatus.rejected:
+        return 'Rechazado';
+      case QuotationStatus.expired:
+        return 'Expirado';
+    }
+  }
+
+  String get dbValue {
+    switch (this) {
+      case QuotationStatus.pending:
+        return 'pending';
+      case QuotationStatus.approved:
+        return 'approved';
+      case QuotationStatus.rejected:
+        return 'rejected';
+      case QuotationStatus.expired:
+        return 'expired';
+    }
+  }
+
+  static QuotationStatus fromDbValue(String? value) {
+    switch (value) {
+      case 'approved':
+        return QuotationStatus.approved;
+      case 'rejected':
+        return QuotationStatus.rejected;
+      case 'expired':
+        return QuotationStatus.expired;
+      default:
+        return QuotationStatus.pending;
+    }
+  }
+}
+
+// ============================================================
+// JOB SUBJECT MODEL (per-tenant component/item catalog)
+// ============================================================
+
+class JobSubject {
+  final String? id;
+  final String tenantId;
+  final String name;
+  final String category;
+  final String icon;
+  final String? description;
+  final bool isActive;
+  final int sortOrder;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const JobSubject({
+    this.id,
+    required this.tenantId,
+    required this.name,
+    this.category = 'General',
+    this.icon = 'build',
+    this.description,
+    this.isActive = true,
+    this.sortOrder = 0,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory JobSubject.fromJson(Map<String, dynamic> json) {
+    return JobSubject(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      category: json['category'] as String? ?? 'General',
+      icon: json['icon'] as String? ?? 'build',
+      description: json['description'] as String?,
+      isActive: json['is_active'] as bool? ?? true,
+      sortOrder: json['sort_order'] as int? ?? 0,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson({bool forUpdate = false}) {
+    final m = <String, dynamic>{
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'name': name,
+      'category': category,
+      'icon': icon,
+      'description': description,
+      'is_active': isActive,
+      'sort_order': sortOrder,
+      if (!forUpdate) 'created_at': createdAt.toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    return m;
+  }
+
+  JobSubject copyWith({
+    String? id,
+    String? tenantId,
+    String? name,
+    String? category,
+    String? icon,
+    String? description,
+    bool? isActive,
+    int? sortOrder,
+  }) {
+    return JobSubject(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      icon: icon ?? this.icon,
+      description: description ?? this.description,
+      isActive: isActive ?? this.isActive,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+
+// ============================================================
 // MECHANIC JOB MODEL
 // ============================================================
 
@@ -765,8 +985,19 @@ class MechanicJob {
   final String tenantId;
   final String? jobNumber; // ✅ Nullable - auto-generated by database
   final String customerId;
-  final String bikeId;
+  final String?
+      bikeId; // nullable: item_service / quotation / warranty jobs may not have a bike
   final String? servicePackageId;
+  // --- new job type fields ---
+  final JobType jobType;
+  final String? subjectId;
+  final JobSubject? subjectData; // loaded from join, not persisted directly
+  final String? subjectNotes;
+  final WarrantyOutcome? warrantyOutcome;
+  final QuotationStatus? quotationStatus;
+  final DateTime? quotationValidUntil;
+  final String? convertedFromId;
+  final DateTime? convertedAt;
   final DateTime arrivalDate;
   final DateTime? diagnosticDeadline; // Target date to send diagnostic
   final DateTime? deliveryDeadline; // Target date to deliver bike
@@ -814,8 +1045,17 @@ class MechanicJob {
     required this.tenantId,
     this.jobNumber, // ✅ Optional - will be auto-generated if null
     required this.customerId,
-    required this.bikeId,
+    this.bikeId, // nullable now
     this.servicePackageId,
+    this.jobType = JobType.service,
+    this.subjectId,
+    this.subjectData,
+    this.subjectNotes,
+    this.warrantyOutcome,
+    this.quotationStatus,
+    this.quotationValidUntil,
+    this.convertedFromId,
+    this.convertedAt,
     DateTime? arrivalDate,
     this.diagnosticDeadline,
     this.deliveryDeadline,
@@ -867,13 +1107,33 @@ class MechanicJob {
           JobStatusCustom.fromJson(json['job_status'] as Map<String, dynamic>);
     }
 
+    // Parse subject if joined
+    JobSubject? subjectData;
+    if (json['subject'] != null && json['subject'] is Map) {
+      subjectData =
+          JobSubject.fromJson(json['subject'] as Map<String, dynamic>);
+    }
+
     return MechanicJob(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       jobNumber: json['job_number']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
-      bikeId: json['bike_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString(),
       servicePackageId: json['service_package_id']?.toString(),
+      jobType: JobType.fromDbValue(json['job_type'] as String?),
+      subjectId: json['subject_id']?.toString(),
+      subjectData: subjectData,
+      subjectNotes: json['subject_notes'] as String?,
+      warrantyOutcome: json['warranty_outcome'] != null
+          ? WarrantyOutcome.fromDbValue(json['warranty_outcome'] as String?)
+          : null,
+      quotationStatus: json['quotation_status'] != null
+          ? QuotationStatus.fromDbValue(json['quotation_status'] as String?)
+          : null,
+      quotationValidUntil: _parseDateNullable(json['quotation_valid_until']),
+      convertedFromId: json['converted_from_id']?.toString(),
+      convertedAt: _parseDateNullable(json['converted_at']),
       arrivalDate: _parseDate(json['arrival_date']),
       diagnosticDeadline: _parseDateNullable(json['diagnostic_deadline']),
       deliveryDeadline: _parseDateNullable(
@@ -937,6 +1197,14 @@ class MechanicJob {
       'customer_id': customerId,
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
+      'job_type': jobType.dbValue,
+      'subject_id': subjectId,
+      'subject_notes': subjectNotes,
+      if (warrantyOutcome != null) 'warranty_outcome': warrantyOutcome!.dbValue,
+      if (quotationStatus != null) 'quotation_status': quotationStatus!.dbValue,
+      'quotation_valid_until': quotationValidUntil?.toIso8601String(),
+      'converted_from_id': convertedFromId,
+      'converted_at': convertedAt?.toIso8601String(),
       'arrival_date':
           arrivalDate.toIso8601String(), // Always include (editable)
       'diagnostic_deadline': diagnosticDeadline?.toIso8601String(),
@@ -989,8 +1257,17 @@ class MechanicJob {
     String? tenantId,
     String? jobNumber,
     String? customerId,
-    String? bikeId,
+    Object? bikeId = _sentinel, // sentinel for nullable field
     String? servicePackageId,
+    JobType? jobType,
+    Object? subjectId = _sentinel,
+    Object? subjectData = _sentinel,
+    Object? subjectNotes = _sentinel,
+    Object? warrantyOutcome = _sentinel,
+    Object? quotationStatus = _sentinel,
+    Object? quotationValidUntil = _sentinel,
+    Object? convertedFromId = _sentinel,
+    Object? convertedAt = _sentinel,
     DateTime? arrivalDate,
     // Use Object? to allow explicitly passing null (sentinel pattern)
     Object? diagnosticDeadline = _sentinel,
@@ -1034,8 +1311,31 @@ class MechanicJob {
       tenantId: tenantId ?? this.tenantId,
       jobNumber: jobNumber ?? this.jobNumber,
       customerId: customerId ?? this.customerId,
-      bikeId: bikeId ?? this.bikeId,
+      bikeId: bikeId == _sentinel ? this.bikeId : bikeId as String?,
       servicePackageId: servicePackageId ?? this.servicePackageId,
+      jobType: jobType ?? this.jobType,
+      subjectId: subjectId == _sentinel ? this.subjectId : subjectId as String?,
+      subjectData: subjectData == _sentinel
+          ? this.subjectData
+          : subjectData as JobSubject?,
+      subjectNotes: subjectNotes == _sentinel
+          ? this.subjectNotes
+          : subjectNotes as String?,
+      warrantyOutcome: warrantyOutcome == _sentinel
+          ? this.warrantyOutcome
+          : warrantyOutcome as WarrantyOutcome?,
+      quotationStatus: quotationStatus == _sentinel
+          ? this.quotationStatus
+          : quotationStatus as QuotationStatus?,
+      quotationValidUntil: quotationValidUntil == _sentinel
+          ? this.quotationValidUntil
+          : quotationValidUntil as DateTime?,
+      convertedFromId: convertedFromId == _sentinel
+          ? this.convertedFromId
+          : convertedFromId as String?,
+      convertedAt: convertedAt == _sentinel
+          ? this.convertedAt
+          : convertedAt as DateTime?,
       arrivalDate: arrivalDate ?? this.arrivalDate,
       // Handle sentinel: if sentinel, keep old value; if null, set to null; if DateTime, use it
       diagnosticDeadline: diagnosticDeadline == _sentinel
@@ -1084,10 +1384,57 @@ class MechanicJob {
   }
 
   /// Get the display name for the status (prefers custom status if available)
-  String get statusDisplayName => customStatus?.name ?? status.displayName;
+  String get statusDisplayName {
+    if (jobType == JobType.quotation) {
+      final qStatus = quotationStatus ?? QuotationStatus.pending;
+      return 'Presupuesto ${qStatus.displayName}';
+    }
+
+    final baseName = customStatus?.name ?? status.displayName;
+
+    if (jobType == JobType.warranty && warrantyOutcome != null) {
+      if (warrantyOutcome == WarrantyOutcome.covered)
+        return '$baseName (Cubierto)';
+      if (warrantyOutcome == WarrantyOutcome.notCovered)
+        return '$baseName (Rechazado)';
+      // If it's explicitly null or pending, we don't necessarily append, or we could append (Eval).
+      // Let's just return baseName since they are evaluating it normally in the workflow.
+    }
+
+    return baseName;
+  }
 
   /// Get the color for the status (prefers custom status if available)
-  String get statusColor => customStatus?.color ?? _defaultStatusColor;
+  String get statusColor {
+    if (jobType == JobType.quotation) {
+      final qStatus = quotationStatus ?? QuotationStatus.pending;
+      switch (qStatus) {
+        case QuotationStatus.pending:
+          return '#F59E0B'; // Amber
+        case QuotationStatus.approved:
+          return '#10B981'; // Green
+        case QuotationStatus.rejected:
+          return '#EF4444'; // Red
+        case QuotationStatus.expired:
+          return '#6B7280'; // Gray
+      }
+    }
+
+    if (jobType == JobType.warranty && warrantyOutcome != null) {
+      if (warrantyOutcome == WarrantyOutcome.covered) return '#10B981'; // Green
+      if (warrantyOutcome == WarrantyOutcome.notCovered)
+        return '#EF4444'; // Red
+      // Pending warranties use the normal workflow color
+    }
+
+    return customStatus?.color ?? _defaultStatusColor;
+  }
+
+  /// Get the Flutter Color object for the status
+  Color get colorValue {
+    final hexColor = statusColor.replaceFirst('#', '0xff');
+    return Color(int.tryParse(hexColor) ?? 0xFF6B7280);
+  }
 
   String get _defaultStatusColor {
     switch (status) {
@@ -1143,6 +1490,16 @@ class MechanicJob {
   bool get isActive {
     return !['FINALIZADO', 'ENTREGADO', 'CANCELADO'].contains(status.dbValue);
   }
+
+  /// Display label for the job subject (for non-bike jobs)
+  String? get subjectDisplayName {
+    if (subjectData != null) return subjectData!.name;
+    if (subjectNotes != null && subjectNotes!.isNotEmpty) return subjectNotes;
+    return null;
+  }
+
+  /// Whether this job requires a bike (service) or just a subject/item
+  bool get requiresBike => jobType == JobType.service;
 }
 
 // ============================================================

@@ -109,6 +109,11 @@ const List<MenuSubItem> _workshopMenuItems = [
     title: 'Estados personalizados',
     route: '/taller/estados',
   ),
+  MenuSubItem(
+    icon: Icons.category_outlined,
+    title: 'Catálogo de elementos',
+    route: '/taller/sujetos',
+  ),
 ];
 
 const String _workshopSectionKey = 'workshop';
@@ -305,6 +310,7 @@ String _getTitleFromRoute(String route) {
     '/taller/bicicletas': 'Bicicletas',
     '/taller/marcas-modelos': 'Marcas y Modelos',
     '/taller/estados': 'Estados personalizados',
+    '/taller/sujetos': 'Catálogo de elementos',
     '/taller/wheel-builder': 'Wheel Builder',
     '/taller/wheel-hubs': 'Hubs',
     '/taller/wheel-rims': 'Rims',

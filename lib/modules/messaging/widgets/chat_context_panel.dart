@@ -70,7 +70,9 @@ class _ChatContextPanelState extends State<ChatContextPanel>
 
           // Fetch Bike
           try {
-            _bike = await bikeshopService.getBikeById(job.bikeId);
+            if (job.bikeId != null) {
+              _bike = await bikeshopService.getBikeById(job.bikeId!);
+            }
           } catch (_) {}
 
           // Fetch Linked Invoice

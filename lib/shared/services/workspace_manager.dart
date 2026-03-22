@@ -39,6 +39,7 @@ String getRouteTitle(String path) {
     '/taller/calendario': 'Calendario Taller',
     '/taller/nueva-pega': 'Nueva Pega',
     '/taller/estados': 'Estados de Pegas',
+    '/taller/sujetos': 'Catálogo de Elementos',
     '/taller/marcas-bicicletas': 'Marcas de Bicicletas',
     '/taller/enciclopedia': 'Enciclopedia de Bicicletas',
     '/taller/logbook': 'Logbook Cliente',

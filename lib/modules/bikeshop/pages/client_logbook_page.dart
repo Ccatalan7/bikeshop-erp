@@ -83,7 +83,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   double _tlColTech = 120;
   double _tlColDate = 130;
   Map<String, Bike> _bikeIndex = {};
-  Map<String, List<MechanicJob>> _jobsByBike = {};
+  Map<String?, List<MechanicJob>> _jobsByBike = {};
   Map<String, MechanicJob> _jobIndex = {};
   Set<TimelineEventType> _timelineTypeFilters =
       TimelineEventType.values.toSet();
@@ -205,7 +205,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         customerId: widget.customerId,
         includeCompleted: true,
       );
-      final jobsByBike = <String, List<MechanicJob>>{};
+      final jobsByBike = <String?, List<MechanicJob>>{};
       final jobIndex = <String, MechanicJob>{};
       for (final job in jobs) {
         if (job.id != null && job.id!.isNotEmpty) {
@@ -518,6 +518,18 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   }
 
   Bike _getBikeForJob(MechanicJob job) {
+    if (job.bikeId == null) {
+      // Non-service job (warranty/quotation/item_service) — no bike
+      final label = job.subjectData?.name ?? job.jobType.displayName;
+      return Bike(
+        id: null,
+        tenantId: '',
+        customerId: job.customerId,
+        brand: label,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+      );
+    }
     final bike = _bikeIndex[job.bikeId];
     if (bike != null) return bike;
     // Fallback bike for display only (not saved to DB)

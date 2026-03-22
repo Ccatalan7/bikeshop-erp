@@ -83,11 +83,14 @@ class _BikeTabData {
 class MechanicJobFormPage extends StatefulWidget {
   final String? jobId; // Null for new job, ID for editing
   final String? customerId; // Pre-select customer if provided
+  final String?
+      initialJobType; // Pre-select type: 'service'|'warranty'|'quotation'|'item_service'
 
   const MechanicJobFormPage({
     super.key,
     this.jobId,
     this.customerId,
+    this.initialJobType,
   });
 
   @override
@@ -147,6 +150,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   TaxTreatment _taxTreatment =
       TaxTreatment.noTax; // Default: no tax (matches sales invoice)
 
+  // Job type and subject (for non-bike jobs: warranty, quotation, item_service)
+  JobType _jobType = JobType.service;
+  JobSubject? _selectedSubject;
+  List<JobSubject> _availableSubjects = [];
+  final _subjectNotesController = TextEditingController();
+  WarrantyOutcome? _warrantyOutcome;
+  QuotationStatus? _quotationStatus;
+  DateTime? _quotationValidUntil;
+
   // Parts and services
   final List<_JobPartItem> _partItems = [];
   final List<_JobServiceItem> _serviceItems = [];
@@ -197,6 +209,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _technicianNotesController.dispose();
     _discountController.dispose();
     _estimatedDurationController.dispose();
+    _subjectNotesController.dispose();
     _partAutocompleteFocus.dispose();
     // Dispose all bike tab controllers
     for (final tab in _bikeTabs) {
@@ -213,6 +226,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<InventoryService>(context, listen: false);
       final jobStatusService =
           Provider.of<JobStatusService>(context, listen: false);
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
 
       // 🚀 Cache-first hydration: paint with in-memory data immediately,
       // then refresh in the background-critical path only as needed.
@@ -236,10 +251,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         customerService.getCustomers(limit: 50),
         inventoryService.searchProducts('', limit: 50),
         jobStatusService.loadStatuses(),
+        bikeshopService.getJobSubjects(),
       ]);
 
       List<Customer> customers = results[0] as List<Customer>;
       List<Product> products = results[1] as List<Product>;
+      final subjects = results[3] as List<JobSubject>;
 
       // If we have a specific customerId, ensure that customer is loaded.
       // For edit mode, _loadExistingJob() will fetch the job once and load the customer,
@@ -274,12 +291,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _products = products;
           _serviceProducts = serviceProducts;
           _customStatuses = customStatuses;
+          _availableSubjects = subjects;
           // Set default status to first "todo" phase status if available
           if (_customStatuses.isNotEmpty && _selectedCustomStatus == null) {
             _selectedCustomStatus = _customStatuses.firstWhere(
               (s) => s.phase == StatusPhase.todo,
               orElse: () => _customStatuses.first,
             );
+          }
+          // Apply initial job type from query parameter (new jobs only)
+          if (widget.initialJobType != null && widget.jobId == null) {
+            _jobType = JobType.fromDbValue(widget.initialJobType!);
           }
         });
       }
@@ -615,6 +637,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _requiresApproval = loadedBikeTabs.first.requiresApproval;
             _isWarrantyJob = loadedBikeTabs.first.isWarrantyWork;
           }
+
+          // Load new job type fields
+          _jobType = job.jobType;
+          if (job.subjectData != null) {
+            _selectedSubject = job.subjectData;
+            if (!_availableSubjects.any((s) => s.id == job.subjectData!.id)) {
+              _availableSubjects = [job.subjectData!, ..._availableSubjects];
+            }
+          }
+          if (job.subjectNotes != null && job.subjectNotes!.isNotEmpty) {
+            _subjectNotesController.text = job.subjectNotes!;
+          }
+          _warrantyOutcome = job.warrantyOutcome;
+          _quotationStatus = job.quotationStatus;
+          _quotationValidUntil = job.quotationValidUntil;
 
           // Clear legacy items (now per-bike)
           _partItems.clear();
@@ -1183,11 +1220,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    // MULTI-BIKE: Check that we have at least one bike tab
-    if (_bikeTabs.isEmpty) {
+    final requiresBike =
+        _jobType == JobType.service || _jobType == JobType.warranty;
+
+    // Service and warranty jobs require a bicycle
+    if (requiresBike && _bikeTabs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Debe seleccionar al menos una bicicleta')),
+      );
+      return;
+    }
+
+    if (_jobType == JobType.itemService && _selectedSubject == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe seleccionar un componente o ítem del catálogo'),
+        ),
+      );
+      return;
+    }
+
+    if (_jobType == JobType.quotation &&
+        _subjectNotesController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Describa qué producto o servicio desea cotizar'),
+        ),
       );
       return;
     }
@@ -1232,13 +1291,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       // Use first bike as the "primary" bike for legacy compatibility
-      final primaryBike = _bikeTabs.first.bike;
-      if (primaryBike?.id == null) {
+      final primaryBike = _bikeTabs.isNotEmpty ? _bikeTabs.first.bike : null;
+      if (requiresBike && primaryBike?.id == null) {
         throw Exception('La primera bicicleta no tiene ID');
       }
 
       // Get combined data from first bike tab for job-level fields (legacy)
-      final firstTab = _bikeTabs.first;
+      final firstTab = _bikeTabs.isNotEmpty ? _bikeTabs.first : null;
 
       // Create MechanicJob object (job-level data)
       final job = MechanicJob(
@@ -1247,7 +1306,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         jobNumber:
             _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
         customerId: _selectedCustomer!.id!,
-        bikeId: primaryBike!.id!, // Primary bike for legacy
+        bikeId: primaryBike?.id, // Nullable for non-bike jobs
+        jobType: _jobType,
+        subjectId:
+            _jobType == JobType.itemService ? _selectedSubject?.id : null,
+        subjectNotes: _subjectNotesController.text.isNotEmpty
+            ? _subjectNotesController.text
+            : null,
+        warrantyOutcome: _warrantyOutcome,
+        quotationStatus: _quotationStatus,
+        quotationValidUntil: _quotationValidUntil,
         priority: _selectedPriority,
         status: _selectedStatus,
         statusId: _selectedCustomStatus?.id, // Custom status ID
@@ -1255,6 +1323,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         diagnosticDeadline: _existingJob?.diagnosticDeadline, // ✅ Preserve
         servicePackageId: _existingJob?.servicePackageId, // ✅ Preserve
         warrantyNotes: _existingJob?.warrantyNotes, // ✅ Preserve
+        convertedAt: _existingJob?.convertedAt, // ✅ Preserve
+        convertedFromId: _existingJob?.convertedFromId, // ✅ Preserve
         assignedTo: _existingJob?.assignedTo, // ✅ Preserve
         assignedTechnicianName:
             _existingJob?.assignedTechnicianName, // ✅ Preserve
@@ -1264,21 +1334,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         deliveredAt: _existingJob?.deliveredAt, // ✅ Preserve
         createdAt: _existingJob?.createdAt ?? DateTime.now(),
         // Store first bike's data in legacy fields for backward compat
-        clientRequest: firstTab.clientRequestController.text.trim().isEmpty
-            ? null
-            : firstTab.clientRequestController.text.trim(),
-        diagnosis: firstTab.diagnosisController.text.trim().isEmpty
-            ? null
-            : firstTab.diagnosisController.text.trim(),
-        workPerformed: firstTab.workRequestedController.text.trim().isEmpty
-            ? null
-            : firstTab.workRequestedController.text.trim(),
-        notes: firstTab.technicianNotesController.text.trim().isEmpty
-            ? null
-            : firstTab.technicianNotesController.text.trim(),
+        clientRequest: firstTab != null &&
+                firstTab.clientRequestController.text.trim().isNotEmpty
+            ? firstTab.clientRequestController.text.trim()
+            : (_clientRequestController.text.trim().isNotEmpty
+                ? _clientRequestController.text.trim()
+                : null),
+        diagnosis: firstTab != null &&
+                firstTab.diagnosisController.text.trim().isNotEmpty
+            ? firstTab.diagnosisController.text.trim()
+            : (_diagnosisController.text.trim().isNotEmpty
+                ? _diagnosisController.text.trim()
+                : null),
+        workPerformed: firstTab != null &&
+                firstTab.workRequestedController.text.trim().isNotEmpty
+            ? firstTab.workRequestedController.text.trim()
+            : (_workSummaryController.text.trim().isNotEmpty
+                ? _workSummaryController.text.trim()
+                : null),
+        notes: firstTab != null &&
+                firstTab.technicianNotesController.text.trim().isNotEmpty
+            ? firstTab.technicianNotesController.text.trim()
+            : (_technicianNotesController.text.trim().isNotEmpty
+                ? _technicianNotesController.text.trim()
+                : null),
         deliveryDeadline: _selectedDeadline,
-        requiresApproval: firstTab.requiresApproval,
-        isWarrantyJob: firstTab.isWarrantyWork,
+        requiresApproval: firstTab?.requiresApproval ?? _requiresApproval,
+        isWarrantyJob:
+            firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
         discountAmount: _discountAmount,
         estimatedCost: 0,
         finalCost: 0,
@@ -1452,6 +1535,44 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
+      // For non-service jobs (no bike tabs): save items from legacy _partItems
+      if (_bikeTabs.isEmpty && _partItems.isNotEmpty) {
+        for (final item in _partItems) {
+          if (item.name.isEmpty) continue;
+          final quantity = item.quantity.toDouble();
+          final unitPrice = item.unitPrice;
+          final jobItem = MechanicJobItem(
+            jobId: jobId,
+            jobBikeId: null,
+            tenantId: tenantId,
+            productId: item.product?.id,
+            productName: item.name,
+            productSku: item.sku ?? '',
+            quantity: quantity,
+            unitPrice: unitPrice,
+            totalPrice: quantity * unitPrice,
+            itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+            notes: item.notes,
+          );
+          final created = await bikeshopService.createJobItem(jobItem);
+          if (item.product != null &&
+              item.product!.description != null &&
+              item.product!.description!.isNotEmpty &&
+              created.id != null) {
+            try {
+              await taskService.generateAutoTasksFromDescription(
+                jobId: jobId,
+                parentItemId: created.id!,
+                description: item.product!.description!,
+              );
+            } catch (e) {
+              debugPrint(
+                  '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+            }
+          }
+        }
+      }
+
       // Add services (job-level, not per-bike for now)
       for (final service in _serviceItems) {
         final hoursWorked = service.hours;
@@ -1506,7 +1627,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final savedJob = await bikeshopService.getJobById(jobId);
       final linkedInvoiceId = savedJob?.invoiceId;
 
+      bool shouldInvoice = true;
+      if (savedJob != null) {
+        if (savedJob.jobType == JobType.quotation) {
+          shouldInvoice = false;
+        } else if (savedJob.jobType == JobType.warranty &&
+            savedJob.warrantyOutcome != WarrantyOutcome.notCovered) {
+          shouldInvoice = false;
+        }
+      }
+
       if (linkedInvoiceId != null) {
+        // If there's an existing invoice, we still sync it just to keep it updated,
+        // (unless we want to delete it if it's a quotation now, but we'll assume
+        // quotes don't get invoices attached in the first place).
         debugPrint('🔄 Syncing job to invoice: $linkedInvoiceId');
         await bikeshopService.syncJobToInvoice(jobId);
         await _updateInvoiceTaxTreatment(linkedInvoiceId);
@@ -1515,7 +1649,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           jobId: jobId,
           invoiceId: linkedInvoiceId,
         );
-      } else {
+      } else if (shouldInvoice) {
         debugPrint('🧾 No linked invoice yet, creating one after items save');
         final createdInvoiceId =
             await bikeshopService.createInvoiceFromJob(jobId);
@@ -1527,9 +1661,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           jobId: jobId,
           invoiceId: createdInvoiceId,
         );
+      } else {
+        debugPrint(
+            'ℹ️ Skipping invoice generation for JobType: ${savedJob?.jobType}, outcome: ${savedJob?.warrantyOutcome}');
       }
 
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.jobId != null
@@ -1545,15 +1682,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar pega: $e')),
         );
       }
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -1927,6 +2066,27 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         if (isEditing &&
                             _selectedCustomer != null &&
                             _selectedBike != null) ...[
+                          if (_jobType == JobType.quotation &&
+                              _quotationStatus == QuotationStatus.pending) ...[
+                            FilledButton.icon(
+                              onPressed: _isSaving
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _jobType = JobType.service;
+                                        _quotationStatus =
+                                            QuotationStatus.approved;
+                                      });
+                                      _saveJob();
+                                    },
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('Aprobar Presupuesto'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.orange.shade700,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           if (_selectedStatus == JobStatus.finalizado ||
                               _selectedStatus == JobStatus.entregado)
                             OutlinedButton.icon(
@@ -1984,6 +2144,26 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     if (isEditing &&
                         _selectedCustomer != null &&
                         _selectedBike != null) ...[
+                      if (_jobType == JobType.quotation &&
+                          _quotationStatus == QuotationStatus.pending) ...[
+                        FilledButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _jobType = JobType.service;
+                                    _quotationStatus = QuotationStatus.approved;
+                                  });
+                                  _saveJob();
+                                },
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('Aprobar Presupuesto'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.orange.shade700,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
                       if (_selectedStatus == JobStatus.finalizado ||
                           _selectedStatus == JobStatus.entregado)
                         OutlinedButton.icon(
@@ -2736,159 +2916,194 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
         ),
         const SizedBox(height: 16),
-        // Custom bike dropdown with action buttons
-        if (_selectedCustomer != null)
-          PopupMenuButton<String>(
-            enabled: widget.jobId == null, // Disable in edit mode
-            child: InputDecorator(
+        // Service and warranty are bike-based workflows.
+        if (_jobType == JobType.service || _jobType == JobType.warranty) ...[
+          // Custom bike dropdown with action buttons
+          if (_selectedCustomer != null)
+            PopupMenuButton<String>(
+              enabled: widget.jobId == null, // Disable in edit mode
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Bicicleta *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.pedal_bike),
+                  suffixIcon: Icon(Icons.arrow_drop_down),
+                ),
+                child: Text(
+                  _selectedBike != null
+                      ? '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}'
+                      : 'Seleccione una bicicleta',
+                  style: _selectedBike != null
+                      ? null
+                      : TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+              itemBuilder: (context) => [
+                // Bike list - add to tabs (not just select)
+                ..._bikes.map((bike) {
+                  final alreadyInTabs =
+                      _bikeTabs.any((tab) => tab.bike?.id == bike.id);
+                  return PopupMenuItem<String>(
+                    value: 'bike_${bike.id}',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
+                          ),
+                        ),
+                        if (alreadyInTabs)
+                          Icon(Icons.check, size: 16, color: Colors.green[600]),
+                      ],
+                    ),
+                    onTap: () {
+                      // Use _addBikeTab to properly add to multi-bike system
+                      _addBikeTab(bike);
+                    },
+                  );
+                }),
+                // Divider
+                if (_bikes.isNotEmpty) const PopupMenuDivider(),
+                // Nueva Bici button
+                PopupMenuItem<String>(
+                  value: 'new_bike',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.add, size: 18),
+                      SizedBox(width: 8),
+                      Text('Nueva bicicleta'),
+                    ],
+                  ),
+                  onTap: () async {
+                    // Delay to let menu close
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    if (!mounted) return;
+
+                    final newBike = await showDialog<Bike?>(
+                      context: context,
+                      builder: (context) => BikeFormDialog(
+                        customerId: _selectedCustomer!.id!,
+                      ),
+                    );
+
+                    if (!mounted) return;
+
+                    // Reload bikes for this customer
+                    final bikeshopService =
+                        Provider.of<BikeshopService>(context, listen: false);
+                    final bikes = await bikeshopService.getBikes(
+                        customerId: _selectedCustomer!.id);
+
+                    setState(() {
+                      _bikes = bikes;
+                    });
+
+                    // Add to multi-bike tabs
+                    if (newBike != null && mounted) {
+                      final addedBike = _bikes.firstWhere(
+                        (bike) => bike.id == newBike.id,
+                        orElse: () => newBike,
+                      );
+                      _addBikeTab(addedBike);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              'Bicicleta "${newBike.displayName}" creada y agregada'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                ),
+                // Gestionar Bicis button
+                if (_bikes.isNotEmpty)
+                  PopupMenuItem<String>(
+                    value: 'manage_bikes',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.settings, size: 18),
+                        SizedBox(width: 8),
+                        Text('Gestionar bicicletas'),
+                      ],
+                    ),
+                    onTap: () async {
+                      await Future.delayed(const Duration(milliseconds: 100));
+                      if (mounted) {
+                        _showBikeManagementDialog();
+                      }
+                    },
+                  ),
+              ],
+            )
+          else
+            // Show disabled field when no customer selected
+            InputDecorator(
               decoration: const InputDecoration(
                 labelText: 'Bicicleta *',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.pedal_bike),
-                suffixIcon: Icon(Icons.arrow_drop_down),
+                enabled: false,
               ),
               child: Text(
-                _selectedBike != null
-                    ? '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}'
-                    : 'Seleccione una bicicleta',
-                style: _selectedBike != null
-                    ? null
-                    : TextStyle(color: Colors.grey[600]),
+                'Primero seleccione un cliente',
+                style: TextStyle(color: Colors.grey[600]),
               ),
             ),
-            itemBuilder: (context) => [
-              // Bike list - add to tabs (not just select)
-              ..._bikes.map((bike) {
-                final alreadyInTabs =
-                    _bikeTabs.any((tab) => tab.bike?.id == bike.id);
-                return PopupMenuItem<String>(
-                  value: 'bike_${bike.id}',
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${bike.displayName}${bike.serialNumber != null ? ' (S/N: ${bike.serialNumber})' : ''}',
-                        ),
-                      ),
-                      if (alreadyInTabs)
-                        Icon(Icons.check, size: 16, color: Colors.green[600]),
-                    ],
-                  ),
-                  onTap: () {
-                    // Use _addBikeTab to properly add to multi-bike system
-                    _addBikeTab(bike);
-                  },
-                );
-              }),
-              // Divider
-              if (_bikes.isNotEmpty) const PopupMenuDivider(),
-              // Nueva Bici button
-              PopupMenuItem<String>(
-                value: 'new_bike',
-                child: Row(
-                  children: const [
-                    Icon(Icons.add, size: 18),
-                    SizedBox(width: 8),
-                    Text('Nueva bicicleta'),
-                  ],
-                ),
-                onTap: () async {
-                  // Delay to let menu close
-                  await Future.delayed(const Duration(milliseconds: 100));
-                  if (!mounted) return;
-
-                  final newBike = await showDialog<Bike?>(
-                    context: context,
-                    builder: (context) => BikeFormDialog(
-                      customerId: _selectedCustomer!.id!,
+          if (_selectedBike != null && _selectedBike!.isUnderWarranty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green[300]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.verified_user, color: Colors.green[700]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Esta bicicleta está bajo garantía hasta ${DateFormat('dd/MM/yyyy').format(_selectedBike!.warrantyUntil!)}',
+                      style: TextStyle(color: Colors.green[900]),
                     ),
-                  );
-
-                  if (!mounted) return;
-
-                  // Reload bikes for this customer
-                  final bikeshopService =
-                      Provider.of<BikeshopService>(context, listen: false);
-                  final bikes = await bikeshopService.getBikes(
-                      customerId: _selectedCustomer!.id);
-
-                  setState(() {
-                    _bikes = bikes;
-                  });
-
-                  // Add to multi-bike tabs
-                  if (newBike != null && mounted) {
-                    final addedBike = _bikes.firstWhere(
-                      (bike) => bike.id == newBike.id,
-                      orElse: () => newBike,
-                    );
-                    _addBikeTab(addedBike);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            'Bicicleta "${newBike.displayName}" creada y agregada'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                },
+                  ),
+                ],
               ),
-              // Gestionar Bicis button
-              if (_bikes.isNotEmpty)
-                PopupMenuItem<String>(
-                  value: 'manage_bikes',
-                  child: Row(
-                    children: const [
-                      Icon(Icons.settings, size: 18),
-                      SizedBox(width: 8),
-                      Text('Gestionar bicicletas'),
-                    ],
-                  ),
-                  onTap: () async {
-                    await Future.delayed(const Duration(milliseconds: 100));
-                    if (mounted) {
-                      _showBikeManagementDialog();
-                    }
-                  },
-                ),
-            ],
-          )
-        else
-          // Show disabled field when no customer selected
-          InputDecorator(
+            ),
+          ],
+        ] else if (_jobType == JobType.itemService) ...[
+          _buildSubjectPicker(),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _subjectNotesController,
             decoration: const InputDecoration(
-              labelText: 'Bicicleta *',
+              labelText: 'Notas del ítem',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.pedal_bike),
-              enabled: false,
+              prefixIcon: Icon(Icons.notes),
+              hintText: 'Ej: Rueda trasera 26", número de serie...',
             ),
-            child: Text(
-              'Primero seleccione un cliente',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+            maxLines: 2,
           ),
-        if (_selectedBike != null && _selectedBike!.isUnderWarranty) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green[300]!),
+        ] else if (_jobType == JobType.quotation) ...[
+          TextFormField(
+            controller: _subjectNotesController,
+            decoration: const InputDecoration(
+              labelText: 'Producto / servicio a cotizar *',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.request_quote_outlined),
+              hintText:
+                  'Ej: Shimano Deore 12v, bicicleta gravel talla M, servicio de mantención...',
             ),
-            child: Row(
-              children: [
-                Icon(Icons.verified_user, color: Colors.green[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Esta bicicleta está bajo garantía hasta ${DateFormat('dd/MM/yyyy').format(_selectedBike!.warrantyUntil!)}',
-                    style: TextStyle(color: Colors.green[900]),
-                  ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Usa presupuesto para cotizaciones nuevas, incluso si el producto no existe aún en tu inventario.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              ],
-            ),
           ),
         ],
       ],
@@ -2914,6 +3129,42 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ========== JOB TYPE SELECTOR ==========
+        if (widget.jobId == null) ...[
+          _buildJobTypeSelector(),
+          const SizedBox(height: 16),
+        ] else ...[
+          _buildJobTypeBadge(),
+          const SizedBox(height: 16),
+        ],
+
+        // ========== WARRANTY TRACEABILITY BANNER ==========
+        if (_existingJob?.convertedAt != null &&
+            _existingJob?.warrantyOutcome == WarrantyOutcome.notCovered &&
+            _jobType == JobType.service) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border.all(color: Colors.orange.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.history, color: Colors.orange.shade800),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Esta pega de servicio técnico fue generada a partir de una Garantía No Cubierta.',
+                    style: TextStyle(color: Colors.orange.shade900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         // ========== JOB-LEVEL FIELDS (same for all bikes) ==========
         Row(
           children: [
@@ -3167,25 +3418,544 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ),
               ),
               Expanded(
-                child: CheckboxListTile(
-                  title: const Text('Trabajo de garantía'),
-                  value: isWarranty,
-                  onChanged: (value) {
-                    setState(() {
-                      if (currentTab != null) {
-                        currentTab.isWarrantyWork = value ?? false;
-                      } else {
-                        _isWarrantyJob = value ?? false;
-                      }
-                    });
-                  },
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
+                child: _jobType == JobType.warranty
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withOpacity(0.45),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.18),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.verified_user_outlined,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Este ingreso se tratará como garantía de servicio',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : CheckboxListTile(
+                        title: const Text('Trabajo de garantía'),
+                        value: isWarranty,
+                        onChanged: (value) {
+                          setState(() {
+                            if (currentTab != null) {
+                              currentTab.isWarrantyWork = value ?? false;
+                            } else {
+                              _isWarrantyJob = value ?? false;
+                            }
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
               ),
             ],
           ),
           // ========== END PER-BIKE FIELDS ==========
         ],
+
+        // ========== SPECIAL TYPE FIELDS ==========
+        // Warranty outcome
+        if (_jobType == JobType.warranty) ...[
+          const SizedBox(height: 16),
+          _buildWarrantySection(),
+        ],
+        // Quotation status + validity
+        if (_jobType == JobType.quotation) ...[
+          const SizedBox(height: 16),
+          _buildQuotationSection(),
+        ],
+      ],
+    );
+  }
+
+  // ============================================================
+  // JOB TYPE UI HELPERS
+  // ============================================================
+
+  void _selectJobType(JobType type) {
+    setState(() {
+      _jobType = type;
+      _warrantyOutcome = null;
+      _quotationStatus = null;
+      _quotationValidUntil = null;
+
+      if (type != JobType.service && type != JobType.warranty) {
+        for (final tab in _bikeTabs) {
+          tab.dispose();
+        }
+        _bikeTabs.clear();
+        _selectedBike = null;
+      }
+
+      if (type != JobType.itemService) {
+        _selectedSubject = null;
+      }
+
+      if (type != JobType.itemService && type != JobType.quotation) {
+        _subjectNotesController.clear();
+      }
+
+      final isWarrantyType = type == JobType.warranty;
+      _isWarrantyJob = isWarrantyType;
+      for (final tab in _bikeTabs) {
+        tab.isWarrantyWork = isWarrantyType;
+      }
+    });
+  }
+
+  Widget _buildJobTypeSelector() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Tipo de Trabajo',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: JobType.values.map((type) {
+            final isSelected = _jobType == type;
+            final textColor = isSelected
+                ? colorScheme.onPrimary
+                : colorScheme.onSurfaceVariant;
+            final bgColor =
+                isSelected ? colorScheme.primary : colorScheme.surface;
+            final borderColor =
+                isSelected ? colorScheme.primary : colorScheme.outlineVariant;
+
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => _selectJobType(type),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: borderColor,
+                      width: 1,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                                color: colorScheme.primary.withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2))
+                          ]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _jobTypeIcon(type),
+                        size: 16,
+                        color: textColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        type.displayName,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: textColor,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJobTypeBadge() {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(_jobTypeIcon(_jobType),
+            size: 16, color: theme.colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          _jobType.displayName,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _jobTypeIcon(JobType type) {
+    switch (type) {
+      case JobType.service:
+        return Icons.pedal_bike_outlined;
+      case JobType.warranty:
+        return Icons.verified_user_outlined;
+      case JobType.quotation:
+        return Icons.request_quote_outlined;
+      case JobType.itemService:
+        return Icons.build_circle_outlined;
+    }
+  }
+
+  IconData _getIconDataFromString(String iconName) {
+    switch (iconName) {
+      case 'build':
+        return Icons.build;
+      case 'tire_repair':
+        return Icons.tire_repair;
+      case 'circle':
+        return Icons.circle;
+      case 'radio_button_unchecked':
+        return Icons.radio_button_unchecked;
+      case 'settings':
+        return Icons.settings;
+      case 'link':
+        return Icons.link;
+      case 'swap_horiz':
+        return Icons.swap_horiz;
+      case 'stop_circle':
+        return Icons.stop_circle;
+      case 'pan_tool':
+        return Icons.pan_tool;
+      case 'cable':
+        return Icons.cable;
+      case 'arrow_upward':
+        return Icons.arrow_upward;
+      case 'compress':
+        return Icons.compress;
+      case 'accessible':
+        return Icons.accessible;
+      case 'shopping_cart':
+        return Icons.shopping_cart;
+      case 'directions_walk':
+        return Icons.directions_walk;
+      case 'horizontal_rule':
+        return Icons.horizontal_rule;
+      case 'extension':
+        return Icons.extension;
+      case 'airline_seat_recline_normal':
+        return Icons.airline_seat_recline_normal;
+      case 'sports':
+        return Icons.sports;
+      case 'rectangle':
+        return Icons.rectangle;
+      default:
+        return Icons.build_circle_outlined;
+    }
+  }
+
+  Widget _buildSubjectPicker() {
+    return InkWell(
+      onTap: widget.jobId == null ? _showSubjectSearchPicker : null,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Ítem / Componente *',
+          border: const OutlineInputBorder(),
+          prefixIcon: Icon(_jobTypeIcon(_jobType)),
+          suffixIcon: widget.jobId == null ? const Icon(Icons.search) : null,
+          helperText: 'Busca en tu catálogo de componentes personalizados.',
+        ),
+        child: Text(
+          _selectedSubject?.name ?? 'Buscar componente...',
+          style: _selectedSubject != null
+              ? null
+              : TextStyle(color: Colors.grey[600]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSubjectSearchPicker() async {
+    final result = await showDialog<JobSubject>(
+      context: context,
+      builder: (context) {
+        String search = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = _availableSubjects.where((subject) {
+              final term = search.toLowerCase();
+              return term.isEmpty ||
+                  subject.name.toLowerCase().contains(term) ||
+                  subject.category.toLowerCase().contains(term) ||
+                  (subject.description?.toLowerCase().contains(term) ?? false);
+            }).toList()
+              ..sort((a, b) {
+                final categoryCompare = a.category.compareTo(b.category);
+                if (categoryCompare != 0) return categoryCompare;
+                return a.sortOrder.compareTo(b.sortOrder);
+              });
+
+            String? lastCategory;
+
+            return Dialog(
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: 560, maxHeight: 620),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Seleccionar componente',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        autofocus: true,
+                        onChanged: (value) =>
+                            setModalState(() => search = value),
+                        decoration: const InputDecoration(
+                          hintText: 'Buscar por nombre o categoría...',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No se encontraron componentes',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: Colors.grey[600]),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final subject = filtered[index];
+                                  final showHeader =
+                                      lastCategory != subject.category;
+                                  lastCategory = subject.category;
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (showHeader) ...[
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              top: 10, bottom: 6),
+                                          child: Text(
+                                            subject.category.toUpperCase(),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  letterSpacing: 0.6,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                      ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        leading: CircleAvatar(
+                                          radius: 16,
+                                          backgroundColor: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                          foregroundColor: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                          child: Icon(
+                                            _getIconDataFromString(
+                                                subject.icon),
+                                            size: 16,
+                                          ),
+                                        ),
+                                        title: Text(subject.name),
+                                        subtitle:
+                                            subject.description?.isNotEmpty ==
+                                                    true
+                                                ? Text(subject.description!)
+                                                : null,
+                                        onTap: () =>
+                                            Navigator.of(context).pop(subject),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      setState(() => _selectedSubject = result);
+    }
+  }
+
+  Widget _buildWarrantySection() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Resultado de Garantía',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<WarrantyOutcome>(
+          value: _warrantyOutcome,
+          decoration: const InputDecoration(
+            labelText: 'Estado de garantía',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.verified_user_outlined),
+          ),
+          items: [
+            const DropdownMenuItem(
+              value: null,
+              child: Text('Pendiente evaluación'),
+            ),
+            ...WarrantyOutcome.values.map((o) => DropdownMenuItem(
+                  value: o,
+                  child: Text(o.displayName),
+                )),
+          ],
+          onChanged: (v) => setState(() => _warrantyOutcome = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuotationSection() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Estado del Presupuesto',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<QuotationStatus>(
+                value: _quotationStatus,
+                decoration: const InputDecoration(
+                  labelText: 'Estado',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.request_quote_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('Pendiente'),
+                  ),
+                  ...QuotationStatus.values.map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s.displayName),
+                      )),
+                ],
+                onChanged: (v) => setState(() => _quotationStatus = v),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _quotationValidUntil ??
+                        DateTime.now().add(const Duration(days: 30)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date != null) {
+                    setState(() => _quotationValidUntil = date);
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Válido hasta',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.event_outlined),
+                  ),
+                  child: Text(
+                    _quotationValidUntil != null
+                        ? DateFormat('dd/MM/yyyy').format(_quotationValidUntil!)
+                        : 'Sin fecha límite',
+                    style: _quotationValidUntil != null
+                        ? null
+                        : TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

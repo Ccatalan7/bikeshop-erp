@@ -15,6 +15,7 @@ import '../../crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
+import '../widgets/split_new_job_button.dart';
 
 class PegasListPage extends StatefulWidget {
   const PegasListPage({super.key});
@@ -396,7 +397,7 @@ class _PegasListPageState extends State<PegasListPage> {
       // FAB for primary action
       floatingActionButton: FloatingActionButton(
         onPressed: () =>
-            context.push('/taller/pegas/new').then((_) => _loadData()),
+            context.push('/taller/pegas/nueva').then((_) => _loadData()),
         backgroundColor: theme.colorScheme.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -1056,11 +1057,14 @@ class _PegasListPageState extends State<PegasListPage> {
                   ),
                 ),
               ),
-              AppButton(
-                text: 'Nuevo Trabajo',
-                icon: Icons.add_circle,
-                onPressed: () {
-                  context.push('/taller/pegas/new').then((_) => _loadData());
+              SplitNewJobButton(
+                onMainPressed: () {
+                  context.push('/taller/pegas/nueva').then((_) => _loadData());
+                },
+                onTypeSelected: (type) {
+                  context
+                      .push('/taller/pegas/nueva?type=$type')
+                      .then((_) => _loadData());
                 },
               ),
             ],
@@ -1475,7 +1479,7 @@ class _PegasListPageState extends State<PegasListPage> {
               AppButton(
                 text: 'Crear Primer Trabajo',
                 onPressed: () {
-                  context.push('/taller/pegas/new').then((_) => _loadData());
+                  context.push('/taller/pegas/nueva').then((_) => _loadData());
                 },
               ),
             ],

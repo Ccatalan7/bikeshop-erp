@@ -4683,6 +4683,10 @@ begin
   -- Seed job roles (employee-user linking system)
   perform public.seed_job_roles_for_tenant(NEW.id);
   raise notice '  ✓ Job roles catalog created';
+
+  -- Seed job subjects (component/item catalog for non-bike jobs)
+  perform public.seed_job_subjects_for_tenant(NEW.id);
+  raise notice '  ✓ Job subjects catalog created';
   
   raise notice '✅ Tenant % fully initialized and ready for use!', NEW.shop_name;
   return NEW;
@@ -10841,6 +10845,173 @@ exception
   when undefined_table then raise notice '⚠ Table mechanic_jobs does not exist';
   when undefined_column then raise notice '⚠ Column missing in mechanic_jobs';
 end $$;
+
+-- ============================================================
+-- TABLE: job_subjects (PER-TENANT CATALOG FOR NON-BIKE JOB ITEMS)
+-- Wheels, wheelchair, derailleur, etc. — things brought in without a bike
+-- ============================================================
+create table if not exists job_subjects (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  category text not null default 'General',
+  icon text default 'build',
+  description text,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, name)
+);
+
+create index if not exists idx_job_subjects_tenant on job_subjects(tenant_id);
+create index if not exists idx_job_subjects_tenant_active on job_subjects(tenant_id, is_active);
+create index if not exists idx_job_subjects_category on job_subjects(tenant_id, category);
+
+alter table job_subjects enable row level security;
+
+drop policy if exists "job_subjects_select" on job_subjects;
+drop policy if exists "job_subjects_insert" on job_subjects;
+drop policy if exists "job_subjects_update" on job_subjects;
+drop policy if exists "job_subjects_delete" on job_subjects;
+
+create policy "job_subjects_select" on job_subjects
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "job_subjects_insert" on job_subjects
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+create policy "job_subjects_update" on job_subjects
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+create policy "job_subjects_delete" on job_subjects
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create or replace function public.set_job_subjects_updated_at()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end; $$;
+
+drop trigger if exists trg_job_subjects_updated_at on job_subjects;
+create trigger trg_job_subjects_updated_at
+  before update on job_subjects
+  for each row execute function public.set_job_subjects_updated_at();
+
+-- seed function (called from handle_new_tenant + migration)
+create or replace function public.seed_job_subjects_for_tenant(p_tenant_id uuid)
+returns void language plpgsql security definer as $$
+begin
+  insert into job_subjects (tenant_id, name, category, icon, sort_order) values
+    (p_tenant_id, 'Rueda delantera',          'Ruedas',      'tire_repair',    10),
+    (p_tenant_id, 'Rueda trasera',             'Ruedas',      'tire_repair',    20),
+    (p_tenant_id, 'Rueda completa',            'Ruedas',      'tire_repair',    30),
+    (p_tenant_id, 'Aro (Rim)',                 'Ruedas',      'circle',         40),
+    (p_tenant_id, 'Cubierta / Neumático',      'Ruedas',      'tire_repair',    50),
+    (p_tenant_id, 'Cámara de neumático',       'Ruedas',      'radio_button_unchecked', 60),
+    (p_tenant_id, 'Desviador trasero',         'Transmisión', 'settings',       10),
+    (p_tenant_id, 'Desviador delantero',       'Transmisión', 'settings',       20),
+    (p_tenant_id, 'Cassette',                  'Transmisión', 'settings',       30),
+    (p_tenant_id, 'Cadena',                    'Transmisión', 'link',           40),
+    (p_tenant_id, 'Plato / Corona',            'Transmisión', 'circle',         50),
+    (p_tenant_id, 'Maneta de cambio',          'Transmisión', 'swap_horiz',     60),
+    (p_tenant_id, 'Biela',                     'Transmisión', 'settings',       70),
+    (p_tenant_id, 'Pedalier / Bottom Bracket', 'Transmisión', 'settings',       80),
+    (p_tenant_id, 'Freno delantero',           'Frenos',      'stop_circle',    10),
+    (p_tenant_id, 'Freno trasero',             'Frenos',      'stop_circle',    20),
+    (p_tenant_id, 'Pastillas de freno',        'Frenos',      'stop_circle',    30),
+    (p_tenant_id, 'Disco / Rotor de freno',    'Frenos',      'radio_button_unchecked', 40),
+    (p_tenant_id, 'Maneta de freno',           'Frenos',      'pan_tool',       50),
+    (p_tenant_id, 'Cable de freno',            'Frenos',      'cable',          60),
+    (p_tenant_id, 'Horquilla delantera',       'Suspensión',  'arrow_upward',   10),
+    (p_tenant_id, 'Amortiguador trasero',      'Suspensión',  'compress',       20),
+    (p_tenant_id, 'Silla de ruedas',           'Movilidad',   'accessible',     10),
+    (p_tenant_id, 'Carro de movilidad',        'Movilidad',   'shopping_cart',  20),
+    (p_tenant_id, 'Andador',                   'Movilidad',   'directions_walk',30),
+    (p_tenant_id, 'Manillar / Guidón',         'Componentes', 'horizontal_rule',10),
+    (p_tenant_id, 'Potencia (stem)',           'Componentes', 'extension',      20),
+    (p_tenant_id, 'Tija de sillín',            'Componentes', 'arrow_upward',   30),
+    (p_tenant_id, 'Sillín',                    'Componentes', 'airline_seat_recline_normal', 40),
+    (p_tenant_id, 'Pedales',                   'Componentes', 'sports',         50),
+    (p_tenant_id, 'Cuadro / Frame',            'Componentes', 'rectangle',      60),
+    (p_tenant_id, 'Componente / Pieza suelta', 'General',     'build',          10)
+  on conflict (tenant_id, name) do nothing;
+end; $$;
+grant execute on function public.seed_job_subjects_for_tenant(uuid) to authenticated;
+
+-- seed existing tenants
+do $$
+declare v_tenant record;
+begin
+  for v_tenant in select id from tenants loop
+    perform public.seed_job_subjects_for_tenant(v_tenant.id);
+  end loop;
+end $$;
+
+-- ============================================================
+-- ALTER mechanic_jobs: job_type, subject_id, warranty_outcome,
+-- quotation_status, converted_from_id, converted_at
+-- ============================================================
+-- Make bike_id nullable so item/quotation jobs need no registered bike
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'mechanic_jobs' and column_name = 'bike_id'
+      and is_nullable = 'NO'
+  ) then
+    alter table mechanic_jobs alter column bike_id drop not null;
+    raise notice '✅ mechanic_jobs.bike_id is now nullable';
+  end if;
+end $$;
+
+alter table mechanic_jobs
+  add column if not exists job_type text not null default 'service';
+do $$ begin
+  alter table mechanic_jobs
+    add constraint mechanic_jobs_job_type_check
+    check (job_type in ('service', 'warranty', 'quotation', 'item_service'));
+exception when duplicate_object then null; end $$;
+
+alter table mechanic_jobs
+  add column if not exists subject_id uuid references job_subjects(id) on delete set null;
+alter table mechanic_jobs
+  add column if not exists subject_notes text;
+alter table mechanic_jobs
+  add column if not exists warranty_outcome text;
+do $$ begin
+  alter table mechanic_jobs
+    add constraint mechanic_jobs_warranty_outcome_check
+    check (warranty_outcome in ('pending', 'covered', 'not_covered'));
+exception when duplicate_object then null; end $$;
+
+alter table mechanic_jobs
+  add column if not exists quotation_status text;
+do $$ begin
+  alter table mechanic_jobs
+    add constraint mechanic_jobs_quotation_status_check
+    check (quotation_status in ('pending', 'approved', 'rejected', 'expired'));
+exception when duplicate_object then null; end $$;
+
+alter table mechanic_jobs
+  add column if not exists quotation_valid_until timestamp with time zone;
+alter table mechanic_jobs
+  add column if not exists converted_from_id uuid references mechanic_jobs(id) on delete set null;
+alter table mechanic_jobs
+  add column if not exists converted_at timestamp with time zone;
+
+-- Migrate existing warranty jobs
+update mechanic_jobs
+   set job_type = 'warranty',
+       warranty_outcome = case
+         when status in ('FINALIZADO', 'ENTREGADO') then 'covered'
+         else 'pending'
+       end
+ where is_warranty_job = true
+   and job_type = 'service';
+
+-- new indexes
+create index if not exists idx_mechanic_jobs_job_type on mechanic_jobs(tenant_id, job_type);
+create index if not exists idx_mechanic_jobs_subject on mechanic_jobs(subject_id) where subject_id is not null;
+create index if not exists idx_mechanic_jobs_converted on mechanic_jobs(converted_from_id) where converted_from_id is not null;
 
 -- ============================================================
 -- TABLE: mechanic_job_bikes (MULTI-BIKE SUPPORT)

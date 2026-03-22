@@ -121,15 +121,22 @@ class _JobDetails extends StatelessWidget {
             const SizedBox(height: 24),
             _buildSectionTitle('Información'),
             _buildInfoRow('N° Orden', '#${job.jobNumber ?? "---"}'),
-            FutureBuilder<Bike?>(
-              future: context.read<BikeshopService>().getBikeById(job.bikeId),
-              builder: (context, bikeSnap) {
-                if (!bikeSnap.hasData) return const SizedBox.shrink();
-                final bike = bikeSnap.data!;
-                return _buildInfoRow(
-                    'Bicicleta', '${bike.brand ?? ""} ${bike.model ?? ""}');
-              },
-            ),
+            if (job.bikeId != null)
+              FutureBuilder<Bike?>(
+                future:
+                    context.read<BikeshopService>().getBikeById(job.bikeId!),
+                builder: (context, bikeSnap) {
+                  if (!bikeSnap.hasData) return const SizedBox.shrink();
+                  final bike = bikeSnap.data!;
+                  return _buildInfoRow(
+                      'Bicicleta', '${bike.brand ?? ""} ${bike.model ?? ""}');
+                },
+              )
+            else
+              _buildInfoRow(
+                'Elemento',
+                job.subjectData?.name ?? job.jobType.displayName,
+              ),
             _buildInfoRow(
                 'Ingreso', DateFormat('dd/MM/yyyy').format(job.arrivalDate)),
             _buildInfoRow(
@@ -178,7 +185,6 @@ class _JobDetails extends StatelessWidget {
         return Colors.grey;
       case JobStatus.cancelado:
       case JobStatus.pendiente:
-      default:
         return Colors.black;
     }
   }
