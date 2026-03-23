@@ -3095,7 +3095,7 @@ begin
     from purchase_invoices pi,
          jsonb_array_elements(pi.items) as item
     where pi.id = v_item.linked_purchase_invoice_id
-      and (item->>'product_id')::uuid = v_item.product_id;
+      and nullif(item->>'product_id', '')::uuid = v_item.product_id;
     
     if v_purchased_qty is not null then
       -- Calculate stock_at_receipt = stock_at_order + purchased_quantity
@@ -5476,7 +5476,7 @@ begin
   -- Process each item
   for v_item in
     select 
-      (item->>'product_id')::uuid as product_id,
+      nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'product_sku')::text as product_sku,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
@@ -8907,7 +8907,7 @@ begin
 
   for v_item in
     select
-      (item->>'product_id')::uuid as product_id,
+      nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'product_name')::text as product_name,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(v_items) as item
@@ -9054,7 +9054,7 @@ begin
   -- DECREASE inventory (restore = undo IN movement)
   for v_item in
     select
-      (item->>'product_id')::uuid as product_id,
+      nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(v_items) as item
   loop
