@@ -969,7 +969,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   void _onTextChanged(String value) {
     if (value.isEmpty) {
-      _debounce?.cancel(); // cancel any pending search before reloading full list
+      _debounce
+          ?.cancel(); // cancel any pending search before reloading full list
       _loadProducts();
       return;
     }
@@ -980,8 +981,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
       setState(() => _isLoading = true);
       try {
-        final results =
-            await _inventoryService.searchProducts(value);
+        final results = await _inventoryService.searchProducts(value);
         if (mounted) {
           setState(() {
             _allFetchedProducts = results;
