@@ -483,6 +483,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         taxTreatment: taxTreatment,
         items: invoiceItems,
         invoiceType: 'sale',
+        source: 'pos',
       );
 
       final saved = await salesService.saveInvoice(invoice);

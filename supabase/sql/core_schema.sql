@@ -5072,14 +5072,30 @@ begin
     0,
     now(),
     now()
-  ), (
+  );
+
+  -- Payment JE clears accounts receivable only.
+  -- Revenue and IVA recognition belong in the sales invoice JE.
+  insert into public.journal_lines (
+    id,
+    tenant_id,
+    entry_id,
+    account_id,
+    account_code,
+    account_name,
+    description,
+    debit_amount,
+    credit_amount,
+    created_at,
+    updated_at
+  ) values (
     gen_random_uuid(),
     v_tenant_id,
     v_entry_id,
     v_receivable_account_id,
     v_receivable_account_code,
     v_receivable_account_name,
-    format('Pago factura %s', coalesce(v_invoice.invoice_number, v_invoice.id::text)),
+    format('Cancelación factura %s', coalesce(v_invoice.invoice_number, v_invoice.id::text)),
     0,
     p_payment.amount,
     now(),
@@ -5780,11 +5796,16 @@ begin
   raise notice 'create_sales_invoice_journal_entry: Creating entry for invoice % (status: %)', p_invoice.invoice_number, p_invoice.status;
 
   -- ✅ CRITICAL: Use net_amount (tax-adjusted) if available, fallback to subtotal
-  -- For tax_included invoices: net_amount = total ÷ 1.19, iva_amount = total - net_amount
-  -- For no_tax invoices: net_amount = total, iva_amount = 0
-  -- POS invoices may only have subtotal field populated, so fallback to it
-  v_subtotal := coalesce(p_invoice.net_amount, p_invoice.subtotal, 0);
-  v_iva := coalesce(p_invoice.iva_amount, 0);
+  -- [FIX: IVA BREAKDOWN] Ensure net_amount and iva_amount are correctly handled
+  -- If tax_included, we MUST have a breakdown. Fallback to calculation if fields are 0.
+  v_subtotal := coalesce(nullif(p_invoice.net_amount, 0), p_invoice.subtotal, 0);
+  v_iva := coalesce(nullif(p_invoice.iva_amount, 0), 0);
+
+  if p_invoice.tax_treatment = 'tax_included' and (v_iva = 0 or v_subtotal = p_invoice.total) then
+    v_subtotal := round(p_invoice.total / 1.19, 2);
+    v_iva := p_invoice.total - v_subtotal;
+  end if;
+
   v_total := coalesce(p_invoice.total, v_subtotal + v_iva);
 
   if v_total = 0 then

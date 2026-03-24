@@ -59,6 +59,7 @@ class Invoice {
   final bool isWarranty; // For pegas: warranty work
   final String? workDescription; // For pegas: work performed
   final String? notes; // Internal notes
+  final String? source; // 'pos', 'manual_sale', 'ecommerce', 'mechanic_job'
 
   Invoice({
     this.id,
@@ -91,6 +92,7 @@ class Invoice {
     this.isWarranty = false,
     this.workDescription,
     this.notes,
+    this.source,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -125,6 +127,7 @@ class Invoice {
     bool? isWarranty,
     String? workDescription,
     String? notes,
+    String? source,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -157,6 +160,7 @@ class Invoice {
       isWarranty: isWarranty ?? this.isWarranty,
       workDescription: workDescription ?? this.workDescription,
       notes: notes ?? this.notes,
+      source: source ?? this.source,
     );
   }
 
@@ -200,6 +204,7 @@ class Invoice {
       isWarranty: json['is_warranty'] as bool? ?? false,
       workDescription: json['work_description']?.toString(),
       notes: json['notes']?.toString(),
+      source: json['source']?.toString(),
     );
   }
 
@@ -237,6 +242,7 @@ class Invoice {
       'is_warranty': isWarranty,
       if (workDescription != null) 'work_description': workDescription,
       if (notes != null) 'notes': notes,
+      if (source != null) 'source': source,
     };
   }
 
