@@ -1,0 +1,88 @@
+{
+  "total_income": 9785161.13,
+  "total_expense": 4531795.73,
+  "net_income": 5253365.4,
+  "top_income_expense_accounts": [
+    {
+      "code": "4100",
+      "name": "Ingresos Operacionales",
+      "type": "income",
+      "category": "operatingIncome",
+      "debits": 0.0,
+      "credits": 9785161.13,
+      "amount": 9785161.13
+    },
+    {
+      "code": "6101-03",
+      "name": "Salario - Vicente Díaz",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1256500.0,
+      "credits": 0.0,
+      "amount": 1256500.0
+    },
+    {
+      "code": "6101-02",
+      "name": "Salario - Rodrigo Guillermo Nieto",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1069000.0,
+      "credits": 0.0,
+      "amount": 1069000.0
+    },
+    {
+      "code": "6101-01",
+      "name": "Salario - Fernando José Tapia Carrillo",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1003000.0,
+      "credits": 0.0,
+      "amount": 1003000.0
+    },
+    {
+      "code": "5100",
+      "name": "Costo de Ventas",
+      "type": "expense",
+      "category": "costOfGoodsSold",
+      "debits": 923062.1599999999,
+      "credits": 0.0,
+      "amount": 923062.16
+    },
+    {
+      "code": "6801",
+      "name": "Gastos Varios",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 220788.52999999997,
+      "credits": 0.0,
+      "amount": 220788.53
+    },
+    {
+      "code": "6206",
+      "name": "Gastos Por Transporte",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 43591.67999999999,
+      "credits": 0.0,
+      "amount": 43591.68
+    },
+    {
+      "code": "6101",
+      "name": "Sueldos y Salarios",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 8403.36,
+      "credits": 0.0,
+      "amount": 8403.36
+    },
+    {
+      "code": "6205",
+      "name": "Suministros de Oficina",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 7450.0,
+      "credits": 0.0,
+      "amount": 7450.0
+    }
+  ]
+}

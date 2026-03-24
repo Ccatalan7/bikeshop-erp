@@ -1,0 +1,1176 @@
+=== PAYROLL EXPENSES ===
+[
+  {
+    "id": "b9de5da8-4b56-4571-a787-e1b3e64afc5c",
+    "expense_number": "GTO-00059",
+    "reference": "Semana Semana 12: 16 mar - 22 mar - NOM-00013",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 105000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-03-24T15:25:16.892913+00:00",
+    "created_at": "2026-03-24T15:25:16.892913+00:00"
+  },
+  {
+    "id": "06f5e5e2-4a8e-49d0-9920-6823f8879507",
+    "expense_number": "GTO-00058",
+    "reference": "Semana Semana 12: 16 mar - 22 mar - NOM-00013",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 86000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-03-24T15:25:16.892913+00:00",
+    "created_at": "2026-03-24T15:25:16.892913+00:00"
+  },
+  {
+    "id": "cd64b3d7-6ca0-4389-89bf-ad111b790d2c",
+    "expense_number": "GTO-00056",
+    "reference": "Semana Semana 11: 09 mar - 15 mar - NOM-00012",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 105000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-03-19T23:19:43.620432+00:00",
+    "created_at": "2026-03-19T23:19:43.620432+00:00"
+  },
+  {
+    "id": "9956a088-9c18-4e71-a007-826dfe99e4b8",
+    "expense_number": "GTO-00055",
+    "reference": "Semana Semana 11: 09 mar - 15 mar - NOM-00012",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 108000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-03-19T23:19:43.620432+00:00",
+    "created_at": "2026-03-19T23:19:43.620432+00:00"
+  },
+  {
+    "id": "08c38ed6-7032-4e3c-bc95-8b409ed9ca6d",
+    "expense_number": "GTO-00049",
+    "reference": "Semana Semana 10: 02 mar - 08 mar - NOM-00011",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 105000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-03-10T23:00:31.692539+00:00",
+    "created_at": "2026-03-10T23:00:31.692539+00:00"
+  },
+  {
+    "id": "2e471be8-fdec-43f8-a470-661f0b1c84fc",
+    "expense_number": "GTO-00048",
+    "reference": "Semana Semana 10: 02 mar - 08 mar - NOM-00011",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 113000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-03-10T23:00:31.692539+00:00",
+    "created_at": "2026-03-10T23:00:31.692539+00:00"
+  },
+  {
+    "id": "cd0eca9e-444e-4ae7-b937-ac70482a86ab",
+    "expense_number": "GTO-00043",
+    "reference": "Semana Semana 9: 23 feb - 01 mar - NOM-00010",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 112000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-03-03T13:32:30.652057+00:00",
+    "created_at": "2026-03-03T13:32:30.652057+00:00"
+  },
+  {
+    "id": "64cf555a-3d6b-43d8-9c90-c9db124dc351",
+    "expense_number": "GTO-00044",
+    "reference": "Semana Semana 9: 23 feb - 01 mar - NOM-00010",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 129500.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-03-03T13:32:30.652057+00:00",
+    "created_at": "2026-03-03T13:32:30.652057+00:00"
+  },
+  {
+    "id": "21c863a6-98df-4a18-8e35-21e017415e8f",
+    "expense_number": "GTO-00042",
+    "reference": "Semana Semana 8: 16 feb - 22 feb - NOM-00009",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 133000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-03-03T13:32:03.431285+00:00",
+    "created_at": "2026-03-03T13:32:03.431285+00:00"
+  },
+  {
+    "id": "27e2b2ec-85ff-4c18-bc17-cb04e3ea5cec",
+    "expense_number": "GTO-00039",
+    "reference": "Semana Semana 7: 09 feb - 15 feb - NOM-00008",
+    "notes": "Pago de salario: Fernando José Tapia Carrillo",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 58500.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-02-18T01:53:03.853944+00:00",
+    "created_at": "2026-02-18T01:53:03.853944+00:00"
+  },
+  {
+    "id": "480036fc-118c-4120-9618-d24bf94fa22f",
+    "expense_number": "GTO-00040",
+    "reference": "Semana Semana 7: 09 feb - 15 feb - NOM-00008",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 112000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-02-18T01:53:03.853944+00:00",
+    "created_at": "2026-02-18T01:53:03.853944+00:00"
+  },
+  {
+    "id": "6d9cf75b-b4c4-4c5c-8611-887ae3b4dc7e",
+    "expense_number": "GTO-00036",
+    "reference": "Semana Semana 6: 02 feb - 08 feb - NOM-00007",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 130000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-02-10T18:39:35.565226+00:00",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "c7ac251b-e0d5-4e49-8ea7-72a47c021f2f",
+    "expense_number": "GTO-00035",
+    "reference": "Semana Semana 6: 02 feb - 08 feb - NOM-00007",
+    "notes": "Pago de salario: Fernando José Tapia Carrillo",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 162000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-02-10T18:39:35.565226+00:00",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "6de3c052-f72f-466f-83de-db2a0f69ecba",
+    "expense_number": "GTO-00037",
+    "reference": "Semana Semana 6: 02 feb - 08 feb - NOM-00007",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 84000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-02-10T18:39:35.565226+00:00",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "488994e4-1d9d-4f46-acc2-e66f1601c20e",
+    "expense_number": "GTO-00033",
+    "reference": "Semana Semana 5: 26 ene - 01 feb - NOM-00006",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 70000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-02-03T22:08:45.040294+00:00",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "6c30c208-2104-49cb-8743-fbe4ba06f25b",
+    "expense_number": "GTO-00031",
+    "reference": "Semana Semana 5: 26 ene - 01 feb - NOM-00006",
+    "notes": "Pago de salario: Fernando José Tapia Carrillo",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 180000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-02-03T22:08:45.040294+00:00",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "c01bcf3f-d244-4276-858e-d29cb1debfd7",
+    "expense_number": "GTO-00032",
+    "reference": "Semana Semana 5: 26 ene - 01 feb - NOM-00006",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 156000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-02-03T22:08:45.040294+00:00",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "bb4f8f66-f024-4f26-8322-2fd9c4dedbb1",
+    "expense_number": "GTO-00022",
+    "reference": "Semana Semana 4: 19 ene - 25 ene - NOM-00005",
+    "notes": "Pago de salario: Vicente Díaz",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 70000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "paid_at": "2026-01-26T01:44:39.73775+00:00",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  },
+  {
+    "id": "80eeac68-3c15-46a7-a6b1-5f34b0f247aa",
+    "expense_number": "GTO-00021",
+    "reference": "Semana Semana 4: 19 ene - 25 ene - NOM-00005",
+    "notes": "Pago de salario: Rodrigo Guillermo Nieto",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 112000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-01-26T01:44:39.73775+00:00",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  },
+  {
+    "id": "fef7b1ef-5de2-4529-af9f-63f561c39f55",
+    "expense_number": "GTO-00020",
+    "reference": "Semana Semana 4: 19 ene - 25 ene - NOM-00005",
+    "notes": "Pago de salario: Fernando José Tapia Carrillo",
+    "posting_status": "posted",
+    "payment_status": "paid",
+    "balance": 0.0,
+    "total_amount": 144000.0,
+    "liability_account_id": null,
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "paid_at": "2026-01-26T01:44:39.73775+00:00",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  }
+]
+=== PAYMENTS ===
+[
+  {
+    "id": "3cf0d6d3-5eaa-4094-a5ef-84a13a88232c",
+    "expense_id": "b9de5da8-4b56-4571-a787-e1b3e64afc5c",
+    "amount": 105000.0,
+    "payment_date": "2026-03-24T15:25:16.892913+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-03-24T15:25:16.892913+00:00"
+  },
+  {
+    "id": "ce80972f-c5ee-4394-9b36-509326327158",
+    "expense_id": "06f5e5e2-4a8e-49d0-9920-6823f8879507",
+    "amount": 86000.0,
+    "payment_date": "2026-03-24T15:25:16.892913+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-03-24T15:25:16.892913+00:00"
+  },
+  {
+    "id": "9a1b75dc-45e3-4c5a-9d0c-d02fa95c7e92",
+    "expense_id": "cd64b3d7-6ca0-4389-89bf-ad111b790d2c",
+    "amount": 105000.0,
+    "payment_date": "2026-03-19T23:19:43.620432+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-03-19T23:19:43.620432+00:00"
+  },
+  {
+    "id": "aa050dbe-b5fa-4018-9c2b-62c6a75b8a37",
+    "expense_id": "9956a088-9c18-4e71-a007-826dfe99e4b8",
+    "amount": 108000.0,
+    "payment_date": "2026-03-19T23:19:43.620432+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-03-19T23:19:43.620432+00:00"
+  },
+  {
+    "id": "04449e03-ab4e-4808-ad06-07828658489d",
+    "expense_id": "2e471be8-fdec-43f8-a470-661f0b1c84fc",
+    "amount": 113000.0,
+    "payment_date": "2026-03-10T23:00:31.692539+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-03-10T23:00:31.692539+00:00"
+  },
+  {
+    "id": "9cb3ff21-b3df-47b6-a0c4-1b36e0be29ba",
+    "expense_id": "08c38ed6-7032-4e3c-bc95-8b409ed9ca6d",
+    "amount": 105000.0,
+    "payment_date": "2026-03-10T23:00:31.692539+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-03-10T23:00:31.692539+00:00"
+  },
+  {
+    "id": "c26c3ed7-34f8-4378-a8e5-d8f2ad54b979",
+    "expense_id": "cd0eca9e-444e-4ae7-b937-ac70482a86ab",
+    "amount": 112000.0,
+    "payment_date": "2026-03-03T13:32:30.652057+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-03-03T13:32:30.652057+00:00"
+  },
+  {
+    "id": "7b01f2b2-4833-48d6-93e6-a0ab4f02c8f0",
+    "expense_id": "64cf555a-3d6b-43d8-9c90-c9db124dc351",
+    "amount": 129500.0,
+    "payment_date": "2026-03-03T13:32:30.652057+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-03-03T13:32:30.652057+00:00"
+  },
+  {
+    "id": "585f364d-4079-45b0-a7a1-d5bc6d888a13",
+    "expense_id": "21c863a6-98df-4a18-8e35-21e017415e8f",
+    "amount": 133000.0,
+    "payment_date": "2026-03-03T13:32:03.431285+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-03-03T13:32:03.431285+00:00"
+  },
+  {
+    "id": "2c5db596-02f1-4e10-bfb4-bbfd39abea93",
+    "expense_id": "27e2b2ec-85ff-4c18-bc17-cb04e3ea5cec",
+    "amount": 48500.0,
+    "payment_date": "2026-02-18T01:53:03.853944+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-18T01:53:03.853944+00:00"
+  },
+  {
+    "id": "463bb28f-5ccc-4c8a-bc1a-fefd16d072cc",
+    "expense_id": "27e2b2ec-85ff-4c18-bc17-cb04e3ea5cec",
+    "amount": 10000.0,
+    "payment_date": "2026-02-18T01:53:03.853944+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-02-18T01:53:03.853944+00:00"
+  },
+  {
+    "id": "82854d5c-e21b-4e8a-a300-36a5b6ded6e0",
+    "expense_id": "480036fc-118c-4120-9618-d24bf94fa22f",
+    "amount": 112000.0,
+    "payment_date": "2026-02-18T01:53:03.853944+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-18T01:53:03.853944+00:00"
+  },
+  {
+    "id": "847b7cc9-0f9b-4510-93a2-e50cc88f1a2b",
+    "expense_id": "c7ac251b-e0d5-4e49-8ea7-72a47c021f2f",
+    "amount": 160000.0,
+    "payment_date": "2026-02-10T18:39:35.565226+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "fb3e8ba5-f60b-4a72-ab29-7552ce021f07",
+    "expense_id": "6de3c052-f72f-466f-83de-db2a0f69ecba",
+    "amount": 84000.0,
+    "payment_date": "2026-02-10T18:39:35.565226+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "2151d516-6ec5-472a-8c19-b6f8e955b1e9",
+    "expense_id": "6d9cf75b-b4c4-4c5c-8611-887ae3b4dc7e",
+    "amount": 130000.0,
+    "payment_date": "2026-02-10T18:39:35.565226+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "a72d5e53-f11b-4d8a-82de-5674efb7dd25",
+    "expense_id": "c7ac251b-e0d5-4e49-8ea7-72a47c021f2f",
+    "amount": 2000.0,
+    "payment_date": "2026-02-10T18:39:35.565226+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-02-10T18:39:35.565226+00:00"
+  },
+  {
+    "id": "6721c8b3-eaec-4c67-8cc5-3a69bade69c5",
+    "expense_id": "6c30c208-2104-49cb-8743-fbe4ba06f25b",
+    "amount": 100000.0,
+    "payment_date": "2026-02-03T22:08:45.040294+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "17740219-cda3-4738-b0b2-65749f40c2f8",
+    "expense_id": "488994e4-1d9d-4f46-acc2-e66f1601c20e",
+    "amount": 70000.0,
+    "payment_date": "2026-02-03T22:08:45.040294+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "22af44a1-417d-4433-9223-2a9074466154",
+    "expense_id": "c01bcf3f-d244-4276-858e-d29cb1debfd7",
+    "amount": 156000.0,
+    "payment_date": "2026-02-03T22:08:45.040294+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "b8d64d9a-a643-4db8-b665-8460b8888799",
+    "expense_id": "6c30c208-2104-49cb-8743-fbe4ba06f25b",
+    "amount": 80000.0,
+    "payment_date": "2026-02-03T22:08:45.040294+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-02-03T22:08:45.040294+00:00"
+  },
+  {
+    "id": "aadc750e-32a5-4b22-99ba-53ac4114faba",
+    "expense_id": "fef7b1ef-5de2-4529-af9f-63f561c39f55",
+    "amount": 144000.0,
+    "payment_date": "2026-01-26T01:44:39.73775+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  },
+  {
+    "id": "a58ced89-0e1a-4205-9462-654e62e57553",
+    "expense_id": "80eeac68-3c15-46a7-a6b1-5f34b0f247aa",
+    "amount": 112000.0,
+    "payment_date": "2026-01-26T01:44:39.73775+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "28960d92-b734-4989-b277-279c67ae2d1e",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  },
+  {
+    "id": "b664b59a-99dc-4716-8f25-34f745b74299",
+    "expense_id": "bb4f8f66-f024-4f26-8322-2fd9c4dedbb1",
+    "amount": 70000.0,
+    "payment_date": "2026-01-26T01:44:39.73775+00:00",
+    "payment_account_id": null,
+    "payment_method_id": "4cfa02c2-eece-4f57-9483-3d97b98a7b76",
+    "created_at": "2026-01-26T01:44:39.73775+00:00"
+  }
+]
+=== PAYMENT_JES ===
+[
+  {
+    "id": "6db2fa36-7d9d-4f09-8569-afd0307e3e8b",
+    "entry_date": "2026-03-24",
+    "description": "Pago gasto GTO-00059",
+    "source_reference": "3cf0d6d3-5eaa-4094-a5ef-84a13a88232c",
+    "lines": [
+      {
+        "entry_id": "6db2fa36-7d9d-4f09-8569-afd0307e3e8b",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 105000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "6db2fa36-7d9d-4f09-8569-afd0307e3e8b",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 105000.0
+      }
+    ]
+  },
+  {
+    "id": "5ece9e38-3cfc-4b44-bbd0-6af32a3a9a3d",
+    "entry_date": "2026-03-24",
+    "description": "Pago gasto GTO-00058",
+    "source_reference": "ce80972f-c5ee-4394-9b36-509326327158",
+    "lines": [
+      {
+        "entry_id": "5ece9e38-3cfc-4b44-bbd0-6af32a3a9a3d",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 86000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "5ece9e38-3cfc-4b44-bbd0-6af32a3a9a3d",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 86000.0
+      }
+    ]
+  },
+  {
+    "id": "fe13d17f-7523-43aa-938b-7c48170a4271",
+    "entry_date": "2026-03-19",
+    "description": "Pago gasto GTO-00056",
+    "source_reference": "9a1b75dc-45e3-4c5a-9d0c-d02fa95c7e92",
+    "lines": [
+      {
+        "entry_id": "fe13d17f-7523-43aa-938b-7c48170a4271",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 105000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "fe13d17f-7523-43aa-938b-7c48170a4271",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 105000.0
+      }
+    ]
+  },
+  {
+    "id": "f5e02293-c112-4154-a193-001361d27090",
+    "entry_date": "2026-03-19",
+    "description": "Pago gasto GTO-00055",
+    "source_reference": "aa050dbe-b5fa-4018-9c2b-62c6a75b8a37",
+    "lines": [
+      {
+        "entry_id": "f5e02293-c112-4154-a193-001361d27090",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 108000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "f5e02293-c112-4154-a193-001361d27090",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 108000.0
+      }
+    ]
+  },
+  {
+    "id": "405e4a90-a24c-4cf4-aa7a-978499812e14",
+    "entry_date": "2026-03-10",
+    "description": "Pago gasto GTO-00048",
+    "source_reference": "04449e03-ab4e-4808-ad06-07828658489d",
+    "lines": [
+      {
+        "entry_id": "405e4a90-a24c-4cf4-aa7a-978499812e14",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 113000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "405e4a90-a24c-4cf4-aa7a-978499812e14",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 113000.0
+      }
+    ]
+  },
+  {
+    "id": "1901eeeb-c804-479a-8ca8-67abbbb34008",
+    "entry_date": "2026-03-10",
+    "description": "Pago gasto GTO-00049",
+    "source_reference": "9cb3ff21-b3df-47b6-a0c4-1b36e0be29ba",
+    "lines": [
+      {
+        "entry_id": "1901eeeb-c804-479a-8ca8-67abbbb34008",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 105000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "1901eeeb-c804-479a-8ca8-67abbbb34008",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 105000.0
+      }
+    ]
+  },
+  {
+    "id": "c6805514-4584-447c-b16f-e17dbc6d3d8a",
+    "entry_date": "2026-03-03",
+    "description": "Pago gasto GTO-00043",
+    "source_reference": "c26c3ed7-34f8-4378-a8e5-d8f2ad54b979",
+    "lines": [
+      {
+        "entry_id": "c6805514-4584-447c-b16f-e17dbc6d3d8a",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 112000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "c6805514-4584-447c-b16f-e17dbc6d3d8a",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 112000.0
+      }
+    ]
+  },
+  {
+    "id": "3fff81c4-cc2c-4727-b939-9df2e093fc2f",
+    "entry_date": "2026-03-03",
+    "description": "Pago gasto GTO-00044",
+    "source_reference": "7b01f2b2-4833-48d6-93e6-a0ab4f02c8f0",
+    "lines": [
+      {
+        "entry_id": "3fff81c4-cc2c-4727-b939-9df2e093fc2f",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 129500.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "3fff81c4-cc2c-4727-b939-9df2e093fc2f",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 129500.0
+      }
+    ]
+  },
+  {
+    "id": "e599c4e9-a5f4-485d-8566-c7013ad14d71",
+    "entry_date": "2026-03-03",
+    "description": "Pago gasto GTO-00042",
+    "source_reference": "585f364d-4079-45b0-a7a1-d5bc6d888a13",
+    "lines": [
+      {
+        "entry_id": "e599c4e9-a5f4-485d-8566-c7013ad14d71",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 133000.0
+      },
+      {
+        "entry_id": "e599c4e9-a5f4-485d-8566-c7013ad14d71",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 133000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "cdd22c79-b942-495c-9f9d-e368e68b1073",
+    "entry_date": "2026-02-18",
+    "description": "Pago gasto GTO-00039",
+    "source_reference": "463bb28f-5ccc-4c8a-bc1a-fefd16d072cc",
+    "lines": [
+      {
+        "entry_id": "cdd22c79-b942-495c-9f9d-e368e68b1073",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 10000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "cdd22c79-b942-495c-9f9d-e368e68b1073",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 10000.0
+      }
+    ]
+  },
+  {
+    "id": "6274d54c-c894-411f-a2b5-95aa166f4691",
+    "entry_date": "2026-02-18",
+    "description": "Pago gasto GTO-00040",
+    "source_reference": "82854d5c-e21b-4e8a-a300-36a5b6ded6e0",
+    "lines": [
+      {
+        "entry_id": "6274d54c-c894-411f-a2b5-95aa166f4691",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 112000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "6274d54c-c894-411f-a2b5-95aa166f4691",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 112000.0
+      }
+    ]
+  },
+  {
+    "id": "6dab4de4-50ea-40ba-ae96-712d2a3cc049",
+    "entry_date": "2026-02-18",
+    "description": "Pago gasto GTO-00039",
+    "source_reference": "2c5db596-02f1-4e10-bfb4-bbfd39abea93",
+    "lines": [
+      {
+        "entry_id": "6dab4de4-50ea-40ba-ae96-712d2a3cc049",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 48500.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "6dab4de4-50ea-40ba-ae96-712d2a3cc049",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 48500.0
+      }
+    ]
+  },
+  {
+    "id": "0204f37f-5e1b-40b6-bb41-daca69745318",
+    "entry_date": "2026-02-10",
+    "description": "Pago gasto GTO-00035",
+    "source_reference": "a72d5e53-f11b-4d8a-82de-5674efb7dd25",
+    "lines": [
+      {
+        "entry_id": "0204f37f-5e1b-40b6-bb41-daca69745318",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 2000.0
+      },
+      {
+        "entry_id": "0204f37f-5e1b-40b6-bb41-daca69745318",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 2000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "756a014e-ce86-474b-b5a0-afa7aeb78637",
+    "entry_date": "2026-02-10",
+    "description": "Pago gasto GTO-00037",
+    "source_reference": "fb3e8ba5-f60b-4a72-ab29-7552ce021f07",
+    "lines": [
+      {
+        "entry_id": "756a014e-ce86-474b-b5a0-afa7aeb78637",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 84000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "756a014e-ce86-474b-b5a0-afa7aeb78637",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 84000.0
+      }
+    ]
+  },
+  {
+    "id": "1dfbf593-59f3-453c-880b-0728fcd52e46",
+    "entry_date": "2026-02-10",
+    "description": "Pago gasto GTO-00036",
+    "source_reference": "2151d516-6ec5-472a-8c19-b6f8e955b1e9",
+    "lines": [
+      {
+        "entry_id": "1dfbf593-59f3-453c-880b-0728fcd52e46",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 130000.0
+      },
+      {
+        "entry_id": "1dfbf593-59f3-453c-880b-0728fcd52e46",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 130000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "992cbfa1-ca24-42ed-9d7c-4cc6ebc35121",
+    "entry_date": "2026-02-10",
+    "description": "Pago gasto GTO-00035",
+    "source_reference": "847b7cc9-0f9b-4510-93a2-e50cc88f1a2b",
+    "lines": [
+      {
+        "entry_id": "992cbfa1-ca24-42ed-9d7c-4cc6ebc35121",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 160000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "992cbfa1-ca24-42ed-9d7c-4cc6ebc35121",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 160000.0
+      }
+    ]
+  },
+  {
+    "id": "b11c018d-d2db-44f1-ac02-57bb6fdb631f",
+    "entry_date": "2026-02-03",
+    "description": "Pago gasto GTO-00031",
+    "source_reference": "6721c8b3-eaec-4c67-8cc5-3a69bade69c5",
+    "lines": [
+      {
+        "entry_id": "b11c018d-d2db-44f1-ac02-57bb6fdb631f",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 100000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "b11c018d-d2db-44f1-ac02-57bb6fdb631f",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 100000.0
+      }
+    ]
+  },
+  {
+    "id": "1a7c4319-067d-4f7c-8769-a00787c384cc",
+    "entry_date": "2026-02-03",
+    "description": "Pago gasto GTO-00031",
+    "source_reference": "b8d64d9a-a643-4db8-b665-8460b8888799",
+    "lines": [
+      {
+        "entry_id": "1a7c4319-067d-4f7c-8769-a00787c384cc",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 80000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "1a7c4319-067d-4f7c-8769-a00787c384cc",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 80000.0
+      }
+    ]
+  },
+  {
+    "id": "8af91022-ac7b-41aa-bbef-fd8675a8b84a",
+    "entry_date": "2026-02-03",
+    "description": "Pago gasto GTO-00032",
+    "source_reference": "22af44a1-417d-4433-9223-2a9074466154",
+    "lines": [
+      {
+        "entry_id": "8af91022-ac7b-41aa-bbef-fd8675a8b84a",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 156000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "8af91022-ac7b-41aa-bbef-fd8675a8b84a",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 156000.0
+      }
+    ]
+  },
+  {
+    "id": "1d462bd3-5e18-4ab0-8483-b5253bae7ce2",
+    "entry_date": "2026-02-03",
+    "description": "Pago gasto GTO-00033",
+    "source_reference": "17740219-cda3-4738-b0b2-65749f40c2f8",
+    "lines": [
+      {
+        "entry_id": "1d462bd3-5e18-4ab0-8483-b5253bae7ce2",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 70000.0
+      },
+      {
+        "entry_id": "1d462bd3-5e18-4ab0-8483-b5253bae7ce2",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 70000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "7a5f15af-bea7-463a-8c44-ca511fbbd048",
+    "entry_date": "2026-01-26",
+    "description": "Pago gasto GTO-00021",
+    "source_reference": "a58ced89-0e1a-4205-9462-654e62e57553",
+    "lines": [
+      {
+        "entry_id": "7a5f15af-bea7-463a-8c44-ca511fbbd048",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 112000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "7a5f15af-bea7-463a-8c44-ca511fbbd048",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 112000.0
+      }
+    ]
+  },
+  {
+    "id": "71d0e85a-3c89-4e20-9104-0f241eed2321",
+    "entry_date": "2026-01-26",
+    "description": "Pago gasto GTO-00020",
+    "source_reference": "aadc750e-32a5-4b22-99ba-53ac4114faba",
+    "lines": [
+      {
+        "entry_id": "71d0e85a-3c89-4e20-9104-0f241eed2321",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 144000.0
+      },
+      {
+        "entry_id": "71d0e85a-3c89-4e20-9104-0f241eed2321",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 144000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "e9d1c7ee-9a8a-4f64-8410-4940f66337f0",
+    "entry_date": "2026-01-26",
+    "description": "Pago gasto GTO-00022",
+    "source_reference": "b664b59a-99dc-4716-8f25-34f745b74299",
+    "lines": [
+      {
+        "entry_id": "e9d1c7ee-9a8a-4f64-8410-4940f66337f0",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 70000.0
+      },
+      {
+        "entry_id": "e9d1c7ee-9a8a-4f64-8410-4940f66337f0",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 70000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "65a323ac-e062-4e72-97a1-f199e519e38a",
+    "entry_date": "2026-01-19",
+    "description": "Pago gasto GTO-00018",
+    "source_reference": "38488ff9-f764-4a4b-b663-3f271e7a130f",
+    "lines": [
+      {
+        "entry_id": "65a323ac-e062-4e72-97a1-f199e519e38a",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 84000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "65a323ac-e062-4e72-97a1-f199e519e38a",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 84000.0
+      }
+    ]
+  },
+  {
+    "id": "ff7aadc6-3503-4aa5-973f-a80921d07f09",
+    "entry_date": "2026-01-19",
+    "description": "Pago gasto GTO-00017",
+    "source_reference": "251353d2-0d58-4dfb-b9f4-f99d0db8d313",
+    "lines": [
+      {
+        "entry_id": "ff7aadc6-3503-4aa5-973f-a80921d07f09",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 40000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "ff7aadc6-3503-4aa5-973f-a80921d07f09",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 40000.0
+      }
+    ]
+  },
+  {
+    "id": "c5fdec9d-52e3-4e2c-b9bb-00d9adb98bf7",
+    "entry_date": "2026-01-19",
+    "description": "Pago gasto GTO-00017",
+    "source_reference": "22487fd4-6896-46dd-b78e-ca3fbb6ac806",
+    "lines": [
+      {
+        "entry_id": "c5fdec9d-52e3-4e2c-b9bb-00d9adb98bf7",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 68000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "c5fdec9d-52e3-4e2c-b9bb-00d9adb98bf7",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 68000.0
+      }
+    ]
+  },
+  {
+    "id": "31b2208a-5d07-462e-bef4-e577d0695e03",
+    "entry_date": "2026-01-19",
+    "description": "Pago gasto GTO-00019",
+    "source_reference": "909401e4-41cf-457e-b02f-d4bab3e89001",
+    "lines": [
+      {
+        "entry_id": "31b2208a-5d07-462e-bef4-e577d0695e03",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 80000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "31b2208a-5d07-462e-bef4-e577d0695e03",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 80000.0
+      }
+    ]
+  },
+  {
+    "id": "2305aeda-bdbe-45d9-b470-3dcb1934cbd4",
+    "entry_date": "2026-01-19",
+    "description": "Pago gasto GTO-00019",
+    "source_reference": "d3ad9d32-e897-4b52-aebe-23c0c8ec066c",
+    "lines": [
+      {
+        "entry_id": "2305aeda-bdbe-45d9-b470-3dcb1934cbd4",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 60000.0
+      },
+      {
+        "entry_id": "2305aeda-bdbe-45d9-b470-3dcb1934cbd4",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 60000.0,
+        "credit_amount": 0.0
+      }
+    ]
+  },
+  {
+    "id": "a40d4fc5-c4f9-40fe-819d-61cc084c511d",
+    "entry_date": "2026-01-12",
+    "description": "Pago gasto GTO-00011",
+    "source_reference": "fdd2b346-e538-40e7-a991-cd0142b0175c",
+    "lines": [
+      {
+        "entry_id": "a40d4fc5-c4f9-40fe-819d-61cc084c511d",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 20000.0,
+        "credit_amount": 0.0
+      },
+      {
+        "entry_id": "a40d4fc5-c4f9-40fe-819d-61cc084c511d",
+        "account_code": "1101",
+        "account_name": "Caja General",
+        "debit_amount": 0.0,
+        "credit_amount": 20000.0
+      }
+    ]
+  },
+  {
+    "id": "55a0c672-adb4-42ac-8855-38a6c6da6e95",
+    "entry_date": "2026-01-12",
+    "description": "Pago gasto GTO-00013",
+    "source_reference": "95c7b918-0d0a-4c24-a048-bb534a688e3c",
+    "lines": [
+      {
+        "entry_id": "55a0c672-adb4-42ac-8855-38a6c6da6e95",
+        "account_code": "1110",
+        "account_name": "Bancos - Cuenta Corriente",
+        "debit_amount": 0.0,
+        "credit_amount": 108500.0
+      },
+      {
+        "entry_id": "55a0c672-adb4-42ac-8855-38a6c6da6e95",
+        "account_code": "2106",
+        "account_name": "Sueldos por Pagar",
+        "debit_amount": 108500.0,
+        "credit_amount": 0.0
+      }
+    ]
+  }
+]

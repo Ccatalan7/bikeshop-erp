@@ -1,0 +1,24 @@
+{
+  "total_assets": 6173792.95,
+  "total_liabilities": 326927.65,
+  "total_equity": 0,
+  "accounting_equation_difference": 5846865.3,
+  "top_liability_equity_accounts": [
+    {
+      "code": "2150",
+      "name": "IVA Débito Fiscal",
+      "type": "liability",
+      "debits": 0.0,
+      "credits": 383778.86,
+      "amount": 383778.86
+    },
+    {
+      "code": "2101",
+      "name": "Cuentas por Pagar Proveedores",
+      "type": "liability",
+      "debits": 1727769.42,
+      "credits": 1670918.2099999997,
+      "amount": -56851.21
+    }
+  ]
+}

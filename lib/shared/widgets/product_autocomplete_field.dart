@@ -131,7 +131,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       if (_focusNode.hasFocus) {
         // Only show overlay if user has explicitly interacted (tap/click/type)
         // Don't show on programmatic focus unless autoFocus is set
-        if (_hasUserInteracted || widget.autoFocus) {
+        if (mounted && (_hasUserInteracted || widget.autoFocus)) {
           _showOverlay();
         }
       } else {
@@ -188,6 +188,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   void _showOverlay() {
+    if (!mounted) return;
     _removeOverlay();
 
     if (_filteredProducts.isEmpty &&
@@ -216,7 +217,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     final spaceBelow = overlaySize.height - fieldBottomInOverlay - margin;
     final spaceAbove = relativeY - margin;
 
-    const preferredMaxHeight = 400.0;
+    const preferredMaxHeight = 520.0;
 
     // Always show wherever there's more space — above or below
     final showAbove = spaceAbove > spaceBelow;
@@ -948,19 +949,27 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   Future<void> _loadProducts() async {
     // Only load initial/recent products to show as defaults when user taps field
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final products = await _inventoryService.searchProducts('', limit: 20);
-      setState(() {
-        _allFetchedProducts = products;
-      });
+      final products = await _inventoryService.searchProducts('');
+      if (mounted) {
+        setState(() {
+          _allFetchedProducts = products;
+        });
+        // Re-show overlay so clearing text immediately refreshes the dropdown
+        if (_focusNode.hasFocus) {
+          _showOverlay();
+        }
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _onTextChanged(String value) {
     if (value.isEmpty) {
+      _debounce?.cancel(); // cancel any pending search before reloading full list
       _loadProducts();
       return;
     }
@@ -972,7 +981,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       setState(() => _isLoading = true);
       try {
         final results =
-            await _inventoryService.searchProducts(value, limit: 20);
+            await _inventoryService.searchProducts(value);
         if (mounted) {
           setState(() {
             _allFetchedProducts = results;
@@ -1163,7 +1172,13 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
 
   @override
   void dispose() {
-    _closePopover(notify: false);
+    // Remove overlay entries directly — do NOT call setState here.
+    // During dispose(), mounted is still true but the element is defunct,
+    // so setState() would throw '_lifecycleState != _ElementLifecycle.defunct'.
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _barrierEntry?.remove();
+    _barrierEntry = null;
     super.dispose();
   }
 

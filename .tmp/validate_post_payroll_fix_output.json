@@ -1,0 +1,274 @@
+{
+  "wrong_expense_entry_count": 0,
+  "corrected_expense_entry_count": 29,
+  "payment_2106_debit_count": 38,
+  "invalid_payment_source_reference_count": 0,
+  "total_2106_debits": 3288500.0,
+  "total_2106_credits": 3288500.0,
+  "net_2106": 0.0,
+  "sample_corrected_expenses": [
+    {
+      "source_reference": "GTO-00008",
+      "description": "Gasto GTO-00008 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "d6335ead-fea7-4afb-a94d-4d491abd54eb",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 148500.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00009",
+      "description": "Gasto GTO-00009 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "70c88f52-793a-4a98-abb7-9b402381b112",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 40000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00010",
+      "description": "Gasto GTO-00010 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "ea7a78c8-a219-4e03-8e5b-f368586988ec",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 94500.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00011",
+      "description": "Gasto GTO-00011 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "c29afb1a-4e6d-4020-9ca6-65c615d555fb",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 162000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00012",
+      "description": "Gasto GTO-00012 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "2f3e0ade-aaf2-4bf3-8ee2-50a60d2d71d2",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 128000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00013",
+      "description": "Gasto GTO-00013 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "2b9983be-b13b-41a0-ba47-cbc41d07b62d",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 108500.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00017",
+      "description": "Gasto GTO-00017 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "a001df87-f84b-45a0-86d5-3b2c24a2f55b",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 108000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00018",
+      "description": "Gasto GTO-00018 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "f1f84db8-3687-410e-b8e0-4d34efd8216d",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 84000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00019",
+      "description": "Gasto GTO-00019 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "7ad5d2f8-22ef-4d3a-91f7-dfec9b1e3f5c",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 140000.0
+        }
+      ]
+    },
+    {
+      "source_reference": "GTO-00020",
+      "description": "Gasto GTO-00020 - Proveedor",
+      "credit_2106": [
+        {
+          "entry_id": "9ffabc79-b812-4482-a9e1-0d714f3eec3c",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 0.0,
+          "credit_amount": 144000.0
+        }
+      ]
+    }
+  ],
+  "sample_invalid_payment_refs": [],
+  "sample_payment_2106_debits": [
+    {
+      "description": "Pago gasto GTO-00008",
+      "source_reference": "af93583e-7ac5-491a-9a81-8eddf978a229",
+      "debit_2106": [
+        {
+          "entry_id": "5b572274-306b-4eeb-83f7-e9297551babb",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 138500.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00008",
+      "source_reference": "c779a5cf-65ee-4587-accc-235bdb6dda9c",
+      "debit_2106": [
+        {
+          "entry_id": "407613d9-e2ad-4342-a20b-8b9783e779d6",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 10000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00009",
+      "source_reference": "ee2b89d5-0285-4039-a3cf-8da95b0f2dba",
+      "debit_2106": [
+        {
+          "entry_id": "acc91d02-3179-4bf9-a357-f00d69a36b73",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 40000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00010",
+      "source_reference": "d7b981a5-6635-44df-9c03-4b958552d8c3",
+      "debit_2106": [
+        {
+          "entry_id": "112c631d-f503-4fdc-aef6-65b58280e045",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 94500.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00011",
+      "source_reference": "b7d9ee2a-9727-4acf-839e-0f4edf4487b6",
+      "debit_2106": [
+        {
+          "entry_id": "eb15a178-448e-49bc-a1c1-bf84f89a2621",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 10000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00011",
+      "source_reference": "fdd2b346-e538-40e7-a991-cd0142b0175c",
+      "debit_2106": [
+        {
+          "entry_id": "a40d4fc5-c4f9-40fe-819d-61cc084c511d",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 20000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00011",
+      "source_reference": "dd54bf26-15b7-40a8-8310-577baca7de0b",
+      "debit_2106": [
+        {
+          "entry_id": "9bcf8a1f-3426-47ca-b5a5-b80348066f23",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 50000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00011",
+      "source_reference": "b4cd5104-a689-4c23-9eea-6df895ef2428",
+      "debit_2106": [
+        {
+          "entry_id": "768c9452-4cdf-42cb-ae35-1fd9cd48d0d8",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 82000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00012",
+      "source_reference": "981f8cb5-3981-44b1-8c32-d0da578cd425",
+      "debit_2106": [
+        {
+          "entry_id": "a2d8e461-2f06-4862-8511-784e142c00f2",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 128000.0,
+          "credit_amount": 0.0
+        }
+      ]
+    },
+    {
+      "description": "Pago gasto GTO-00013",
+      "source_reference": "95c7b918-0d0a-4c24-a048-bb534a688e3c",
+      "debit_2106": [
+        {
+          "entry_id": "55a0c672-adb4-42ac-8855-38a6c6da6e95",
+          "account_code": "2106",
+          "account_name": "Sueldos por Pagar",
+          "debit_amount": 108500.0,
+          "credit_amount": 0.0
+        }
+      ]
+    }
+  ]
+}

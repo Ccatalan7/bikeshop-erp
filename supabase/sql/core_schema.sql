@@ -5930,7 +5930,7 @@ begin
     now()
   );
 
-  if v_subtotal <> 0 then
+  if v_total - v_iva <> 0 then
     insert into public.journal_lines (
       id,
       tenant_id,
@@ -5952,7 +5952,7 @@ begin
       v_revenue_account_name,
       format('Ingreso por venta %s', v_invoice_number),
       0,
-      v_subtotal,
+      v_total - v_iva,
       now(),
       now()
     );
@@ -7570,8 +7570,8 @@ declare
   v_entry_id uuid := gen_random_uuid();
   v_exists boolean;
   v_liability_account_id uuid;
-  v_liability_account_code text := '2105';
-  v_liability_account_name text := 'Cuentas por Pagar - Gastos';
+  v_liability_account_code text;
+  v_liability_account_name text;
   v_tax_account_id uuid;
   v_tax_account_code text := '2120';
   v_tax_account_name text := 'IVA Crédito Fiscal';
@@ -7587,6 +7587,7 @@ declare
   v_line record;
   v_line_count integer := 0;
   v_default_account record;
+  v_is_payroll boolean := false;
 begin
   select e.*
     into v_expense
@@ -7607,6 +7608,12 @@ begin
     return;
   end if;
 
+  v_is_payroll := (
+    v_expense.notes like 'Pago de salario%'
+    or v_expense.notes like 'Salario:%'
+    or v_expense.reference like 'Semana %'
+  );
+
   -- Delete existing journal entry if it exists (to recreate it fresh)
   select exists (
            select 1
@@ -7620,18 +7627,34 @@ begin
     perform public.delete_expense_journal_entry(p_expense_id);
   end if;
 
-  v_liability_account_id := coalesce(
-    v_expense.liability_account_id,
-    public.ensure_account(
+  if v_is_payroll then
+    v_liability_account_code := '2106';
+    v_liability_account_name := 'Sueldos por Pagar';
+    v_liability_account_id := public.ensure_account(
       v_expense.tenant_id,
       v_liability_account_code,
       v_liability_account_name,
       'liability',
       'currentLiability',
-      'Obligaciones por gastos pendientes de pago',
+      'Obligaciones pendientes de pago por remuneraciones al personal',
       null
-    )
-  );
+    );
+  else
+    v_liability_account_code := '2105';
+    v_liability_account_name := 'Cuentas por Pagar - Gastos';
+    v_liability_account_id := coalesce(
+      v_expense.liability_account_id,
+      public.ensure_account(
+        v_expense.tenant_id,
+        v_liability_account_code,
+        v_liability_account_name,
+        'liability',
+        'currentLiability',
+        'Obligaciones por gastos pendientes de pago',
+        null
+      )
+    );
+  end if;
 
   -- Ensure record has a known tuple structure even when no payment account/method is set
   select null::uuid as id, null::text as code, null::text as name
@@ -7684,7 +7707,7 @@ begin
     public.get_next_document_number(v_expense.tenant_id, 'journal_entry'),
     coalesce(v_expense.issue_date, now()),
     v_description,
-    'purchase',
+    case when v_is_payroll then 'payroll' else 'purchase' end,
     'expenses',
     v_expense.expense_number,
     'posted',
@@ -7808,7 +7831,11 @@ begin
     );
   end if;
 
-  if lower(coalesce(v_expense.payment_status, 'pending')) = 'paid'
+  if v_is_payroll then
+    v_credit_account_id := v_liability_account_id;
+    v_credit_account_code := v_liability_account_code;
+    v_credit_account_name := v_liability_account_name;
+  elsif lower(coalesce(v_expense.payment_status, 'pending')) = 'paid'
      and coalesce(v_expense.balance, 0) <= 0.01
      and v_cash_account.id is not null then
     v_credit_account_id := v_cash_account.id;
@@ -7887,10 +7914,11 @@ declare
   v_entry_id uuid := gen_random_uuid();
   v_exists boolean;
   v_liability_account_id uuid;
-  v_liability_code text := '2105';
-  v_liability_name text := 'Cuentas por Pagar - Gastos';
+  v_liability_code text;
+  v_liability_name text;
   v_cash_account record;
   v_description text;
+  v_is_payroll boolean := false;
 begin
   select ep.*
     into v_payment
@@ -7918,6 +7946,12 @@ begin
     return;
   end if;
 
+  v_is_payroll := (
+    v_expense.notes like 'Pago de salario%'
+    or v_expense.notes like 'Salario:%'
+    or v_expense.reference like 'Semana %'
+  );
+
   select exists (
            select 1
              from public.journal_entries
@@ -7927,7 +7961,15 @@ begin
     into v_exists;
 
   if v_exists then
-    return;
+    perform public.delete_expense_payment_journal_entry(v_payment.id);
+  end if;
+
+  if v_is_payroll then
+    v_liability_code := '2106';
+    v_liability_name := 'Sueldos por Pagar';
+  else
+    v_liability_code := '2105';
+    v_liability_name := 'Cuentas por Pagar - Gastos';
   end if;
 
   v_liability_account_id := coalesce(
@@ -7988,7 +8030,7 @@ begin
     v_description,
     'payment',
     'expense_payments',
-    v_expense.expense_number,
+    v_payment.id::text,
     'posted',
     v_payment.amount,
     v_payment.amount,

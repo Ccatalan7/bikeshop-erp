@@ -1,0 +1,158 @@
+{
+  "totals": {
+    "asset": 6173792.95,
+    "liability": 326927.65,
+    "equity": 0.0,
+    "income": 9785161.13,
+    "expense": 4531795.73
+  },
+  "debit_side_total": 10705588.68,
+  "credit_side_total": 10112088.78,
+  "difference": 593499.9,
+  "rows": [
+    {
+      "code": "1101",
+      "name": "Caja General",
+      "type": "asset",
+      "category": "currentAsset",
+      "debits": 2604000.0,
+      "credits": 1908952.96,
+      "amount": 695047.04
+    },
+    {
+      "code": "1105",
+      "name": "Inventarios",
+      "type": "asset",
+      "category": "currentAsset",
+      "debits": 1420083.35,
+      "credits": 923062.16,
+      "amount": 497021.19
+    },
+    {
+      "code": "1110",
+      "name": "Bancos - Cuenta Corriente",
+      "type": "asset",
+      "category": "currentAsset",
+      "debits": 8097549.89,
+      "credits": 3447581.46,
+      "amount": 4649968.43
+    },
+    {
+      "code": "1130",
+      "name": "Cuentas por Cobrar Comerciales",
+      "type": "asset",
+      "category": "currentAsset",
+      "debits": 10762439.89,
+      "credits": 10701549.89,
+      "amount": 60890.0
+    },
+    {
+      "code": "2101",
+      "name": "Cuentas por Pagar Proveedores",
+      "type": "liability",
+      "category": "currentLiability",
+      "debits": 1727769.42,
+      "credits": 1670918.21,
+      "amount": -56851.21
+    },
+    {
+      "code": "2120",
+      "name": "IVA Crédito Fiscal",
+      "type": "asset",
+      "category": "currentAsset",
+      "debits": 270866.29,
+      "credits": 0.0,
+      "amount": 270866.29
+    },
+    {
+      "code": "2150",
+      "name": "IVA Débito Fiscal",
+      "type": "liability",
+      "category": "currentLiability",
+      "debits": 0.0,
+      "credits": 383778.86,
+      "amount": 383778.86
+    },
+    {
+      "code": "4100",
+      "name": "Ingresos Operacionales",
+      "type": "income",
+      "category": "operatingIncome",
+      "debits": 0.0,
+      "credits": 9785161.13,
+      "amount": 9785161.13
+    },
+    {
+      "code": "5100",
+      "name": "Costo de Ventas",
+      "type": "expense",
+      "category": "costOfGoodsSold",
+      "debits": 923062.16,
+      "credits": 0.0,
+      "amount": 923062.16
+    },
+    {
+      "code": "6101",
+      "name": "Sueldos y Salarios",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 8403.36,
+      "credits": 0.0,
+      "amount": 8403.36
+    },
+    {
+      "code": "6101-01",
+      "name": "Salario - Fernando José Tapia Carrillo",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1003000.0,
+      "credits": 0.0,
+      "amount": 1003000.0
+    },
+    {
+      "code": "6101-02",
+      "name": "Salario - Rodrigo Guillermo Nieto",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1069000.0,
+      "credits": 0.0,
+      "amount": 1069000.0
+    },
+    {
+      "code": "6101-03",
+      "name": "Salario - Vicente Díaz",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 1256500.0,
+      "credits": 0.0,
+      "amount": 1256500.0
+    },
+    {
+      "code": "6205",
+      "name": "Suministros de Oficina",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 7450.0,
+      "credits": 0.0,
+      "amount": 7450.0
+    },
+    {
+      "code": "6206",
+      "name": "Gastos Por Transporte",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 43591.68,
+      "credits": 0.0,
+      "amount": 43591.68
+    },
+    {
+      "code": "6801",
+      "name": "Gastos Varios",
+      "type": "expense",
+      "category": "operatingExpense",
+      "debits": 220788.53,
+      "credits": 0.0,
+      "amount": 220788.53
+    }
+  ]
+}

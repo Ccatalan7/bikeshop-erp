@@ -170,7 +170,7 @@ class InventoryService extends ChangeNotifier {
         .replaceAll('ü', 'u');
   }
 
-  Future<List<Product>> searchProducts(String query, {int limit = 50}) async {
+  Future<List<Product>> searchProducts(String query, {int limit = 200}) async {
     if (query.trim().isEmpty) {
       return await getProducts();
     }
@@ -183,6 +183,26 @@ class InventoryService extends ChangeNotifier {
 
     if (searchTerms.isEmpty) {
       return await getProducts();
+    }
+
+    // If products are already in local memory, use accent-insensitive filter
+    // (avoids DB ILIKE which is accent-sensitive in PostgreSQL by default)
+    if (_hasLoaded && _products.isNotEmpty) {
+      return _products
+          .where((product) {
+            final searchableText = _normalize([
+              product.name,
+              product.sku,
+              product.brand ?? '',
+              product.model ?? '',
+              product.barcode ?? '',
+              product.categoryName ?? '',
+              product.supplierCode ?? '',
+            ].join(' '));
+            return searchTerms.every((term) => searchableText.contains(term));
+          })
+          .take(limit)
+          .toList();
     }
 
     // 1. Try DB search first if available for efficiency on large datasets
