@@ -2173,13 +2173,32 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildJobTypeCounters() {
-    final bicycles = _filteredJobs.where((j) => j.bikeId != null).length;
+    // Count total bicycles across all filtered jobs, accounting for multi-bike jobs.
+    // Use _jobBikesMap (which has actual per-job bike entries from the DB);
+    // fall back to 1 if the job has a bikeId but no entry in the map yet.
+    int bicycles = 0;
+    for (final j in _filteredJobs) {
+      if (j.jobType == JobType.itemService) continue; // item/accessory jobs have no bike
+      final jobBikes = _jobBikesMap[j.id ?? ''];
+      if (jobBikes != null && jobBikes.isNotEmpty) {
+        bicycles += jobBikes.length;
+      } else if (j.bikeId != null) {
+        bicycles += 1; // fallback: primary bike only
+      }
+    }
+
     final items = _filteredJobs
         .where((j) => j.jobType == JobType.itemService || j.bikeId == null)
         .length;
-    final warranties = _filteredJobs
-        .where((j) => j.jobType == JobType.warranty || j.isWarrantyJob)
-        .length;
+    // Only count warranty-type jobs that are still in progress (not completed/finalizado).
+    // Warranty jobs in the complete phase (e.g. "Terminado Cubierto") are done
+    // and should not count as "active" warranties in the counter.
+    final warranties = _filteredJobs.where((j) {
+      if (j.jobType != JobType.warranty) return false;
+      final phase = j.customStatus?.phase ??
+          _inferPhaseFromLegacyStatus(j.status);
+      return phase != StatusPhase.complete;
+    }).length;
     final quotations =
         _filteredJobs.where((j) => j.jobType == JobType.quotation).length;
 
