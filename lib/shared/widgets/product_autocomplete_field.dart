@@ -928,6 +928,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         ),
       ),
     );
+
+    overlay.insert(_imagePreviewOverlay!);
   }
 
   Widget _buildPlaceholderIcon(ThemeData theme) {
