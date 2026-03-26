@@ -1124,8 +1124,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     setState(() => _isGeneratingPdf = true);
 
     try {
-      // Ideally we should use the latest invoice from backend, but _loadedInvoice should be up to date if we just saved/loaded.
-      // Only if dirty we might want to warn or save first.
       if (_isDirty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1135,12 +1133,74 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         return;
       }
 
-      final pdf = await _generateInvoicePDF(_loadedInvoice!);
+      // ── Resolve bike names from the database ──────────────────────────────
+      final Map<String, String> resolvedBikeNames = {};
+      try {
+        if (!mounted) return;
+        final db = context.read<DatabaseService>();
+        final invoice = _loadedInvoice!;
+
+        // 1. Single-bike invoice via invoice.bikeId
+        if (invoice.bikeId != null && invoice.bikeId!.isNotEmpty) {
+          final bikeData = await db.supabase
+              .from('bikes')
+              .select('brand, model, year')
+              .eq('id', invoice.bikeId as Object)
+              .maybeSingle();
+          if (bikeData != null) {
+            final parts = <String>[
+              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
+                bikeData['brand'] as String,
+              if ((bikeData['model'] as String?)?.isNotEmpty == true)
+                bikeData['model'] as String,
+              if (bikeData['year'] != null) bikeData['year'].toString(),
+            ];
+            if (parts.isNotEmpty) resolvedBikeNames['single'] = parts.join(' ');
+          }
+        }
+
+        // 2. Multi-bike items via jobBikeId
+        final jobBikeIds = invoice.items
+            .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
+            .map((i) => i.jobBikeId!)
+            .toSet();
+
+        for (final jobBikeId in jobBikeIds) {
+          final existingName = invoice.items
+              .firstWhere((i) => i.jobBikeId == jobBikeId)
+              .bikeName;
+          if (existingName != null && existingName.isNotEmpty) {
+            resolvedBikeNames[jobBikeId] = existingName;
+            continue;
+          }
+          final jobBikeData = await db.supabase
+              .from('mechanic_job_bikes')
+              .select('bikes(brand, model, year)')
+              .eq('id', jobBikeId as Object)
+              .maybeSingle();
+          if (jobBikeData != null) {
+            final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
+            if (bikeMap != null) {
+              final parts = <String>[
+                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
+                  bikeMap['brand'] as String,
+                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
+                  bikeMap['model'] as String,
+                if (bikeMap['year'] != null) bikeMap['year'].toString(),
+              ];
+              if (parts.isNotEmpty) resolvedBikeNames[jobBikeId] = parts.join(' ');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Could not resolve bike names for PDF: $e');
+      }
+
+      final pdf = await _generateInvoicePDF(_loadedInvoice!, resolvedBikeNames);
       final bytes = await pdf.save();
 
       // Platform-specific download
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
-        // Desktop: Use Save As dialog
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar Factura PDF',
           fileName: 'factura_${_loadedInvoice!.invoiceNumber}.pdf',
@@ -1161,14 +1221,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           }
         }
       } else {
-        // Mobile: Use share sheet
         await Printing.sharePdf(
           bytes: bytes,
           filename: 'factura_${_loadedInvoice!.invoiceNumber}.pdf',
         );
       }
     } catch (e) {
-      // debugPrint('Error generating PDF: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1181,7 +1239,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
-  Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
+  Future<pw.Document> _generateInvoicePDF(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) async {
     final pdf = pw.Document();
 
     // Try to load company logo (use cache if available)
@@ -1344,7 +1405,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               ],
             ),
 
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: 16),
+
+            // ── Bicycle info banner ──────────────────────────────────
+            ..._buildEditorPdfBikeBanner(invoice, resolvedBikeNames),
 
             // Items Table Header
             pw.Container(
@@ -1387,70 +1451,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
             pw.SizedBox(height: 8),
 
-            // Items List
-            ...invoice.items.map(
-              (item) => pw.Container(
-                padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                decoration: const pw.BoxDecoration(
-                  border: pw.Border(
-                      bottom:
-                          pw.BorderSide(width: 0.5, color: PdfColors.grey300)),
-                ),
-                child: pw.Row(
-                  children: [
-                    pw.Expanded(
-                      flex: 4,
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                              item.productName ?? item.productSku ?? 'Producto',
-                              style: pw.TextStyle(
-                                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                          if (item.description != null &&
-                              item.description!.isNotEmpty)
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.only(top: 2),
-                              child: pw.Text(
-                                item.description!,
-                                style: const pw.TextStyle(
-                                    fontSize: 8, color: PdfColors.grey700),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    pw.Expanded(
-                      flex: 1,
-                      child: pw.Text(
-                        item.quantity.toStringAsFixed(
-                            item.quantity.truncateToDouble() == item.quantity
-                                ? 0
-                                : 2),
-                        textAlign: pw.TextAlign.center,
-                        style: const pw.TextStyle(fontSize: 9),
-                      ),
-                    ),
-                    pw.Expanded(
-                      flex: 2,
-                      child: pw.Text(
-                        ChileanUtils.formatCurrency(item.unitPrice),
-                        textAlign: pw.TextAlign.right,
-                        style: const pw.TextStyle(fontSize: 9),
-                      ),
-                    ),
-                    pw.Expanded(
-                      flex: 2,
-                      child: pw.Text(
-                        ChileanUtils.formatCurrency(item.lineTotal),
-                        textAlign: pw.TextAlign.right,
-                        style: const pw.TextStyle(fontSize: 9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            // Items List (grouped by bike when multi-bike)
+            ..._buildEditorPdfItemRows(invoice, resolvedBikeNames),
 
             pw.SizedBox(height: 16),
 
@@ -1532,6 +1534,218 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     );
 
     return pdf;
+  }
+
+  /// Blue banner showing which bicycle(s) this invoice is for.
+  List<pw.Widget> _buildEditorPdfBikeBanner(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final multiBikeNames = <String>[];
+    for (final item in invoice.items) {
+      final jbId = item.jobBikeId;
+      if (jbId != null && jbId.isNotEmpty) {
+        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
+        if (name.isNotEmpty && !multiBikeNames.contains(name)) {
+          multiBikeNames.add(name);
+        }
+      }
+    }
+
+    final singleBikeName = resolvedBikeNames['single'];
+
+    final List<String> bikeNames;
+    if (multiBikeNames.isNotEmpty) {
+      bikeNames = multiBikeNames;
+    } else if (singleBikeName != null && singleBikeName.isNotEmpty) {
+      bikeNames = [singleBikeName];
+    } else {
+      return [];
+    }
+
+    final isMultiBike = bikeNames.length > 1;
+    final label =
+        isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
+
+    return [
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.blue50,
+          border: pw.Border.all(color: PdfColors.blue200, width: 0.8),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue800,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            if (!isMultiBike)
+              pw.Text(
+                bikeNames.first,
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue900,
+                ),
+              )
+            else
+              ...bikeNames.asMap().entries.map(
+                    (entry) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(top: 2),
+                      child: pw.Row(
+                        children: [
+                          pw.Container(
+                            width: 16,
+                            height: 16,
+                            alignment: pw.Alignment.center,
+                            decoration: const pw.BoxDecoration(
+                              color: PdfColors.blue700,
+                              shape: pw.BoxShape.circle,
+                            ),
+                            child: pw.Text(
+                              '${entry.key + 1}',
+                              style: const pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                          pw.SizedBox(width: 6),
+                          pw.Text(
+                            entry.value,
+                            style: pw.TextStyle(
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+      pw.SizedBox(height: 12),
+    ];
+  }
+
+  /// Builds item rows. For multi-bike jobs, inserts a light-blue sub-header
+  /// before each new bike group.
+  List<pw.Widget> _buildEditorPdfItemRows(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final widgets = <pw.Widget>[];
+    String? lastBikeName;
+
+    final bikeNamesForItems = <String>{};
+    for (final item in invoice.items) {
+      final jbId = item.jobBikeId;
+      if (jbId != null && jbId.isNotEmpty) {
+        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
+        if (name.isNotEmpty) bikeNamesForItems.add(name);
+      }
+    }
+    final hasMultiBike = bikeNamesForItems.length > 1;
+
+    for (final item in invoice.items) {
+      if (hasMultiBike) {
+        final jbId = item.jobBikeId ?? '';
+        final bikeName = jbId.isNotEmpty
+            ? (resolvedBikeNames[jbId] ?? item.bikeName ?? '')
+            : (item.bikeName ?? '');
+        if (bikeName.isNotEmpty && bikeName != lastBikeName) {
+          lastBikeName = bikeName;
+          widgets.add(
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              color: PdfColors.blue50,
+              child: pw.Text(
+                '🚲  $bikeName',
+                style: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue800,
+                ),
+              ),
+            ),
+          );
+        }
+      }
+
+      widgets.add(
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+                bottom: pw.BorderSide(width: 0.5, color: PdfColors.grey300)),
+          ),
+          child: pw.Row(
+            children: [
+              pw.Expanded(
+                flex: 4,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      item.productName ?? item.productSku ?? 'Producto',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    ),
+                    if (item.description != null &&
+                        item.description!.isNotEmpty)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.only(top: 2),
+                        child: pw.Text(
+                          item.description!,
+                          style: const pw.TextStyle(
+                              fontSize: 8, color: PdfColors.grey700),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              pw.Expanded(
+                flex: 1,
+                child: pw.Text(
+                  item.quantity.toStringAsFixed(
+                      item.quantity.truncateToDouble() == item.quantity ? 0 : 2),
+                  textAlign: pw.TextAlign.center,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+              pw.Expanded(
+                flex: 2,
+                child: pw.Text(
+                  ChileanUtils.formatCurrency(item.unitPrice),
+                  textAlign: pw.TextAlign.right,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+              pw.Expanded(
+                flex: 2,
+                child: pw.Text(
+                  ChileanUtils.formatCurrency(item.lineTotal),
+                  textAlign: pw.TextAlign.right,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return widgets;
   }
 
   @override

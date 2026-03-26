@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data' show Uint8List;
 
 import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/services/database_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -893,7 +894,77 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         throw Exception('No se pudo cargar la factura');
       }
 
-      final pdf = await _generateInvoicePDF(freshInvoice);
+      // ── Resolve bike names from the database ──────────────────────────────
+      // Key: jobBikeId (for multi-bike items) OR 'single' for invoice.bikeId.
+      final Map<String, String> resolvedBikeNames = {};
+      try {
+        if (!mounted) return;
+        final db = context.read<DatabaseService>();
+
+        // 1. Single-bike invoice: fetch bike directly via invoice.bikeId
+        if (freshInvoice.bikeId != null && freshInvoice.bikeId!.isNotEmpty) {
+          final bikeData = await db.supabase
+              .from('bikes')
+              .select('brand, model, year')
+              .eq('id', freshInvoice.bikeId as Object)
+              .maybeSingle();
+          if (bikeData != null) {
+            final parts = <String>[
+              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
+                bikeData['brand'] as String,
+              if ((bikeData['model'] as String?)?.isNotEmpty == true)
+                bikeData['model'] as String,
+              if (bikeData['year'] != null) bikeData['year'].toString(),
+            ];
+            if (parts.isNotEmpty) {
+              resolvedBikeNames['single'] = parts.join(' ');
+            }
+          }
+        }
+
+        // 2. Multi-bike items: fetch bike name per unique jobBikeId
+        final jobBikeIds = freshInvoice.items
+            .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
+            .map((i) => i.jobBikeId!)
+            .toSet();
+
+        for (final jobBikeId in jobBikeIds) {
+          // item.bikeName already populated → use it
+          final existingName = freshInvoice.items
+              .firstWhere((i) => i.jobBikeId == jobBikeId)
+              .bikeName;
+          if (existingName != null && existingName.isNotEmpty) {
+            resolvedBikeNames[jobBikeId] = existingName;
+            continue;
+          }
+          // Otherwise, look up via mechanic_job_bikes → bikes join
+          final jobBikeData = await db.supabase
+              .from('mechanic_job_bikes')
+              .select('bikes(brand, model, year)')
+              .eq('id', jobBikeId as Object)
+              .maybeSingle();
+          if (jobBikeData != null) {
+            final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
+            if (bikeMap != null) {
+              final parts = <String>[
+                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
+                  bikeMap['brand'] as String,
+                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
+                  bikeMap['model'] as String,
+                if (bikeMap['year'] != null) bikeMap['year'].toString(),
+              ];
+              if (parts.isNotEmpty) {
+                resolvedBikeNames[jobBikeId] = parts.join(' ');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Could not resolve bike names for PDF: $e');
+        // Non-fatal: PDF will still generate without bike banner
+      }
+
+      final pdf = await _generateInvoicePDF(freshInvoice, resolvedBikeNames);
       final bytes = await pdf.save();
 
       // Platform-specific download
@@ -939,7 +1010,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
-  Future<pw.Document> _generateInvoicePDF(Invoice invoice) async {
+  Future<pw.Document> _generateInvoicePDF(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) async {
     final pdf = pw.Document();
 
     // Try to load company logo (use cache if available)
@@ -1090,6 +1164,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
             pw.SizedBox(height: 16),
 
+            // ── Bicycle info banner ──────────────────────────────────────────
+            ..._buildPdfBikeBanner(invoice, resolvedBikeNames),
+
             // Items table - much tighter
             pw.Table(
               border: pw.TableBorder.all(
@@ -1116,50 +1193,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     _buildPdfTableCell('Cantidad', isHeader: true),
                   ],
                 ),
-                // Data rows
-                ...invoice.items.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final item = entry.value;
-                  final hasDescription =
-                      item.description != null && item.description!.isNotEmpty;
-                  return pw.TableRow(
-                    children: [
-                      _buildPdfTableCell('${index + 1}'),
-                      // Product name + description (Zoho style)
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 5),
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              item.productName ?? 'Sin nombre',
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                            if (hasDescription) ...[
-                              pw.SizedBox(height: 3),
-                              pw.Text(
-                                item.description!,
-                                style: const pw.TextStyle(
-                                  fontSize: 9,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
-                      _buildPdfTableCell(
-                          ChileanUtils.formatCurrency(item.unitPrice)),
-                      _buildPdfTableCell(
-                          ChileanUtils.formatCurrency(item.lineTotal)),
-                    ],
-                  );
-                }),
+                // Data rows – grouped by bike when multi-bike
+                ..._buildPdfItemRows(invoice, resolvedBikeNames),
               ],
             ),
 
@@ -1195,6 +1230,222 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     );
 
     return pdf;
+  }
+
+  /// Returns a list of PDF widgets forming the bicycle banner, or empty if
+  /// no bike information exists on this invoice.
+  ///
+  /// [resolvedBikeNames] is keyed by:
+  ///   'single'    → single-bike invoice (invoice.bikeId)
+  ///   jobBikeId   → multi-bike item grouping
+  List<pw.Widget> _buildPdfBikeBanner(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    // Priority 1: multi-bike grouping via jobBikeId keys
+    final multiBikeNames = <String>[];
+    for (final item in invoice.items) {
+      final jbId = item.jobBikeId;
+      if (jbId != null && jbId.isNotEmpty) {
+        // Resolved name from DB, fallback to item.bikeName
+        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
+        if (name.isNotEmpty && !multiBikeNames.contains(name)) {
+          multiBikeNames.add(name);
+        }
+      }
+    }
+
+    // Priority 2: single-bike invoice via invoice.bikeId
+    final singleBikeName = resolvedBikeNames['single'];
+
+    final List<String> bikeNames;
+    if (multiBikeNames.isNotEmpty) {
+      bikeNames = multiBikeNames;
+    } else if (singleBikeName != null && singleBikeName.isNotEmpty) {
+      bikeNames = [singleBikeName];
+    } else {
+      return []; // No bike info available
+    }
+
+    final isMultiBike = bikeNames.length > 1;
+    final label =
+        isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
+
+    return [
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.blue50,
+          border: pw.Border.all(color: PdfColors.blue200, width: 0.8),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue800,
+              ),
+            ),
+            pw.SizedBox(height: 5),
+            if (!isMultiBike)
+              pw.Text(
+                bikeNames.first,
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue900,
+                ),
+              )
+            else
+              ...bikeNames.asMap().entries.map(
+                    (entry) => pw.Padding(
+                      padding: const pw.EdgeInsets.only(top: 2),
+                      child: pw.Row(
+                        children: [
+                          pw.Container(
+                            width: 16,
+                            height: 16,
+                            alignment: pw.Alignment.center,
+                            decoration: const pw.BoxDecoration(
+                              color: PdfColors.blue700,
+                              shape: pw.BoxShape.circle,
+                            ),
+                            child: pw.Text(
+                              '${entry.key + 1}',
+                              style: const pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.white,
+                              ),
+                            ),
+                          ),
+                          pw.SizedBox(width: 6),
+                          pw.Text(
+                            entry.value,
+                            style: pw.TextStyle(
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+      pw.SizedBox(height: 12),
+    ];
+  }
+
+  /// Builds item table rows. For multi-bike jobs, inserts a light-blue
+  /// sub-header row before each new bike group.
+  List<pw.TableRow> _buildPdfItemRows(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final rows = <pw.TableRow>[];
+    String? lastBikeName;
+    int itemIndex = 0;
+
+    // Determine if we have multi-bike grouping
+    final bikeNamesForItems = <String>{};
+    for (final item in invoice.items) {
+      final jbId = item.jobBikeId;
+      if (jbId != null && jbId.isNotEmpty) {
+        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
+        if (name.isNotEmpty) bikeNamesForItems.add(name);
+      }
+    }
+    final hasMultiBike = bikeNamesForItems.length > 1;
+
+    for (final item in invoice.items) {
+      // Insert bike sub-header row when the bike group changes
+      if (hasMultiBike) {
+        final jbId = item.jobBikeId ?? '';
+        final bikeName = jbId.isNotEmpty
+            ? (resolvedBikeNames[jbId] ?? item.bikeName ?? '')
+            : (item.bikeName ?? '');
+        if (bikeName.isNotEmpty && bikeName != lastBikeName) {
+          lastBikeName = bikeName;
+          rows.add(
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.blue50),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 4),
+                  child: pw.SizedBox(),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 4),
+                  child: pw.Text(
+                    '🚲  $bikeName',
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(),
+                pw.SizedBox(),
+                pw.SizedBox(),
+              ],
+            ),
+          );
+        }
+      }
+
+      itemIndex++;
+      final hasDescription =
+          item.description != null && item.description!.isNotEmpty;
+
+      rows.add(
+        pw.TableRow(
+          children: [
+            _buildPdfTableCell('$itemIndex'),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 6, vertical: 5),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    item.productName ?? 'Sin nombre',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                  if (hasDescription) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      item.description!,
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            _buildPdfTableCell(item.quantity.toStringAsFixed(2)),
+            _buildPdfTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
+            _buildPdfTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
+          ],
+        ),
+      );
+    }
+
+    return rows;
   }
 
   pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
