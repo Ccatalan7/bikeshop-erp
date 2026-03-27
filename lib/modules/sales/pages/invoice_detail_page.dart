@@ -1061,7 +1061,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     style: pw.TextStyle(
                       fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue800,
+                      color: PdfColors.grey800,
                     ),
                   ),
                 pw.Column(
@@ -1271,71 +1271,57 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     final label =
         isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
 
-    return [
+        return [
       pw.Container(
         width: double.infinity,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.blue50,
-          border: pw.Border.all(color: PdfColors.blue200, width: 0.8),
-          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-        ),
+        padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              label,
+              isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio',
               style: pw.TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blue800,
+                color: PdfColors.grey800,
               ),
             ),
-            pw.SizedBox(height: 5),
+            pw.SizedBox(height: 4),
             if (!isMultiBike)
               pw.Text(
                 bikeNames.first,
-                style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.blue900,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.black,
                 ),
               )
             else
-              ...bikeNames.asMap().entries.map(
-                    (entry) => pw.Padding(
-                      padding: const pw.EdgeInsets.only(top: 2),
-                      child: pw.Row(
-                        children: [
-                          pw.Container(
-                            width: 16,
-                            height: 16,
-                            alignment: pw.Alignment.center,
-                            decoration: const pw.BoxDecoration(
-                              color: PdfColors.blue700,
-                              shape: pw.BoxShape.circle,
-                            ),
-                            child: pw.Text(
-                              '${entry.key + 1}',
-                              style: const pw.TextStyle(
-                                fontSize: 8,
-                                color: PdfColors.white,
-                              ),
-                            ),
-                          ),
-                          pw.SizedBox(width: 6),
-                          pw.Text(
-                            entry.value,
-                            style: pw.TextStyle(
-                              fontSize: 11,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue900,
-                            ),
-                          ),
-                        ],
+              ...bikeNames.map(
+                (name) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 2, left: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Container(
+                        width: 3,
+                        height: 3,
+                        margin: const pw.EdgeInsets.only(right: 6),
+                        decoration: const pw.BoxDecoration(
+                          shape: pw.BoxShape.circle,
+                          color: PdfColors.black,
+                        ),
                       ),
-                    ),
+                      pw.Text(
+                        name,
+                        style: const pw.TextStyle(
+                          fontSize: 10,
+                          color: PdfColors.black,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1375,7 +1361,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           lastBikeName = bikeName;
           rows.add(
             pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.blue50),
+              decoration: const pw.BoxDecoration(color: PdfColors.grey100),
               children: [
                 pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(
@@ -1386,11 +1372,11 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   padding: const pw.EdgeInsets.symmetric(
                       horizontal: 6, vertical: 4),
                   child: pw.Text(
-                    '🚲  $bikeName',
+                    bikeName,
                     style: pw.TextStyle(
                       fontSize: 9,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue800,
+                      color: PdfColors.grey800,
                     ),
                   ),
                 ),
@@ -1426,9 +1412,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   ),
                   if (hasDescription) ...[
                     pw.SizedBox(height: 3),
-                    pw.Text(
-                      item.description!,
-                      style: const pw.TextStyle(
+                    pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
                         fontSize: 9,
                         color: PdfColors.grey700,
                       ),
@@ -1448,7 +1432,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return rows;
   }
 
-  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  
+  String _cleanPdfText(String text) {
+    if (text.isEmpty) return text;
+    return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
+  }
+
+pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(

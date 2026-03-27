@@ -2547,9 +2547,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       (p) => p.id == item.productId,
                       orElse: () => null,
                     );
-                final displayName =
-                    product?.name ?? item.productName ?? 'Sin nombre';
-                final displaySku = product?.sku ?? item.productSku;
+                final displayName = _cleanPdfText(product?.name ?? item.productName ?? 'Sin nombre');
+                final displaySku = _cleanPdfText(product?.sku ?? item.productSku ?? '');
 
                 return TableRow(
                   children: [
@@ -2936,9 +2935,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         (p) => p.id == item.productId,
                         orElse: () => null,
                       );
-                  final displayName =
-                      product?.name ?? item.productName ?? 'Sin nombre';
-                  final displaySku = product?.sku ?? item.productSku;
+                  final displayName = _cleanPdfText(product?.name ?? item.productName ?? 'Sin nombre');
+                  final displaySku = _cleanPdfText(product?.sku ?? item.productSku ?? '');
 
                   final hasDescription =
                       item.description != null && item.description!.isNotEmpty;
@@ -2963,9 +2961,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                             ),
                             if (hasDescription) ...[
                               pw.SizedBox(height: 3),
-                              pw.Text(
-                                item.description!,
-                                style: const pw.TextStyle(
+                              pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
                                   fontSize: 9,
                                   color: PdfColors.grey700,
                                 ),
@@ -3038,7 +3034,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     return pdf;
   }
 
-  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  
+  String _cleanPdfText(String text) {
+    if (text.isEmpty) return text;
+    return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
+  }
+
+pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(

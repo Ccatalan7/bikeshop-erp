@@ -1290,7 +1290,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                     style: pw.TextStyle(
                       fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue800,
+                      color: PdfColors.grey800,
                     ),
                   ),
                 pw.Column(
@@ -1567,71 +1567,57 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     final label =
         isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
 
-    return [
+        return [
       pw.Container(
         width: double.infinity,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.blue50,
-          border: pw.Border.all(color: PdfColors.blue200, width: 0.8),
-          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-        ),
+        padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              label,
+              isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio',
               style: pw.TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blue800,
+                color: PdfColors.grey800,
               ),
             ),
             pw.SizedBox(height: 4),
             if (!isMultiBike)
               pw.Text(
                 bikeNames.first,
-                style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.blue900,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.black,
                 ),
               )
             else
-              ...bikeNames.asMap().entries.map(
-                    (entry) => pw.Padding(
-                      padding: const pw.EdgeInsets.only(top: 2),
-                      child: pw.Row(
-                        children: [
-                          pw.Container(
-                            width: 16,
-                            height: 16,
-                            alignment: pw.Alignment.center,
-                            decoration: const pw.BoxDecoration(
-                              color: PdfColors.blue700,
-                              shape: pw.BoxShape.circle,
-                            ),
-                            child: pw.Text(
-                              '${entry.key + 1}',
-                              style: const pw.TextStyle(
-                                fontSize: 8,
-                                color: PdfColors.white,
-                              ),
-                            ),
-                          ),
-                          pw.SizedBox(width: 6),
-                          pw.Text(
-                            entry.value,
-                            style: pw.TextStyle(
-                              fontSize: 11,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue900,
-                            ),
-                          ),
-                        ],
+              ...bikeNames.map(
+                (name) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 2, left: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Container(
+                        width: 3,
+                        height: 3,
+                        margin: const pw.EdgeInsets.only(right: 6),
+                        decoration: const pw.BoxDecoration(
+                          shape: pw.BoxShape.circle,
+                          color: PdfColors.black,
+                        ),
                       ),
-                    ),
+                      pw.Text(
+                        name,
+                        style: const pw.TextStyle(
+                          fontSize: 10,
+                          color: PdfColors.black,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1641,7 +1627,13 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   /// Builds item rows. For multi-bike jobs, inserts a light-blue sub-header
   /// before each new bike group.
-  List<pw.Widget> _buildEditorPdfItemRows(
+  
+  String _cleanPdfText(String text) {
+    if (text.isEmpty) return text;
+    return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
+  }
+
+List<pw.Widget> _buildEditorPdfItemRows(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
   ) {
@@ -1669,13 +1661,13 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           widgets.add(
             pw.Container(
               padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-              color: PdfColors.blue50,
+              color: PdfColors.grey100,
               child: pw.Text(
-                '🚲  $bikeName',
+                bikeName,
                 style: pw.TextStyle(
                   fontSize: 8,
                   fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.blue800,
+                  color: PdfColors.grey800,
                 ),
               ),
             ),
@@ -1706,9 +1698,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                         item.description!.isNotEmpty)
                       pw.Padding(
                         padding: const pw.EdgeInsets.only(top: 2),
-                        child: pw.Text(
-                          item.description!,
-                          style: const pw.TextStyle(
+                        child: pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
                               fontSize: 8, color: PdfColors.grey700),
                         ),
                       ),

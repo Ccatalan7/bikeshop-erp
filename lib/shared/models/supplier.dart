@@ -17,7 +17,8 @@ class Supplier {
   final String? website;
   final Map<String, String> bankDetails;
   final PaymentTerms paymentTerms;
-  final TaxTreatment defaultTaxTreatment; // suggested tax treatment for purchases
+  final TaxTreatment
+      defaultTaxTreatment; // suggested tax treatment for purchases
   final String? notes;
   final bool isActive;
   final DateTime createdAt;
@@ -69,7 +70,8 @@ class Supplier {
         (t) => t.name == json['payment_terms'],
         orElse: () => PaymentTerms.net30,
       ),
-      defaultTaxTreatment: TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
+      defaultTaxTreatment:
+          TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
       notes: json['notes'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
