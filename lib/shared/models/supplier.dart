@@ -19,6 +19,13 @@ class Supplier {
   final PaymentTerms paymentTerms;
   final TaxTreatment
       defaultTaxTreatment; // suggested tax treatment for purchases
+  final String? imageUrl;
+  final String? portalUsername;
+  final String? portalPassword;
+  final String? salesRepName;
+  final String? salesRepPhone;
+  final String? salesRepEmail;
+  final String? purchaseInstructions;
   final String? notes;
   final bool isActive;
   final DateTime createdAt;
@@ -41,6 +48,13 @@ class Supplier {
     this.bankDetails = const {},
     this.paymentTerms = PaymentTerms.net30,
     this.defaultTaxTreatment = TaxTreatment.noTax,
+    this.imageUrl,
+    this.portalUsername,
+    this.portalPassword,
+    this.salesRepName,
+    this.salesRepPhone,
+    this.salesRepEmail,
+    this.purchaseInstructions,
     this.notes,
     this.isActive = true,
     required this.createdAt,
@@ -72,6 +86,13 @@ class Supplier {
       ),
       defaultTaxTreatment:
           TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
+      imageUrl: json['image_url'] as String?,
+      portalUsername: json['portal_username'] as String?,
+      portalPassword: json['portal_password'] as String?,
+      salesRepName: json['sales_rep_name'] as String?,
+      salesRepPhone: json['sales_rep_phone'] as String?,
+      salesRepEmail: json['sales_rep_email'] as String?,
+      purchaseInstructions: json['purchase_instructions'] as String?,
       notes: json['notes'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -97,6 +118,13 @@ class Supplier {
       'bank_details': bankDetails,
       'payment_terms': paymentTerms.name,
       'default_tax_treatment': defaultTaxTreatment.toValue(),
+      'image_url': imageUrl,
+      'portal_username': portalUsername,
+      'portal_password': portalPassword,
+      'sales_rep_name': salesRepName,
+      'sales_rep_phone': salesRepPhone,
+      'sales_rep_email': salesRepEmail,
+      'purchase_instructions': purchaseInstructions,
       'notes': notes,
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),
@@ -121,6 +149,13 @@ class Supplier {
     Map<String, String>? bankDetails,
     PaymentTerms? paymentTerms,
     TaxTreatment? defaultTaxTreatment,
+    String? imageUrl,
+    String? portalUsername,
+    String? portalPassword,
+    String? salesRepName,
+    String? salesRepPhone,
+    String? salesRepEmail,
+    String? purchaseInstructions,
     String? notes,
     bool? isActive,
     DateTime? createdAt,
@@ -143,6 +178,13 @@ class Supplier {
       bankDetails: bankDetails ?? this.bankDetails,
       paymentTerms: paymentTerms ?? this.paymentTerms,
       defaultTaxTreatment: defaultTaxTreatment ?? this.defaultTaxTreatment,
+      imageUrl: imageUrl ?? this.imageUrl,
+      portalUsername: portalUsername ?? this.portalUsername,
+      portalPassword: portalPassword ?? this.portalPassword,
+      salesRepName: salesRepName ?? this.salesRepName,
+      salesRepPhone: salesRepPhone ?? this.salesRepPhone,
+      salesRepEmail: salesRepEmail ?? this.salesRepEmail,
+      purchaseInstructions: purchaseInstructions ?? this.purchaseInstructions,
       notes: notes ?? this.notes,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,

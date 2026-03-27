@@ -264,6 +264,21 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
+  Future<List<PurchaseInvoice>> getInvoicesBySupplier(String supplierId) async {
+    try {
+      final List<dynamic> data = await _supabase
+          .from('purchase_invoices')
+          .select()
+          .eq('tenant_id', await _tenantService.getTenantId() ?? '')
+          .eq('supplier_id', supplierId)
+          .order('date', ascending: false);
+      return data.map((row) => PurchaseInvoice.fromJson(row)).toList();
+    } catch (e) {
+      debugPrint('Error getting invoices for supplier: $e');
+      return [];
+    }
+  }
+
   Future<PurchaseInvoice?> getPurchaseInvoice(String id) async {
     try {
       final data = await _db.selectById('purchase_invoices', id);

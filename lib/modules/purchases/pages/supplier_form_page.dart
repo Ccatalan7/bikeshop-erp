@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../../shared/models/supplier.dart';
+import '../models/purchase_invoice.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+
 import '../services/purchase_service.dart';
 
 class SupplierFormPage extends StatefulWidget {
@@ -19,8 +23,11 @@ class SupplierFormPage extends StatefulWidget {
   State<SupplierFormPage> createState() => _SupplierFormPageState();
 }
 
-class _SupplierFormPageState extends State<SupplierFormPage> {
+class _SupplierFormPageState extends State<SupplierFormPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+
+  // Controllers
   final _nameController = TextEditingController();
   final _rutController = TextEditingController();
   final _emailController = TextEditingController();
@@ -33,20 +40,32 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   final _websiteController = TextEditingController();
   final _notesController = TextEditingController();
 
+  // New Controllers
+  final _imageUrlController = TextEditingController();
+  final _portalUsernameController = TextEditingController();
+  final _portalPasswordController = TextEditingController();
+  final _salesRepNameController = TextEditingController();
+  final _salesRepPhoneController = TextEditingController();
+  final _salesRepEmailController = TextEditingController();
+  final _purchaseInstructionsController = TextEditingController();
+
   SupplierType _type = SupplierType.local;
   PaymentTerms _paymentTerms = PaymentTerms.net30;
-  TaxTreatment _defaultTaxTreatment = TaxTreatment.taxIncluded; // Most suppliers charge IVA
+  TaxTreatment _defaultTaxTreatment = TaxTreatment.taxIncluded;
   bool _isActive = true;
 
   bool _isSaving = false;
   bool _isLoading = true;
   Supplier? _existing;
+  List<PurchaseInvoice> _invoices = [];
 
   late PurchaseService _purchaseService;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
   }
 
@@ -63,6 +82,14 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     _contactController.dispose();
     _websiteController.dispose();
     _notesController.dispose();
+    _imageUrlController.dispose();
+    _portalUsernameController.dispose();
+    _portalPasswordController.dispose();
+    _salesRepNameController.dispose();
+    _salesRepPhoneController.dispose();
+    _salesRepEmailController.dispose();
+    _purchaseInstructionsController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -82,7 +109,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   Future<void> _initialize() async {
     _purchaseService = context.read<PurchaseService>();
     if (widget.supplierId == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -101,10 +128,21 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         _contactController.text = supplier.contactPerson ?? '';
         _websiteController.text = supplier.website ?? '';
         _notesController.text = supplier.notes ?? '';
+        _imageUrlController.text = supplier.imageUrl ?? '';
+        _portalUsernameController.text = supplier.portalUsername ?? '';
+        _portalPasswordController.text = supplier.portalPassword ?? '';
+        _salesRepNameController.text = supplier.salesRepName ?? '';
+        _salesRepPhoneController.text = supplier.salesRepPhone ?? '';
+        _salesRepEmailController.text = supplier.salesRepEmail ?? '';
+        _purchaseInstructionsController.text =
+            supplier.purchaseInstructions ?? '';
         _type = supplier.type;
         _paymentTerms = supplier.paymentTerms;
         _defaultTaxTreatment = supplier.defaultTaxTreatment;
         _isActive = supplier.isActive;
+
+        // Load invoices
+        _invoices = await _purchaseService.getInvoicesBySupplier(supplier.id);
       }
     } catch (e) {
       if (!mounted) return;
@@ -123,13 +161,17 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
+      // Switch to the edit tab if validation fails
+      if (widget.supplierId != null) {
+        _tabController.animateTo(2);
+      }
       return;
     }
 
     final now = DateTime.now();
     final supplier = Supplier(
       id: _existing?.id ?? '',
-      tenantId: _existing?.tenantId ?? '', // Will be set by service
+      tenantId: _existing?.tenantId ?? '',
       name: _nameController.text.trim(),
       email: _emailController.text.trim().isEmpty
           ? null
@@ -165,6 +207,27 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      imageUrl: _imageUrlController.text.trim().isEmpty
+          ? null
+          : _imageUrlController.text.trim(),
+      portalUsername: _portalUsernameController.text.trim().isEmpty
+          ? null
+          : _portalUsernameController.text.trim(),
+      portalPassword: _portalPasswordController.text.trim().isEmpty
+          ? null
+          : _portalPasswordController.text.trim(),
+      salesRepName: _salesRepNameController.text.trim().isEmpty
+          ? null
+          : _salesRepNameController.text.trim(),
+      salesRepPhone: _salesRepPhoneController.text.trim().isEmpty
+          ? null
+          : _salesRepPhoneController.text.trim(),
+      salesRepEmail: _salesRepEmailController.text.trim().isEmpty
+          ? null
+          : _salesRepEmailController.text.trim(),
+      purchaseInstructions: _purchaseInstructionsController.text.trim().isEmpty
+          ? null
+          : _purchaseInstructionsController.text.trim(),
       isActive: _isActive,
       createdAt: _existing?.createdAt ?? now,
       updatedAt: now,
@@ -177,9 +240,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_existing == null
-              ? 'Proveedor creado correctamente'
-              : 'Proveedor actualizado'),
+          content: Text(
+              _existing == null ? 'Proveedor creado' : 'Proveedor actualizado'),
           backgroundColor: Colors.green,
         ),
       );
@@ -188,29 +250,73 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('No se pudo guardar el proveedor: $e'),
+            content: Text('No se pudo guardar: $e'),
             backgroundColor: Colors.red),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('$label copiado al portapapeles'),
+          duration: const Duration(seconds: 2)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+
     return MainLayout(
       child: Form(
         key: _formKey,
         child: Column(
           children: [
             _buildHeader(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: BrandedLoading())
-                  : _buildForm(),
-            ),
+            if (_isLoading)
+              const Expanded(child: Center(child: BrandedLoading()))
+            else if (widget.supplierId == null)
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: _buildForm(isCreation: true),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: isDesktop
+                    ? Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(width: 320, child: _buildProfilePanel()),
+                            const SizedBox(width: 24),
+                            Expanded(child: _buildRightPanel()),
+                          ],
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            _buildProfilePanel(),
+                            SizedBox(
+                              height: 800, // Fixed height for mobile tabs
+                              child: _buildRightPanel(),
+                            )
+                          ],
+                        ),
+                      ),
+              ),
           ],
         ),
       ),
@@ -218,24 +324,29 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   }
 
   Widget _buildHeader() {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
       child: Row(
         children: [
           IconButton(
             onPressed: () => _closePage(),
             icon: const Icon(Icons.arrow_back),
+            tooltip: 'Volver',
           ),
-          Expanded(
-            child: Text(
-              widget.supplierId != null
-                  ? 'Editar proveedor'
-                  : 'Nuevo proveedor',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+          const SizedBox(width: 8),
+          Text(
+            widget.supplierId != null
+                ? 'Perfil de Proveedor'
+                : 'Nuevo Proveedor',
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
+          const Spacer(),
           AppButton(
-            text: 'Guardar',
+            text: 'Guardar Cambios',
             icon: Icons.save,
             onPressed: _isSaving ? null : _save,
             isLoading: _isSaving,
@@ -245,243 +356,640 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     );
   }
 
-  Widget _buildForm() {
+  Widget _buildProfilePanel() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.grey.shade100,
+                    backgroundImage: _imageUrlController.text.isNotEmpty
+                        ? NetworkImage(_imageUrlController.text)
+                        : null,
+                    child: _imageUrlController.text.isEmpty
+                        ? Text(
+                            _nameController.text.isNotEmpty
+                                ? _nameController.text
+                                    .substring(0, 1)
+                                    .toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                                fontSize: 40, color: Colors.grey.shade400),
+                          )
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _isActive ? Colors.green : Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                      width: 20,
+                      height: 20,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                _nameController.text.isNotEmpty
+                    ? _nameController.text
+                    : 'Sin Nombre',
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  _type.displayName,
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.badge_outlined, 'RUT', _rutController.text),
+            _buildInfoRow(Icons.email_outlined, 'Email', _emailController.text),
+            _buildInfoRow(
+                Icons.phone_outlined, 'Teléfono', _phoneController.text),
+            _buildInfoRow(Icons.language, 'Sitio Web', _websiteController.text),
+            _buildInfoRow(Icons.location_on_outlined, 'Dirección',
+                _addressController.text),
+            const SizedBox(height: 24),
+            const Text(
+              'Contacto Portal/Web',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            _buildCredentialRow('Usuario:', _portalUsernameController.text),
+            _buildCredentialRow('Clave:', _portalPasswordController.text),
+            const SizedBox(height: 24),
+            const Text(
+              'Vendedor Asignado',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow(
+                Icons.person_outline, 'Nombre', _salesRepNameController.text),
+            _buildInfoRow(Icons.phone_outlined, 'WhatsApp/Tel',
+                _salesRepPhoneController.text),
+            _buildInfoRow(
+                Icons.email_outlined, 'Email', _salesRepEmailController.text),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: ListView(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[300]!),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Datos del proveedor',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre legal',
-                      hintText: 'Ej: Importadora Vinabike Ltda.',
-                    ),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                            ? 'Ingresa el nombre del proveedor'
-                            : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _rutController,
-                    decoration: const InputDecoration(
-                      labelText: 'RUT',
-                      hintText: '11.111.111-1',
-                    ),
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return null;
-                      return ChileanUtils.isValidRut(value.trim())
-                          ? null
-                          : 'RUT inválido';
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration:
-                        const InputDecoration(labelText: 'Correo electrónico'),
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return null;
-                      return ChileanUtils.isValidEmail(value.trim())
-                          ? null
-                          : 'Correo inválido';
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Teléfono'),
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return null;
-                      return ChileanUtils.isValidChileanPhone(value.trim())
-                          ? null
-                          : 'Teléfono inválido';
-                    },
-                  ),
-                ],
-              ),
+          Icon(icon, size: 18, color: Colors.grey.shade500),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 14)),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[300]!),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Dirección y contacto',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressController,
-                    decoration: const InputDecoration(labelText: 'Dirección'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _comunaController,
-                    decoration: const InputDecoration(labelText: 'Comuna'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _cityController,
-                    decoration: const InputDecoration(labelText: 'Ciudad'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _regionController,
-                    decoration: const InputDecoration(labelText: 'Región'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _contactController,
-                    decoration:
-                        const InputDecoration(labelText: 'Persona de contacto'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _websiteController,
-                    decoration: const InputDecoration(labelText: 'Sitio web'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[300]!),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Condiciones comerciales',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<SupplierType>(
-                          value: _type,
-                          decoration: const InputDecoration(
-                              labelText: 'Tipo de proveedor'),
-                          items: SupplierType.values
-                              .map((type) => DropdownMenuItem(
-                                    value: type,
-                                    child: Text(type.displayName),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _type = value);
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<PaymentTerms>(
-                          value: _paymentTerms,
-                          decoration: const InputDecoration(
-                              labelText: 'Condiciones de pago'),
-                          items: PaymentTerms.values
-                              .map((term) => DropdownMenuItem(
-                                    value: term,
-                                    child: Text(term.displayName),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _paymentTerms = value);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Tax Treatment Dropdown
-                  DropdownButtonFormField<TaxTreatment>(
-                    value: _defaultTaxTreatment,
-                    decoration: const InputDecoration(
-                      labelText: 'Tratamiento de IVA por Defecto',
-                      helperText: 'Se usará como sugerencia al crear facturas de compra',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: TaxTreatment.taxIncluded,
-                        child: Text('✓ IVA Incluido (19%) - Proveedor cobra IVA'),
-                      ),
-                      DropdownMenuItem(
-                        value: TaxTreatment.noTax,
-                        child: Text('✗ Sin IVA - Proveedor exento'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _defaultTaxTreatment = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Proveedor activo'),
-                    subtitle: const Text(
-                        'Controla la visibilidad en las listas de selección.'),
-                    value: _isActive,
-                    onChanged: (value) => setState(() => _isActive = value),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _notesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Notas internas',
-                      hintText:
-                          'Información relevante para compras o contabilidad',
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+
+  Widget _buildCredentialRow(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(label,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _copyToClipboard(value, 'Credencial'),
+            color: Colors.blue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightPanel() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Theme.of(context).primaryColor,
+              unselectedLabelColor: Colors.grey.shade600,
+              indicatorColor: Theme.of(context).primaryColor,
+              tabs: const [
+                Tab(text: 'Instrucciones & Resumen'),
+                Tab(text: 'Historial Facturas'),
+                Tab(text: 'Editar Datos'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildInstructionsAndSummaryTab(),
+                _buildInvoicesTab(),
+                _buildForm(isCreation: false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionsAndSummaryTab() {
+    // Calculate basic KPIs
+    final totalSpent = _invoices.fold<double>(0, (sum, inv) => sum + inv.total);
+    final totalInvoices = _invoices.length;
+
+    return ListView(
+      padding: const EdgeInsets.all(24.0),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildKpiCard(
+                  'Total Compras',
+                  '\$${ChileanUtils.formatCurrency(totalSpent)}',
+                  Icons.monetization_on,
+                  Colors.green),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildKpiCard(
+                  'Facturas', '$totalInvoices', Icons.receipt, Colors.blue),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildKpiCard('Condición Pago', _paymentTerms.displayName,
+                  Icons.payment, Colors.orange),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        const Text(
+          'Instrucciones de Compra',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: _purchaseInstructionsController.text.isNotEmpty
+              ? Text(
+                  _purchaseInstructionsController.text,
+                  style: const TextStyle(fontSize: 15, height: 1.5),
+                )
+              : const Text(
+                  'No hay instrucciones de compra configuradas aún. Ve a "Editar Datos" para añadirlas.',
+                  style: TextStyle(
+                      fontStyle: FontStyle.italic, color: Colors.grey),
+                ),
+        ),
+        const SizedBox(height: 32),
+        if (_notesController.text.isNotEmpty) ...[
+          const Text(
+            'Notas Internas',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Text(
+              _notesController.text,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ]
+      ],
+    );
+  }
+
+  Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style:
+                        TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvoicesTab() {
+    if (_invoices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.receipt_long, size: 60, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              'No hay facturas registradas',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _invoices.length,
+      separatorBuilder: (context, index) => const Divider(),
+      itemBuilder: (context, index) {
+        final inv = _invoices[index];
+        final isPaid = inv.status == PurchaseInvoiceStatus.paid;
+        return ListTile(
+          onTap: () => context.push('/purchases/${inv.id}'),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isPaid ? Colors.green.shade50 : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isPaid ? Icons.check_circle : Icons.warning,
+              color: isPaid ? Colors.green : Colors.orange,
+            ),
+          ),
+          title: Text(
+              'Factura #${inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : "S/N"}'),
+          subtitle: Text(DateFormat('dd/MM/yyyy').format(inv.date)),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '\$${ChileanUtils.formatCurrency(inv.total)}',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              if (!isPaid)
+                Text(
+                  'Pendiente: \$${ChileanUtils.formatCurrency(inv.balance)}',
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildForm({required bool isCreation}) {
+    return ListView(
+      padding: isCreation ? EdgeInsets.zero : const EdgeInsets.all(24.0),
+      children: [
+        _buildSectionTitle('Datos Básicos'),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                    labelText: 'Nombre legal / Empresa *'),
+                validator: (val) =>
+                    (val == null || val.trim().isEmpty) ? 'Requerido' : null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _rutController,
+                decoration: const InputDecoration(labelText: 'RUT'),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                validator: (val) => (val != null &&
+                        val.trim().isNotEmpty &&
+                        !ChileanUtils.isValidRut(val.trim()))
+                    ? 'RUT inválido'
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _imageUrlController,
+          decoration: const InputDecoration(
+            labelText: 'URL Imagen de Perfil (Logo)',
+            hintText: 'https://...',
+            prefixIcon: Icon(Icons.image),
+          ),
+        ),
+        const SizedBox(height: 32),
+        _buildSectionTitle('Información de Contacto'),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _emailController,
+                decoration:
+                    const InputDecoration(labelText: 'Correo principal'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _phoneController,
+                decoration:
+                    const InputDecoration(labelText: 'Teléfono principal'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _addressController,
+                decoration: const InputDecoration(labelText: 'Dirección'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _websiteController,
+                decoration: const InputDecoration(labelText: 'Sitio Web'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        _buildSectionTitle('Portal B2B (Sitio del Proveedor)'),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _portalUsernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuario / Rut de Acceso',
+                  prefixIcon: Icon(Icons.person),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _portalPasswordController,
+                decoration: const InputDecoration(
+                  labelText: 'Contraseña Portal',
+                  prefixIcon: Icon(Icons.password),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        _buildSectionTitle('Vendedor Asignado'),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _salesRepNameController,
+                decoration:
+                    const InputDecoration(labelText: 'Nombre del vendedor'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _salesRepPhoneController,
+                decoration:
+                    const InputDecoration(labelText: 'Teléfono / WhatsApp'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _salesRepEmailController,
+                decoration:
+                    const InputDecoration(labelText: 'Email del vendedor'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        _buildSectionTitle('Condiciones y Operación'),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _purchaseInstructionsController,
+          decoration: const InputDecoration(
+            labelText:
+                'Instrucciones para generar compra (Para nuevos empleados)',
+            hintText:
+                'Ej: Hacer pedido por la web. Luego enviar comprobante por whatsapp a Roberto...',
+            alignLabelWithHint: true,
+          ),
+          maxLines: 4,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<SupplierType>(
+                value: _type,
+                decoration: const InputDecoration(labelText: 'Tipo'),
+                items: SupplierType.values
+                    .map((t) =>
+                        DropdownMenuItem(value: t, child: Text(t.displayName)))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _type = val);
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: DropdownButtonFormField<PaymentTerms>(
+                value: _paymentTerms,
+                decoration:
+                    const InputDecoration(labelText: 'Términos de Pago'),
+                items: PaymentTerms.values
+                    .map((t) =>
+                        DropdownMenuItem(value: t, child: Text(t.displayName)))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _paymentTerms = val);
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<TaxTreatment>(
+          value: _defaultTaxTreatment,
+          decoration: const InputDecoration(
+            labelText: 'Tratamiento de IVA por Defecto',
+          ),
+          items: const [
+            DropdownMenuItem(
+                value: TaxTreatment.taxIncluded,
+                child: Text('✓ Proveedor cobra IVA (19%)')),
+            DropdownMenuItem(
+                value: TaxTreatment.noTax,
+                child: Text('✗ Sin IVA - Proveedor exento')),
+          ],
+          onChanged: (val) {
+            if (val != null) setState(() => _defaultTaxTreatment = val);
+          },
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _notesController,
+          decoration: const InputDecoration(labelText: 'Notas adicionales'),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Proveedor activo'),
+          value: _isActive,
+          onChanged: (val) => setState(() => _isActive = val),
+        ),
+        const SizedBox(height: 64),
+      ],
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).primaryColor,
+          ),
+        ),
+        const Divider(),
+      ],
     );
   }
 }
