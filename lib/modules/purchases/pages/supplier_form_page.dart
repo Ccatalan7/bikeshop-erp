@@ -325,7 +325,21 @@ class _SupplierFormPageState extends State<SupplierFormPage>
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 800),
-                      child: _buildForm(isCreation: true),
+                      child: Container(
+                        padding: const EdgeInsets.all(32.0),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 24,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _buildForm(isCreation: true),
+                      ),
                     ),
                   ),
                 ),
@@ -367,7 +381,13 @@ class _SupplierFormPageState extends State<SupplierFormPage>
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -396,11 +416,17 @@ class _SupplierFormPageState extends State<SupplierFormPage>
   }
 
   Widget _buildProfilePanel() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -574,17 +600,23 @@ class _SupplierFormPageState extends State<SupplierFormPage>
   }
 
   Widget _buildRightPanel() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Container(
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
             ),
             child: TabBar(
               controller: _tabController,
@@ -652,9 +684,8 @@ class _SupplierFormPageState extends State<SupplierFormPage>
           width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.blue.shade50,
+            color: Colors.blue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.shade200),
           ),
           child: _purchaseInstructionsController.text.isNotEmpty
               ? Text(
@@ -678,9 +709,8 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50,
+              color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.shade200),
             ),
             child: Text(
               _notesController.text,
@@ -697,8 +727,14 @@ class _SupplierFormPageState extends State<SupplierFormPage>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -796,6 +832,8 @@ class _SupplierFormPageState extends State<SupplierFormPage>
 
   Widget _buildForm({required bool isCreation}) {
     return ListView(
+      shrinkWrap: isCreation,
+      physics: isCreation ? const NeverScrollableScrollPhysics() : null,
       padding: isCreation ? EdgeInsets.zero : const EdgeInsets.all(24.0),
       children: [
         _buildSectionTitle('Datos Básicos'),
@@ -970,7 +1008,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
           children: [
             Expanded(
               child: DropdownButtonFormField<SupplierType>(
-                value: _type,
+                initialValue: _type,
                 decoration: const InputDecoration(labelText: 'Tipo'),
                 items: SupplierType.values
                     .map((t) =>
@@ -984,7 +1022,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             const SizedBox(width: 16),
             Expanded(
               child: DropdownButtonFormField<PaymentTerms>(
-                value: _paymentTerms,
+                initialValue: _paymentTerms,
                 decoration:
                     const InputDecoration(labelText: 'Términos de Pago'),
                 items: PaymentTerms.values
@@ -1000,7 +1038,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<TaxTreatment>(
-          value: _defaultTaxTreatment,
+          initialValue: _defaultTaxTreatment,
           decoration: const InputDecoration(
             labelText: 'Tratamiento de IVA por Defecto',
           ),

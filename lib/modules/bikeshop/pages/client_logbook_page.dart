@@ -12,6 +12,7 @@ import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import 'bike_form_dialog.dart';
+import 'mechanic_job_form_page.dart';
 
 enum JobViewFilter { active, completed, all }
 
@@ -38,6 +39,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   Loyalty? _loyalty;
   bool _isLoading = true;
   String? _error;
+
+  String? _selectedJobId;
+  String? _selectedBikeId;
+  bool _isEditingJob = false;
+  bool _isEditingBike = false;
 
   late TabController _tabController;
 
@@ -839,8 +845,17 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () =>
-                    context.push('/taller/pegas/nueva?customer_id=${c.id}'),
+                onPressed: () {
+                  if (MediaQuery.of(context).size.width < 900) {
+                    context.push('/taller/pegas/nueva?customer_id=${c.id}');
+                  } else {
+                    setState(() {
+                      _selectedJobId = null;
+                      _isEditingJob = true;
+                      _tabController.index = 1; // Jobs tab
+                    });
+                  }
+                },
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Nuevo Trabajo'),
               ),
@@ -1040,12 +1055,19 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                   if (_tabController.index == 0) {
                     return TextButton.icon(
                       onPressed: () async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          builder: (_) =>
-                              BikeFormDialog(customerId: widget.customerId),
-                        );
-                        if (ok == true) _loadData();
+                        if (MediaQuery.of(context).size.width < 900) {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) =>
+                                BikeFormDialog(customerId: widget.customerId),
+                          );
+                          if (ok == true) _loadData();
+                        } else {
+                          setState(() {
+                            _selectedBikeId = null;
+                            _isEditingBike = true;
+                          });
+                        }
                       },
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Agregar Bicicleta'),
@@ -1053,8 +1075,17 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                   }
                   if (_tabController.index == 1) {
                     return TextButton.icon(
-                      onPressed: () => context.push(
-                          '/taller/pegas/nueva?customer_id=${_customer!.id}'),
+                      onPressed: () {
+                        if (MediaQuery.of(context).size.width < 900) {
+                          context.push(
+                              '/taller/pegas/nueva?customer_id=${_customer!.id}');
+                        } else {
+                          setState(() {
+                            _selectedJobId = null;
+                            _isEditingJob = true;
+                          });
+                        }
+                      },
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Nuevo Trabajo'),
                     );
@@ -1110,6 +1141,65 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // ─────────────────────────────────────────────
 
   Widget _buildBikesTab() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 900;
+        final showRightPane =
+            isDesktop && (_selectedBikeId != null || _isEditingBike);
+
+        if (!showRightPane) {
+          return _buildBikesList();
+        }
+
+        final selectedBike = _selectedBikeId != null
+            ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
+            : null;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 1,
+              child: _buildBikesList(),
+            ),
+            Container(
+              width: 1,
+              color: Colors.grey[300],
+            ),
+            Expanded(
+              flex: 1,
+              child: ColoredBox(
+                color: Colors.white,
+                child: Scaffold(
+                  backgroundColor: Colors.white,
+                  body: BikeFormDialog(
+                    key: ValueKey(_selectedBikeId ?? 'new_bike'),
+                    customerId: widget.customerId,
+                    bike: selectedBike,
+                    isEmbedded: true,
+                    onSaved: (_) {
+                      setState(() {
+                        _isEditingBike = false;
+                      });
+                      _loadData();
+                    },
+                    onCanceled: () {
+                      setState(() {
+                        _isEditingBike = false;
+                        _selectedBikeId = null;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBikesList() {
     final filteredBikes = _getFilteredBikes();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1259,6 +1349,58 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // ─────────────────────────────────────────────
 
   Widget _buildJobsTab() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 900;
+        final showRightPane =
+            isDesktop && (_selectedJobId != null || _isEditingJob);
+
+        if (!showRightPane) {
+          return _buildJobsList();
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 1,
+              child: _buildJobsList(),
+            ),
+            Container(
+              width: 1,
+              color: Colors.grey[300],
+            ),
+            Expanded(
+              flex: 1,
+              child: ColoredBox(
+                color: Colors.white,
+                child: MechanicJobFormPage(
+                  key: ValueKey(_selectedJobId ?? 'new_job'),
+                  jobId: _selectedJobId,
+                  customerId: widget.customerId,
+                  isEmbedded: true,
+                  onSaved: () {
+                    setState(() {
+                      _isEditingJob = false;
+                    });
+                    _loadData(); // Refresh list
+                  },
+                  onCanceled: () {
+                    setState(() {
+                      _isEditingJob = false;
+                      _selectedJobId = null;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildJobsList() {
     final filteredJobs = _getFilteredJobs();
     final activeCount = _jobs
         .where((j) =>
@@ -2089,12 +2231,14 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
     return InkWell(
       onTap: () {
-        setState(() {
-          _jobViewFilter = JobViewFilter.all;
-          _jobSearchController.text = bike.displayName;
-          _jobSearchTerm = bike.displayName;
-        });
-        _tabController.animateTo(1);
+        if (MediaQuery.of(context).size.width < 900) {
+          _editBike(bike);
+        } else {
+          setState(() {
+            _selectedBikeId = bike.id;
+            _isEditingBike = true;
+          });
+        }
       },
       hoverColor: Colors.blue[50]?.withOpacity(0.5),
       child: Container(
@@ -2228,10 +2372,34 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 splashRadius: 16,
                 tooltip: 'Opciones',
                 onSelected: (value) {
-                  if (value == 'edit') _editBike(bike);
+                  if (value == 'jobs') {
+                    setState(() {
+                      _jobViewFilter = JobViewFilter.all;
+                      _jobSearchController.text = bike.displayName;
+                      _jobSearchTerm = bike.displayName;
+                    });
+                    _tabController.animateTo(1);
+                  }
+                  if (value == 'edit') {
+                    if (MediaQuery.of(context).size.width < 900) {
+                      _editBike(bike);
+                    } else {
+                      setState(() {
+                        _selectedBikeId = bike.id;
+                        _isEditingBike = true;
+                      });
+                    }
+                  }
                   if (value == 'delete') _confirmDeleteBike(bike);
                 },
                 itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'jobs',
+                      child: Row(children: [
+                        Icon(Icons.build_circle_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Ver Trabajos'),
+                      ])),
                   const PopupMenuItem(
                       value: 'edit',
                       child: Row(children: [
@@ -2514,7 +2682,16 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     }
 
     return InkWell(
-      onTap: () => context.push('/taller/pegas/${job.id}'),
+      onTap: () {
+        if (MediaQuery.of(context).size.width < 900) {
+          context.push('/taller/pegas/${job.id}');
+        } else {
+          setState(() {
+            _selectedJobId = job.id;
+            _isEditingJob = true;
+          });
+        }
+      },
       hoverColor: Colors.blue[50]?.withOpacity(0.5),
       child: Container(
         height: 52,

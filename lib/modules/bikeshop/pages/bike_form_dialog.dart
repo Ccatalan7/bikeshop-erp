@@ -12,11 +12,17 @@ import '../../../shared/widgets/branded_loading.dart';
 class BikeFormDialog extends StatefulWidget {
   final String customerId;
   final Bike? bike; // Null for new bike, existing bike for edit
+  final bool isEmbedded;
+  final ValueChanged<Bike>? onSaved;
+  final VoidCallback? onCanceled;
 
   const BikeFormDialog({
     super.key,
     required this.customerId,
     this.bike,
+    this.isEmbedded = false,
+    this.onSaved,
+    this.onCanceled,
   });
 
   @override
@@ -503,7 +509,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       }
 
       if (mounted) {
-        Navigator.of(context).pop(savedBike); // Return the saved bike
+        if (widget.isEmbedded) {
+          widget.onSaved?.call(savedBike);
+        } else {
+          Navigator.of(context).pop(savedBike); // Return the saved bike
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.bike == null
@@ -560,7 +570,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         await bikeshopService.deleteBike(widget.bike!.id!);
 
         if (mounted) {
-          Navigator.of(context).pop(null); // Return null to indicate deletion
+          if (widget.isEmbedded) {
+            widget.onSaved?.call(widget.bike!);
+          } else {
+            Navigator.of(context).pop(null); // Return null to indicate deletion
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Bicicleta eliminada exitosamente'),
@@ -587,636 +601,646 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.bike != null;
 
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor,
+            borderRadius: widget.isEmbedded
+                ? BorderRadius.zero
+                : const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(4),
+                  ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isEditing ? Icons.edit : Icons.add_circle_outline,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                isEditing ? 'Editar Bicicleta' : 'Nueva Bicicleta',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () {
+                  if (widget.isEmbedded) {
+                    widget.onCanceled?.call();
+                  } else {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // Form
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Brand & Model - Dropdowns with quick-add
+                  Row(
+                    children: [
+                      // Brand Dropdown
+                      Expanded(
+                        child: _loadingBrands
+                            ? const Center(child: BrandedLoading())
+                            : Autocomplete<BikeBrand>(
+                                key: _brandFieldKey,
+                                initialValue: TextEditingValue(
+                                  text: _selectedBrand?.name ?? '',
+                                ),
+                                optionsBuilder:
+                                    (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text == '') {
+                                    return const Iterable<BikeBrand>.empty();
+                                  }
+                                  return _brands.where((BikeBrand option) {
+                                    return option.name.toLowerCase().contains(
+                                        textEditingValue.text.toLowerCase());
+                                  });
+                                },
+                                displayStringForOption: (BikeBrand option) =>
+                                    option.name,
+                                onSelected: (BikeBrand selection) async {
+                                  setState(() {
+                                    _selectedBrand = selection;
+                                    _selectedModel =
+                                        null; // Reset model when brand changes
+                                    _models = [];
+                                    _modelFieldKey =
+                                        UniqueKey(); // Force rebuild/clear of model field
+                                  });
+                                  if (selection.id != null) {
+                                    await _loadModels(selection.id!);
+                                  }
+                                },
+                                fieldViewBuilder: (BuildContext context,
+                                    TextEditingController
+                                        fieldTextEditingController,
+                                    FocusNode fieldFocusNode,
+                                    VoidCallback onFieldSubmitted) {
+                                  // IMPORTANT: Keep controller in sync if state changes externally (e.g. creating new brand)
+                                  if (_selectedBrand != null &&
+                                      fieldTextEditingController.text !=
+                                          _selectedBrand!.name) {
+                                    fieldTextEditingController.text =
+                                        _selectedBrand!.name;
+                                  }
+
+                                  return TextFormField(
+                                    controller: fieldTextEditingController,
+                                    focusNode: fieldFocusNode,
+                                    decoration: InputDecoration(
+                                      labelText: 'Marca *',
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: IconButton(
+                                        icon: const Icon(
+                                            Icons.add_circle_outline),
+                                        tooltip: 'Agregar nueva marca',
+                                        onPressed: () =>
+                                            _showQuickAddBrandDialog(),
+                                      ),
+                                    ),
+                                    validator: (value) {
+                                      if (_selectedBrand == null) {
+                                        return 'Seleccione una marca de la lista';
+                                      }
+                                      if (value == null || value.isEmpty) {
+                                        return 'La marca es requerida';
+                                      }
+                                      // Ensure typed text matches selected brand (prevent "ghost" text)
+                                      if (value != _selectedBrand!.name) {
+                                        return 'Seleccione una marca válida';
+                                      }
+                                      return null;
+                                    },
+                                    onChanged: (text) {
+                                      // Clear selection if user clears text or modifies it to something invalid
+                                      if (_selectedBrand != null &&
+                                          text != _selectedBrand!.name) {
+                                        setState(() {
+                                          _selectedBrand = null;
+                                          _selectedModel = null;
+                                          _models = [];
+                                          _modelFieldKey = UniqueKey();
+                                        });
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Model Dropdown
+                      Expanded(
+                        child: _loadingModels
+                            ? const Center(child: BrandedLoading())
+                            : Autocomplete<BikeModel>(
+                                key: _modelFieldKey, // Key used to reset field
+                                initialValue: TextEditingValue(
+                                  text: _selectedModel?.name ?? '',
+                                ),
+                                optionsBuilder:
+                                    (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text == '') {
+                                    return const Iterable<BikeModel>.empty();
+                                  }
+                                  return _models.where((BikeModel option) {
+                                    return option.name.toLowerCase().contains(
+                                        textEditingValue.text.toLowerCase());
+                                  });
+                                },
+                                displayStringForOption: (BikeModel option) =>
+                                    option.name,
+                                onSelected: (BikeModel selection) {
+                                  setState(() {
+                                    _selectedModel = selection;
+                                  });
+                                },
+                                fieldViewBuilder: (BuildContext context,
+                                    TextEditingController
+                                        fieldTextEditingController,
+                                    FocusNode fieldFocusNode,
+                                    VoidCallback onFieldSubmitted) {
+                                  // IMPORTANT: Keep controller in sync if state changes
+                                  if (_selectedModel != null &&
+                                      fieldTextEditingController.text !=
+                                          _selectedModel!.name) {
+                                    fieldTextEditingController.text =
+                                        _selectedModel!.name;
+                                  }
+
+                                  return TextFormField(
+                                    controller: fieldTextEditingController,
+                                    focusNode: fieldFocusNode,
+                                    enabled: _selectedBrand !=
+                                        null, // Prepare only if brand selected
+                                    decoration: InputDecoration(
+                                      labelText: 'Modelo *',
+                                      border: const OutlineInputBorder(),
+                                      prefixIcon:
+                                          const Icon(Icons.directions_bike),
+                                      suffixIcon: _selectedBrand != null
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                  Icons.add_circle_outline),
+                                              tooltip: 'Agregar nuevo modelo',
+                                              onPressed: () =>
+                                                  _showQuickAddModelDialog(),
+                                            )
+                                          : null,
+                                    ),
+                                    validator: (value) {
+                                      if (_selectedBrand == null) {
+                                        return null; // Don't validate if parent is missing (parent will error first)
+                                      }
+                                      if (_selectedModel == null) {
+                                        return 'Seleccione un modelo';
+                                      }
+                                      if (value == null || value.isEmpty) {
+                                        return 'El modelo es requerido';
+                                      }
+                                      if (value != _selectedModel!.name) {
+                                        return 'Seleccione un modelo válido';
+                                      }
+                                      return null;
+                                    },
+                                    onChanged: (text) {
+                                      if (_selectedModel != null &&
+                                          text != _selectedModel!.name) {
+                                        setState(() {
+                                          _selectedModel = null;
+                                        });
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Type & Year
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<BikeType>(
+                          value: _selectedType,
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo de Bicicleta',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.category),
+                          ),
+                          items: BikeType.values.map((type) {
+                            return DropdownMenuItem(
+                              value: type,
+                              child: Text(type.displayName),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedType = value;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _yearController,
+                          decoration: const InputDecoration(
+                            labelText: 'Año',
+                            hintText: '2024',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_today),
+                          ),
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value != null && value.isNotEmpty) {
+                              final year = int.tryParse(value);
+                              if (year == null ||
+                                  year < 1900 ||
+                                  year > DateTime.now().year + 1) {
+                                return 'Año inválido';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Serial Number & Color
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _serialNumberController,
+                          decoration: const InputDecoration(
+                            labelText: 'Número de Serie',
+                            hintText: 'ABC-12345',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.qr_code),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _colorController,
+                          decoration: const InputDecoration(
+                            labelText: 'Color',
+                            hintText: 'Rojo, Azul, Negro...',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.palette),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Frame Size & Wheel Size
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _frameSizeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Talla del Cuadro',
+                            hintText: 'M, L, 17", 54cm...',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.straighten),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _wheelSizeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Aro',
+                            hintText: '29", 27.5", 26"...',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.settings),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Purchase Date & Warranty
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => _selectDate(context, true),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Fecha de Compra',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.shopping_cart),
+                            ),
+                            child: Text(
+                              _purchaseDate != null
+                                  ? DateFormat('dd/MM/yyyy')
+                                      .format(_purchaseDate!)
+                                  : 'Seleccionar fecha',
+                              style: TextStyle(
+                                color:
+                                    _purchaseDate != null ? null : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => _selectDate(context, false),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Garantía Hasta',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.verified_user),
+                            ),
+                            child: Text(
+                              _warrantyUntil != null
+                                  ? DateFormat('dd/MM/yyyy')
+                                      .format(_warrantyUntil!)
+                                  : 'Seleccionar fecha',
+                              style: TextStyle(
+                                color:
+                                    _warrantyUntil != null ? null : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Images Section
+                  const Text(
+                    'Fotos de la Bicicleta',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Image Grid
+                  if (_imageUrls.isNotEmpty || _newImages.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          // Existing images from database
+                          ..._imageUrls.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final url = entry.value;
+                            return Stack(
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border:
+                                        Border.all(color: Colors.grey[300]!),
+                                    image: DecorationImage(
+                                      image: NetworkImage(url),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: InkWell(
+                                    onTap: () => _removeImage(index, false),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+
+                          // New images (not yet uploaded)
+                          ..._newImages.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final imageData = entry.value;
+                            return Stack(
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: Colors.blue[300]!, width: 2),
+                                    image: DecorationImage(
+                                      image: MemoryImage(imageData.bytes),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: InkWell(
+                                    onTap: () => _removeImage(index, true),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 4,
+                                  left: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'NUEVA',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+
+                  // Add Image Button
+                  OutlinedButton.icon(
+                    onPressed: _isUploadingImage ? null : _pickImage,
+                    icon: _isUploadingImage
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_photo_alternate),
+                    label: Text(
+                        _isUploadingImage ? 'Subiendo...' : 'Agregar Foto'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Notes
+                  TextFormField(
+                    controller: _notesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Notas',
+                      hintText: 'Información adicional sobre la bicicleta...',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.note),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Actions
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            border: Border(top: BorderSide(color: Colors.grey[300]!)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Delete button (only show when editing)
+              if (widget.bike != null)
+                TextButton.icon(
+                  onPressed: _isSaving ? null : _confirmDelete,
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  label: const Text('Eliminar',
+                      style: TextStyle(color: Colors.red)),
+                )
+              else
+                const SizedBox.shrink(),
+              // Right side buttons
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _isSaving
+                        ? null
+                        : () {
+                            if (widget.isEmbedded) {
+                              widget.onCanceled?.call();
+                            } else {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _saveBike,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.save),
+                    label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.isEmbedded) {
+      return Material(
+        color: Colors.white,
+        child: content,
+      );
+    }
+
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  topRight: Radius.circular(4),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isEditing ? Icons.edit : Icons.add_circle_outline,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    isEditing ? 'Editar Bicicleta' : 'Nueva Bicicleta',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-
-            // Form
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Brand & Model - Dropdowns with quick-add
-                      Row(
-                        children: [
-                          // Brand Dropdown
-                          Expanded(
-                            child: _loadingBrands
-                                ? const Center(child: BrandedLoading())
-                                : Autocomplete<BikeBrand>(
-                                    key: _brandFieldKey,
-                                    initialValue: TextEditingValue(
-                                      text: _selectedBrand?.name ?? '',
-                                    ),
-                                    optionsBuilder:
-                                        (TextEditingValue textEditingValue) {
-                                      if (textEditingValue.text == '') {
-                                        return const Iterable<
-                                            BikeBrand>.empty();
-                                      }
-                                      return _brands.where((BikeBrand option) {
-                                        return option.name
-                                            .toLowerCase()
-                                            .contains(textEditingValue.text
-                                                .toLowerCase());
-                                      });
-                                    },
-                                    displayStringForOption:
-                                        (BikeBrand option) => option.name,
-                                    onSelected: (BikeBrand selection) async {
-                                      setState(() {
-                                        _selectedBrand = selection;
-                                        _selectedModel =
-                                            null; // Reset model when brand changes
-                                        _models = [];
-                                        _modelFieldKey =
-                                            UniqueKey(); // Force rebuild/clear of model field
-                                      });
-                                      if (selection.id != null) {
-                                        await _loadModels(selection.id!);
-                                      }
-                                    },
-                                    fieldViewBuilder: (BuildContext context,
-                                        TextEditingController
-                                            fieldTextEditingController,
-                                        FocusNode fieldFocusNode,
-                                        VoidCallback onFieldSubmitted) {
-                                      // IMPORTANT: Keep controller in sync if state changes externally (e.g. creating new brand)
-                                      if (_selectedBrand != null &&
-                                          fieldTextEditingController.text !=
-                                              _selectedBrand!.name) {
-                                        fieldTextEditingController.text =
-                                            _selectedBrand!.name;
-                                      }
-
-                                      return TextFormField(
-                                        controller: fieldTextEditingController,
-                                        focusNode: fieldFocusNode,
-                                        decoration: InputDecoration(
-                                          labelText: 'Marca *',
-                                          border: const OutlineInputBorder(),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(
-                                                Icons.add_circle_outline),
-                                            tooltip: 'Agregar nueva marca',
-                                            onPressed: () =>
-                                                _showQuickAddBrandDialog(),
-                                          ),
-                                        ),
-                                        validator: (value) {
-                                          if (_selectedBrand == null) {
-                                            return 'Seleccione una marca de la lista';
-                                          }
-                                          if (value == null || value.isEmpty) {
-                                            return 'La marca es requerida';
-                                          }
-                                          // Ensure typed text matches selected brand (prevent "ghost" text)
-                                          if (value != _selectedBrand!.name) {
-                                            return 'Seleccione una marca válida';
-                                          }
-                                          return null;
-                                        },
-                                        onChanged: (text) {
-                                          // Clear selection if user clears text or modifies it to something invalid
-                                          if (_selectedBrand != null &&
-                                              text != _selectedBrand!.name) {
-                                            setState(() {
-                                              _selectedBrand = null;
-                                              _selectedModel = null;
-                                              _models = [];
-                                              _modelFieldKey = UniqueKey();
-                                            });
-                                          }
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                          const SizedBox(width: 16),
-                          // Model Dropdown
-                          Expanded(
-                            child: _loadingModels
-                                ? const Center(child: BrandedLoading())
-                                : Autocomplete<BikeModel>(
-                                    key:
-                                        _modelFieldKey, // Key used to reset field
-                                    initialValue: TextEditingValue(
-                                      text: _selectedModel?.name ?? '',
-                                    ),
-                                    optionsBuilder:
-                                        (TextEditingValue textEditingValue) {
-                                      if (textEditingValue.text == '') {
-                                        return const Iterable<
-                                            BikeModel>.empty();
-                                      }
-                                      return _models.where((BikeModel option) {
-                                        return option.name
-                                            .toLowerCase()
-                                            .contains(textEditingValue.text
-                                                .toLowerCase());
-                                      });
-                                    },
-                                    displayStringForOption:
-                                        (BikeModel option) => option.name,
-                                    onSelected: (BikeModel selection) {
-                                      setState(() {
-                                        _selectedModel = selection;
-                                      });
-                                    },
-                                    fieldViewBuilder: (BuildContext context,
-                                        TextEditingController
-                                            fieldTextEditingController,
-                                        FocusNode fieldFocusNode,
-                                        VoidCallback onFieldSubmitted) {
-                                      // IMPORTANT: Keep controller in sync if state changes
-                                      if (_selectedModel != null &&
-                                          fieldTextEditingController.text !=
-                                              _selectedModel!.name) {
-                                        fieldTextEditingController.text =
-                                            _selectedModel!.name;
-                                      }
-
-                                      return TextFormField(
-                                        controller: fieldTextEditingController,
-                                        focusNode: fieldFocusNode,
-                                        enabled: _selectedBrand !=
-                                            null, // Prepare only if brand selected
-                                        decoration: InputDecoration(
-                                          labelText: 'Modelo *',
-                                          border: const OutlineInputBorder(),
-                                          prefixIcon:
-                                              const Icon(Icons.directions_bike),
-                                          suffixIcon: _selectedBrand != null
-                                              ? IconButton(
-                                                  icon: const Icon(
-                                                      Icons.add_circle_outline),
-                                                  tooltip:
-                                                      'Agregar nuevo modelo',
-                                                  onPressed: () =>
-                                                      _showQuickAddModelDialog(),
-                                                )
-                                              : null,
-                                        ),
-                                        validator: (value) {
-                                          if (_selectedBrand == null) {
-                                            return null; // Don't validate if parent is missing (parent will error first)
-                                          }
-                                          if (_selectedModel == null) {
-                                            return 'Seleccione un modelo';
-                                          }
-                                          if (value == null || value.isEmpty) {
-                                            return 'El modelo es requerido';
-                                          }
-                                          if (value != _selectedModel!.name) {
-                                            return 'Seleccione un modelo válido';
-                                          }
-                                          return null;
-                                        },
-                                        onChanged: (text) {
-                                          if (_selectedModel != null &&
-                                              text != _selectedModel!.name) {
-                                            setState(() {
-                                              _selectedModel = null;
-                                            });
-                                          }
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Type & Year
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<BikeType>(
-                              value: _selectedType,
-                              decoration: const InputDecoration(
-                                labelText: 'Tipo de Bicicleta',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.category),
-                              ),
-                              items: BikeType.values.map((type) {
-                                return DropdownMenuItem(
-                                  value: type,
-                                  child: Text(type.displayName),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _selectedType = value;
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _yearController,
-                              decoration: const InputDecoration(
-                                labelText: 'Año',
-                                hintText: '2024',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.calendar_today),
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                if (value != null && value.isNotEmpty) {
-                                  final year = int.tryParse(value);
-                                  if (year == null ||
-                                      year < 1900 ||
-                                      year > DateTime.now().year + 1) {
-                                    return 'Año inválido';
-                                  }
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Serial Number & Color
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _serialNumberController,
-                              decoration: const InputDecoration(
-                                labelText: 'Número de Serie',
-                                hintText: 'ABC-12345',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.qr_code),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _colorController,
-                              decoration: const InputDecoration(
-                                labelText: 'Color',
-                                hintText: 'Rojo, Azul, Negro...',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.palette),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Frame Size & Wheel Size
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _frameSizeController,
-                              decoration: const InputDecoration(
-                                labelText: 'Talla del Cuadro',
-                                hintText: 'M, L, 17", 54cm...',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.straighten),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _wheelSizeController,
-                              decoration: const InputDecoration(
-                                labelText: 'Aro',
-                                hintText: '29", 27.5", 26"...',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.settings),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Purchase Date & Warranty
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _selectDate(context, true),
-                              child: InputDecorator(
-                                decoration: const InputDecoration(
-                                  labelText: 'Fecha de Compra',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.shopping_cart),
-                                ),
-                                child: Text(
-                                  _purchaseDate != null
-                                      ? DateFormat('dd/MM/yyyy')
-                                          .format(_purchaseDate!)
-                                      : 'Seleccionar fecha',
-                                  style: TextStyle(
-                                    color: _purchaseDate != null
-                                        ? null
-                                        : Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _selectDate(context, false),
-                              child: InputDecorator(
-                                decoration: const InputDecoration(
-                                  labelText: 'Garantía Hasta',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.verified_user),
-                                ),
-                                child: Text(
-                                  _warrantyUntil != null
-                                      ? DateFormat('dd/MM/yyyy')
-                                          .format(_warrantyUntil!)
-                                      : 'Seleccionar fecha',
-                                  style: TextStyle(
-                                    color: _warrantyUntil != null
-                                        ? null
-                                        : Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Images Section
-                      const Text(
-                        'Fotos de la Bicicleta',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Image Grid
-                      if (_imageUrls.isNotEmpty || _newImages.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              // Existing images from database
-                              ..._imageUrls.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final url = entry.value;
-                                return Stack(
-                                  children: [
-                                    Container(
-                                      width: 120,
-                                      height: 120,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.grey[300]!),
-                                        image: DecorationImage(
-                                          image: NetworkImage(url),
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 4,
-                                      right: 4,
-                                      child: InkWell(
-                                        onTap: () => _removeImage(index, false),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            size: 16,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }),
-
-                              // New images (not yet uploaded)
-                              ..._newImages.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final imageData = entry.value;
-                                return Stack(
-                                  children: [
-                                    Container(
-                                      width: 120,
-                                      height: 120,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.blue[300]!, width: 2),
-                                        image: DecorationImage(
-                                          image: MemoryImage(imageData.bytes),
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 4,
-                                      right: 4,
-                                      child: InkWell(
-                                        onTap: () => _removeImage(index, true),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            size: 16,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      bottom: 4,
-                                      left: 4,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: const Text(
-                                          'NUEVA',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-
-                      // Add Image Button
-                      OutlinedButton.icon(
-                        onPressed: _isUploadingImage ? null : _pickImage,
-                        icon: _isUploadingImage
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.add_photo_alternate),
-                        label: Text(
-                            _isUploadingImage ? 'Subiendo...' : 'Agregar Foto'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Notes
-                      TextFormField(
-                        controller: _notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Notas',
-                          hintText:
-                              'Información adicional sobre la bicicleta...',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.note),
-                        ),
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Actions
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                border: Border(top: BorderSide(color: Colors.grey[300]!)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Delete button (only show when editing)
-                  if (widget.bike != null)
-                    TextButton.icon(
-                      onPressed: _isSaving ? null : _confirmDelete,
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      label: const Text('Eliminar',
-                          style: TextStyle(color: Colors.red)),
-                    )
-                  else
-                    const SizedBox.shrink(),
-                  // Right side buttons
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: _isSaving
-                            ? null
-                            : () => Navigator.of(context).pop(),
-                        child: const Text('Cancelar'),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: _isSaving ? null : _saveBike,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.save),
-                        label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: content,
       ),
     );
   }

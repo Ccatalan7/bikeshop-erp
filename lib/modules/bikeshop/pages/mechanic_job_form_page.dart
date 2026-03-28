@@ -85,12 +85,18 @@ class MechanicJobFormPage extends StatefulWidget {
   final String? customerId; // Pre-select customer if provided
   final String?
       initialJobType; // Pre-select type: 'service'|'warranty'|'quotation'|'item_service'
+  final bool isEmbedded;
+  final VoidCallback? onSaved;
+  final VoidCallback? onCanceled;
 
   const MechanicJobFormPage({
     super.key,
     this.jobId,
     this.customerId,
     this.initialJobType,
+    this.isEmbedded = false,
+    this.onSaved,
+    this.onCanceled,
   });
 
   @override
@@ -1208,6 +1214,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  void _handleCancel() {
+    if (widget.isEmbedded) {
+      if (widget.onCanceled != null) widget.onCanceled!();
+    } else {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/taller/pegas');
+      }
+    }
+  }
+
   Future<void> _saveJob() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1675,10 +1693,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             backgroundColor: Colors.green,
           ),
         );
-        if (context.canPop()) {
-          context.pop(true);
+        if (widget.isEmbedded) {
+          if (widget.onSaved != null) widget.onSaved!();
         } else {
-          context.go('/taller/pegas');
+          if (context.canPop()) {
+            context.pop(true);
+          } else {
+            context.go('/taller/pegas');
+          }
         }
       }
     } catch (e) {
@@ -2011,21 +2033,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return MainLayout(
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            _buildHeader(theme),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: BrandedLoading())
-                  : _buildForm(theme),
-            ),
-          ],
-        ),
+    final content = Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          _buildHeader(theme),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: BrandedLoading())
+                : _buildForm(theme),
+          ),
+        ],
       ),
     );
+
+    if (widget.isEmbedded) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: content,
+      );
+    }
+
+    return MainLayout(child: content);
   }
 
   Widget _buildHeader(ThemeData theme) {
@@ -2110,7 +2139,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             ),
                         ],
                         OutlinedButton.icon(
-                          onPressed: _isSaving ? null : () => context.pop(),
+                          onPressed: _isSaving ? null : _handleCancel,
                           icon: const Icon(Icons.close),
                           label: const Text('Cancelar'),
                         ),
@@ -2187,7 +2216,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       const SizedBox(width: 12),
                     ],
                     OutlinedButton.icon(
-                      onPressed: _isSaving ? null : () => context.pop(),
+                      onPressed: _isSaving ? null : _handleCancel,
                       icon: const Icon(Icons.close),
                       label: const Text('Cancelar'),
                     ),
