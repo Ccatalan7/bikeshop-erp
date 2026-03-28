@@ -34,13 +34,25 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   int? _selectionEndRow;
   int? _selectionEndCol;
 
-  // Drag state
+  // Drag state (fill-handle only)
   bool _isDraggingHandle = false;
+  bool _isSelectingRange = false;
+  int? _dragSourceMinRow;
+  int? _dragSourceMaxRow;
+  int? _dragSourceMinCol;
+  int? _dragSourceMaxCol;
 
   bool _isEditing = false;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasUnsaved = false;
+
+  bool get _isPrimaryShortcutPressed =>
+      HardwareKeyboard.instance.isMetaPressed ||
+      HardwareKeyboard.instance.isControlPressed;
+
+  int get _rowCount => _sheet?.rowCount ?? _defaultRows;
+  int get _colCount => _sheet?.colCount ?? _defaultCols;
 
   bool get _isMultiSelection =>
       _selectionEndRow != null &&
@@ -128,7 +140,9 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         _sheet = sheet;
         _isLoading = false;
       });
-      _gridFocusNode.requestFocus();
+      _formulaBarController.text =
+          _getCell(_selectedRow, _selectedCol).rawValue;
+      _focusGrid();
     }
   }
 
@@ -136,48 +150,159 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   // CELL EDITING
   // ══════════════════════════════════════════════════════════════════
 
+  String _cellKey(int row, int col) => '$row,$col';
+
   CellData _getCell(int row, int col) {
-    return _cells.putIfAbsent('$row,$col', () => CellData());
+    return _cells.putIfAbsent(_cellKey(row, col), () => CellData());
+  }
+
+  CellData _cloneCell(CellData cell) {
+    return CellData(
+      rawValue: cell.rawValue,
+      displayValue: cell.displayValue,
+      cellType: cell.cellType,
+      bold: cell.bold,
+      italic: cell.italic,
+      textAlign: cell.textAlign,
+      dirty: true,
+    );
+  }
+
+  void _applyRawToCell(CellData cell, String raw, int row, int col) {
+    cell.rawValue = raw;
+
+    if (raw.isEmpty) {
+      cell.cellType = 'text';
+      cell.displayValue = '';
+      return;
+    }
+
+    if (raw.startsWith('=')) {
+      cell.cellType = 'formula';
+      cell.displayValue = _formulaEngine.evaluate(raw, row, col);
+      return;
+    }
+
+    if (double.tryParse(raw.replaceAll(',', '.')) != null) {
+      cell.cellType = 'number';
+      cell.displayValue = raw;
+      return;
+    }
+
+    cell.cellType = 'text';
+    cell.displayValue = raw;
+  }
+
+  bool _isCellInSelection(int row, int col) {
+    return row >= _minRow && row <= _maxRow && col >= _minCol && col <= _maxCol;
+  }
+
+  void _captureCurrentSelectionForDrag() {
+    _dragSourceMinRow = _minRow;
+    _dragSourceMaxRow = _maxRow;
+    _dragSourceMinCol = _minCol;
+    _dragSourceMaxCol = _maxCol;
+  }
+
+  void _resetPointerState() {
+    _isDraggingHandle = false;
+    _isSelectingRange = false;
+    _dragSourceMinRow = null;
+    _dragSourceMaxRow = null;
+    _dragSourceMinCol = null;
+    _dragSourceMaxCol = null;
+  }
+
+  /// Aggressively request focus on the grid.
+  /// Uses both sync + post-frame callback to guarantee keyboard events arrive.
+  void _focusGrid() {
+    _gridFocusNode.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_isEditing) {
+        _gridFocusNode.requestFocus();
+      }
+    });
+  }
+
+  bool _isOverFillHandle(double x, double y) {
+    final handleCenterX = _headerWidth + (_maxCol + 1) * _cellWidth;
+    final handleCenterY = _headerHeight + (_maxRow + 1) * _cellHeight;
+    return (x - handleCenterX).abs() <= 10 && (y - handleCenterY).abs() <= 10;
+  }
+
+  void _selectRange(int startRow, int startCol, int endRow, int endCol) {
+    if (_isEditing) _commitEdit();
+
+    setState(() {
+      _selectedRow = startRow;
+      _selectedCol = startCol;
+      _selectionEndRow = endRow;
+      _selectionEndCol = endCol;
+      _isEditing = false;
+      _formulaBarController.text = _getCell(startRow, startCol).rawValue;
+    });
+
+    _ensureVisibleCell(endRow, endCol);
+    _focusGrid();
   }
 
   void _selectCell(int row, int col) {
-    if (_isEditing) _commitEdit();
-    setState(() {
-      _selectedRow = row;
-      _selectedCol = col;
-      _selectionEndRow = null;
-      _selectionEndCol = null;
-      _isEditing = false;
+    _selectRange(row, col, row, col);
+  }
 
-      // If single cell, show its raw value in formula bar
-      final cell = _getCell(row, col);
-      _formulaBarController.text = cell.rawValue;
-    });
-    _gridFocusNode.requestFocus();
+  void _selectAll() {
+    _selectRange(0, 0, _rowCount - 1, _colCount - 1);
+  }
+
+  void _selectRow(int row) {
+    _selectRange(row, 0, row, _colCount - 1);
+  }
+
+  void _selectColumn(int col) {
+    _selectRange(0, col, _rowCount - 1, col);
   }
 
   void _updateSelectionEnd(int row, int col) {
+    if (_isEditing) _commitEdit();
     setState(() {
       _selectionEndRow = row;
       _selectionEndCol = col;
-      // When exploring multi-selection, perhaps clear formula bar or show range stats
-      // For now, keep the starting cell's formula if we just drag
     });
     _ensureVisibleCell(row, col);
+    _focusGrid();
   }
 
   void _startEditing() {
     final cell = _getCell(_selectedRow, _selectedCol);
+    _beginEditing(
+      initialText: cell.rawValue,
+      selection: TextSelection(
+        baseOffset: 0,
+        extentOffset: cell.rawValue.length,
+      ),
+    );
+  }
+
+  void _startTyping(String firstCharacter) {
+    _beginEditing(
+      initialText: firstCharacter,
+      selection: TextSelection.collapsed(offset: firstCharacter.length),
+    );
+  }
+
+  void _beginEditing({
+    required String initialText,
+    required TextSelection selection,
+  }) {
     setState(() {
       _isEditing = true;
-      _cellEditController.text = cell.rawValue;
+      _cellEditController.value = TextEditingValue(
+        text: initialText,
+        selection: selection,
+      );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cellEditFocusNode.requestFocus();
-      _cellEditController.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: _cellEditController.text.length,
-      );
     });
   }
 
@@ -186,35 +311,57 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     final raw = _cellEditController.text;
     _setCellValue(_selectedRow, _selectedCol, raw);
     setState(() => _isEditing = false);
-    _gridFocusNode.requestFocus();
+    _focusGrid();
   }
 
   void _cancelEdit() {
     setState(() => _isEditing = false);
-    _gridFocusNode.requestFocus();
+    _focusGrid();
   }
 
   void _setCellValue(int row, int col, String raw) {
     final cell = _getCell(row, col);
-    cell.rawValue = raw;
+    _applyRawToCell(cell, raw, row, col);
     cell.dirty = true;
-
-    // Determine type and display value
-    if (raw.startsWith('=')) {
-      cell.cellType = 'formula';
-      cell.displayValue = _formulaEngine.evaluate(raw, row, col);
-    } else if (double.tryParse(raw.replaceAll(',', '.')) != null) {
-      cell.cellType = 'number';
-      cell.displayValue = raw;
-    } else {
-      cell.cellType = 'text';
-      cell.displayValue = raw;
-    }
 
     // Recalculate dependent formulas
     _formulaEngine.recalculateAll();
 
-    _formulaBarController.text = raw;
+    _formulaBarController.text = _getCell(_selectedRow, _selectedCol).rawValue;
+    _hasUnsaved = true;
+    _scheduleSave();
+    setState(() {});
+  }
+
+  void _clearCellSilently(int row, int col) {
+    final cell = _getCell(row, col);
+    _applyRawToCell(cell, '', row, col);
+    cell.dirty = true;
+  }
+
+  void _writeCellFromSource(
+    int row,
+    int col,
+    CellData source, {
+    int rowOffset = 0,
+    int colOffset = 0,
+    bool shiftFormula = false,
+  }) {
+    final target = _getCell(row, col);
+    final raw = shiftFormula && source.isFormula
+        ? _shiftFormula(source.rawValue, rowOffset, colOffset)
+        : source.rawValue;
+
+    target.bold = source.bold;
+    target.italic = source.italic;
+    target.textAlign = source.textAlign;
+    _applyRawToCell(target, raw, row, col);
+    target.dirty = true;
+  }
+
+  void _finishBatchUpdate() {
+    _formulaEngine.recalculateAll();
+    _formulaBarController.text = _getCell(_selectedRow, _selectedCol).rawValue;
     _hasUnsaved = true;
     _scheduleSave();
     setState(() {});
@@ -226,7 +373,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   void _onFormulaBarSubmitted(String value) {
     _setCellValue(_selectedRow, _selectedCol, value);
-    _gridFocusNode.requestFocus();
+    _focusGrid();
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -266,46 +413,55 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   // ══════════════════════════════════════════════════════════════════
 
   void _performAutofill() {
-    if (!_isMultiSelection) return;
+    if (!_isMultiSelection ||
+        _dragSourceMinRow == null ||
+        _dragSourceMinCol == null) {
+      return;
+    }
 
-    // Detect fill direction. We assume the "source" is the selectedRow/selectedCol.
-    // The "target" area is the expanded selection.
+    final sourceMinRow = _dragSourceMinRow!;
+    final sourceMaxRow = _dragSourceMaxRow ?? sourceMinRow;
+    final sourceMinCol = _dragSourceMinCol!;
+    final sourceMaxCol = _dragSourceMaxCol ?? sourceMinCol;
 
-    // For simplicity: copy from the first selected cell to all others in the range.
-    final srcRow = _selectedRow;
-    final srcCol = _selectedCol;
-    final srcCell = _getCell(srcRow, srcCol);
-    if (srcCell.isEmpty) return;
-
-    final baseRaw = srcCell.rawValue;
-
+    final sourceHeight = sourceMaxRow - sourceMinRow + 1;
+    final sourceWidth = sourceMaxCol - sourceMinCol + 1;
     bool changedAny = false;
+
     for (int r = _minRow; r <= _maxRow; r++) {
       for (int c = _minCol; c <= _maxCol; c++) {
-        if (r == srcRow && c == srcCol) continue; // Skip source
+        final isInsideOriginalSource = r >= sourceMinRow &&
+            r <= sourceMaxRow &&
+            c >= sourceMinCol &&
+            c <= sourceMaxCol;
+        if (isInsideOriginalSource) continue;
 
-        if (baseRaw.startsWith('=')) {
-          // Increment formula refs based on offset
-          final rowOffset = r - srcRow;
-          final colOffset = c - srcCol;
-          final newFormula = _shiftFormula(baseRaw, rowOffset, colOffset);
-          _setCellValue(r, c, newFormula);
+        final sourceRow = sourceMinRow + ((r - _minRow) % sourceHeight);
+        final sourceCol = sourceMinCol + ((c - _minCol) % sourceWidth);
+        final sourceCell = _getCell(sourceRow, sourceCol);
+
+        if (sourceCell.isEmpty) {
+          _clearCellSilently(r, c);
         } else {
-          // Just copy value
-          _setCellValue(r, c, baseRaw);
+          _writeCellFromSource(
+            r,
+            c,
+            sourceCell,
+            rowOffset: r - sourceRow,
+            colOffset: c - sourceCol,
+            shiftFormula: sourceCell.isFormula,
+          );
         }
         changedAny = true;
       }
     }
 
     if (changedAny) {
-      _scheduleSave();
-      setState(() {});
+      _finishBatchUpdate();
     }
   }
 
   String _shiftFormula(String formula, int rowOffset, int colOffset) {
-    // Basic regex to find cell references like A1, B10, etc.
     final refRegex = RegExp(r'\b([A-Z]+)(\d+)\b', caseSensitive: false);
     return formula.replaceAllMapped(refRegex, (match) {
       final colStr = match.group(1)!;
@@ -313,11 +469,71 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       final col = CellModel.letterToCol(colStr.toUpperCase());
       final row = int.parse(rowStr) - 1;
 
-      final newCol = (col + colOffset).clamp(0, _defaultCols - 1);
-      final newRow = (row + rowOffset).clamp(0, _defaultRows - 1);
+      final newCol = (col + colOffset).clamp(0, _colCount - 1);
+      final newRow = (row + rowOffset).clamp(0, _rowCount - 1);
 
       return '${CellModel.colToLetter(newCol)}${newRow + 1}';
     });
+  }
+
+  String _selectionToText() {
+    final rows = <String>[];
+    for (int r = _minRow; r <= _maxRow; r++) {
+      final values = <String>[];
+      for (int c = _minCol; c <= _maxCol; c++) {
+        values.add(_getCell(r, c).rawValue);
+      }
+      rows.add(values.join('\t'));
+    }
+    return rows.join('\n');
+  }
+
+  Future<void> _copySelectionToClipboard() async {
+    await Clipboard.setData(ClipboardData(text: _selectionToText()));
+  }
+
+  Future<void> _cutSelectionToClipboard() async {
+    await _copySelectionToClipboard();
+    for (int r = _minRow; r <= _maxRow; r++) {
+      for (int c = _minCol; c <= _maxCol; c++) {
+        _clearCellSilently(r, c);
+      }
+    }
+    _finishBatchUpdate();
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+
+    final rows = text.replaceAll('\r\n', '\n').split('\n').toList();
+    if (rows.isNotEmpty && rows.last.isEmpty) {
+      rows.removeLast();
+    }
+    if (rows.isEmpty) return;
+
+    int widestRow = 0;
+    for (int rowOffset = 0; rowOffset < rows.length; rowOffset++) {
+      final values = rows[rowOffset].split('\t');
+      widestRow = values.length > widestRow ? values.length : widestRow;
+
+      for (int colOffset = 0; colOffset < values.length; colOffset++) {
+        final targetRow = _selectedRow + rowOffset;
+        final targetCol = _selectedCol + colOffset;
+        if (targetRow >= _rowCount || targetCol >= _colCount) continue;
+        final target = _getCell(targetRow, targetCol);
+        _applyRawToCell(target, values[colOffset], targetRow, targetCol);
+        target.dirty = true;
+      }
+    }
+
+    setState(() {
+      _selectionEndRow =
+          (_selectedRow + rows.length - 1).clamp(0, _rowCount - 1);
+      _selectionEndCol = (_selectedCol + widestRow - 1).clamp(0, _colCount - 1);
+    });
+    _finishBatchUpdate();
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -330,6 +546,25 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     }
 
     final key = event.logicalKey;
+
+    if (!_isEditing && _isPrimaryShortcutPressed) {
+      if (key == LogicalKeyboardKey.keyC) {
+        unawaited(_copySelectionToClipboard());
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyX) {
+        unawaited(_cutSelectionToClipboard());
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyV) {
+        unawaited(_pasteFromClipboard());
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyA) {
+        _selectAll();
+        return KeyEventResult.handled;
+      }
+    }
 
     // If editing, handle special keys
     if (_isEditing) {
@@ -357,7 +592,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       if (isShiftPressed) {
         final endR = _selectionEndRow ?? _selectedRow;
         final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd((endR + 1).clamp(0, _defaultRows - 1), endC);
+        _updateSelectionEnd((endR + 1).clamp(0, _rowCount - 1), endC);
       } else {
         _moveSelection(1, 0);
       }
@@ -367,7 +602,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       if (isShiftPressed) {
         final endR = _selectionEndRow ?? _selectedRow;
         final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd((endR - 1).clamp(0, _defaultRows - 1), endC);
+        _updateSelectionEnd((endR - 1).clamp(0, _rowCount - 1), endC);
       } else {
         _moveSelection(-1, 0);
       }
@@ -377,7 +612,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       if (isShiftPressed) {
         final endR = _selectionEndRow ?? _selectedRow;
         final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd(endR, (endC + 1).clamp(0, _defaultCols - 1));
+        _updateSelectionEnd(endR, (endC + 1).clamp(0, _colCount - 1));
       } else {
         _moveSelection(0, 1);
       }
@@ -387,7 +622,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       if (isShiftPressed) {
         final endR = _selectionEndRow ?? _selectedRow;
         final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd(endR, (endC - 1).clamp(0, _defaultCols - 1));
+        _updateSelectionEnd(endR, (endC - 1).clamp(0, _colCount - 1));
       } else {
         _moveSelection(0, -1);
       }
@@ -428,18 +663,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         event.character!.isNotEmpty &&
         !HardwareKeyboard.instance.isControlPressed &&
         !HardwareKeyboard.instance.isMetaPressed) {
-      final cell = _getCell(_selectedRow, _selectedCol);
-      setState(() {
-        _isEditing = true;
-        _cellEditController.text = event.character!;
-        cell.rawValue = event.character!;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _cellEditFocusNode.requestFocus();
-        _cellEditController.selection = TextSelection.collapsed(
-          offset: _cellEditController.text.length,
-        );
-      });
+      _startTyping(event.character!);
       return KeyEventResult.handled;
     }
 
@@ -448,18 +672,22 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
   void _moveSelection(int dRow, int dCol) {
     setState(() {
-      _selectedRow = (_selectedRow + dRow).clamp(0, _defaultRows - 1);
-      _selectedCol = (_selectedCol + dCol).clamp(0, _defaultCols - 1);
+      _selectedRow = (_selectedRow + dRow).clamp(0, _rowCount - 1);
+      _selectedCol = (_selectedCol + dCol).clamp(0, _colCount - 1);
       _selectionEndRow = null;
       _selectionEndCol = null;
       final cell = _getCell(_selectedRow, _selectedCol);
       _formulaBarController.text = cell.rawValue;
     });
     _ensureVisibleCell(_selectedRow, _selectedCol);
+    _focusGrid();
   }
 
   void _ensureVisibleCell(int row, int col) {
-    // Scroll to keep targeted cell visible
+    if (!_hScrollController.hasClients || !_vScrollController.hasClients) {
+      return;
+    }
+
     final targetX = _headerWidth + col * _cellWidth;
     final targetY = _headerHeight + row * _cellHeight;
     final viewportWidth = _hScrollController.position.viewportDimension;
@@ -478,6 +706,87 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         _vScrollController.offset + viewportHeight) {
       _vScrollController.jumpTo(targetY + _cellHeight - viewportHeight);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // POINTER HANDLERS (simple Excel model: click=select, drag=extend)
+  // ══════════════════════════════════════════════════════════════════
+
+  void _onGridPointerDown(PointerDownEvent details) {
+    final x = details.localPosition.dx;
+    final y = details.localPosition.dy;
+
+    // Header: select all
+    if (x < _headerWidth && y < _headerHeight) {
+      _selectAll();
+      return;
+    }
+    // Row header: select row
+    if (x < _headerWidth) {
+      final row =
+          ((y - _headerHeight) / _cellHeight).floor().clamp(0, _rowCount - 1);
+      _selectRow(row);
+      return;
+    }
+    // Column header: select column
+    if (y < _headerHeight) {
+      final col =
+          ((x - _headerWidth) / _cellWidth).floor().clamp(0, _colCount - 1);
+      _selectColumn(col);
+      return;
+    }
+
+    final col = ((x - _headerWidth) / _cellWidth).floor();
+    final row = ((y - _headerHeight) / _cellHeight).floor();
+    if (row < 0 || row >= _rowCount || col < 0 || col >= _colCount) return;
+
+    // Fill handle
+    if ((_isMultiSelection || (row == _selectedRow && col == _selectedCol)) &&
+        _isOverFillHandle(x, y)) {
+      if (_isEditing) _commitEdit();
+      _captureCurrentSelectionForDrag();
+      _isDraggingHandle = true;
+      return;
+    }
+
+    // Clicking inside the active inline editor — let EditableText handle it
+    if (_isEditing && row == _selectedRow && col == _selectedCol) {
+      return;
+    }
+
+    // Commit any active edit before selecting a new cell
+    if (_isEditing) _commitEdit();
+
+    // Select (or extend with Shift)
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _updateSelectionEnd(row, col);
+    } else {
+      _selectCell(row, col);
+    }
+    _isSelectingRange = true;
+  }
+
+  void _onGridPointerMove(PointerMoveEvent details) {
+    if (!details.down) return;
+    final x = details.localPosition.dx;
+    final y = details.localPosition.dy;
+    if (x < _headerWidth || y < _headerHeight) return;
+
+    final col =
+        ((x - _headerWidth) / _cellWidth).floor().clamp(0, _colCount - 1);
+    final row =
+        ((y - _headerHeight) / _cellHeight).floor().clamp(0, _rowCount - 1);
+
+    if (_isDraggingHandle || _isSelectingRange) {
+      _updateSelectionEnd(row, col);
+    }
+  }
+
+  void _onGridPointerUp(PointerUpEvent details) {
+    if (_isDraggingHandle && _isMultiSelection) {
+      _performAutofill();
+    }
+    _resetPointerState();
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -652,6 +961,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
             // ── Spreadsheet grid ──
             Expanded(
               child: Focus(
+                autofocus: true,
                 focusNode: _gridFocusNode,
                 onKeyEvent: _handleKeyEvent,
                 child: _buildGrid(theme),
@@ -725,8 +1035,8 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   Widget _buildGrid(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final totalWidth = _headerWidth + _defaultCols * _cellWidth;
-        final totalHeight = _headerHeight + _defaultRows * _cellHeight;
+        final totalWidth = _headerWidth + _colCount * _cellWidth;
+        final totalHeight = _headerHeight + _rowCount * _cellHeight;
 
         return ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(
@@ -752,8 +1062,12 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                         cells: _cells,
                         selectedRow: _selectedRow,
                         selectedCol: _selectedCol,
-                        rowCount: _defaultRows,
-                        colCount: _defaultCols,
+                        isEditing: _isEditing,
+                        selectionEndRow: _selectionEndRow,
+                        selectionEndCol: _selectionEndCol,
+                        isDraggingHandle: _isDraggingHandle,
+                        rowCount: _rowCount,
+                        colCount: _colCount,
                         cellWidth: _cellWidth,
                         cellHeight: _cellHeight,
                         headerWidth: _headerWidth,
@@ -762,72 +1076,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                       ),
                       child: Stack(
                         children: [
-                          // Click handler
-                          // Click and Drag handler (using raw Listener to avoid gesture arena conflicts)
                           Listener(
-                            onPointerDown: (details) {
-                              final x = details.localPosition.dx;
-                              final y = details.localPosition.dy;
-                              if (x < _headerWidth || y < _headerHeight) return;
-
-                              final col =
-                                  ((x - _headerWidth) / _cellWidth).floor();
-                              final row =
-                                  ((y - _headerHeight) / _cellHeight).floor();
-
-                              // Check if clicked exactly on the auto-fill handle
-                              if (_isMultiSelection ||
-                                  (row == _selectedRow &&
-                                      col == _selectedCol)) {
-                                final maxR = _maxRow;
-                                final maxC = _maxCol;
-                                final handleX =
-                                    _headerWidth + (maxC + 1) * _cellWidth;
-                                final handleY =
-                                    _headerHeight + (maxR + 1) * _cellHeight;
-
-                                if ((x - handleX).abs() <= 12 &&
-                                    (y - handleY).abs() <= 12) {
-                                  _isDraggingHandle = true;
-                                  return;
-                                }
-                              }
-
-                              _isDraggingHandle = false;
-                              if (row >= 0 &&
-                                  row < _defaultRows &&
-                                  col >= 0 &&
-                                  col < _defaultCols) {
-                                if (HardwareKeyboard.instance.isShiftPressed) {
-                                  _updateSelectionEnd(row, col);
-                                } else {
-                                  _selectCell(row, col);
-                                }
-                              }
-                            },
-                            onPointerMove: (details) {
-                              // Only process if we are actively dragging (button is pressed)
-                              if (!details.down) return;
-
-                              final x = details.localPosition.dx;
-                              final y = details.localPosition.dy;
-                              if (x < _headerWidth || y < _headerHeight) return;
-
-                              final col = ((x - _headerWidth) / _cellWidth)
-                                  .floor()
-                                  .clamp(0, _defaultCols - 1);
-                              final row = ((y - _headerHeight) / _cellHeight)
-                                  .floor()
-                                  .clamp(0, _defaultRows - 1);
-
-                              _updateSelectionEnd(row, col);
-                            },
-                            onPointerUp: (details) {
-                              if (_isDraggingHandle && _isMultiSelection) {
-                                _performAutofill();
-                              }
-                              _isDraggingHandle = false;
-                            },
+                            onPointerDown: _onGridPointerDown,
+                            onPointerMove: _onGridPointerMove,
+                            onPointerUp: _onGridPointerUp,
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
                               onDoubleTapDown: (details) {
@@ -840,9 +1092,9 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                                 final row =
                                     ((y - _headerHeight) / _cellHeight).floor();
                                 if (row >= 0 &&
-                                    row < _defaultRows &&
+                                    row < _rowCount &&
                                     col >= 0 &&
-                                    col < _defaultCols) {
+                                    col < _colCount) {
                                   _selectCell(row, col);
                                   _startEditing();
                                 }
@@ -850,12 +1102,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                               child: Container(
                                 width: totalWidth,
                                 height: totalHeight,
-                                color: Colors.transparent, // Capture events
+                                color: Colors.transparent,
                               ),
                             ),
                           ),
-
-                          // Inline cell editor
                           if (_isEditing)
                             Positioned(
                               left:
@@ -865,28 +1115,40 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                                   1,
                               width: _cellWidth - 2,
                               height: _cellHeight - 2,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(
-                                    color: Colors.blue.shade600,
-                                    width: 2,
+                              child: ColoredBox(
+                                color: Colors.white,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Center(
+                                    child: SizedBox(
+                                      height: 18,
+                                      child: EditableText(
+                                        controller: _cellEditController,
+                                        focusNode: _cellEditFocusNode,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          height: 1.0,
+                                          color: Colors.black87,
+                                        ),
+                                        strutStyle: const StrutStyle(
+                                          fontSize: 13,
+                                          height: 1.0,
+                                          forceStrutHeight: true,
+                                        ),
+                                        maxLines: 1,
+                                        cursorColor: Colors.blue,
+                                        backgroundCursorColor: Colors.black54,
+                                        textAlign: TextAlign.left,
+                                        selectionColor:
+                                            Colors.blue.withOpacity(0.18),
+                                        onSubmitted: (_) {
+                                          _commitEdit();
+                                          _moveSelection(1, 0);
+                                        },
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: TextField(
-                                  controller: _cellEditController,
-                                  focusNode: _cellEditFocusNode,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 6),
-                                  ),
-                                  onSubmitted: (_) {
-                                    _commitEdit();
-                                    _moveSelection(1, 0);
-                                  },
                                 ),
                               ),
                             ),
@@ -911,6 +1173,7 @@ class _SpreadsheetPainter extends CustomPainter {
   final Map<String, CellData> cells;
   final int selectedRow;
   final int selectedCol;
+  final bool isEditing;
   final int? selectionEndRow;
   final int? selectionEndCol;
   final bool isDraggingHandle;
@@ -926,6 +1189,7 @@ class _SpreadsheetPainter extends CustomPainter {
     required this.cells,
     required this.selectedRow,
     required this.selectedCol,
+    this.isEditing = false,
     this.selectionEndRow,
     this.selectionEndCol,
     this.isDraggingHandle = false,
@@ -1079,6 +1343,7 @@ class _SpreadsheetPainter extends CustomPainter {
       final row = int.parse(parts[0]);
       final col = int.parse(parts[1]);
       if (row >= rowCount || col >= colCount) continue;
+      if (isEditing && row == selectedRow && col == selectedCol) continue;
 
       final x = headerWidth + col * cellWidth;
       final y = headerHeight + row * cellHeight;
