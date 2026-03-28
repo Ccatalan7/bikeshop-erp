@@ -108,6 +108,9 @@ String getRouteTitle(String path) {
     '/settings/backup': 'Respaldos',
     '/settings/factory-reset': 'Reseteo de Fábrica',
 
+    // Tools
+    '/tools/web': 'Portal Web',
+
     // WebView modules
     '/webview/feria-del-disco': 'Feria del Disco',
     '/webview/google-maps': 'Google Maps',

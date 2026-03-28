@@ -11,6 +11,7 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/services/workspace_manager.dart';
 
 import '../services/purchase_service.dart';
 
@@ -93,6 +94,44 @@ class _SupplierFormPageState extends State<SupplierFormPage>
     super.dispose();
   }
 
+  void _openWebsiteWorkspace() {
+    final url = _websiteController.text.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Por favor ingrese un Sitio Web primero (ej: https://www.proveedor.com)')),
+      );
+      return;
+    }
+
+    final validUrl = url.startsWith('http') ? url : 'https://$url';
+    final pageTitle = _nameController.text.isEmpty
+        ? 'Portal B2B'
+        : 'Portal: ${_nameController.text}';
+    final route = Uri(
+      path: '/tools/web',
+      queryParameters: {
+        'url': validUrl,
+        'name': pageTitle,
+      },
+    ).toString();
+
+    try {
+      final workspaceManager = context.read<WorkspaceManager>();
+      final existingFound =
+          workspaceManager.switchToExistingWorkspaceWithRoute(route);
+      if (!existingFound) {
+        workspaceManager.addWorkspace(
+          title: pageTitle,
+          initialRoute: route,
+        );
+      }
+    } catch (_) {
+      context.go(route);
+    }
+  }
+
   void _closePage({bool saved = false}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -163,7 +202,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
     if (!_formKey.currentState!.validate()) {
       // Switch to the edit tab if validation fails
       if (widget.supplierId != null) {
-        _tabController.animateTo(2);
+        _tabController.animateTo(0);
       }
       return;
     }
@@ -553,9 +592,9 @@ class _SupplierFormPageState extends State<SupplierFormPage>
               unselectedLabelColor: Colors.grey.shade600,
               indicatorColor: Theme.of(context).primaryColor,
               tabs: const [
-                Tab(text: 'Instrucciones & Resumen'),
-                Tab(text: 'Historial Facturas'),
                 Tab(text: 'Editar Datos'),
+                Tab(text: 'Historial Facturas'),
+                Tab(text: 'Instrucciones & Resumen'),
               ],
             ),
           ),
@@ -563,9 +602,9 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildInstructionsAndSummaryTab(),
-                _buildInvoicesTab(),
                 _buildForm(isCreation: false),
+                _buildInvoicesTab(),
+                _buildInstructionsAndSummaryTab(),
               ],
             ),
           ),
@@ -828,17 +867,36 @@ class _SupplierFormPageState extends State<SupplierFormPage>
                 decoration: const InputDecoration(labelText: 'Dirección'),
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _websiteController,
-                decoration: const InputDecoration(labelText: 'Sitio Web'),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 32),
         _buildSectionTitle('Portal B2B (Sitio del Proveedor)'),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextFormField(
+                controller: _websiteController,
+                decoration: const InputDecoration(
+                  labelText: 'URL del Portal / Sitio Web',
+                  prefixIcon: Icon(Icons.language),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 52,
+              child: AppButton(
+                text: 'Abrir Portal',
+                icon: Icons.open_in_browser,
+                onPressed: _openWebsiteWorkspace,
+                type: ButtonType.primary,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         Row(
           children: [
