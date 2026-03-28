@@ -15,8 +15,10 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 
 import '../../purchases/services/purchase_service.dart';
+import '../models/brand_models.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
+import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 import '../widgets/product_movements_tab.dart';
@@ -96,12 +98,14 @@ class _ProductListPageState extends State<ProductListPage> {
 
   late inventory_services.InventoryService _inventoryService;
   late CategoryService _categoryService;
+  late BrandService _brandService;
   late PurchaseService _purchaseService;
 
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
   List<Category> _categories = [];
   List<Supplier> _suppliers = [];
+  List<ProductBrand> _brands = [];
 
   // Detail pane resize
   double _detailPaneWidth = 520.0;
@@ -112,11 +116,13 @@ class _ProductListPageState extends State<ProductListPage> {
   // 🔍 Smart Filters State
   String? _selectedCategoryId;
   String? _selectedSupplierId;
+  String? _selectedBrandId;
   ProductType? _selectedProductType;
   StockFilter _stockFilter = StockFilter.all;
   bool _filterWebPublished = false; // is_published = true
   bool _filterGoogleMerchant = false; // is_google_merchant = true
-  bool _showInactive = false;
+  bool _showInactive =
+      false; // when true, show ALL products (including inactive)
 
   // 🔽 Sorting State
   ProductSortOption _sortOption = ProductSortOption.nameAsc;
@@ -163,6 +169,7 @@ class _ProductListPageState extends State<ProductListPage> {
   bool get _hasActiveFilters =>
       _selectedCategoryId != null ||
       _selectedSupplierId != null ||
+      _selectedBrandId != null ||
       _selectedProductType != null ||
       _stockFilter != StockFilter.all ||
       _filterWebPublished ||
@@ -192,6 +199,7 @@ class _ProductListPageState extends State<ProductListPage> {
         context,
         listen: false);
     _categoryService = Provider.of<CategoryService>(context, listen: false);
+    _brandService = Provider.of<BrandService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
 
     // Restore if there's any saved state (pending flag OR grace window).
@@ -230,6 +238,7 @@ class _ProductListPageState extends State<ProductListPage> {
       _products = _inventoryService.cachedProducts;
       _loadCategories(); // Still need filter options
       _loadSuppliers();
+      _loadBrands();
       _applyFilters(resetPagination: false);
       _isLoading = false;
       // Schedule scroll restore after the frame renders
@@ -294,8 +303,11 @@ class _ProductListPageState extends State<ProductListPage> {
       // Reset all filters to defaults
       _searchTerm = '';
       _searchController.clear();
+      _searchTerm = '';
+      _searchController.clear();
       _selectedCategoryId = null;
       _selectedSupplierId = null;
+      _selectedBrandId = null;
       _selectedProductType = null;
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
@@ -342,6 +354,7 @@ class _ProductListPageState extends State<ProductListPage> {
     await Future.wait([
       _loadCategories(),
       _loadSuppliers(),
+      _loadBrands(),
       _loadProducts(preserveState: _shouldRestoreState),
     ]);
   }
@@ -568,6 +581,19 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  Future<void> _loadBrands() async {
+    try {
+      final brands = await _brandService.getBrands();
+      if (mounted) {
+        setState(() {
+          _brands = brands.where((b) => b.isActive).toList();
+        });
+      }
+    } catch (_) {
+      // Ignored: brands are optional for listing products.
+    }
+  }
+
   Future<void> _loadProducts(
       {bool forceRefresh = false, bool preserveState = false}) async {
     if (!mounted) return;
@@ -753,6 +779,19 @@ class _ProductListPageState extends State<ProductListPage> {
 
     if (_filterGoogleMerchant) {
       filtered = filtered.where((product) => product.isGoogleMerchant).toList();
+    }
+
+    if (_selectedBrandId != null) {
+      final brand = _brands.firstWhere(
+        (b) => b.id == _selectedBrandId,
+        orElse: () => _brands.first,
+      );
+      final brandNameLower = brand.name.toLowerCase();
+      filtered = filtered
+          .where((product) =>
+              (product.brand ?? '').toLowerCase() == brandNameLower ||
+              product.brandId == _selectedBrandId)
+          .toList();
     }
 
     if (!_showInactive) {
@@ -1414,14 +1453,40 @@ class _ProductListPageState extends State<ProductListPage> {
                   const SizedBox(width: 8),
                   _ModernFilterChip(
                     theme: theme,
-                    label: 'Activos',
-                    isActive: _showInactive,
+                    label: _selectedBrandId != null
+                        ? (_brands
+                                .where((b) => b.id == _selectedBrandId)
+                                .firstOrNull
+                                ?.name ??
+                            'Marca')
+                        : 'Marca',
+                    isActive: _selectedBrandId != null,
                     onTap: (chipCtx, link) {
-                      setState(() {
-                        _showInactive = !_showInactive;
-                        _applyFilters();
-                      });
+                      _showFilterMenu<ProductBrand>(
+                        buttonContext: chipCtx,
+                        layerLink: link,
+                        theme: theme,
+                        title: 'Marca',
+                        items: _brands,
+                        labelBuilder: (b) => b.name,
+                        selectedId: _selectedBrandId,
+                        idExtractor: (b) => b.id,
+                        onSelected: (id) {
+                          setState(() {
+                            _selectedBrandId = id;
+                            _applyFilters();
+                          });
+                        },
+                      );
                     },
+                  ),
+                  const SizedBox(width: 8),
+                  _ModernFilterChip(
+                    theme: theme,
+                    label: _showInactive ? 'Incl. inactivos' : 'Estado',
+                    isActive: _showInactive,
+                    onTap: (chipCtx, link) =>
+                        _showActivosMenu(chipCtx, link, theme),
                   ),
                   if (_hasActiveFilters) ...[
                     const SizedBox(width: 16),
@@ -2066,6 +2131,109 @@ class _ProductListPageState extends State<ProductListPage> {
           builder: (context, setModalState) =>
               buildMenuContent(ctx, setModalState),
         ),
+      );
+    }
+  }
+
+  void _showActivosMenu(BuildContext context, LayerLink link, ThemeData theme) {
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+
+    Widget buildMenuContent(BuildContext ctx) => Container(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('Solo activos'),
+                leading: Radio<bool>(
+                  value: false,
+                  groupValue: _showInactive,
+                  onChanged: (_) {
+                    setState(() {
+                      _showInactive = false;
+                      _applyFilters();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                ),
+                onTap: () {
+                  setState(() {
+                    _showInactive = false;
+                    _applyFilters();
+                  });
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Incluir inactivos'),
+                leading: Radio<bool>(
+                  value: true,
+                  groupValue: _showInactive,
+                  onChanged: (_) {
+                    setState(() {
+                      _showInactive = true;
+                      _applyFilters();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                ),
+                onTap: () {
+                  setState(() {
+                    _showInactive = true;
+                    _applyFilters();
+                  });
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        );
+
+    if (isDesktop) {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Dismiss',
+        barrierColor: Colors.transparent,
+        pageBuilder: (context, anim1, anim2) {
+          return Stack(
+            children: [
+              CompositedTransformFollower(
+                link: link,
+                targetAnchor: Alignment.bottomLeft,
+                followerAnchor: Alignment.topLeft,
+                offset: const Offset(0, 4),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 240,
+                    child: Material(
+                      elevation: 8,
+                      borderRadius: BorderRadius.circular(8),
+                      clipBehavior: Clip.antiAlias,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          border:
+                              Border.all(color: Theme.of(context).dividerColor),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: buildMenuContent(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: buildMenuContent,
       );
     }
   }
@@ -2853,6 +3021,7 @@ class _ProductListPageState extends State<ProductListPage> {
     setState(() {
       _selectedCategoryId = null;
       _selectedSupplierId = null;
+      _selectedBrandId = null;
       _selectedProductType = null;
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
