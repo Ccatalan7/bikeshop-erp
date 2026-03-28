@@ -216,7 +216,7 @@ class PayrollVoucherService extends ChangeNotifier {
       });
 
       // Delete existing lines and re-insert
-      await _db.delete('payroll_voucher_lines', 'voucher_id=${voucher.id}');
+      await _db.deleteWhere('payroll_voucher_lines', 'voucher_id', voucher.id!);
 
       // Insert updated lines
       for (var line in voucher.lines) {
