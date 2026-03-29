@@ -316,47 +316,20 @@ Se valido con el sistema de errores del editor:
 
 **Avances de la ultima sesion:**
 - ✅ **SQL Deployado:** Se ejecuto con exito `20260329_whatsapp_cloud_api_integration.sql` en Supabase.
-- ✅ **Edge Functions Deployadas:** Ambas funciones (`whatsapp-webhook` y `whatsapp-send`) fueron desplegadas hacia el proyecto `xzdvtzdqjeyqxnkqprtf`.
-- 🚧 **Meta App:** Se inicio el setup en developers.facebook.com, pero la app "Viñabike App" quedo guardada accidentalmente como "Tipo: Ninguno" debido a un bloqueo de seguridad de Meta (ahora resuelto). **Se necesita crear una nueva app como tipo "Negocios"**.
+- ✅ **Meta App:** Se creó la aplicación "Viñabike ERP API" (Tipo Negocios) correctamente.
+- ✅ **Tokens & Secrets:** Se extrajeron los tokens y se guardaron exitosamente en Supabase usando `supabase secrets set`.
+- ✅ **Base de datos poblada:** Se insertó el canal (número de pruebas) en la tabla `whatsapp_channels`.
+- ✅ **Edge Functions Deployadas:** Ambas funciones (`whatsapp-webhook` y `whatsapp-send`) fueron desplegadas exitosamente hacia el web server de Supabase (`xzdvtzdqjeyqxnkqprtf`).
+- 🚧 **Verificación Webhook:** Pendiente hacer click en "Verify and Save" en la UI de Meta para que haga el Handshake final.
 
 ## Lo que falta si quieres dejarlo funcionando de verdad
 
-### 1. Recrear Meta App (Bloqueante Actual)
-- Crear una nueva aplicacion en developers.facebook.com.
-- Seleccionar **Otros** -> **Negocios** -> Nombre "Viñabike ERP API".
-- Agregar el producto **WhatsApp**.
-- Configurar el numero de telefono real (`+56998357797`).
-- Obtener los IDs y Tokens necesarios.
-
-### 2. Configurar secrets en Supabase Functions
-Una vez que tengas la info de Meta, hay que guardarla usando la CLI de Supabase (VER MANUAL ABAJO PARA EL USO CORRECTO DE LA CLI):
-
-Necesarios:
-- `WHATSAPP_VERIFY_TOKEN` (Tu propio string aleatorio para el webhook, ej: `vinabike_webhook_secreto_2026`)
-- `META_APP_SECRET` (Desde Dashboard de Meta -> Configuración de App -> Información basica)
-- `WHATSAPP_ACCESS_TOKEN` (Token temporal o permanente de Meta)
-
-Opcional:
-- `WHATSAPP_API_VERSION` (default actual: `v23.0`)
-
-### 3. Poblar tabla `whatsapp_channels`
-En Supabase SQL Editor, correr el insert:
-```sql
-insert into public.whatsapp_channels (tenant_id, phone_number_id, business_account_id, display_name, display_phone_number)
-values (
-  '5443b130-cc28-45af-a420-cd500b288890', 
-  '<PHONE_NUMBER_ID>', 
-  '<WABA_ID>', 
-  'Viñabike', 
-  '+56998357797'
-);
-```
-
-### 4. Configurar Meta Webhook
-En el dashboard de Meta de WhatsApp:
-- Callback URL: `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`
-- Verify token: (el mismo que seteaste en `WHATSAPP_VERIFY_TOKEN`)
-- Suscribirse a los eventos: `messages`.
+### 1. Configurar y Verificar Meta Webhook (A realizar AHORA en tu otro Mac)
+Dado que las funciones **ya están arriba**, los secrets **están seteados**, y la BD **está lista**, solo falta ir al dashboard de Meta de WhatsApp (WhatsApp > Configuración) e ingresar:
+- **Callback URL:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`
+- **Verify token:** `vinabike_webhook_secreto_2026`
+- Dar click en **"Verify and Save"**.
+- Luego hacer click en **Manage / Suscribirse**, y suscribirse al campo de eventos: `messages`.
 
 ---
 
@@ -509,36 +482,34 @@ Si hay datos inconsistentes en clientes, el binding puede crear conversacion sin
 
 Orden sugerido:
 
-1. Abrir este repo.
-2. Revisar este archivo handoff.
-3. Crear la app en developers.facebook.com (Tipo: Negocios).
-4. Configurar los secrets usando Supabase CLI (Ver manual arriba).
-5. Insertar el canal en la tabla `whatsapp_channels`.
-6. Configurar la URL del webhook en Meta.
-7. Probar webhook challenge desde Meta.
-8. Hacer una prueba real de envio con `whatsapp-send`.
-9. Hacer una prueba real de inbound reply.
-10. Recien despues cablear Flutter UI.
+1. Abrir este repo en el nuevo Mac.
+2. Leer este archivo handoff para entrar en contexto.
+3. Abrir developers.facebook.com, entrar a tu app "Viñabike ERP API" > **WhatsApp** > **Configuración**.
+4. En Webhooks, darle al bóton de editar.
+5. Poner tu URL (`https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`) y token (`vinabike_webhook_secreto_2026`) y darle a **Verify and Save**. (Ya no tirará error porque las funciones sí están en el servidor).
+6. Darle a Manage en Webhooks y suscribirte a `messages`.
+7. Probar enviar y recibir mensajes a ese numero de test.
+8. Recién después empezar a escribir el código de la UI en Flutter.
 
 ## Sugerencia de proximo bloque de trabajo
 
 Si retomas despues, el siguiente bloque razonable seria:
 
-1. Completar la configuración de Meta App y credenciales.
-2. Crear servicio Flutter para invocar `whatsapp-send`.
-3. Agregar accion desde la pega para enviar presupuesto por WhatsApp.
-4. Generar interactive message de aprobacion/rechazo.
-5. Verificar que la respuesta cambie el status de la pega automaticamente.
+1. Configurar exitosamente el Webhook en la UI de Meta (Pasos arriba).
+2. Probar recibir y mandar un mensaje hacia el celular de prueba antes de tocar Dart.
+3. Crear servicio Flutter `WhatsAppCloudService` o similar para invocar la API `whatsapp-send`.
+4. Agregar accion desde la pega (Work Orders) para enviar el presupuesto por WhatsApp.
+5. Generar formato/tarjeta de aprobacion/rechazo interactivo en la Edge Function para enviársela al cliente.
+6. Verificar que la respuesta cambie el status de la pega automaticamente.
 
 ## Estado final de esta sesion
 
-Backend base listo y desplegado.
+**Backend para WhatsApp Webhooks 100% armado, variables de entorno seteadas, y desplegado satisfactoriamente hacia Supabase.**
 
 Listo para:
-- Setup final en developers.facebook.com (Crear APP tipo Negocios)
-- Configurar credenciales y variables de entorno usando `supabase secrets set`
-- Pruebas reales de envio/recepcion de mensajes.
+- Darle a "Verify and Save" en la página de Webhooks de Meta.
+- Probar el flujo real en backend.
 
 No listo aun para:
-- Uso final desde la app Flutter
-- Operacion productiva sin pruebas E2E.
+- Pantallas del frontend en Flutter (falta crear todas las UI de chat/botones).
+- Salir a Producción (Recuerda que estas usando el "Número de pruebas" que te dio Meta provisoriamente para que no se desconecte el número real y se caiga la operación de tienda hasta que el ERP esté bien pulido).
