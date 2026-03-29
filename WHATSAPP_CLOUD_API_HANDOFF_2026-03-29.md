@@ -307,71 +307,87 @@ Credenciales sensibles se consideran server-side:
 
 No se dejo nada de esto para cliente Flutter.
 
-## Validacion hecha
+## Validacion y Estado Actual (Sesion 29 de Marzo)
 
 Se valido con el sistema de errores del editor:
 
 - `supabase/functions/whatsapp-webhook/index.ts` -> sin errores
 - `supabase/functions/whatsapp-send/index.ts` -> sin errores
 
-No se hicieron pruebas reales contra Meta ni deploy real de funciones en esta sesion.
+**Avances de la ultima sesion:**
+- ✅ **SQL Deployado:** Se ejecuto con exito `20260329_whatsapp_cloud_api_integration.sql` en Supabase.
+- ✅ **Edge Functions Deployadas:** Ambas funciones (`whatsapp-webhook` y `whatsapp-send`) fueron desplegadas hacia el proyecto `xzdvtzdqjeyqxnkqprtf`.
+- 🚧 **Meta App:** Se inicio el setup en developers.facebook.com, pero la app "Viñabike App" quedo guardada accidentalmente como "Tipo: Ninguno" debido a un bloqueo de seguridad de Meta (ahora resuelto). **Se necesita crear una nueva app como tipo "Negocios"**.
 
 ## Lo que falta si quieres dejarlo funcionando de verdad
 
-### 1. Deploy SQL en Supabase
+### 1. Recrear Meta App (Bloqueante Actual)
+- Crear una nueva aplicacion en developers.facebook.com.
+- Seleccionar **Otros** -> **Negocios** -> Nombre "Viñabike ERP API".
+- Agregar el producto **WhatsApp**.
+- Configurar el numero de telefono real (`+56998357797`).
+- Obtener los IDs y Tokens necesarios.
 
-Ejecutar este archivo:
-
-- `supabase/migrations/20260329_whatsapp_cloud_api_integration.sql`
-
-Importante:
-
-- la fuente de verdad sigue siendo `supabase/sql/core_schema.sql`
-- la migration es solo el extracto listo para deploy puntual
-
-### 2. Deploy de Edge Functions
-
-Hay que desplegar:
-
-- `whatsapp-webhook`
-- `whatsapp-send`
-
-### 3. Configurar secrets en Supabase Functions
+### 2. Configurar secrets en Supabase Functions
+Una vez que tengas la info de Meta, hay que guardarla usando la CLI de Supabase (VER MANUAL ABAJO PARA EL USO CORRECTO DE LA CLI):
 
 Necesarios:
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `WHATSAPP_VERIFY_TOKEN`
-- `META_APP_SECRET`
-- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_VERIFY_TOKEN` (Tu propio string aleatorio para el webhook, ej: `vinabike_webhook_secreto_2026`)
+- `META_APP_SECRET` (Desde Dashboard de Meta -> Configuración de App -> Información basica)
+- `WHATSAPP_ACCESS_TOKEN` (Token temporal o permanente de Meta)
 
 Opcional:
-
 - `WHATSAPP_API_VERSION` (default actual: `v23.0`)
 
-### 4. Poblar `whatsapp_channels`
+### 3. Poblar tabla `whatsapp_channels`
+En Supabase SQL Editor, correr el insert:
+```sql
+insert into public.whatsapp_channels (tenant_id, phone_number_id, business_account_id, display_name, display_phone_number)
+values (
+  '5443b130-cc28-45af-a420-cd500b288890', 
+  '<PHONE_NUMBER_ID>', 
+  '<WABA_ID>', 
+  'Viñabike', 
+  '+56998357797'
+);
+```
 
-Hay que insertar al menos un registro por tenant con:
+### 4. Configurar Meta Webhook
+En el dashboard de Meta de WhatsApp:
+- Callback URL: `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`
+- Verify token: (el mismo que seteaste en `WHATSAPP_VERIFY_TOKEN`)
+- Suscribirse a los eventos: `messages`.
 
-- `tenant_id`
-- `phone_number_id`
-- `business_account_id` si aplica
-- `display_name`
-- `display_phone_number`
-- `is_active = true`
+---
 
-Sin eso el webhook y el send no podran resolver canal.
+## 🤖 MANUAL DE SUPABASE CLI PARA AGENTES (¡LEER ANTES DE USAR!)
 
-### 5. Configurar Meta Webhook
+La interfaz de línea de comandos de Supabase debe usarse con cuidado. **NUNCA INVENTAR COMANDOS.** 
 
-Hay que registrar en Meta:
+### Para setear secrets (Credenciales Backend)
+Para setear variables de entorno en el servidor de Supabase (las que leen las Edge Functions):
+```bash
+# FORMA CORRECTA PARA EL PROYECTO DE PRODUCCIÓN DE VIÑABIKE:
+supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf WHATSAPP_VERIFY_TOKEN="mi_token" META_APP_SECRET="el_secreto" WHATSAPP_ACCESS_TOKEN="el_token"
+```
 
-- callback URL apuntando a `whatsapp-webhook`
-- verify token igual al secret `WHATSAPP_VERIFY_TOKEN`
+Para ver si los secrets quedaron guardados:
+```bash
+supabase secrets list --project-ref xzdvtzdqjeyqxnkqprtf
+```
 
-La funcion ya soporta el challenge GET y validacion de firma POST.
+### Para deployar edge functions
+```bash
+# FORMA CORRECTA (Despliega una funcion específica):
+supabase functions deploy whatsapp-webhook --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+supabase functions deploy whatsapp-send --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+
+# NOTA: En este proyecto, webhook y edge functions publicas llevan la flag --no-verify-jwt
+# porque el webhook es público (Meta le pega directo) y whatsapp-send maneja la validacion Auth
+# de manera manual viendo los headers para saber a qué Tenant pertenece.
+```
+
+---
 
 ### 6. Aprobar templates si se van a usar
 
@@ -495,10 +511,10 @@ Orden sugerido:
 
 1. Abrir este repo.
 2. Revisar este archivo handoff.
-3. Ejecutar la migration SQL puntual en Supabase.
-4. Configurar los secrets de funciones.
-5. Desplegar `whatsapp-webhook` y `whatsapp-send`.
-6. Insertar un `whatsapp_channels` para Viñabike.
+3. Crear la app en developers.facebook.com (Tipo: Negocios).
+4. Configurar los secrets usando Supabase CLI (Ver manual arriba).
+5. Insertar el canal en la tabla `whatsapp_channels`.
+6. Configurar la URL del webhook en Meta.
 7. Probar webhook challenge desde Meta.
 8. Hacer una prueba real de envio con `whatsapp-send`.
 9. Hacer una prueba real de inbound reply.
@@ -508,23 +524,21 @@ Orden sugerido:
 
 Si retomas despues, el siguiente bloque razonable seria:
 
-1. Crear servicio Flutter para invocar `whatsapp-send`.
-2. Agregar accion desde la pega para enviar presupuesto por WhatsApp.
-3. Generar interactive message de aprobacion/rechazo.
-4. Verificar que la respuesta cambie el status de la pega automaticamente.
+1. Completar la configuración de Meta App y credenciales.
+2. Crear servicio Flutter para invocar `whatsapp-send`.
+3. Agregar accion desde la pega para enviar presupuesto por WhatsApp.
+4. Generar interactive message de aprobacion/rechazo.
+5. Verificar que la respuesta cambie el status de la pega automaticamente.
 
 ## Estado final de esta sesion
 
-Backend base listo.
+Backend base listo y desplegado.
 
 Listo para:
-
-- deploy SQL
-- deploy de Edge Functions
-- configuracion en Meta
-- pruebas reales
+- Setup final en developers.facebook.com (Crear APP tipo Negocios)
+- Configurar credenciales y variables de entorno usando `supabase secrets set`
+- Pruebas reales de envio/recepcion de mensajes.
 
 No listo aun para:
-
-- uso final desde Flutter
-- operacion productiva sin pruebas E2E
+- Uso final desde la app Flutter
+- Operacion productiva sin pruebas E2E.

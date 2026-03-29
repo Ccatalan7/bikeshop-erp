@@ -32,6 +32,30 @@ postgresql://postgres.xzdvtzdqjeyqxnkqprtf:[PASSWORD]@aws-0-us-west-1.pooler.sup
 postgresql://postgres:[PASSWORD]@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres
 ```
 
+## 🚀 Correct Use of Supabase CLI (CRITICAL FOR AGENTS)
+
+When interacting with the Supabase project using the terminal, NEVER guess or invent commands. Always use the explicit `--project-ref` flag pointing to our project `xzdvtzdqjeyqxnkqprtf`.
+
+**1. Managing Secrets for Edge Functions:**
+To set secrets that Edge Functions will read via `Deno.env.get()`:
+```bash
+# Correct syntax for setting multiple secrets:
+supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf KEY_NAME="value" ANOTHER_KEY="value2"
+
+# To list current secrets constraints:
+supabase secrets list --project-ref xzdvtzdqjeyqxnkqprtf
+```
+
+**2. Deploying Edge Functions:**
+```bash
+# Correct syntax to deploy a single edge function:
+supabase functions deploy my-function-name --project-ref xzdvtzdqjeyqxnkqprtf
+
+# If the function handles its own auth (like webhooks), use --no-verify-jwt:
+supabase functions deploy whatsapp-webhook --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+```
+**⚠️ ALWAYS set `--project-ref xzdvtzdqjeyqxnkqprtf` or the command will fail or deploy to the wrong place.**
+
 ## Important Tenant IDs
 
 | Tenant | UUID | Description |
