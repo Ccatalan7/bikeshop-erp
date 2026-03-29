@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../widgets/whatsapp_web_viewer.dart';
 
+enum WhatsAppDeliveryMethod {
+  cloudApi,
+  manualFallback,
+  failed,
+}
+
 /// WhatsApp messaging service for customer communication
-/// Opens WhatsApp Web in embedded WebView (desktop) or external app (mobile)
+/// Sends through WhatsApp Cloud API and falls back to manual WhatsApp Web if needed.
 class WhatsAppService {
   static final WhatsAppService _instance = WhatsAppService._internal();
   factory WhatsAppService() => _instance;
   WhatsAppService._internal();
+
+  final SupabaseClient _client = Supabase.instance.client;
 
   final _currencyFormat = NumberFormat.currency(
     symbol: '\$',
@@ -20,23 +29,64 @@ class WhatsAppService {
 
   final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CL');
 
+  WhatsAppDeliveryMethod _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
+
+  WhatsAppDeliveryMethod get lastDeliveryMethod => _lastDeliveryMethod;
+
   /// Format Chilean phone number (remove spaces, dashes, +56 prefix)
   String _formatPhoneNumber(String phone) {
-    // Remove all non-numeric characters
     String cleaned = phone.replaceAll(RegExp(r'[^0-9]'), '');
 
-    // Remove leading 56 if present (Chile country code)
     if (cleaned.startsWith('56') && cleaned.length > 9) {
       cleaned = cleaned.substring(2);
     }
 
-    // Ensure it starts with 9 (Chilean mobile format)
     if (!cleaned.startsWith('9')) {
       cleaned = '9$cleaned';
     }
 
-    // Return with country code
     return '56$cleaned';
+  }
+
+  Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
+    try {
+      final response = await _client.functions.invoke(
+        'whatsapp-send',
+        body: body,
+      );
+
+      final status = response.status;
+      if (status >= 200 && status < 300) {
+        _lastDeliveryMethod = WhatsAppDeliveryMethod.cloudApi;
+        debugPrint('✅ [WhatsAppService] Message sent via Cloud API');
+        return true;
+      }
+
+      debugPrint(
+        '❌ [WhatsAppService] Cloud API failed: status=$status data=${response.data}',
+      );
+    } catch (error) {
+      debugPrint('❌ [WhatsAppService] Cloud API error: $error');
+    }
+
+    return false;
+  }
+
+  Future<bool> _sendWithFallback({
+    required BuildContext context,
+    required String phoneNumber,
+    required String message,
+    required Map<String, dynamic> cloudBody,
+  }) async {
+    if (await _sendViaCloud(cloudBody)) {
+      return true;
+    }
+
+    final opened = await _openWhatsApp(context, phoneNumber, message);
+    _lastDeliveryMethod = opened
+        ? WhatsAppDeliveryMethod.manualFallback
+        : WhatsAppDeliveryMethod.failed;
+    return opened;
   }
 
   /// Open WhatsApp with pre-filled message
@@ -63,8 +113,7 @@ class WhatsAppService {
 
       return true;
     } catch (e) {
-      print('❌ Error opening WhatsApp: $e');
-      // Fallback: Try opening in external browser
+      debugPrint('❌ [WhatsAppService] Error opening WhatsApp WebView: $e');
       try {
         final formattedPhone = _formatPhoneNumber(phoneNumber);
         final encodedMessage = Uri.encodeComponent(message);
@@ -75,7 +124,7 @@ class WhatsAppService {
           return await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
       } catch (fallbackError) {
-        print('❌ Fallback error: $fallbackError');
+        debugPrint('❌ [WhatsAppService] Fallback launch error: $fallbackError');
       }
       return false;
     }
@@ -110,7 +159,24 @@ Por favor confirma para proceder con el trabajo. 🔧
 ¿Alguna duda? ¡Escríbenos! 📞
     ''';
 
-    return await _openWhatsApp(context, customerPhone, message);
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': customerName,
+        'contextType': 'invoice',
+        'contextId': invoice.id,
+        'type': 'text',
+        'text': message,
+        'metadata': {
+          'source': 'flutter_erp',
+          'invoiceId': invoice.id,
+          'invoiceNumber': invoice.invoiceNumber,
+        },
+      },
+    );
   }
 
   /// Send payment confirmation receipt
@@ -146,7 +212,25 @@ ${invoice.balance <= 0 ? '🎉 ¡Factura pagada completamente!' : '⚠️ Saldo 
 ¡Gracias por tu confianza! 🚴‍♂️
     ''';
 
-    return await _openWhatsApp(context, customerPhone, message);
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': customerName,
+        'contextType': 'invoice',
+        'contextId': invoice.id,
+        'type': 'text',
+        'text': message,
+        'metadata': {
+          'source': 'flutter_erp',
+          'invoiceId': invoice.id,
+          'invoiceNumber': invoice.invoiceNumber,
+          'paymentId': payment.id,
+        },
+      },
+    );
   }
 
   /// Send mechanic job status update
@@ -178,7 +262,25 @@ ${job.deliveryDeadline != null ? '⏰ Fecha estimada: ${_dateFormat.format(job.d
 Viña Bike - Tu taller de confianza 🔧
     ''';
 
-    return await _openWhatsApp(context, customerPhone, message);
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': customerName,
+        'contextType': job.id != null ? 'job' : null,
+        'contextId': job.id,
+        'jobId': job.id,
+        'type': 'text',
+        'text': message,
+        'metadata': {
+          'source': 'flutter_erp',
+          'jobId': job.id,
+          'jobStatus': job.status.name,
+        },
+      },
+    );
   }
 
   /// Send bike ready for pickup notification
@@ -211,7 +313,29 @@ ${job.invoiceId != null ? '💰 *Recuerda:* Debes pagar la factura antes de reti
 Viña Bike
     ''';
 
-    return await _openWhatsApp(context, customerPhone, message);
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': customerName,
+        'contextType': job.id != null ? 'job' : null,
+        'contextId': job.id,
+        'jobId': job.id,
+        'type': 'interactive',
+        'text': message,
+        'caption': message,
+        'actionType': 'confirm_delivery',
+        'actionKind': 'job',
+        'actionTargetId': job.id,
+        'metadata': {
+          'source': 'flutter_erp',
+          'jobId': job.id,
+          'jobStatus': job.status.name,
+        },
+      },
+    );
   }
 
   /// Send generic message
@@ -220,7 +344,19 @@ Viña Bike
     required String customerPhone,
     required String message,
   }) async {
-    return await _openWhatsApp(context, customerPhone, message);
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'type': 'text',
+        'text': message,
+        'metadata': {
+          'source': 'flutter_erp',
+        },
+      },
+    );
   }
 
   // Helper methods for status formatting
@@ -233,7 +369,7 @@ Viña Bike
       case JobStatus.esperandoAprobacion:
         return '⏰';
       case JobStatus.esperandoRepuestos:
-        return '�';
+        return '📦';
       case JobStatus.enCurso:
         return '🔧';
       case JobStatus.finalizado:

@@ -1817,9 +1817,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
 
       if (success && mounted) {
+        final content = switch (whatsappService.lastDeliveryMethod) {
+          WhatsAppDeliveryMethod.cloudApi =>
+            'Mensaje enviado por WhatsApp Cloud API',
+          WhatsAppDeliveryMethod.manualFallback =>
+            'WhatsApp abierto con mensaje pre-llenado',
+          WhatsAppDeliveryMethod.failed => 'Mensaje procesado',
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('WhatsApp abierto con mensaje pre-llenado'),
+          SnackBar(
+            content: Text(content),
             backgroundColor: Colors.green,
           ),
         );
@@ -1869,10 +1877,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
 
       if (success && mounted) {
+        final content = switch (whatsappService.lastDeliveryMethod) {
+          WhatsAppDeliveryMethod.cloudApi =>
+            'Notificación enviada por WhatsApp Cloud API',
+          WhatsAppDeliveryMethod.manualFallback =>
+            'WhatsApp abierto - Notifica al cliente que su bici está lista',
+          WhatsAppDeliveryMethod.failed => 'Mensaje procesado',
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'WhatsApp abierto - Notifica al cliente que su bici está lista'),
+          SnackBar(
+            content: Text(content),
             backgroundColor: Colors.green,
           ),
         );
