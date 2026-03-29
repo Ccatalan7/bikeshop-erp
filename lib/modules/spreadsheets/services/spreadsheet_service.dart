@@ -53,6 +53,33 @@ class SpreadsheetService extends ChangeNotifier {
     }
   }
 
+  Future<void> updateSpreadsheetMetadata(
+    String id, {
+    String? name,
+    int? rowCount,
+    int? colCount,
+  }) async {
+    final updates = <String, dynamic>{
+      if (name != null) 'name': name,
+      if (rowCount != null) 'row_count': rowCount,
+      if (colCount != null) 'col_count': colCount,
+    };
+
+    if (updates.isEmpty) return;
+
+    await _supabase.from('spreadsheets').update(updates).eq('id', id);
+
+    final idx = _spreadsheets.indexWhere((s) => s.id == id);
+    if (idx >= 0) {
+      _spreadsheets[idx] = _spreadsheets[idx].copyWith(
+        name: name ?? _spreadsheets[idx].name,
+        rowCount: rowCount ?? _spreadsheets[idx].rowCount,
+        colCount: colCount ?? _spreadsheets[idx].colCount,
+      );
+      notifyListeners();
+    }
+  }
+
   Future<void> deleteSpreadsheet(String id) async {
     await _supabase.from('spreadsheets').delete().eq('id', id);
     _spreadsheets.removeWhere((s) => s.id == id);

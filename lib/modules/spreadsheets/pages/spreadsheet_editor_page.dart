@@ -1,16 +1,22 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_windows/webview_windows.dart' as windows_webview;
 
-import '../models/spreadsheet_model.dart';
-import '../services/formula_engine.dart';
-import '../services/spreadsheet_service.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../models/spreadsheet_model.dart';
+import '../services/spreadsheet_service.dart';
 
 class SpreadsheetEditorPage extends StatefulWidget {
   final String spreadsheetId;
+
   const SpreadsheetEditorPage({super.key, required this.spreadsheetId});
 
   @override
@@ -18,113 +24,121 @@ class SpreadsheetEditorPage extends StatefulWidget {
 }
 
 class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
-  // Grid config
   static const int _defaultRows = 100;
   static const int _defaultCols = 26;
-  static const double _cellWidth = 120;
-  static const double _cellHeight = 32;
-  static const double _headerWidth = 48;
-  static const double _headerHeight = 32;
+  static const Duration _saveDebounce = Duration(milliseconds: 700);
 
-  // State
   SpreadsheetModel? _sheet;
-  final Map<String, CellData> _cells = {};
-  int _selectedRow = 0;
-  int _selectedCol = 0;
-  int? _selectionEndRow;
-  int? _selectionEndCol;
+  final Map<String, CellData> _cells = <String, CellData>{};
+  final Map<String, CellData> _pendingDirtyCells = <String, CellData>{};
+  final List<StreamSubscription<dynamic>> _windowsSubscriptions =
+      <StreamSubscription<dynamic>>[];
 
-  // Drag state (fill-handle only)
-  bool _isDraggingHandle = false;
-  bool _isSelectingRange = false;
-  int? _dragSourceMinRow;
-  int? _dragSourceMaxRow;
-  int? _dragSourceMinCol;
-  int? _dragSourceMaxCol;
+  WebViewController? _controller;
+  windows_webview.WebviewController? _windowsController;
+  Timer? _saveTimer;
+  Timer? _pointerSyncTimer;
 
-  bool _isEditing = false;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasUnsaved = false;
+  bool _webViewReady = false;
+  bool _sheetLoaded = false;
+  String? _platformMessage;
+  int? _pendingRowCount;
+  int? _pendingColCount;
+  String? _pendingName;
+  Offset? _pendingPointerOffset;
 
-  bool get _isPrimaryShortcutPressed =>
-      HardwareKeyboard.instance.isMetaPressed ||
-      HardwareKeyboard.instance.isControlPressed;
+  bool get _usesFlutterWebView {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
 
-  int get _rowCount => _sheet?.rowCount ?? _defaultRows;
-  int get _colCount => _sheet?.colCount ?? _defaultCols;
+  bool get _usesWindowsWebView {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows;
+  }
 
-  bool get _isMultiSelection =>
-      _selectionEndRow != null &&
-      _selectionEndCol != null &&
-      (_selectionEndRow != _selectedRow || _selectionEndCol != _selectedCol);
+  bool get _supportsEmbeddedEditor =>
+      _usesFlutterWebView || _usesWindowsWebView;
 
-  int get _minRow => _isMultiSelection
-      ? (_selectedRow < _selectionEndRow! ? _selectedRow : _selectionEndRow!)
-      : _selectedRow;
-  int get _maxRow => _isMultiSelection
-      ? (_selectedRow > _selectionEndRow! ? _selectedRow : _selectionEndRow!)
-      : _selectedRow;
-  int get _minCol => _isMultiSelection
-      ? (_selectedCol < _selectionEndCol! ? _selectedCol : _selectionEndCol!)
-      : _selectedCol;
-  int get _maxCol => _isMultiSelection
-      ? (_selectedCol > _selectionEndCol! ? _selectedCol : _selectionEndCol!)
-      : _selectedCol;
-
-  Timer? _saveTimer;
-  final TextEditingController _formulaBarController = TextEditingController();
-  final TextEditingController _cellEditController = TextEditingController();
-  final FocusNode _gridFocusNode = FocusNode();
-  final FocusNode _cellEditFocusNode = FocusNode();
-  final FocusNode _formulaBarFocusNode = FocusNode();
-  final ScrollController _hScrollController = ScrollController();
-  final ScrollController _vScrollController = ScrollController();
-
-  late FormulaEngine _formulaEngine;
+  bool get _supportsPointerSync {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS;
+  }
 
   @override
   void initState() {
     super.initState();
-    _formulaEngine = FormulaEngine(_cells);
-    _loadSpreadsheet();
+    unawaited(_initializeEditor());
   }
 
   @override
   void dispose() {
     _saveTimer?.cancel();
-    _saveNow();
-    _formulaBarController.dispose();
-    _cellEditController.dispose();
-    _gridFocusNode.dispose();
-    _cellEditFocusNode.dispose();
-    _formulaBarFocusNode.dispose();
-    _hScrollController.dispose();
-    _vScrollController.dispose();
+    _pointerSyncTimer?.cancel();
+    for (final subscription in _windowsSubscriptions) {
+      subscription.cancel();
+    }
+    if (_windowsController != null) {
+      unawaited(_windowsController!.dispose());
+    }
     super.dispose();
+  }
+
+  Future<void> _initializeEditor() async {
+    await _loadSpreadsheet();
+    if (!mounted || _sheet == null) return;
+
+    if (_usesFlutterWebView) {
+      _initializeFlutterWebView();
+      return;
+    }
+
+    if (_usesWindowsWebView) {
+      await _initializeWindowsWebView();
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _platformMessage =
+            'El editor embebido de planillas no esta disponible en esta plataforma.';
+      });
+    }
   }
 
   Future<void> _loadSpreadsheet() async {
     final service = context.read<SpreadsheetService>();
 
-    // Get sheet metadata
     await service.fetchSpreadsheets();
-    final sheet = service.spreadsheets
-        .where((s) => s.id == widget.spreadsheetId)
-        .firstOrNull;
+    SpreadsheetModel? sheet;
+    for (final entry in service.spreadsheets) {
+      if (entry.id == widget.spreadsheetId) {
+        sheet = entry;
+        break;
+      }
+    }
 
     if (sheet == null) {
-      if (mounted) context.go('/tools/spreadsheets');
+      if (mounted) {
+        context.go('/tools/spreadsheets');
+      }
       return;
     }
 
-    // Load cells
     final cellModels = await service.loadCells(widget.spreadsheetId);
+    _cells.clear();
     for (final cell in cellModels) {
-      final key = '${cell.row},${cell.col}';
-      _cells[key] = CellData(
-        rawValue: cell.rawValue ?? '',
-        displayValue: cell.displayValue ?? '',
+      final rawValue = cell.rawValue ?? '';
+      if (rawValue.isEmpty) continue;
+      _cells[_cellKey(cell.row, cell.col)] = CellData(
+        rawValue: rawValue,
+        displayValue: cell.displayValue ?? rawValue,
         cellType: cell.cellType,
         bold: cell.bold,
         italic: cell.italic,
@@ -132,684 +146,536 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       );
     }
 
-    // Recalculate formula cells
-    _formulaEngine.recalculateAll();
-
     if (mounted) {
       setState(() {
         _sheet = sheet;
-        _isLoading = false;
+        _sheetLoaded = true;
       });
-      _formulaBarController.text =
-          _getCell(_selectedRow, _selectedCol).rawValue;
-      _focusGrid();
     }
+
+    await _maybeBootstrapEditor();
   }
 
-  // ══════════════════════════════════════════════════════════════════
-  // CELL EDITING
-  // ══════════════════════════════════════════════════════════════════
+  void _initializeFlutterWebView() {
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'SpreadsheetBridge',
+        onMessageReceived: (message) {
+          _handleBridgeMessage(message.message);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (!mounted) return;
+            setState(() {
+              _isLoading = true;
+              _platformMessage = null;
+            });
+          },
+          onWebResourceError: (error) {
+            debugPrint('Spreadsheet WebView error: ${error.description}');
+          },
+          onNavigationRequest: (_) => NavigationDecision.navigate,
+        ),
+      )
+      ..loadHtmlString(_spreadsheetShellHtml);
+
+    setState(() {
+      _controller = controller;
+    });
+  }
+
+  Future<void> _initializeWindowsWebView() async {
+    try {
+      final runtimeVersion =
+          await windows_webview.WebviewController.getWebViewVersion();
+      if (!mounted) return;
+
+      if (runtimeVersion == null) {
+        setState(() {
+          _isLoading = false;
+          _platformMessage =
+              'Microsoft Edge WebView2 Runtime no esta instalado.';
+        });
+        return;
+      }
+
+      final controller = windows_webview.WebviewController();
+      await controller.initialize();
+      await controller.setBackgroundColor(Colors.white);
+      await controller.setPopupWindowPolicy(
+        windows_webview.WebviewPopupWindowPolicy.sameWindow,
+      );
+
+      _windowsSubscriptions.addAll([
+        controller.loadingState.listen((state) {
+          if (!mounted) return;
+          setState(() {
+            _isLoading = state == windows_webview.LoadingState.loading;
+          });
+        }),
+        controller.webMessage.listen(_handleBridgeMessage),
+        controller.onLoadError.listen((error) {
+          debugPrint('Spreadsheet Windows WebView error: $error');
+        }),
+      ]);
+
+      await controller.loadStringContent(_spreadsheetShellHtml);
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _windowsController = controller;
+        _platformMessage = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _platformMessage =
+            'No se pudo inicializar el editor de planillas: $error';
+      });
+    }
+  }
 
   String _cellKey(int row, int col) => '$row,$col';
 
-  CellData _getCell(int row, int col) {
-    return _cells.putIfAbsent(_cellKey(row, col), () => CellData());
-  }
+  CellData _cellDataFromRaw(String rawValue) {
+    if (rawValue.startsWith('=')) {
+      return CellData(
+        rawValue: rawValue,
+        displayValue: rawValue,
+        cellType: 'formula',
+      );
+    }
 
-  CellData _cloneCell(CellData cell) {
+    final numericValue = double.tryParse(rawValue.replaceAll(',', '.'));
+    if (numericValue != null) {
+      return CellData(
+        rawValue: rawValue,
+        displayValue: rawValue,
+        cellType: 'number',
+      );
+    }
+
     return CellData(
-      rawValue: cell.rawValue,
-      displayValue: cell.displayValue,
-      cellType: cell.cellType,
-      bold: cell.bold,
-      italic: cell.italic,
-      textAlign: cell.textAlign,
-      dirty: true,
+      rawValue: rawValue,
+      displayValue: rawValue,
+      cellType: 'text',
     );
   }
 
-  void _applyRawToCell(CellData cell, String raw, int row, int col) {
-    cell.rawValue = raw;
+  int _effectiveRowCount() {
+    int maxRow = (_sheet?.rowCount ?? _defaultRows) - 1;
+    for (final key in _cells.keys) {
+      final row = int.tryParse(key.split(',').first) ?? 0;
+      if (row > maxRow) maxRow = row;
+    }
+    return (maxRow + 21).clamp(_defaultRows, 5000);
+  }
 
-    if (raw.isEmpty) {
-      cell.cellType = 'text';
-      cell.displayValue = '';
-      return;
+  int _effectiveColCount() {
+    int maxCol = (_sheet?.colCount ?? _defaultCols) - 1;
+    for (final key in _cells.keys) {
+      final parts = key.split(',');
+      final col = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+      if (col > maxCol) maxCol = col;
+    }
+    return (maxCol + 6).clamp(_defaultCols, 500);
+  }
+
+  Map<String, dynamic> _buildBootstrapPayload() {
+    final cells = <Map<String, dynamic>>[];
+    for (final entry in _cells.entries) {
+      if (entry.value.rawValue.isEmpty) continue;
+      final parts = entry.key.split(',');
+      cells.add({
+        'row': int.tryParse(parts[0]) ?? 0,
+        'col': parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+        'rawValue': entry.value.rawValue,
+      });
     }
 
-    if (raw.startsWith('=')) {
-      cell.cellType = 'formula';
-      cell.displayValue = _formulaEngine.evaluate(raw, row, col);
-      return;
-    }
-
-    if (double.tryParse(raw.replaceAll(',', '.')) != null) {
-      cell.cellType = 'number';
-      cell.displayValue = raw;
-      return;
-    }
-
-    cell.cellType = 'text';
-    cell.displayValue = raw;
+    return {
+      'name': _sheet?.name ?? 'Planilla sin titulo',
+      'rowCount': _effectiveRowCount(),
+      'colCount': _effectiveColCount(),
+      'cells': cells,
+    };
   }
 
-  bool _isCellInSelection(int row, int col) {
-    return row >= _minRow && row <= _maxRow && col >= _minCol && col <= _maxCol;
-  }
+  Future<void> _maybeBootstrapEditor() async {
+    if (!_sheetLoaded || !_webViewReady || _sheet == null) return;
 
-  void _captureCurrentSelectionForDrag() {
-    _dragSourceMinRow = _minRow;
-    _dragSourceMaxRow = _maxRow;
-    _dragSourceMinCol = _minCol;
-    _dragSourceMaxCol = _maxCol;
-  }
+    final payload = jsonEncode(_buildBootstrapPayload());
+    final script = 'window.bootstrapSpreadsheet($payload);';
 
-  void _resetPointerState() {
-    _isDraggingHandle = false;
-    _isSelectingRange = false;
-    _dragSourceMinRow = null;
-    _dragSourceMaxRow = null;
-    _dragSourceMinCol = null;
-    _dragSourceMaxCol = null;
-  }
-
-  /// Aggressively request focus on the grid.
-  /// Uses both sync + post-frame callback to guarantee keyboard events arrive.
-  void _focusGrid() {
-    _gridFocusNode.requestFocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_isEditing) {
-        _gridFocusNode.requestFocus();
+    try {
+      if (_usesFlutterWebView && _controller != null) {
+        await _controller!.runJavaScript(script);
+      } else if (_usesWindowsWebView && _windowsController != null) {
+        await _windowsController!.executeScript(script);
       }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Spreadsheet bootstrap error: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _platformMessage = 'No se pudo cargar la planilla embebida.';
+        });
+      }
+    }
+  }
+
+  void _onEditorHover(PointerHoverEvent event) {
+    _syncPointerIfSupported(event.localPosition);
+  }
+
+  void _onEditorMove(PointerMoveEvent event) {
+    _syncPointerIfSupported(event.localPosition);
+  }
+
+  void _onEditorDown(PointerDownEvent event) {
+    _syncPointerIfSupported(event.localPosition);
+  }
+
+  void _syncPointerIfSupported(Offset position) {
+    if (!_supportsPointerSync || !_webViewReady) return;
+    _queuePointerSync(position);
+  }
+
+  void _queuePointerSync(Offset position) {
+    _pendingPointerOffset = position;
+    if (_pointerSyncTimer != null) return;
+
+    _pointerSyncTimer = Timer(const Duration(milliseconds: 16), () {
+      _pointerSyncTimer = null;
+      final pointer = _pendingPointerOffset;
+      _pendingPointerOffset = null;
+      if (pointer == null) return;
+      unawaited(_sendPointerToEmbeddedEditor(pointer));
     });
   }
 
-  bool _isOverFillHandle(double x, double y) {
-    final handleCenterX = _headerWidth + (_maxCol + 1) * _cellWidth;
-    final handleCenterY = _headerHeight + (_maxRow + 1) * _cellHeight;
-    return (x - handleCenterX).abs() <= 10 && (y - handleCenterY).abs() <= 10;
+  Future<void> _sendPointerToEmbeddedEditor(Offset position) async {
+    final dx = position.dx.toStringAsFixed(2);
+    final dy = position.dy.toStringAsFixed(2);
+    final script =
+        'window.__setFlutterPointer && window.__setFlutterPointer($dx, $dy);';
+
+    try {
+      if (_usesFlutterWebView && _controller != null) {
+        await _controller!.runJavaScript(script);
+      } else if (_usesWindowsWebView && _windowsController != null) {
+        await _windowsController!.executeScript(script);
+      }
+    } catch (_) {
+      // Ignore transient pointer sync failures while the WebView is loading.
+    }
   }
 
-  void _selectRange(int startRow, int startCol, int endRow, int endCol) {
-    if (_isEditing) _commitEdit();
+  void _handleBridgeMessage(dynamic rawMessage) {
+    Map<String, dynamic>? message;
+    if (rawMessage is String) {
+      try {
+        message = jsonDecode(rawMessage) as Map<String, dynamic>;
+      } catch (_) {
+        return;
+      }
+    } else if (rawMessage is Map) {
+      message = Map<String, dynamic>.from(rawMessage);
+    }
 
+    if (message == null) return;
+
+    final type = message['type']?.toString() ?? '';
+    switch (type) {
+      case 'ready':
+        _webViewReady = true;
+        unawaited(_maybeBootstrapEditor());
+        break;
+      case 'change':
+        final payload = message['payload'];
+        if (payload is Map) {
+          _handleSpreadsheetChange(Map<String, dynamic>.from(payload));
+        }
+        break;
+      case 'error':
+        final description = message['message']?.toString();
+        if (mounted) {
+          setState(() {
+            _platformMessage = description ?? 'Error cargando la planilla.';
+            _isLoading = false;
+          });
+        }
+        break;
+    }
+  }
+
+  void _handleSpreadsheetChange(Map<String, dynamic> payload) {
+    final nextCells = <String, CellData>{};
+    final rawCells = payload['cells'];
+    if (rawCells is List) {
+      for (final entry in rawCells) {
+        if (entry is! Map) continue;
+        final row = (entry['row'] as num?)?.toInt();
+        final col = (entry['col'] as num?)?.toInt();
+        final rawValue = entry['rawValue']?.toString() ?? '';
+        if (row == null || col == null || rawValue.isEmpty) continue;
+        nextCells[_cellKey(row, col)] = _cellDataFromRaw(rawValue);
+      }
+    }
+
+    final dirty = <String, CellData>{};
+    final allKeys = <String>{..._cells.keys, ...nextCells.keys};
+    for (final key in allKeys) {
+      final previous = _cells[key];
+      final next = nextCells[key];
+
+      if (next == null) {
+        if (previous != null) {
+          dirty[key] = CellData(dirty: true);
+        }
+        continue;
+      }
+
+      if (previous == null ||
+          previous.rawValue != next.rawValue ||
+          previous.cellType != next.cellType) {
+        next.dirty = true;
+        dirty[key] = next;
+      }
+    }
+
+    _cells
+      ..clear()
+      ..addAll(nextCells);
+
+    _pendingDirtyCells.addAll(dirty);
+    _pendingRowCount = (payload['rowCount'] as num?)?.toInt();
+    _pendingColCount = (payload['colCount'] as num?)?.toInt();
+    _pendingName = payload['name']?.toString();
+
+    if (dirty.isEmpty &&
+        _pendingRowCount == (_sheet?.rowCount) &&
+        _pendingColCount == (_sheet?.colCount) &&
+        _pendingName == (_sheet?.name)) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _hasUnsaved = true;
+      });
+    }
+    _scheduleSave();
+  }
+
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDebounce, () {
+      unawaited(_saveNow());
+    });
+  }
+
+  Future<void> _saveNow() async {
+    if (_sheet == null) return;
+
+    final dirtySnapshot = Map<String, CellData>.from(_pendingDirtyCells);
+    final hasMetadataChanges = _pendingRowCount != null ||
+        _pendingColCount != null ||
+        (_pendingName != null && _pendingName != _sheet!.name);
+    if (dirtySnapshot.isEmpty && !hasMetadataChanges) {
+      if (mounted) {
+        setState(() {
+          _hasUnsaved = false;
+          _isSaving = false;
+        });
+      }
+      return;
+    }
+
+    _pendingDirtyCells.clear();
+
+    if (mounted) {
+      setState(() {
+        _isSaving = true;
+      });
+    }
+
+    final service = context.read<SpreadsheetService>();
+
+    try {
+      if (dirtySnapshot.isNotEmpty) {
+        await service.saveCells(widget.spreadsheetId, dirtySnapshot);
+      }
+
+      if (hasMetadataChanges) {
+        await service.updateSpreadsheetMetadata(
+          widget.spreadsheetId,
+          name: _pendingName != _sheet!.name ? _pendingName : null,
+          rowCount: _pendingRowCount,
+          colCount: _pendingColCount,
+        );
+        _sheet = _sheet!.copyWith(
+          name: _pendingName ?? _sheet!.name,
+          rowCount: _pendingRowCount ?? _sheet!.rowCount,
+          colCount: _pendingColCount ?? _sheet!.colCount,
+        );
+      }
+
+      _pendingRowCount = null;
+      _pendingColCount = null;
+      _pendingName = null;
+
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _hasUnsaved = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Spreadsheet save error: $error');
+      _pendingDirtyCells.addAll(dirtySnapshot);
+
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _hasUnsaved = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo guardar la planilla.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _renameSheet() async {
+    if (_sheet == null) return;
+
+    final controller = TextEditingController(text: _sheet!.name);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Renombrar planilla'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          onSubmitted: (value) => Navigator.of(ctx).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (!mounted || result == null) return;
+
+    final trimmed = result.trim();
+    if (trimmed.isEmpty || trimmed == _sheet!.name) return;
+
+    await context
+        .read<SpreadsheetService>()
+        .renameSpreadsheet(widget.spreadsheetId, trimmed);
+
+    if (!mounted) return;
     setState(() {
-      _selectedRow = startRow;
-      _selectedCol = startCol;
-      _selectionEndRow = endRow;
-      _selectionEndCol = endCol;
-      _isEditing = false;
-      _formulaBarController.text = _getCell(startRow, startCol).rawValue;
+      _sheet = _sheet!.copyWith(name: trimmed);
     });
 
-    _ensureVisibleCell(endRow, endCol);
-    _focusGrid();
+    if (_webViewReady) {
+      unawaited(_maybeBootstrapEditor());
+    }
   }
 
-  void _selectCell(int row, int col) {
-    _selectRange(row, col, row, col);
+  Widget _buildEmbeddedEditor() {
+    final editor = () {
+      if (_usesFlutterWebView) {
+        if (_controller == null) {
+          return const SizedBox.shrink();
+        }
+        return WebViewWidget(controller: _controller!);
+      }
+
+      if (_usesWindowsWebView) {
+        if (_windowsController == null) {
+          return const SizedBox.shrink();
+        }
+        return windows_webview.Webview(_windowsController!);
+      }
+
+      return _buildUnsupportedView();
+    }();
+
+    if (_supportsPointerSync) {
+      return Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerHover: _onEditorHover,
+        onPointerMove: _onEditorMove,
+        onPointerDown: _onEditorDown,
+        child: editor,
+      );
+    }
+
+    return editor;
   }
 
-  void _selectAll() {
-    _selectRange(0, 0, _rowCount - 1, _colCount - 1);
-  }
-
-  void _selectRow(int row) {
-    _selectRange(row, 0, row, _colCount - 1);
-  }
-
-  void _selectColumn(int col) {
-    _selectRange(0, col, _rowCount - 1, col);
-  }
-
-  void _updateSelectionEnd(int row, int col) {
-    if (_isEditing) _commitEdit();
-    setState(() {
-      _selectionEndRow = row;
-      _selectionEndCol = col;
-    });
-    _ensureVisibleCell(row, col);
-    _focusGrid();
-  }
-
-  void _startEditing() {
-    final cell = _getCell(_selectedRow, _selectedCol);
-    _beginEditing(
-      initialText: cell.rawValue,
-      selection: TextSelection(
-        baseOffset: 0,
-        extentOffset: cell.rawValue.length,
+  Widget _buildUnsupportedView() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 42),
+              const SizedBox(height: 12),
+              const Text(
+                'Editor no disponible',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _platformMessage ??
+                    'Esta plataforma no soporta el editor embebido de planillas.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  void _startTyping(String firstCharacter) {
-    _beginEditing(
-      initialText: firstCharacter,
-      selection: TextSelection.collapsed(offset: firstCharacter.length),
-    );
-  }
-
-  void _beginEditing({
-    required String initialText,
-    required TextSelection selection,
-  }) {
-    setState(() {
-      _isEditing = true;
-      _cellEditController.value = TextEditingValue(
-        text: initialText,
-        selection: selection,
-      );
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cellEditFocusNode.requestFocus();
-    });
-  }
-
-  void _commitEdit() {
-    if (!_isEditing) return;
-    final raw = _cellEditController.text;
-    _setCellValue(_selectedRow, _selectedCol, raw);
-    setState(() => _isEditing = false);
-    _focusGrid();
-  }
-
-  void _cancelEdit() {
-    setState(() => _isEditing = false);
-    _focusGrid();
-  }
-
-  void _setCellValue(int row, int col, String raw) {
-    final cell = _getCell(row, col);
-    _applyRawToCell(cell, raw, row, col);
-    cell.dirty = true;
-
-    // Recalculate dependent formulas
-    _formulaEngine.recalculateAll();
-
-    _formulaBarController.text = _getCell(_selectedRow, _selectedCol).rawValue;
-    _hasUnsaved = true;
-    _scheduleSave();
-    setState(() {});
-  }
-
-  void _clearCellSilently(int row, int col) {
-    final cell = _getCell(row, col);
-    _applyRawToCell(cell, '', row, col);
-    cell.dirty = true;
-  }
-
-  void _writeCellFromSource(
-    int row,
-    int col,
-    CellData source, {
-    int rowOffset = 0,
-    int colOffset = 0,
-    bool shiftFormula = false,
-  }) {
-    final target = _getCell(row, col);
-    final raw = shiftFormula && source.isFormula
-        ? _shiftFormula(source.rawValue, rowOffset, colOffset)
-        : source.rawValue;
-
-    target.bold = source.bold;
-    target.italic = source.italic;
-    target.textAlign = source.textAlign;
-    _applyRawToCell(target, raw, row, col);
-    target.dirty = true;
-  }
-
-  void _finishBatchUpdate() {
-    _formulaEngine.recalculateAll();
-    _formulaBarController.text = _getCell(_selectedRow, _selectedCol).rawValue;
-    _hasUnsaved = true;
-    _scheduleSave();
-    setState(() {});
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // FORMULA BAR
-  // ══════════════════════════════════════════════════════════════════
-
-  void _onFormulaBarSubmitted(String value) {
-    _setCellValue(_selectedRow, _selectedCol, value);
-    _focusGrid();
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // SAVE
-  // ══════════════════════════════════════════════════════════════════
-
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 2), _saveNow);
-  }
-
-  Future<void> _saveNow() async {
-    if (!_hasUnsaved) return;
-    final dirty = Map.fromEntries(
-      _cells.entries.where((e) => e.value.dirty),
-    );
-    if (dirty.isEmpty) {
-      _hasUnsaved = false;
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    await context
-        .read<SpreadsheetService>()
-        .saveCells(widget.spreadsheetId, dirty);
-
-    if (mounted) {
-      setState(() {
-        _isSaving = false;
-        _hasUnsaved = false;
-      });
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // AUTOFILL LOGIC
-  // ══════════════════════════════════════════════════════════════════
-
-  void _performAutofill() {
-    if (!_isMultiSelection ||
-        _dragSourceMinRow == null ||
-        _dragSourceMinCol == null) {
-      return;
-    }
-
-    final sourceMinRow = _dragSourceMinRow!;
-    final sourceMaxRow = _dragSourceMaxRow ?? sourceMinRow;
-    final sourceMinCol = _dragSourceMinCol!;
-    final sourceMaxCol = _dragSourceMaxCol ?? sourceMinCol;
-
-    final sourceHeight = sourceMaxRow - sourceMinRow + 1;
-    final sourceWidth = sourceMaxCol - sourceMinCol + 1;
-    bool changedAny = false;
-
-    for (int r = _minRow; r <= _maxRow; r++) {
-      for (int c = _minCol; c <= _maxCol; c++) {
-        final isInsideOriginalSource = r >= sourceMinRow &&
-            r <= sourceMaxRow &&
-            c >= sourceMinCol &&
-            c <= sourceMaxCol;
-        if (isInsideOriginalSource) continue;
-
-        final sourceRow = sourceMinRow + ((r - _minRow) % sourceHeight);
-        final sourceCol = sourceMinCol + ((c - _minCol) % sourceWidth);
-        final sourceCell = _getCell(sourceRow, sourceCol);
-
-        if (sourceCell.isEmpty) {
-          _clearCellSilently(r, c);
-        } else {
-          _writeCellFromSource(
-            r,
-            c,
-            sourceCell,
-            rowOffset: r - sourceRow,
-            colOffset: c - sourceCol,
-            shiftFormula: sourceCell.isFormula,
-          );
-        }
-        changedAny = true;
-      }
-    }
-
-    if (changedAny) {
-      _finishBatchUpdate();
-    }
-  }
-
-  String _shiftFormula(String formula, int rowOffset, int colOffset) {
-    final refRegex = RegExp(r'\b([A-Z]+)(\d+)\b', caseSensitive: false);
-    return formula.replaceAllMapped(refRegex, (match) {
-      final colStr = match.group(1)!;
-      final rowStr = match.group(2)!;
-      final col = CellModel.letterToCol(colStr.toUpperCase());
-      final row = int.parse(rowStr) - 1;
-
-      final newCol = (col + colOffset).clamp(0, _colCount - 1);
-      final newRow = (row + rowOffset).clamp(0, _rowCount - 1);
-
-      return '${CellModel.colToLetter(newCol)}${newRow + 1}';
-    });
-  }
-
-  String _selectionToText() {
-    final rows = <String>[];
-    for (int r = _minRow; r <= _maxRow; r++) {
-      final values = <String>[];
-      for (int c = _minCol; c <= _maxCol; c++) {
-        values.add(_getCell(r, c).rawValue);
-      }
-      rows.add(values.join('\t'));
-    }
-    return rows.join('\n');
-  }
-
-  Future<void> _copySelectionToClipboard() async {
-    await Clipboard.setData(ClipboardData(text: _selectionToText()));
-  }
-
-  Future<void> _cutSelectionToClipboard() async {
-    await _copySelectionToClipboard();
-    for (int r = _minRow; r <= _maxRow; r++) {
-      for (int c = _minCol; c <= _maxCol; c++) {
-        _clearCellSilently(r, c);
-      }
-    }
-    _finishBatchUpdate();
-  }
-
-  Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text;
-    if (text == null || text.isEmpty) return;
-
-    final rows = text.replaceAll('\r\n', '\n').split('\n').toList();
-    if (rows.isNotEmpty && rows.last.isEmpty) {
-      rows.removeLast();
-    }
-    if (rows.isEmpty) return;
-
-    int widestRow = 0;
-    for (int rowOffset = 0; rowOffset < rows.length; rowOffset++) {
-      final values = rows[rowOffset].split('\t');
-      widestRow = values.length > widestRow ? values.length : widestRow;
-
-      for (int colOffset = 0; colOffset < values.length; colOffset++) {
-        final targetRow = _selectedRow + rowOffset;
-        final targetCol = _selectedCol + colOffset;
-        if (targetRow >= _rowCount || targetCol >= _colCount) continue;
-        final target = _getCell(targetRow, targetCol);
-        _applyRawToCell(target, values[colOffset], targetRow, targetCol);
-        target.dirty = true;
-      }
-    }
-
-    setState(() {
-      _selectionEndRow =
-          (_selectedRow + rows.length - 1).clamp(0, _rowCount - 1);
-      _selectionEndCol = (_selectedCol + widestRow - 1).clamp(0, _colCount - 1);
-    });
-    _finishBatchUpdate();
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // KEYBOARD
-  // ══════════════════════════════════════════════════════════════════
-
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-
-    final key = event.logicalKey;
-
-    if (!_isEditing && _isPrimaryShortcutPressed) {
-      if (key == LogicalKeyboardKey.keyC) {
-        unawaited(_copySelectionToClipboard());
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyX) {
-        unawaited(_cutSelectionToClipboard());
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyV) {
-        unawaited(_pasteFromClipboard());
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.keyA) {
-        _selectAll();
-        return KeyEventResult.handled;
-      }
-    }
-
-    // If editing, handle special keys
-    if (_isEditing) {
-      if (key == LogicalKeyboardKey.enter) {
-        _commitEdit();
-        _moveSelection(1, 0);
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.escape) {
-        _cancelEdit();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.tab) {
-        _commitEdit();
-        _moveSelection(0, 1);
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    }
-
-    // Navigation with Shift for multi-selection
-    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-
-    if (key == LogicalKeyboardKey.arrowDown) {
-      if (isShiftPressed) {
-        final endR = _selectionEndRow ?? _selectedRow;
-        final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd((endR + 1).clamp(0, _rowCount - 1), endC);
-      } else {
-        _moveSelection(1, 0);
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowUp) {
-      if (isShiftPressed) {
-        final endR = _selectionEndRow ?? _selectedRow;
-        final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd((endR - 1).clamp(0, _rowCount - 1), endC);
-      } else {
-        _moveSelection(-1, 0);
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight) {
-      if (isShiftPressed) {
-        final endR = _selectionEndRow ?? _selectedRow;
-        final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd(endR, (endC + 1).clamp(0, _colCount - 1));
-      } else {
-        _moveSelection(0, 1);
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      if (isShiftPressed) {
-        final endR = _selectionEndRow ?? _selectedRow;
-        final endC = _selectionEndCol ?? _selectedCol;
-        _updateSelectionEnd(endR, (endC - 1).clamp(0, _colCount - 1));
-      } else {
-        _moveSelection(0, -1);
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.tab) {
-      _moveSelection(0, 1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.enter) {
-      _moveSelection(1, 0);
-      return KeyEventResult.handled;
-    }
-
-    // Delete
-    if (key == LogicalKeyboardKey.delete ||
-        key == LogicalKeyboardKey.backspace) {
-      if (_isMultiSelection) {
-        for (int r = _minRow; r <= _maxRow; r++) {
-          for (int c = _minCol; c <= _maxCol; c++) {
-            _setCellValue(r, c, '');
-          }
-        }
-      } else {
-        _setCellValue(_selectedRow, _selectedCol, '');
-      }
-      return KeyEventResult.handled;
-    }
-
-    // F2 to edit
-    if (key == LogicalKeyboardKey.f2) {
-      _startEditing();
-      return KeyEventResult.handled;
-    }
-
-    // Start typing to edit
-    if (event.character != null &&
-        event.character!.isNotEmpty &&
-        !HardwareKeyboard.instance.isControlPressed &&
-        !HardwareKeyboard.instance.isMetaPressed) {
-      _startTyping(event.character!);
-      return KeyEventResult.handled;
-    }
-
-    return KeyEventResult.ignored;
-  }
-
-  void _moveSelection(int dRow, int dCol) {
-    setState(() {
-      _selectedRow = (_selectedRow + dRow).clamp(0, _rowCount - 1);
-      _selectedCol = (_selectedCol + dCol).clamp(0, _colCount - 1);
-      _selectionEndRow = null;
-      _selectionEndCol = null;
-      final cell = _getCell(_selectedRow, _selectedCol);
-      _formulaBarController.text = cell.rawValue;
-    });
-    _ensureVisibleCell(_selectedRow, _selectedCol);
-    _focusGrid();
-  }
-
-  void _ensureVisibleCell(int row, int col) {
-    if (!_hScrollController.hasClients || !_vScrollController.hasClients) {
-      return;
-    }
-
-    final targetX = _headerWidth + col * _cellWidth;
-    final targetY = _headerHeight + row * _cellHeight;
-    final viewportWidth = _hScrollController.position.viewportDimension;
-    final viewportHeight = _vScrollController.position.viewportDimension;
-
-    if (targetX < _hScrollController.offset) {
-      _hScrollController.jumpTo(targetX);
-    } else if (targetX + _cellWidth >
-        _hScrollController.offset + viewportWidth) {
-      _hScrollController.jumpTo(targetX + _cellWidth - viewportWidth);
-    }
-
-    if (targetY < _vScrollController.offset) {
-      _vScrollController.jumpTo(targetY);
-    } else if (targetY + _cellHeight >
-        _vScrollController.offset + viewportHeight) {
-      _vScrollController.jumpTo(targetY + _cellHeight - viewportHeight);
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // POINTER HANDLERS (simple Excel model: click=select, drag=extend)
-  // ══════════════════════════════════════════════════════════════════
-
-  void _onGridPointerDown(PointerDownEvent details) {
-    final x = details.localPosition.dx;
-    final y = details.localPosition.dy;
-
-    // Header: select all
-    if (x < _headerWidth && y < _headerHeight) {
-      _selectAll();
-      return;
-    }
-    // Row header: select row
-    if (x < _headerWidth) {
-      final row =
-          ((y - _headerHeight) / _cellHeight).floor().clamp(0, _rowCount - 1);
-      _selectRow(row);
-      return;
-    }
-    // Column header: select column
-    if (y < _headerHeight) {
-      final col =
-          ((x - _headerWidth) / _cellWidth).floor().clamp(0, _colCount - 1);
-      _selectColumn(col);
-      return;
-    }
-
-    final col = ((x - _headerWidth) / _cellWidth).floor();
-    final row = ((y - _headerHeight) / _cellHeight).floor();
-    if (row < 0 || row >= _rowCount || col < 0 || col >= _colCount) return;
-
-    // Fill handle
-    if ((_isMultiSelection || (row == _selectedRow && col == _selectedCol)) &&
-        _isOverFillHandle(x, y)) {
-      if (_isEditing) _commitEdit();
-      _captureCurrentSelectionForDrag();
-      _isDraggingHandle = true;
-      return;
-    }
-
-    // Clicking inside the active inline editor — let EditableText handle it
-    if (_isEditing && row == _selectedRow && col == _selectedCol) {
-      return;
-    }
-
-    // Commit any active edit before selecting a new cell
-    if (_isEditing) _commitEdit();
-
-    // Select (or extend with Shift)
-    if (HardwareKeyboard.instance.isShiftPressed) {
-      _updateSelectionEnd(row, col);
-    } else {
-      _selectCell(row, col);
-    }
-    _isSelectingRange = true;
-  }
-
-  void _onGridPointerMove(PointerMoveEvent details) {
-    if (!details.down) return;
-    final x = details.localPosition.dx;
-    final y = details.localPosition.dy;
-    if (x < _headerWidth || y < _headerHeight) return;
-
-    final col =
-        ((x - _headerWidth) / _cellWidth).floor().clamp(0, _colCount - 1);
-    final row =
-        ((y - _headerHeight) / _cellHeight).floor().clamp(0, _rowCount - 1);
-
-    if (_isDraggingHandle || _isSelectingRange) {
-      _updateSelectionEnd(row, col);
-    }
-  }
-
-  void _onGridPointerUp(PointerUpEvent details) {
-    if (_isDraggingHandle && _isMultiSelection) {
-      _performAutofill();
-    }
-    _resetPointerState();
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  // UI
-  // ══════════════════════════════════════════════════════════════════
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const MainLayout(
-        child: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
-    }
-
     final theme = Theme.of(context);
-    final cellRef = '${CellModel.colToLetter(_selectedCol)}${_selectedRow + 1}';
 
     return MainLayout(
       child: Scaffold(
         backgroundColor: theme.colorScheme.surface,
         body: Column(
           children: [
-            // ── Top bar ──
             Container(
               height: 48,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -824,51 +690,17 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 20),
                     onPressed: () {
-                      _saveNow();
+                      unawaited(_saveNow());
                       context.go('/tools/spreadsheets');
                     },
                     tooltip: 'Volver',
                   ),
                   const SizedBox(width: 8),
-                  // Editable title
                   Expanded(
                     child: GestureDetector(
-                      onDoubleTap: () async {
-                        final ctrl =
-                            TextEditingController(text: _sheet?.name ?? '');
-                        final result = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Renombrar'),
-                            content: TextField(
-                              controller: ctrl,
-                              autofocus: true,
-                              onSubmitted: (v) => Navigator.of(ctx).pop(v),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(),
-                                child: const Text('Cancelar'),
-                              ),
-                              FilledButton(
-                                onPressed: () =>
-                                    Navigator.of(ctx).pop(ctrl.text),
-                                child: const Text('OK'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (result != null && result.isNotEmpty && mounted) {
-                          await context
-                              .read<SpreadsheetService>()
-                              .renameSpreadsheet(_sheet!.id!, result);
-                          setState(
-                              () => _sheet = _sheet!.copyWith(name: result));
-                        }
-                        ctrl.dispose();
-                      },
+                      onDoubleTap: _renameSheet,
                       child: Text(
-                        _sheet?.name ?? '',
+                        _sheet?.name ?? 'Planilla sin titulo',
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
@@ -877,7 +709,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                       ),
                     ),
                   ),
-                  // Save indicator
                   if (_isSaving)
                     const SizedBox(
                       width: 16,
@@ -885,557 +716,368 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   else if (_hasUnsaved)
-                    Icon(Icons.cloud_upload_outlined,
-                        size: 16, color: Colors.orange.shade600)
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 16,
+                      color: Colors.orange.shade600,
+                    )
                   else
-                    Icon(Icons.cloud_done_outlined,
-                        size: 16, color: Colors.green.shade600),
+                    Icon(
+                      Icons.cloud_done_outlined,
+                      size: 16,
+                      color: Colors.green.shade600,
+                    ),
                   const SizedBox(width: 12),
                 ],
               ),
             ),
-
-            // ── Formula bar ──
-            Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade200),
-                ),
-              ),
-              child: Row(
+            Expanded(
+              child: Stack(
                 children: [
-                  // Cell reference badge
-                  Container(
-                    width: 60,
-                    alignment: Alignment.center,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(4),
-                      color: Colors.white,
-                    ),
-                    child: Text(
-                      cellRef,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                        fontFamily: 'monospace',
+                  Positioned.fill(
+                    child: _supportsEmbeddedEditor
+                        ? _buildEmbeddedEditor()
+                        : _buildUnsupportedView(),
+                  ),
+                  if (_platformMessage != null && _supportsEmbeddedEditor)
+                    Positioned.fill(child: _buildUnsupportedView()),
+                  if (_isLoading)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.white,
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 1,
-                    height: 20,
-                    color: Colors.grey.shade300,
-                  ),
-                  const SizedBox(width: 8),
-                  // Formula input
-                  Expanded(
-                    child: TextField(
-                      controller: _formulaBarController,
-                      focusNode: _formulaBarFocusNode,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
-                        hintText:
-                            'Escribe un valor o fórmula (ej: =SUM(A1:A10))',
-                        hintStyle: TextStyle(fontSize: 12),
-                      ),
-                      onSubmitted: _onFormulaBarSubmitted,
-                    ),
-                  ),
                 ],
               ),
             ),
-
-            // ── Spreadsheet grid ──
-            Expanded(
-              child: Focus(
-                autofocus: true,
-                focusNode: _gridFocusNode,
-                onKeyEvent: _handleKeyEvent,
-                child: _buildGrid(theme),
-              ),
-            ),
-
-            // ── Quick Stats Bottom Bar ──
-            if (_isMultiSelection) _buildQuickStatsBar(theme),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildQuickStatsBar(ThemeData theme) {
-    double sum = 0;
-    int count = 0;
-    int numCount = 0;
+const String _spreadsheetShellHtml = '''
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planillas</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/x-data-spreadsheet@1.1.5/dist/xspreadsheet.css"
+    />
+    <style>
+      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: #fff;
+      }
+      #spreadsheet {
+        width: 100vw;
+        height: 100vh;
+      }
+      #status {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #334155;
+        background: #fff;
+        z-index: 9999;
+        font-size: 14px;
+      }
+      #debug-overlay {
+        position: fixed;
+        bottom: 4px;
+        right: 4px;
+        background: rgba(0,0,0,0.75);
+        color: #0f0;
+        font: 11px/1.3 monospace;
+        padding: 4px 8px;
+        border-radius: 4px;
+        z-index: 99999;
+        pointer-events: none;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Cargando editor de planillas...</div>
+    <div id="spreadsheet"></div>
+    <div id="debug-overlay"></div>
 
-    for (int r = _minRow; r <= _maxRow; r++) {
-      for (int c = _minCol; c <= _maxCol; c++) {
-        final cell = _getCell(r, c);
-        if (cell.isEmpty) continue;
-        count++;
+    <script>
+      // ──────────────────────────────────────────────────────────
+      // FORCE devicePixelRatio = 1 at every level we can reach.
+      // On macOS Retina WKWebView, the native DPR is 2.
+      // The spreadsheet library scales its canvas by DPR, which
+      // causes a coordinate mismatch with CSS-pixel mouse events.
+      // ──────────────────────────────────────────────────────────
+      (function() {
+        var realDpr = window.devicePixelRatio || 1;
 
-        final val =
-            double.tryParse(cell.isFormula ? cell.displayValue : cell.rawValue);
-        if (val != null) {
-          sum += val;
-          numCount++;
+        function forceDpr(obj) {
+          try {
+            Object.defineProperty(obj, 'devicePixelRatio', {
+              get: function() { return 1; },
+              configurable: true
+            });
+          } catch(e) {}
         }
-      }
-    }
 
-    if (numCount == 0 && count == 0) return const SizedBox.shrink();
+        forceDpr(window);
+        forceDpr(Window.prototype);
 
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade300),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (numCount > 0) ...[
-            Text('Promedio: ${(sum / numCount).toStringAsFixed(2)}',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            const SizedBox(width: 16),
-            Text('Recuento nums: $numCount',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            const SizedBox(width: 16),
-            Text('Suma: ${sum.toStringAsFixed(2)}',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            const SizedBox(width: 16),
-          ],
-          Text('Recuento: $count',
-              style:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
+        // Some engines read from screen
+        try {
+          if (window.screen) {
+            forceDpr(window.screen);
+          }
+        } catch(e) {}
 
-  Widget _buildGrid(ThemeData theme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = _headerWidth + _colCount * _cellWidth;
-        final totalHeight = _headerHeight + _rowCount * _cellHeight;
+        // Show debug info
+        var dbg = document.getElementById('debug-overlay');
+        if (dbg) {
+          dbg.textContent = 'realDPR=' + realDpr + ' forcedDPR=' + (window.devicePixelRatio);
+        }
 
-        return ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(
-            scrollbars: true,
-          ),
-          child: Scrollbar(
-            controller: _vScrollController,
-            thumbVisibility: true,
-            child: Scrollbar(
-              controller: _hScrollController,
-              thumbVisibility: true,
-              notificationPredicate: (n) => n.depth == 1,
-              child: SingleChildScrollView(
-                controller: _vScrollController,
-                child: SingleChildScrollView(
-                  controller: _hScrollController,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: totalWidth,
-                    height: totalHeight,
-                    child: CustomPaint(
-                      painter: _SpreadsheetPainter(
-                        cells: _cells,
-                        selectedRow: _selectedRow,
-                        selectedCol: _selectedCol,
-                        isEditing: _isEditing,
-                        selectionEndRow: _selectionEndRow,
-                        selectionEndCol: _selectionEndCol,
-                        isDraggingHandle: _isDraggingHandle,
-                        rowCount: _rowCount,
-                        colCount: _colCount,
-                        cellWidth: _cellWidth,
-                        cellHeight: _cellHeight,
-                        headerWidth: _headerWidth,
-                        headerHeight: _headerHeight,
-                        theme: theme,
-                      ),
-                      child: Stack(
-                        children: [
-                          Listener(
-                            onPointerDown: _onGridPointerDown,
-                            onPointerMove: _onGridPointerMove,
-                            onPointerUp: _onGridPointerUp,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onDoubleTapDown: (details) {
-                                final x = details.localPosition.dx;
-                                final y = details.localPosition.dy;
-                                if (x < _headerWidth || y < _headerHeight)
-                                  return;
-                                final col =
-                                    ((x - _headerWidth) / _cellWidth).floor();
-                                final row =
-                                    ((y - _headerHeight) / _cellHeight).floor();
-                                if (row >= 0 &&
-                                    row < _rowCount &&
-                                    col >= 0 &&
-                                    col < _colCount) {
-                                  _selectCell(row, col);
-                                  _startEditing();
-                                }
-                              },
-                              child: Container(
-                                width: totalWidth,
-                                height: totalHeight,
-                                color: Colors.transparent,
-                              ),
-                            ),
-                          ),
-                          if (_isEditing)
-                            Positioned(
-                              left:
-                                  _headerWidth + _selectedCol * _cellWidth + 1,
-                              top: _headerHeight +
-                                  _selectedRow * _cellHeight +
-                                  1,
-                              width: _cellWidth - 2,
-                              height: _cellHeight - 2,
-                              child: ColoredBox(
-                                color: Colors.white,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 4),
-                                  child: Center(
-                                    child: SizedBox(
-                                      height: 18,
-                                      child: EditableText(
-                                        controller: _cellEditController,
-                                        focusNode: _cellEditFocusNode,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          height: 1.0,
-                                          color: Colors.black87,
-                                        ),
-                                        strutStyle: const StrutStyle(
-                                          fontSize: 13,
-                                          height: 1.0,
-                                          forceStrutHeight: true,
-                                        ),
-                                        maxLines: 1,
-                                        cursorColor: Colors.blue,
-                                        backgroundCursorColor: Colors.black54,
-                                        textAlign: TextAlign.left,
-                                        selectionColor:
-                                            Colors.blue.withOpacity(0.18),
-                                        onSubmitted: (_) {
-                                          _commitEdit();
-                                          _moveSelection(1, 0);
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+        // x-data-spreadsheet uses raw MouseEvent.offsetX/offsetY for hit testing.
+        // In embedded desktop WebViews those values can be relative to a nested child
+        // instead of the spreadsheet overlay, which shifts selection left/up.
+        var nativeOffsetX = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'offsetX');
+        var nativeOffsetY = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'offsetY');
+        window.__flutterPointer = { x: null, y: null, ts: 0 };
 
-// ══════════════════════════════════════════════════════════════════
-// CUSTOM PAINTER — renders the entire grid efficiently
-// ══════════════════════════════════════════════════════════════════
-class _SpreadsheetPainter extends CustomPainter {
-  final Map<String, CellData> cells;
-  final int selectedRow;
-  final int selectedCol;
-  final bool isEditing;
-  final int? selectionEndRow;
-  final int? selectionEndCol;
-  final bool isDraggingHandle;
-  final int rowCount;
-  final int colCount;
-  final double cellWidth;
-  final double cellHeight;
-  final double headerWidth;
-  final double headerHeight;
-  final ThemeData theme;
+        window.__setFlutterPointer = function(x, y) {
+          window.__flutterPointer = {
+            x: Number(x),
+            y: Number(y),
+            ts: Date.now(),
+          };
+        };
 
-  _SpreadsheetPainter({
-    required this.cells,
-    required this.selectedRow,
-    required this.selectedCol,
-    this.isEditing = false,
-    this.selectionEndRow,
-    this.selectionEndCol,
-    this.isDraggingHandle = false,
-    required this.rowCount,
-    required this.colCount,
-    required this.cellWidth,
-    required this.cellHeight,
-    required this.headerWidth,
-    required this.headerHeight,
-    required this.theme,
-  });
+        function spreadsheetCoordRoot(target) {
+          if (target && target.closest) {
+            var closestRoot = target.closest('.x-spreadsheet-overlayer') ||
+              target.closest('.x-spreadsheet') ||
+              target.closest('#spreadsheet');
+            if (closestRoot) return closestRoot;
+          }
 
-  bool get _isMultiSelection =>
-      selectionEndRow != null &&
-      selectionEndCol != null &&
-      (selectionEndRow != selectedRow || selectionEndCol != selectedCol);
+          return document.querySelector('.x-spreadsheet-overlayer') ||
+            document.querySelector('.x-spreadsheet') ||
+            document.getElementById('spreadsheet');
+        }
 
-  int get _minRow => _isMultiSelection
-      ? (selectedRow < selectionEndRow! ? selectedRow : selectionEndRow!)
-      : selectedRow;
-  int get _maxRow => _isMultiSelection
-      ? (selectedRow > selectionEndRow! ? selectedRow : selectionEndRow!)
-      : selectedRow;
-  int get _minCol => _isMultiSelection
-      ? (selectedCol < selectionEndCol! ? selectedCol : selectionEndCol!)
-      : selectedCol;
-  int get _maxCol => _isMultiSelection
-      ? (selectedCol > selectionEndCol! ? selectedCol : selectionEndCol!)
-      : selectedCol;
+        function normalizedOffset(event, axis) {
+          var root = spreadsheetCoordRoot(event.target);
+          if (!root) {
+            if (axis === 'x' && nativeOffsetX && nativeOffsetX.get) return nativeOffsetX.get.call(event);
+            if (axis === 'y' && nativeOffsetY && nativeOffsetY.get) return nativeOffsetY.get.call(event);
+            return axis === 'x' ? event.clientX : event.clientY;
+          }
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = Colors.grey.shade200
-      ..strokeWidth = 0.5;
-    final headerBg = Paint()..color = Colors.grey.shade100;
+          var rect = root.getBoundingClientRect();
+          var flutterPointer = window.__flutterPointer || {};
+          var shouldUseFlutterPointer =
+            event && typeof event.type === 'string' &&
+            (event.type === 'mousedown' ||
+              event.type === 'mouseup' ||
+              event.type === 'click');
+          var hasFreshFlutterPointer =
+            Number.isFinite(flutterPointer.x) &&
+            Number.isFinite(flutterPointer.y) &&
+            typeof flutterPointer.ts === 'number' &&
+            Date.now() - flutterPointer.ts < 250;
+          var baseX = shouldUseFlutterPointer && hasFreshFlutterPointer
+            ? flutterPointer.x
+            : event.clientX;
+          var baseY = shouldUseFlutterPointer && hasFreshFlutterPointer
+            ? flutterPointer.y
+            : event.clientY;
+          var value = axis === 'x' ? baseX - rect.left : baseY - rect.top;
+          return Math.max(0, value);
+        }
 
-    final selectionBorderPaint = Paint()
-      ..color = Colors.blue.shade600
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+        try {
+          Object.defineProperty(MouseEvent.prototype, 'offsetX', {
+            get: function() { return normalizedOffset(this, 'x'); },
+            configurable: true
+          });
+          Object.defineProperty(MouseEvent.prototype, 'offsetY', {
+            get: function() { return normalizedOffset(this, 'y'); },
+            configurable: true
+          });
+        } catch (e) {}
+      })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/x-data-spreadsheet@1.1.5/dist/xspreadsheet.js"></script>
+    <script>
+      (function () {
+        let spreadsheet = null;
+        let isBootstrapping = false;
+        let changeTimer = null;
 
-    final selectionFillPaint = Paint()
-      ..color = Colors.blue.withOpacity(0.1)
-      ..style = PaintingStyle.fill;
+        // ── Debug click logger ──────────────────────────────
+        document.addEventListener('mousedown', function(e) {
+          var dbg = document.getElementById('debug-overlay');
+          if (dbg) {
+            var host = document.getElementById('spreadsheet');
+            var rect = host ? host.getBoundingClientRect() : {};
+            var target = e.target;
+            var coordRoot = target && target.closest
+              ? (target.closest('.x-spreadsheet-overlayer') ||
+                  target.closest('.x-spreadsheet') ||
+                  target.closest('#spreadsheet'))
+              : null;
+            var rootRect = coordRoot ? coordRoot.getBoundingClientRect() : null;
+            dbg.textContent =
+              'click: (' + e.clientX + ',' + e.clientY + ')' +
+              '  offset: (' + e.offsetX + ',' + e.offsetY + ')' +
+              '\\nhost rect: (' + Math.round(rect.left||0) + ',' + Math.round(rect.top||0) +
+              ') ' + Math.round(rect.width||0) + 'x' + Math.round(rect.height||0) +
+              '\\ncoord root: ' + (coordRoot ? coordRoot.className : 'none') +
+              ' @ (' + Math.round(rootRect && rootRect.left || 0) + ',' + Math.round(rootRect && rootRect.top || 0) + ')' +
+              '\\nflutter ptr: (' + (window.__flutterPointer && window.__flutterPointer.x) + ',' +
+                (window.__flutterPointer && window.__flutterPointer.y) + ') age=' +
+                (window.__flutterPointer ? (Date.now() - window.__flutterPointer.ts) : 'na') +
+              '\\ndpr(now): ' + window.devicePixelRatio +
+              '  inner: ' + window.innerWidth + 'x' + window.innerHeight;
+          }
+        }, true);
 
-    final selectionHeaderBg = Paint()..color = Colors.blue.shade50;
+        function sendMessage(message) {
+          if (window.SpreadsheetBridge && window.SpreadsheetBridge.postMessage) {
+            window.SpreadsheetBridge.postMessage(JSON.stringify(message));
+            return;
+          }
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(message);
+          }
+        }
 
-    final minR = _minRow;
-    final maxR = _maxRow;
-    final minC = _minCol;
-    final maxC = _maxCol;
+        function showStatus(text) {
+          var s = document.getElementById('status');
+          if (s) { s.textContent = text; s.style.display = 'flex'; }
+        }
 
-    // ── Column headers ──
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, headerHeight),
-      headerBg,
-    );
-    for (int c = 0; c < colCount; c++) {
-      final x = headerWidth + c * cellWidth;
-      // Highlight selected column header(s)
-      final isSelected = c >= minC && c <= maxC;
-      if (isSelected) {
-        canvas.drawRect(
-          Rect.fromLTWH(x, 0, cellWidth, headerHeight),
-          selectionHeaderBg,
-        );
-      }
-      // Column letter
-      final label = CellModel.colToLetter(c);
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.blue.shade700 : Colors.grey.shade600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(
-        canvas,
-        Offset(
-          x + (cellWidth - tp.width) / 2,
-          (headerHeight - tp.height) / 2,
-        ),
-      );
-      // Vertical line
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        gridPaint,
-      );
-    }
+        function hideStatus() {
+          var s = document.getElementById('status');
+          if (s) { s.style.display = 'none'; }
+        }
 
-    // ── Row headers ──
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, headerWidth, size.height),
-      headerBg,
-    );
-    for (int r = 0; r < rowCount; r++) {
-      final y = headerHeight + r * cellHeight;
-      // Highlight selected row header(s)
-      final isSelected = r >= minR && r <= maxR;
-      if (isSelected) {
-        canvas.drawRect(
-          Rect.fromLTWH(0, y, headerWidth, cellHeight),
-          selectionHeaderBg,
-        );
-      }
-      final label = '${r + 1}';
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.blue.shade700 : Colors.grey.shade600,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(
-        canvas,
-        Offset(
-          (headerWidth - tp.width) / 2,
-          y + (cellHeight - tp.height) / 2,
-        ),
-      );
-      // Horizontal line
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
-    }
+        function flattenSheets(rawData) {
+          var sheets = Array.isArray(rawData) ? rawData : [rawData];
+          var sheet = sheets[0] || {};
+          var rows = sheet.rows || {};
+          var cells = [];
 
-    // ── Top-left corner ──
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, headerWidth, headerHeight),
-      headerBg,
-    );
+          Object.keys(rows).forEach(function(rowKey) {
+            if (rowKey === 'len') return;
+            var row = rows[rowKey];
+            if (!row || !row.cells) return;
 
-    // ── Cell values ──
-    for (final entry in cells.entries) {
-      final cell = entry.value;
-      if (cell.isEmpty) continue;
+            Object.keys(row.cells).forEach(function(colKey) {
+              var cell = row.cells[colKey] || {};
+              var text = cell.text == null ? '' : String(cell.text);
+              if (!text) return;
+              cells.push({ row: Number(rowKey), col: Number(colKey), rawValue: text });
+            });
+          });
 
-      final parts = entry.key.split(',');
-      final row = int.parse(parts[0]);
-      final col = int.parse(parts[1]);
-      if (row >= rowCount || col >= colCount) continue;
-      if (isEditing && row == selectedRow && col == selectedCol) continue;
+          return {
+            name: sheet.name || 'Planilla',
+            rowCount: (sheet.rows && sheet.rows.len) || 100,
+            colCount: (sheet.cols && sheet.cols.len) || 26,
+            cells: cells,
+          };
+        }
 
-      final x = headerWidth + col * cellWidth;
-      final y = headerHeight + row * cellHeight;
+        function scheduleEmitChange() {
+          if (isBootstrapping || !spreadsheet) return;
+          if (changeTimer) window.clearTimeout(changeTimer);
 
-      final displayText = cell.isFormula ? cell.displayValue : cell.rawValue;
+          changeTimer = window.setTimeout(function() {
+            try {
+              sendMessage({ type: 'change', payload: flattenSheets(spreadsheet.getData()) });
+            } catch (error) {
+              sendMessage({ type: 'error', message: String(error) });
+            }
+          }, 120);
+        }
 
-      TextAlign align;
-      switch (cell.textAlign) {
-        case 'center':
-          align = TextAlign.center;
-          break;
-        case 'right':
-          align = TextAlign.right;
-          break;
-        default:
-          // Right-align numbers by default
-          align = cell.cellType == 'number' ? TextAlign.right : TextAlign.left;
-      }
+        function ensureSpreadsheet() {
+          if (!window.x_spreadsheet) {
+            showStatus('No se pudo cargar el motor de planillas.');
+            sendMessage({ type: 'error', message: 'x-data-spreadsheet no se cargo correctamente.' });
+            return;
+          }
 
-      final tp = TextPainter(
-        text: TextSpan(
-          text: displayText,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.black87,
-            fontWeight: cell.bold ? FontWeight.bold : FontWeight.normal,
-            fontStyle: cell.italic ? FontStyle.italic : FontStyle.normal,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-        textAlign: align,
-        maxLines: 1,
-        ellipsis: '…',
-      )..layout(maxWidth: cellWidth - 8);
+          spreadsheet = window.x_spreadsheet('#spreadsheet', {
+            mode: 'edit',
+            showToolbar: true,
+            showGrid: true,
+            showContextmenu: true,
+            showBottomBar: false,
+            row: { len: 100, height: 28 },
+            col: { len: 26, width: 120, minWidth: 72, indexWidth: 56 },
+          }).change(function() {
+            scheduleEmitChange();
+          });
 
-      double offsetX;
-      if (align == TextAlign.right) {
-        offsetX = x + cellWidth - tp.width - 6;
-      } else if (align == TextAlign.center) {
-        offsetX = x + (cellWidth - tp.width) / 2;
-      } else {
-        offsetX = x + 4;
-      }
+          window.addEventListener('resize', function() {
+            if (spreadsheet && typeof spreadsheet.resize === 'function') {
+              spreadsheet.resize();
+            }
+          });
 
-      tp.paint(
-        canvas,
-        Offset(offsetX, y + (cellHeight - tp.height) / 2),
-      );
-    }
+          hideStatus();
+          sendMessage({ type: 'ready' });
+        }
 
-    // ── Selection Overlay ──
-    final selX = headerWidth + minC * cellWidth;
-    final selY = headerHeight + minR * cellHeight;
-    final selW = (maxC - minC + 1) * cellWidth;
-    final selH = (maxR - minR + 1) * cellHeight;
+        window.bootstrapSpreadsheet = function (payload) {
+          if (!spreadsheet) return;
 
-    // Fill the selection (except the primary cell)
-    if (_isMultiSelection) {
-      canvas.drawRect(
-          Rect.fromLTWH(selX, selY, selW, selH), selectionFillPaint);
+          var data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+          var rows = { len: data.rowCount || 100 };
+          var cols = { len: data.colCount || 26 };
+          var sourceCells = Array.isArray(data.cells) ? data.cells : [];
 
-      // Clear fill from the active cell
-      final activeX = headerWidth + selectedCol * cellWidth;
-      final activeY = headerHeight + selectedRow * cellHeight;
-      canvas.drawRect(
-          Rect.fromLTWH(activeX, activeY, cellWidth, cellHeight),
-          Paint()
-            ..color = Colors.white
-            ..blendMode = BlendMode.clear);
-    }
+          sourceCells.forEach(function(entry) {
+            var rowIndex = Number(entry.row);
+            var colIndex = Number(entry.col);
+            var rawValue = entry.rawValue == null ? '' : String(entry.rawValue);
+            if (!rawValue) return;
 
-    // Draw the main border around the selection
-    canvas.drawRect(
-        Rect.fromLTWH(selX, selY, selW, selH), selectionBorderPaint);
+            var rowKey = String(rowIndex);
+            var colKey = String(colIndex);
+            rows[rowKey] = rows[rowKey] || { cells: {} };
+            rows[rowKey].cells = rows[rowKey].cells || {};
+            rows[rowKey].cells[colKey] = { text: rawValue };
+          });
 
-    // ── Autofill Handle ──
-    final handleSize = 6.0;
-    final handleX = selX + selW; // bottom right
-    final handleY = selY + selH;
+          isBootstrapping = true;
+          spreadsheet.loadData([{ name: data.name || 'Planilla', rows: rows, cols: cols }]);
+          window.setTimeout(function() {
+            isBootstrapping = false;
+            if (spreadsheet && typeof spreadsheet.resize === 'function') {
+              spreadsheet.resize();
+            }
+            hideStatus();
+          }, 0);
+        };
 
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(handleX, handleY),
-        width: handleSize,
-        height: handleSize,
-      ),
-      Paint()..color = Colors.blue.shade700,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpreadsheetPainter oldDelegate) {
-    return true; // Repaint on every state change for simplicity
-  }
-}
+        window.addEventListener('load', ensureSpreadsheet);
+      })();
+    </script>
+  </body>
+</html>
+''';
