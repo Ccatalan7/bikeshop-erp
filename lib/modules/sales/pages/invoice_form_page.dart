@@ -38,7 +38,6 @@ import 'dart:io' show Platform, File;
 import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
-import '../../../shared/services/whatsapp_service.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
 ///
@@ -872,97 +871,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
-  Future<void> _sendInvoiceToCustomer() async {
-    final invoice = _loadedInvoice;
-    if (invoice == null || invoice.id == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Guarda la factura antes de enviarla al cliente.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    final customer = _selectedCustomer;
-    final customerPhone = customer?.phone?.trim();
-    if (customer == null || customerPhone == null || customerPhone.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'El cliente debe tener un teléfono para enviar la factura.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    setState(() => _isUpdatingStatus = true);
-    try {
-      final whatsappService = WhatsAppService();
-      final success = await whatsappService.sendInvoice(
-        context: context,
-        customerPhone: customerPhone,
-        customerName: customer.name,
-        invoice: invoice,
-      );
-
-      if (!success || !mounted) {
-        return;
-      }
-
-      final shouldMarkAsSent = _status == InvoiceStatus.draft;
-      final markedAsSent = !shouldMarkAsSent ||
-          await _updateStatusInternal(
-            InvoiceStatus.sent,
-            showFeedback: false,
-          );
-
-      if (!mounted) {
-        return;
-      }
-
-      final message = switch (whatsappService.lastDeliveryMethod) {
-        WhatsAppDeliveryMethod.cloudApi => markedAsSent
-            ? 'Factura enviada por WhatsApp Cloud API y marcada como enviada'
-            : 'Factura enviada por WhatsApp Cloud API',
-        WhatsAppDeliveryMethod.manualFallback => markedAsSent
-            ? 'WhatsApp abierto con la factura lista para enviar y marcada como enviada'
-            : 'WhatsApp abierto con la factura lista para enviar',
-        WhatsAppDeliveryMethod.failed => 'No se pudo enviar la factura',
-      };
-
-      final backgroundColor =
-          whatsappService.lastDeliveryMethod == WhatsAppDeliveryMethod.failed
-              ? Colors.red
-              : Colors.green;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: backgroundColor,
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo enviar la factura: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
   Future<void> _openPaymentForm() async {
     final invoiceId = _currentInvoiceId;
     if (invoiceId == null) {
@@ -1656,7 +1564,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             if (_canMarkAsSent) {
               if (isMobile) {
                 actionButtons.add(IconButton.filled(
-                  onPressed: _isUpdatingStatus ? null : _sendInvoiceToCustomer,
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.sent),
                   icon: _isUpdatingStatus
                       ? const SizedBox(
                           width: 16,
@@ -1664,13 +1574,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.send_outlined),
-                  tooltip: 'Enviar al cliente',
+                  tooltip: 'Enviar',
                 ));
               } else {
                 actionButtons.add(
                   FilledButton.icon(
-                    onPressed:
-                        _isUpdatingStatus ? null : _sendInvoiceToCustomer,
+                    onPressed: _isUpdatingStatus
+                        ? null
+                        : () => _updateStatus(InvoiceStatus.sent),
                     icon: _isUpdatingStatus
                         ? const SizedBox(
                             height: 16,
@@ -1678,7 +1589,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.send_outlined),
-                    label: const Text('Enviar al cliente'),
+                    label: const Text('Enviar'),
                   ),
                 );
               }
