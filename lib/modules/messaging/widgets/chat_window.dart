@@ -19,6 +19,9 @@ import 'parsed_message_text.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import 'assign_context_dialog.dart';
+import '../../../shared/services/whatsapp_service.dart';
+import '../../../shared/services/database_service.dart';
+import '../../../shared/utils/invoice_pdf_generator.dart';
 
 class ChatWindow extends StatefulWidget {
   final Conversation conversation;
@@ -39,6 +42,7 @@ class _ChatWindowState extends State<ChatWindow> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final MessagingService _messagingService = MessagingService();
+  bool _isSendingMessage = false;
 
   // Autocomplete State
   List<AutocompleteSuggestion> _suggestions = [];
@@ -264,20 +268,104 @@ class _ChatWindowState extends State<ChatWindow> {
     });
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isNotEmpty) {
-      context.read<ChatProvider>().sendMessage(text);
-      _messageController.clear();
-      // Keep focus on the text field after sending
-      // On Web, post-frame callback isn't always enough due to engine/DOM sync.
-      // A small delay ensures the focus request happens after the UI settles.
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          FocusScope.of(context).requestFocus(_focusNode);
-        }
-      });
+    if (text.isEmpty || _isSendingMessage) {
+      return;
     }
+
+    final chatProvider = context.read<ChatProvider>();
+    final pendingText = text;
+    final optimisticMessageId =
+        'temp-wa-${DateTime.now().millisecondsSinceEpoch}';
+
+    _messageController.clear();
+    _restoreComposerFocus();
+    setState(() => _isSendingMessage = true);
+
+    try {
+      if (widget.conversation.type == 'support') {
+        final contact = await _resolveConversationWhatsAppContact();
+        final phone = contact?['phone']?.toString();
+
+        if (phone != null && phone.isNotEmpty) {
+          final whatsappService = WhatsAppService();
+          chatProvider.addOptimisticMessage(
+            Message(
+              id: optimisticMessageId,
+              conversationId: widget.conversation.id,
+              senderId: _messagingService.currentUserId,
+              content: pendingText,
+              type: 'text',
+              metadata: const {
+                'channel': 'whatsapp',
+                'provider': 'whatsapp',
+                'pending': true,
+              },
+              createdAt: DateTime.now(),
+              isMe: true,
+            ),
+          );
+
+          final success = await whatsappService.sendMessage(
+            context: context,
+            customerPhone: phone,
+            message: pendingText,
+          );
+
+          if (!mounted) {
+            return;
+          }
+
+          if (!success) {
+            chatProvider.removeMessageById(optimisticMessageId);
+            throw Exception('No se pudo enviar el mensaje por WhatsApp');
+          }
+
+          if (whatsappService.lastDeliveryMethod ==
+              WhatsAppDeliveryMethod.manualFallback) {
+            _showWhatsAppResultSnackbar(
+              context: context,
+              deliveryMethod: whatsappService.lastDeliveryMethod,
+              successMessage: 'Mensaje enviado por WhatsApp Cloud API',
+              fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
+            );
+          }
+          return;
+        }
+      }
+
+      await chatProvider.sendMessage(pendingText);
+      if (!mounted) {
+        return;
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text = pendingText;
+        _messageController.selection = TextSelection.collapsed(
+          offset: _messageController.text.length,
+        );
+      }
+      _restoreComposerFocus();
+      _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingMessage = false);
+      }
+    }
+  }
+
+  void _restoreComposerFocus() {
+    // On Web, post-frame callback isn't always enough due to engine/DOM sync.
+    // A small delay ensures the focus request happens after the UI settles.
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted) {
+        FocusScope.of(context).requestFocus(_focusNode);
+      }
+    });
   }
 
   /// Accept a pending chat request
@@ -395,7 +483,7 @@ class _ChatWindowState extends State<ChatWindow> {
     if (choice == null || !mounted) return;
 
     try {
-      String? fileName;
+      late String fileName;
       Uint8List? bytes;
 
       if (choice == 'camera') {
@@ -444,7 +532,7 @@ class _ChatWindowState extends State<ChatWindow> {
         bytes = file.bytes;
       }
 
-      if (bytes == null || fileName == null || !mounted) return;
+      if (bytes == null || !mounted) return;
 
       // Show loading indicator
       ScaffoldMessenger.of(context).showSnackBar(
@@ -824,26 +912,26 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
 
-    // Get invoice details
     String? invoiceId;
+    String? jobId;
     double? amount;
+    String? actionTargetId;
+    String? actionKind;
 
-    if (contextType == 'invoice') {
-      invoiceId = contextId;
-    } else if (contextType == 'job') {
+    if (contextType == 'job') {
+      jobId = contextId;
       try {
         final bikeshopService = context.read<BikeshopService>();
         final job = await bikeshopService.getJobById(contextId);
         if (job?.invoiceId != null) {
           invoiceId = job!.invoiceId;
-        } else {
-          _showErrorSnackBar(context, 'El trabajo no tiene factura asociada.');
-          return;
         }
       } catch (e) {
         _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
         return;
       }
+    } else if (contextType == 'invoice') {
+      invoiceId = contextId;
     }
 
     // Get invoice amount for payment requests
@@ -857,27 +945,66 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    if (actionType == 'approve_quote' && jobId == null) {
+      if (invoiceId == null) {
+        _showErrorSnackBar(
+          context,
+          'No se encontró una factura asociada para solicitar la aprobación.',
+        );
+        return;
+      }
+    }
+
+    if (actionType == 'confirm_delivery' && jobId == null) {
+      _showErrorSnackBar(
+        context,
+        'La confirmación de entrega por WhatsApp requiere una pega asociada.',
+      );
+      return;
+    }
+
+    if (actionType == 'pay_now' && invoiceId == null) {
+      _showErrorSnackBar(
+        context,
+        'No se encontró una factura asociada para solicitar el pago.',
+      );
+      return;
+    }
+
     // Build message content
     String content;
     switch (actionType) {
       case 'approve_quote':
         content = 'Por favor revisa y aprueba el presupuesto adjunto.';
+        actionTargetId = invoiceId;
+        actionKind = 'invoice';
         break;
       case 'pay_now':
         content = amount != null
             ? 'Tienes un saldo pendiente de \$${amount.toStringAsFixed(0)}. Por favor procede con el pago.'
             : 'Por favor procede con el pago.';
+        actionTargetId = invoiceId;
+        actionKind = 'invoice';
         break;
       case 'confirm_delivery':
         content = 'Tu pedido ha sido enviado. Por favor confirma la recepción.';
+        actionTargetId = jobId;
+        actionKind = 'job';
         break;
       default:
         content = 'Acción requerida.';
     }
 
+    if (actionTargetId == null || actionKind == null) {
+      _showErrorSnackBar(
+        context,
+        'No se pudo determinar el destino de la acción de WhatsApp.',
+      );
+      return;
+    }
+
     try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
+      final whatsappService = WhatsAppService();
 
       // For approve_quote, update invoice status to 'sent' first
       if (actionType == 'approve_quote' && invoiceId != null) {
@@ -889,27 +1016,38 @@ class _ChatWindowState extends State<ChatWindow> {
         }
       }
 
-      await supabase.from('messages').insert({
-        'conversation_id': conversation.id,
-        'sender_id': userId,
-        'content': content,
-        'type': 'action_request',
-        'metadata': {
+      final success = await _sendWhatsAppInteractiveRequest(
+        context: context,
+        actionType: actionType,
+        actionKind: actionKind,
+        actionTargetId: actionTargetId,
+        message: content,
+        contextType: contextType,
+        contextId: contextId,
+        jobId: jobId,
+        amount: amount,
+        metadata: {
           'action_type': actionType,
-          'target_id': invoiceId,
-          'status': 'pending',
-          'amount': amount,
+          'target_id': actionTargetId,
+          'invoiceId': invoiceId,
+          if (jobId != null) 'jobId': jobId,
         },
-      });
+      );
+
+      if (!success || !mounted) {
+        return;
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(actionType == 'approve_quote'
-                ? '✅ Presupuesto enviado al cliente'
-                : '✅ Solicitud enviada al cliente'),
-            backgroundColor: Colors.green,
-          ),
+        _showWhatsAppResultSnackbar(
+          context: context,
+          deliveryMethod: whatsappService.lastDeliveryMethod,
+          successMessage: actionType == 'approve_quote'
+              ? 'Presupuesto enviado por WhatsApp Cloud API'
+              : 'Solicitud enviada por WhatsApp Cloud API',
+          fallbackMessage: actionType == 'approve_quote'
+              ? 'WhatsApp abierto con el presupuesto prellenado'
+              : 'WhatsApp abierto con la solicitud prellenada',
         );
       }
     } catch (e) {
@@ -933,31 +1071,36 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
 
+    String? jobId;
     String? invoiceId;
-    if (contextType == 'invoice') {
-      invoiceId = contextId;
-    } else if (contextType == 'job') {
-      // Find linked invoice for job
+
+    if (contextType == 'job') {
+      jobId = contextId;
       try {
         final bikeshopService = context.read<BikeshopService>();
-        final job = await bikeshopService.getJobById(contextId);
-        if (job?.invoiceId != null) {
-          invoiceId = job!.invoiceId;
-        } else {
-          _showErrorSnackBar(context, 'El trabajo no tiene factura asociada.');
-          return;
-        }
+        final job = await bikeshopService.getJobById(jobId);
+        invoiceId = job?.invoiceId;
       } catch (e) {
         _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
         return;
       }
+    } else if (contextType == 'invoice') {
+      invoiceId = contextId;
     } else {
       _showErrorSnackBar(
-          context, 'Tipo de contexto no soportado para presupuesto.');
+        context,
+        'El envío de presupuesto por WhatsApp requiere una factura o pega asociada.',
+      );
       return;
     }
 
-    if (invoiceId == null) return;
+    if (invoiceId == null) {
+      _showErrorSnackBar(
+        context,
+        'No se encontró una factura asociada para enviar el presupuesto.',
+      );
+      return;
+    }
 
     // Confirm Action
     final confirm = await showDialog<bool>(
@@ -985,19 +1128,75 @@ class _ChatWindowState extends State<ChatWindow> {
           .read<SalesService>()
           .updateInvoiceStatus(invoiceId, InvoiceStatus.sent);
 
-      // 2. Send Message
-      if (mounted) {
-        context.read<ChatProvider>().sendMessage(
-            '📋 Presupuesto Enviado\nPor favor revisa y confirma los detalles para proceder.',
-            metadata: {
-              'type': 'quote_request',
-              'invoiceId': invoiceId,
-              'action': 'confirm_quote'
-            });
+      // 2. Generate and Upload PDF
+      String? documentUrl;
+      String? documentFilename;
+      try {
+        final salesService = context.read<SalesService>();
+        final invoiceToPrint = await salesService.fetchInvoice(
+          invoiceId,
+          refresh: true,
+        );
+        if (invoiceToPrint != null) {
+          final resolvedBikeNames = await InvoicePdfGenerator.resolveBikeNames(
+              context, invoiceToPrint);
+          final pdfDoc = await InvoicePdfGenerator.generateInvoicePDF(
+              context, invoiceToPrint, resolvedBikeNames);
+          final pdfBytes = await pdfDoc.save();
 
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Presupuesto enviado correctamente'),
-            backgroundColor: Colors.green));
+          final db = context.read<DatabaseService>();
+          final filename =
+              'presupuestos/presupuesto_${invoiceToPrint.invoiceNumber}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+          await db.supabase.storage.from('vinabike-assets').uploadBinary(
+                filename,
+                pdfBytes,
+                fileOptions: const FileOptions(
+                    contentType: 'application/pdf', upsert: true),
+              );
+
+          documentUrl = db.supabase.storage
+              .from('vinabike-assets')
+              .getPublicUrl(filename);
+          documentFilename = 'Presupuesto_${invoiceToPrint.invoiceNumber}.pdf';
+        }
+      } catch (e) {
+        debugPrint('Error generating/uploading PDF for quote: $e');
+      }
+
+      final whatsappService = WhatsAppService();
+      final success = await _sendWhatsAppInteractiveRequest(
+        context: context,
+        actionType: 'approve_quote',
+        actionKind: 'invoice',
+        actionTargetId: invoiceId,
+        message:
+            '📋 Presupuesto enviado\nPor favor revisa y confirma los detalles para proceder.',
+        contextType: contextType,
+        contextId: contextId,
+        jobId: jobId,
+        markQuoteSent: true,
+        documentUrl: documentUrl,
+        documentFilename: documentFilename,
+        metadata: {
+          'action_type': 'approve_quote',
+          'target_id': invoiceId,
+          'invoiceId': invoiceId,
+          if (jobId != null) 'jobId': jobId,
+        },
+      );
+
+      if (!success || !mounted) {
+        return;
+      }
+
+      if (mounted) {
+        _showWhatsAppResultSnackbar(
+          context: context,
+          deliveryMethod: whatsappService.lastDeliveryMethod,
+          successMessage: 'Presupuesto enviado por WhatsApp Cloud API',
+          fallbackMessage: 'WhatsApp abierto con el presupuesto prellenado',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1008,6 +1207,83 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<Map<String, dynamic>?> _getSenderInfo(String senderId) async {
     return _messagingService.getSenderInfo(senderId);
+  }
+
+  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() {
+    return _messagingService.getSupportConversationContact(
+      widget.conversation.id,
+    );
+  }
+
+  Future<bool> _sendWhatsAppInteractiveRequest({
+    required BuildContext context,
+    required String actionType,
+    required String actionKind,
+    required String actionTargetId,
+    required String message,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+    String? jobId,
+    double? amount,
+    bool markQuoteSent = false,
+    Map<String, dynamic>? metadata,
+    String? documentUrl,
+    String? documentFilename,
+  }) async {
+    final contact = await _resolveConversationWhatsAppContact();
+    final phone = contact?['phone']?.toString();
+
+    if (phone == null || phone.isEmpty) {
+      throw Exception(
+        'La conversación no tiene un contacto con teléfono para WhatsApp',
+      );
+    }
+
+    final customerName = contact?['name']?.toString();
+    final whatsappService = WhatsAppService();
+
+    return whatsappService.sendInteractiveAction(
+      context: context,
+      customerPhone: phone,
+      customerName: customerName == null || customerName.isEmpty
+          ? 'Cliente'
+          : customerName,
+      conversationId: widget.conversation.id,
+      customerId: customerId ?? contact?['customer_id']?.toString(),
+      contextType: contextType,
+      contextId: contextId,
+      jobId: jobId,
+      actionType: actionType,
+      actionKind: actionKind,
+      actionTargetId: actionTargetId,
+      message: message,
+      amount: amount,
+      markQuoteSent: markQuoteSent,
+      metadata: metadata,
+      documentUrl: documentUrl,
+      documentFilename: documentFilename,
+    );
+  }
+
+  void _showWhatsAppResultSnackbar({
+    required BuildContext context,
+    required WhatsAppDeliveryMethod deliveryMethod,
+    required String successMessage,
+    required String fallbackMessage,
+  }) {
+    final content = switch (deliveryMethod) {
+      WhatsAppDeliveryMethod.cloudApi => successMessage,
+      WhatsAppDeliveryMethod.manualFallback => fallbackMessage,
+      WhatsAppDeliveryMethod.failed => successMessage,
+    };
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(content),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   void _showErrorSnackBar(BuildContext context, String message) {
@@ -1292,13 +1568,7 @@ class _ChatWindowState extends State<ChatWindow> {
                       Positioned(
                         bottom: 0,
                         right: 0,
-                        child: Text(
-                          timeStr,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 10,
-                          ),
-                        ),
+                        child: _buildOutgoingMessageFooter(msg, timeStr),
                       ),
                     ],
                   ),
@@ -1387,6 +1657,78 @@ class _ChatWindowState extends State<ChatWindow> {
         return Icons.image;
       default:
         return Icons.insert_drive_file;
+    }
+  }
+
+  Widget _buildOutgoingMessageFooter(Message msg, String timeStr) {
+    final statusIcon = _buildWhatsAppStatusIcon(msg);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          timeStr,
+          style: TextStyle(
+            color: Colors.grey[500],
+            fontSize: 10,
+          ),
+        ),
+        if (statusIcon != null) ...[
+          const SizedBox(width: 4),
+          statusIcon,
+        ],
+      ],
+    );
+  }
+
+  Widget? _buildWhatsAppStatusIcon(Message msg) {
+    final metadata = msg.metadata;
+    final isWhatsAppMessage =
+        metadata['provider'] == 'whatsapp' || metadata['channel'] == 'whatsapp';
+
+    if (!isWhatsAppMessage) {
+      return null;
+    }
+
+    if (metadata['pending'] == true) {
+      return Icon(
+        Icons.access_time_rounded,
+        size: 13,
+        color: Colors.grey[500],
+      );
+    }
+
+    final externalStatus =
+        metadata['external_status']?.toString().toLowerCase();
+
+    switch (externalStatus) {
+      case 'accepted':
+      case 'sent':
+        return Icon(
+          Icons.done_rounded,
+          size: 14,
+          color: Colors.grey[500],
+        );
+      case 'delivered':
+        return Icon(
+          Icons.done_all_rounded,
+          size: 14,
+          color: Colors.grey[500],
+        );
+      case 'read':
+        return const Icon(
+          Icons.done_all_rounded,
+          size: 14,
+          color: Colors.lightBlue,
+        );
+      case 'failed':
+        return const Icon(
+          Icons.error_outline_rounded,
+          size: 13,
+          color: Colors.red,
+        );
+      default:
+        return null;
     }
   }
 

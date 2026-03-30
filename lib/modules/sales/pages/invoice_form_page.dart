@@ -26,6 +26,7 @@ import '../../crm/services/customer_service.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../inventory/pages/product_form_page.dart';
+import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -37,6 +38,7 @@ import 'dart:io' show Platform, File;
 import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import '../../../shared/services/whatsapp_service.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
 ///
@@ -87,6 +89,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   late SalesService _salesService;
   late CustomerService _customerService;
   late shared_inventory.InventoryService _inventoryService;
+  bool _salesServiceListenerAttached = false;
 
   final List<Customer> _cachedCustomers = [];
   final List<Product> _cachedProducts = [];
@@ -132,6 +135,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status != InvoiceStatus.paid;
+  String get _invoiceChatTitle {
+    final invoiceNumber = _loadedInvoice?.invoiceNumber;
+    if (invoiceNumber != null && invoiceNumber.isNotEmpty) {
+      return 'Factura #$invoiceNumber';
+    }
+
+    final invoiceId = _currentInvoiceId;
+    if (invoiceId != null && invoiceId.length >= 6) {
+      return 'Factura #${invoiceId.substring(0, 6)}';
+    }
+
+    return 'Factura';
+  }
 
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
@@ -163,6 +179,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   @override
   void dispose() {
+    if (_salesServiceListenerAttached) {
+      _salesService.removeListener(_handleSalesServiceChanged);
+    }
     _invoiceNumberController.dispose();
     _referenceController.dispose();
     for (final entry in _lineEntries) {
@@ -344,6 +363,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   Future<void> _initialize() async {
     _salesService = context.read<SalesService>();
+    if (!_salesServiceListenerAttached) {
+      _salesService.addListener(_handleSalesServiceChanged);
+      _salesServiceListenerAttached = true;
+    }
     _customerService = context.read<CustomerService>();
     _inventoryService = context.read<shared_inventory.InventoryService>();
 
@@ -574,6 +597,48 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     });
   }
 
+  void _handleSalesServiceChanged() {
+    if (!mounted || _isEditing || _isSaving || _isUpdatingStatus) {
+      return;
+    }
+
+    final invoiceId = _currentInvoiceId;
+    if (invoiceId == null || invoiceId.isEmpty) {
+      return;
+    }
+
+    Invoice? serviceInvoice;
+    for (final candidate in _salesService.invoices) {
+      if (candidate.id == invoiceId) {
+        serviceInvoice = candidate;
+        break;
+      }
+    }
+
+    if (serviceInvoice == null) {
+      return;
+    }
+
+    final currentInvoice = _loadedInvoice;
+    final hasChanged = currentInvoice == null ||
+        serviceInvoice.updatedAt.isAfter(currentInvoice.updatedAt) ||
+        serviceInvoice.status != currentInvoice.status ||
+        serviceInvoice.paidAmount != currentInvoice.paidAmount ||
+        serviceInvoice.balance != currentInvoice.balance ||
+        serviceInvoice.total != currentInvoice.total;
+
+    if (!hasChanged) {
+      return;
+    }
+
+    debugPrint(
+      '🔄 [InvoiceFormPage] SalesService pushed invoice update | id=$invoiceId | '
+      'status=${serviceInvoice.status.name} | paid=${serviceInvoice.paidAmount} | '
+      'balance=${serviceInvoice.balance}',
+    );
+    _applyInvoice(serviceInvoice);
+  }
+
   String _buildSuggestedNumber() {
     // Deprecated: Use NumberGenerationService instead
     // This fallback should rarely be used
@@ -705,6 +770,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Future<void> _updateStatus(InvoiceStatus newStatus) async {
+    await _updateStatusInternal(newStatus, showFeedback: true);
+  }
+
+  Future<bool> _updateStatusInternal(
+    InvoiceStatus newStatus, {
+    required bool showFeedback,
+  }) async {
     final invoiceId = _currentInvoiceId;
     if (invoiceId == null) {
       if (mounted) {
@@ -716,7 +788,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           ),
         );
       }
-      return;
+      return false;
     }
 
     // ⚠️ Smart validation: If paying with card but no tax → auto-fix
@@ -726,7 +798,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       // Auto-add tax for card payments
       setState(() => _taxTreatment = TaxTreatment.taxIncluded);
       await _saveInvoice();
-      if (!mounted) return;
+      if (!mounted) return false;
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
@@ -753,7 +825,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           );
         } catch (_) {}
       }
-      if (mounted) {
+      if (mounted && showFeedback) {
         String message = 'Estado actualizado';
         switch (newStatus) {
           case InvoiceStatus.draft:
@@ -782,11 +854,104 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           ),
         );
       }
+      return true;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo actualizar el estado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _sendInvoiceToCustomer() async {
+    final invoice = _loadedInvoice;
+    if (invoice == null || invoice.id == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Guarda la factura antes de enviarla al cliente.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    final customer = _selectedCustomer;
+    final customerPhone = customer?.phone?.trim();
+    if (customer == null || customerPhone == null || customerPhone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'El cliente debe tener un teléfono para enviar la factura.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isUpdatingStatus = true);
+    try {
+      final whatsappService = WhatsAppService();
+      final success = await whatsappService.sendInvoice(
+        context: context,
+        customerPhone: customerPhone,
+        customerName: customer.name,
+        invoice: invoice,
+      );
+
+      if (!success || !mounted) {
+        return;
+      }
+
+      final shouldMarkAsSent = _status == InvoiceStatus.draft;
+      final markedAsSent = !shouldMarkAsSent ||
+          await _updateStatusInternal(
+            InvoiceStatus.sent,
+            showFeedback: false,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      final message = switch (whatsappService.lastDeliveryMethod) {
+        WhatsAppDeliveryMethod.cloudApi => markedAsSent
+            ? 'Factura enviada por WhatsApp Cloud API y marcada como enviada'
+            : 'Factura enviada por WhatsApp Cloud API',
+        WhatsAppDeliveryMethod.manualFallback => markedAsSent
+            ? 'WhatsApp abierto con la factura lista para enviar y marcada como enviada'
+            : 'WhatsApp abierto con la factura lista para enviar',
+        WhatsAppDeliveryMethod.failed => 'No se pudo enviar la factura',
+      };
+
+      final backgroundColor =
+          whatsappService.lastDeliveryMethod == WhatsAppDeliveryMethod.failed
+              ? Colors.red
+              : Colors.green;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo enviar la factura: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1491,9 +1656,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             if (_canMarkAsSent) {
               if (isMobile) {
                 actionButtons.add(IconButton.filled(
-                  onPressed: _isUpdatingStatus
-                      ? null
-                      : () => _updateStatus(InvoiceStatus.sent),
+                  onPressed: _isUpdatingStatus ? null : _sendInvoiceToCustomer,
                   icon: _isUpdatingStatus
                       ? const SizedBox(
                           width: 16,
@@ -1501,14 +1664,13 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.send_outlined),
-                  tooltip: 'Enviar',
+                  tooltip: 'Enviar al cliente',
                 ));
               } else {
                 actionButtons.add(
                   FilledButton.icon(
-                    onPressed: _isUpdatingStatus
-                        ? null
-                        : () => _updateStatus(InvoiceStatus.sent),
+                    onPressed:
+                        _isUpdatingStatus ? null : _sendInvoiceToCustomer,
                     icon: _isUpdatingStatus
                         ? const SizedBox(
                             height: 16,
@@ -1516,7 +1678,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.send_outlined),
-                    label: const Text('Enviar'),
+                    label: const Text('Enviar al cliente'),
                   ),
                 );
               }
@@ -1771,6 +1933,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 1180;
+        final showChatSidebar = isWide && _currentInvoiceId != null;
         if (isWide) {
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -1842,6 +2005,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     ),
                   ),
                 ),
+                if (showChatSidebar) ...[
+                  const SizedBox(width: 8),
+                  EntityChatSidebar(
+                    entityType: 'invoice',
+                    entityId: _currentInvoiceId!,
+                    entityTitle: _invoiceChatTitle,
+                  ),
+                ],
               ],
             ),
           );
@@ -3303,8 +3474,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               .maybeSingle();
           if (bikeData != null) {
             final parts = <String>[
-              if ((bikeData['brand'] as String?)?.isNotEmpty == true) bikeData['brand'] as String,
-              if ((bikeData['model'] as String?)?.isNotEmpty == true) bikeData['model'] as String,
+              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
+                bikeData['brand'] as String,
+              if ((bikeData['model'] as String?)?.isNotEmpty == true)
+                bikeData['model'] as String,
               if (bikeData['year'] != null) bikeData['year'].toString(),
             ];
             if (parts.isNotEmpty) resolvedBikeNames['single'] = parts.join(' ');
@@ -3334,11 +3507,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
             if (bikeMap != null) {
               final parts = <String>[
-                if ((bikeMap['brand'] as String?)?.isNotEmpty == true) bikeMap['brand'] as String,
-                if ((bikeMap['model'] as String?)?.isNotEmpty == true) bikeMap['model'] as String,
+                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
+                  bikeMap['brand'] as String,
+                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
+                  bikeMap['model'] as String,
                 if (bikeMap['year'] != null) bikeMap['year'].toString(),
               ];
-              if (parts.isNotEmpty) resolvedBikeNames[jobBikeId] = parts.join(' ');
+              if (parts.isNotEmpty)
+                resolvedBikeNames[jobBikeId] = parts.join(' ');
             }
           }
         }
@@ -3620,7 +3796,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       final jbId = item.jobBikeId;
       if (jbId != null && jbId.isNotEmpty) {
         final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
-        if (name.isNotEmpty && !multiBikeNames.contains(name)) multiBikeNames.add(name);
+        if (name.isNotEmpty && !multiBikeNames.contains(name))
+          multiBikeNames.add(name);
       }
     }
     final singleBikeName = resolvedBikeNames['single'];
@@ -3633,7 +3810,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       return [];
     }
     final isMultiBike = bikeNames.length > 1;
-        return [
+    return [
       pw.Container(
         width: double.infinity,
         padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
@@ -3721,18 +3898,29 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           rows.add(pw.TableRow(
             decoration: const pw.BoxDecoration(color: PdfColors.grey100),
             children: [
-              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
               pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: pw.Text(bikeName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                  padding:
+                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: pw.SizedBox()),
+              pw.Padding(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(bikeName,
+                    style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey800)),
               ),
-              pw.SizedBox(), pw.SizedBox(), pw.SizedBox(),
+              pw.SizedBox(),
+              pw.SizedBox(),
+              pw.SizedBox(),
             ],
           ));
         }
       }
       itemIndex++;
-      final hasDescription = item.description != null && item.description!.isNotEmpty;
+      final hasDescription =
+          item.description != null && item.description!.isNotEmpty;
       rows.add(pw.TableRow(
         children: [
           _buildPdfTableCell('$itemIndex'),
@@ -3741,10 +3929,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(_cleanPdfText(item.productName ?? 'Sin nombre'), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                pw.Text(_cleanPdfText(item.productName ?? 'Sin nombre'),
+                    style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold, fontSize: 10)),
                 if (hasDescription) ...[
                   pw.SizedBox(height: 3),
-                  pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                  pw.Text(_cleanPdfText(item.description!),
+                      style: const pw.TextStyle(
+                          fontSize: 9, color: PdfColors.grey700)),
                 ],
               ],
             ),
@@ -3758,13 +3950,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     return rows;
   }
 
-  
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(

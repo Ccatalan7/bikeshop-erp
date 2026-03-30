@@ -294,7 +294,7 @@ serve(async (req) => {
 
             if (
               actionTarget.kind === 'invoice' &&
-              ['approve_invoice', 'confirm_invoice'].includes(actionTarget.action)
+              ['approve_invoice', 'confirm_invoice', 'approve_quote'].includes(actionTarget.action)
             ) {
               const { error } = await supabase.rpc('confirm_invoice_approval', {
                 p_invoice_id: actionTarget.targetId,

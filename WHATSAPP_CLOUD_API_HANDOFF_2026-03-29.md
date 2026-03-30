@@ -8,6 +8,13 @@ Objetivo: dejar documentado el estado actual de la integracion de WhatsApp Cloud
 
 Se implemento la base backend para integrar WhatsApp Cloud API con el ERP usando Supabase como backend principal.
 
+En la sesion posterior a este handoff tambien se avanzo bastante en Flutter y en el flujo real de envio de presupuestos/facturas por WhatsApp:
+
+- ya existe integracion Flutter para disparar `whatsapp-send`
+- el chat del ERP ya puede enviar solicitudes interactivas por WhatsApp Cloud API
+- el presupuesto adjunto ahora reutiliza el mismo PDF bonito del modulo de facturas
+- el webhook ya quedo corregido para que `approve_quote` sobre invoices confirme la factura (`sent` -> `confirmed`) cuando el cliente toca `Aprobar` en WhatsApp
+
 La solucion quedo dividida en 3 piezas:
 
 1. Schema y RPCs en `supabase/sql/core_schema.sql`
@@ -42,6 +49,15 @@ Este archivo contiene el extracto listo para ejecutar en Supabase SQL Editor sin
 
 - `supabase/functions/whatsapp-webhook/index.ts`
 - `supabase/functions/whatsapp-send/index.ts`
+
+### Flutter / ERP (agregado en esta sesion)
+
+- `lib/modules/messaging/widgets/chat_window.dart`
+- `lib/modules/messaging/services/messaging_service.dart`
+- `lib/shared/services/whatsapp_service.dart`
+- `lib/shared/utils/invoice_pdf_generator.dart`
+- `lib/modules/sales/pages/invoice_form_page.dart`
+- `lib/shared/widgets/whatsapp_web_viewer.dart`
 
 ## Lo que ya quedo implementado
 
@@ -229,7 +245,7 @@ Responsabilidades:
 Automatizacion actual:
 
 - `job:*` -> `apply_whatsapp_job_action(...)`
-- `invoice:*` con `approve_invoice` o `confirm_invoice` -> `confirm_invoice_approval(...)`
+- `invoice:*` con `approve_invoice`, `confirm_invoice` o `approve_quote` -> `confirm_invoice_approval(...)`
 
 Formato esperado para botones interactivos:
 
@@ -237,6 +253,7 @@ Formato esperado para botones interactivos:
 - `job:<job_id>:reject_quote`
 - `job:<job_id>:confirm_delivery`
 - `invoice:<invoice_id>:confirm_invoice`
+- `invoice:<invoice_id>:approve_quote`
 
 ### 5. Edge Function `whatsapp-send`
 
@@ -260,6 +277,123 @@ Tipos soportados actualmente:
 - `document`
 - `template`
 - `interactive`
+
+Avance adicional de esta sesion:
+
+- los mensajes `interactive` ahora pueden incluir `header` de tipo `document`
+- esto permite mandar el PDF del presupuesto directamente dentro de la tarjeta interactiva de WhatsApp
+- para presupuestos enviados desde el chat del ERP se adjunta el PDF antes de los botones `Rechazar / Aprobar`
+
+## Lo que ya quedo implementado en Flutter / ERP
+
+### 6. Chat del ERP conectado a WhatsApp Cloud API
+
+Archivo principal:
+
+- `lib/modules/messaging/widgets/chat_window.dart`
+
+Responsabilidades implementadas:
+
+- enviar solicitudes interactivas de WhatsApp desde conversaciones del ERP
+- resolver automaticamente el contacto del cliente asociado a la conversacion
+- soportar acciones:
+   - `approve_quote`
+   - `pay_now`
+   - `confirm_delivery`
+- mover la factura a `sent` antes de enviar la solicitud de aprobacion del presupuesto
+- mostrar feedback en UI segun si el envio salio por Cloud API o por fallback manual
+
+### 7. Resolucion de contacto WhatsApp desde conversaciones
+
+Archivo:
+
+- `lib/modules/messaging/services/messaging_service.dart`
+
+Se agrego:
+
+- `getSupportConversationContact(conversationId)`
+
+Responsabilidades:
+
+- intentar resolver el contacto desde `whatsapp_conversation_bindings`
+- fallback a contexto invoice/job
+- fallback final a participantes de la conversacion vinculados a `customers.auth_user_id`
+
+### 8. Servicio Flutter para acciones interactivas
+
+Archivo:
+
+- `lib/shared/services/whatsapp_service.dart`
+
+Se agrego:
+
+- `sendInteractiveAction(...)`
+
+Responsabilidades:
+
+- encapsular el llamado Flutter -> Edge Function `whatsapp-send`
+- permitir acciones interactivas con metadatos, monto, contexto y documento adjunto
+- mantener fallback manual cuando Cloud API falle o no este disponible
+
+### 9. Presupuesto PDF compartido y reutilizable
+
+Archivo:
+
+- `lib/shared/utils/invoice_pdf_generator.dart`
+
+Se implemento un generador compartido para reutilizar exactamente el layout de PDF ya usado en facturas/presupuestos del modulo de ventas.
+
+Responsabilidades:
+
+- resolver nombres de bicicletas para invoices con una o multiples bicicletas
+- generar el PDF con el mismo estilo del formulario de factura
+- cachear el logo de la empresa para no volver a descargarlo en cada export
+
+Importante:
+
+- durante esta sesion se descartaron los experimentos de layout alternativo
+- el PDF adjunto en WhatsApp ya usa el layout bueno/reutilizado, no una UI nueva improvisada
+
+### 10. Envio de presupuesto con PDF adjunto desde el chat
+
+Archivo:
+
+- `lib/modules/messaging/widgets/chat_window.dart`
+
+Responsabilidades:
+
+- buscar la invoice asociada al contexto de chat
+- regenerar el PDF del presupuesto desde la invoice real
+- subir el PDF a Supabase Storage (`vinabike-assets`)
+- enviar una tarjeta interactiva de WhatsApp con:
+   - documento PDF adjunto
+   - mensaje de contexto
+   - botones `Rechazar` / `Aprobar`
+
+### 11. Envio de factura al cliente desde la pantalla de factura
+
+Archivo:
+
+- `lib/modules/sales/pages/invoice_form_page.dart`
+
+Avances:
+
+- el boton `Enviar` ahora paso a ser `Enviar al cliente`
+- usa `WhatsAppService.sendInvoice(...)`
+- si el envio tiene exito, la factura puede quedar marcada como `sent`
+- se agrego sidebar de chat contextual (`EntityChatSidebar`) cuando la factura ya existe
+
+### 12. Ajustes de experiencia en fallback manual
+
+Archivo:
+
+- `lib/shared/widgets/whatsapp_web_viewer.dart`
+
+Avances:
+
+- mejora visual del WebView en macOS
+- limpieza de estado temporal no usado
+- soporte para abrir `wa.me` externamente en macOS desde `WhatsAppService`
 
 Si no se provee `interactive` manualmente pero se envian `actionType` y `actionTargetId` o `jobId`, la funcion construye botones reply automaticamente.
 
@@ -313,23 +447,136 @@ Se valido con el sistema de errores del editor:
 
 - `supabase/functions/whatsapp-webhook/index.ts` -> sin errores
 - `supabase/functions/whatsapp-send/index.ts` -> sin errores
+- `lib/shared/utils/invoice_pdf_generator.dart` -> sin errores de compilacion
+- `lib/modules/messaging/widgets/chat_window.dart` -> sin errores de compilacion
+- `lib/shared/services/whatsapp_service.dart` -> sin errores de compilacion
+- `lib/modules/sales/pages/invoice_form_page.dart` -> sin errores de compilacion
 
-**Avances de la ultima sesion:**
-- ✅ **SQL Deployado:** Se ejecuto con exito `20260329_whatsapp_cloud_api_integration.sql` en Supabase.
-- ✅ **Meta App:** Se creó la aplicación "Viñabike ERP API" (Tipo Negocios) correctamente.
-- ✅ **Tokens & Secrets:** Se extrajeron los tokens y se guardaron exitosamente en Supabase usando `supabase secrets set`.
-- ✅ **Base de datos poblada:** Se insertó el canal (número de pruebas) en la tabla `whatsapp_channels`.
-- ✅ **Edge Functions Deployadas:** Ambas funciones (`whatsapp-webhook` y `whatsapp-send`) fueron desplegadas exitosamente hacia el web server de Supabase (`xzdvtzdqjeyqxnkqprtf`).
-- 🚧 **Verificación Webhook:** Pendiente hacer click en "Verify and Save" en la UI de Meta para que haga el Handshake final.
+Nota sobre `flutter analyze`:
+
+- sigue retornando exit code `1` por lints/info preexistentes (`use_build_context_synchronously`, `deprecated_member_use`, etc.)
+- no quedan errores de compilacion en el flujo nuevo de PDF + WhatsApp
+
+### Estado real validado al cierre de esta sesion
+
+- ✅ **Webhook verificado y funcionando:** el challenge GET de Meta responde bien y los POST ya estan entrando correctamente.
+- ✅ **Secrets corregidos en servidor:** el problema real era una discrepancia en `META_APP_SECRET`; despues de corregir el secret desplegado y redeployar `whatsapp-webhook`, los eventos POST quedaron validando firma correctamente.
+- ✅ **Functions desplegadas:** `whatsapp-webhook` y `whatsapp-send` quedaron deployadas en `xzdvtzdqjeyqxnkqprtf`.
+- ✅ **Flujo end-to-end validado:** al tocar `Aprobar` en WhatsApp, la invoice pasa de `sent` a `confirmed`.
+- ✅ **Chat ERP -> WhatsApp funcionando:** desde el chat ya se puede enviar texto simple al cliente, no solo la invoice/presupuesto.
+- ✅ **UX del chat mejorada:**
+  - el mensaje sale con burbuja optimista
+  - ya no aparece snackbar verde en cada envio exitoso por Cloud API
+  - ya no aparece spinner en el boton enviar
+  - las burbujas salientes muestran estado estilo WhatsApp (`pending`, `sent`, `delivered`, `read`, `failed`) usando `messages.external_status`
+- ✅ **Invoice form sincronizada en vivo:** cuando la invoice cambia de estado en backend, la pantalla abierta de factura ahora refresca el status y los botones sin necesidad de navegar fuera y volver.
+
+### Root cause importante que quedo resuelto
+
+El bug mas dificil de esta sesion fue este:
+
+- outbound de WhatsApp funcionaba
+- inbound/messages/status no llegaban a BD
+- `whatsapp_webhook_events` quedaba vacia
+- la invoice no se confirmaba al tocar `Aprobar`
+
+La causa real fue:
+
+- `META_APP_SECRET` desplegado en Supabase no coincidia con el app secret real configurado en Meta
+- el webhook GET verificaba bien, pero el POST fallaba validacion de firma
+
+Una vez corregido ese secret y redeployado `whatsapp-webhook`, el flujo quedo operativo.
+
+## Estado actual de deploy
+
+### Backend / Supabase
+
+Ya esta activo en servidor:
+
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-send/index.ts`
+- schema SQL / RPCs de WhatsApp
+- canal de prueba en `whatsapp_channels`
+
+### Flutter / ERP
+
+Ya esta activo en codigo:
+
+- envio de presupuesto con PDF adjunto y botones interactivos
+- envio de factura al cliente
+- envio de mensaje de texto desde el chat ERP
+- estados visuales estilo WhatsApp en mensajes salientes
+- refresco live de la pantalla de factura cuando cambia estado/pagos
 
 ## Lo que falta si quieres dejarlo funcionando de verdad
 
-### 1. Configurar y Verificar Meta Webhook (A realizar AHORA en tu otro Mac)
-Dado que las funciones **ya están arriba**, los secrets **están seteados**, y la BD **está lista**, solo falta ir al dashboard de Meta de WhatsApp (WhatsApp > Configuración) e ingresar:
-- **Callback URL:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`
-- **Verify token:** `vinabike_webhook_secreto_2026`
-- Dar click en **"Verify and Save"**.
-- Luego hacer click en **Manage / Suscribirse**, y suscribirse al campo de eventos: `messages`.
+### 1. Entender la limitacion actual del numero de prueba
+
+Hoy el sistema ya funciona, pero sigue usando el **numero de prueba de Meta**.
+
+Eso implica una restriccion importante:
+
+- si intentas enviar a un numero no autorizado en la lista de prueba, Graph API devuelve error `131030`
+- mensaje tipico: `Recipient phone number not in allowed list`
+
+Esto **no es un bug del ERP**.
+
+Es una restriccion normal del entorno de prueba de WhatsApp Cloud API.
+
+### 2. Para seguir probando ahora mismo
+
+Si quieres seguir usando el numero de prueba actual:
+
+1. Agrega el numero destino en la lista de destinatarios permitidos de Meta.
+2. Verifica ese numero con el codigo SMS/llamada que pide Meta.
+3. Reintenta desde el ERP.
+
+Con eso deberia enviar por Cloud API sin cambiar nada del codigo.
+
+### 3. Para salir de test/dev y poder escribir a numeros reales sin allowlist
+
+No basta con "activar" el numero de prueba. Hay que pasar a un setup productivo real:
+
+1. Verificar el negocio en Meta Business Suite.
+2. Tener una WhatsApp Business Account real asociada al negocio.
+3. Agregar un numero telefonico real de envio del negocio.
+4. Configurar nombre para mostrar y perfil comercial.
+5. Configurar billing/pagos en WhatsApp Manager.
+6. Generar token permanente de system user con permisos:
+   - `business_management`
+   - `whatsapp_business_messaging`
+   - `whatsapp_business_management`
+7. Poner la app en Live mode si aplica segun la configuracion final.
+8. Actualizar en Supabase los valores productivos:
+   - `WHATSAPP_ACCESS_TOKEN`
+   - `phone_number_id` / canal real en `whatsapp_channels`
+   - cualquier dato nuevo de la WABA si cambia
+
+### 4. OJO: Produccion no elimina la regla de plantillas
+
+Aunque salgas de sandbox y ya no necesites allowlist:
+
+- **no** puedes mandar primer mensaje libre a cualquier cliente fuera de la ventana de 24h
+- si el cliente no te escribio en las ultimas 24h, el primer outbound debe ser **template aprobado por Meta**
+- una vez el cliente responde, se abre la customer service window de 24h y ahi si puedes seguir con texto libre
+
+En otras palabras:
+
+- produccion elimina el bloqueo de allowlist
+- produccion **no** elimina la politica de plantillas
+
+### 5. La puerta que queda abierta para implementar esto pronto
+
+La implementacion actual ya deja el camino listo para un siguiente bloque muy razonable:
+
+1. agregar templates reales en Meta (por ejemplo: presupuesto listo, recordatorio de pago, seguimiento de servicio)
+2. extender `whatsapp-send` / Flutter para elegir automaticamente:
+   - texto libre si la ventana de 24h esta abierta
+   - template aprobado si la ventana esta cerrada
+3. agregar UX en el ERP para mostrar claramente:
+   - si el contacto esta dentro o fuera de la ventana de 24h
+   - si el proximo envio sera libre o por template
+4. agregar una pantalla de administracion de canales / templates / estados de conversacion
 
 ---
 
@@ -364,27 +611,45 @@ supabase functions deploy whatsapp-send --project-ref xzdvtzdqjeyqxnkqprtf --no-
 
 ### 6. Aprobar templates si se van a usar
 
-La funcion de envio soporta `template`, pero Meta exige templates aprobados.
+La funcion de envio ya soporta `template`, pero Meta exige templates aprobados.
+
+Esto pasa a ser importante de verdad para produccion, porque si quieres iniciar conversaciones desde el ERP a numeros reales fuera de la ventana de 24h, vas a necesitar templates si o si.
 
 ## Lo que todavia no hice
 
 ### 1. Integracion Flutter
 
-No se implemento todavia:
+Esto ya NO esta completamente pendiente.
 
-- servicio Flutter para invocar `whatsapp-send`
-- botones en pegas/chat para disparar mensajes WhatsApp
+Ya se implemento:
+
+- servicio Flutter para acciones interactivas (`sendInteractiveAction`)
+- botones/acciones desde chat para disparar mensajes WhatsApp
+- envio de presupuesto con PDF adjunto
+- envio de factura al cliente desde la pantalla de invoice
+
+Sigue pendiente:
+
 - UI de administracion de `whatsapp_channels`
 - vistas de auditoria para `whatsapp_webhook_events`
+- limpieza de lints/info en algunos archivos Flutter
 
 ### 2. Testing funcional real
 
-No se hicieron pruebas end-to-end de:
+Todavia no se hicieron pruebas completas de produccion real con numero comercial propio.
+
+En cambio, si se valido en entorno actual de prueba:
 
 - envio real a Meta
 - recepcion real desde Meta
-- interactive replies reales
+- interactive reply real (`Aprobar`)
+- confirmacion real de invoice `sent` -> `confirmed`
+
+Sigue pendiente probar de forma sistematica:
+
 - lectura de estados `sent`, `delivered`, `read`
+- envio con numero productivo real (no test number)
+- primer contacto via template fuera de la ventana de 24h
 
 ### 3. Media avanzada
 
@@ -409,12 +674,19 @@ Posible mejora:
 
 ### 5. Casos de invoice mas completos
 
-En webhook solo deje automatizacion directa de invoice para:
+El webhook ahora ya soporta automatizacion directa de invoice para:
 
 - `approve_invoice`
 - `confirm_invoice`
+- `approve_quote`
 
-No revise en detalle si el flujo real de ventas usa otros action types en mensajes existentes.
+Pendiente:
+
+- revisar si hay otros action types legacy en ventas/mensajeria que convenga homologar
+- decidir si el ERP deberia crear templates especificos para:
+   - primer contacto de presupuesto
+   - seguimiento de aprobacion
+   - recordatorio de pago
 
 ### 6. Estados adicionales de pegas
 
@@ -429,20 +701,17 @@ Podrian refinarse segun negocio real:
 
 ### Prioridad alta
 
-1. Crear servicio Flutter `WhatsAppCloudService` para invocar `whatsapp-send`.
-2. Agregar botones desde pegas para:
-   - enviar presupuesto PDF
-   - pedir aprobacion
-   - confirmar entrega
-3. Crear pantalla ERP para administrar `whatsapp_channels`.
-4. Probar end-to-end con un numero real de prueba de Meta.
+1. Crear pantalla ERP para administrar `whatsapp_channels`.
+2. Crear UI de auditoria para `whatsapp_webhook_events`.
+3. Implementar estrategia de templates para primer contacto fuera de la ventana de 24h.
+4. Probar end-to-end con un numero productivo real de negocio.
 
 ### Prioridad media
 
 1. Guardar media inbound en Supabase Storage.
-2. Agregar dashboard o tabla de `whatsapp_webhook_events`.
-3. Agregar reintentos y mejor manejo de errores en `whatsapp-send`.
-4. Homologar action types con los ya usados por el modulo de mensajeria.
+2. Agregar reintentos y mejor manejo de errores en `whatsapp-send`.
+3. Homologar action types con los ya usados por el modulo de mensajeria.
+4. Mostrar en UI si un contacto esta dentro/fuera de la ventana de 24h.
 
 ### Prioridad media/alta
 
@@ -455,6 +724,7 @@ Podrian refinarse segun negocio real:
 1. Soportar mas tipos de interactive payload.
 2. Soportar mas automatizaciones por invoice/payment.
 3. Soportar credenciales multi-canal por tenant si un dia hace falta.
+4. Agregar highlight visual cuando una invoice cambie live en pantalla.
 
 ## Riesgos o puntos a revisar
 
@@ -484,32 +754,62 @@ Orden sugerido:
 
 1. Abrir este repo en el nuevo Mac.
 2. Leer este archivo handoff para entrar en contexto.
-3. Abrir developers.facebook.com, entrar a tu app "Viñabike ERP API" > **WhatsApp** > **Configuración**.
-4. En Webhooks, darle al bóton de editar.
-5. Poner tu URL (`https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-webhook`) y token (`vinabike_webhook_secreto_2026`) y darle a **Verify and Save**. (Ya no tirará error porque las funciones sí están en el servidor).
-6. Darle a Manage en Webhooks y suscribirte a `messages`.
-7. Probar enviar y recibir mensajes a ese numero de test.
-8. Recién después empezar a escribir el código de la UI en Flutter.
+3. Confirmar en Meta que sigues usando el numero de prueba o si ya vas a pasar a numero productivo.
+4. Si sigues en test:
+   - revisar allowlist de destinatarios
+   - agregar/verificar el numero destino antes de probar outbound
+5. Si vas a pasar a produccion:
+   - verificar negocio
+   - agregar numero real
+   - configurar billing
+   - generar token permanente
+   - actualizar Supabase secrets / canal
+6. Probar enviar y recibir mensajes desde el ERP.
+7. Solo despues meterse al bloque de templates / admin UI / endurecimiento UX.
 
 ## Sugerencia de proximo bloque de trabajo
 
 Si retomas despues, el siguiente bloque razonable seria:
 
-1. Configurar exitosamente el Webhook en la UI de Meta (Pasos arriba).
-2. Probar recibir y mandar un mensaje hacia el celular de prueba antes de tocar Dart.
-3. Crear servicio Flutter `WhatsAppCloudService` o similar para invocar la API `whatsapp-send`.
-4. Agregar accion desde la pega (Work Orders) para enviar el presupuesto por WhatsApp.
-5. Generar formato/tarjeta de aprobacion/rechazo interactivo en la Edge Function para enviársela al cliente.
-6. Verificar que la respuesta cambie el status de la pega automaticamente.
+1. Decidir si el siguiente paso es seguir en test o pasar a numero productivo.
+2. Si el objetivo es negocio real: implementar templates y flujo de primer contacto.
+3. Si el objetivo es robustez interna: construir admin UI de canales + auditoria de webhook events.
+4. Endurecer el manejo de errores de Meta en Flutter para casos como:
+   - `131030 Recipient phone number not in allowed list`
+   - ventana de 24h cerrada
+   - template faltante o no aprobado
+5. Recien despues, limpiar lints Flutter y pulir UI.
 
 ## Estado final de esta sesion
 
-**Backend para WhatsApp Webhooks 100% armado, variables de entorno seteadas, y desplegado satisfactoriamente hacia Supabase.**
+**Backend WhatsApp Cloud API operativo, webhook validando firma correctamente, functions desplegadas y flujo invoice approval funcionando end-to-end.**
+
+**Ademas, ya existe una primera integracion Flutter utilizable para:**
+
+- enviar presupuesto con PDF adjunto
+- enviar factura al cliente
+- enviar mensajes de texto desde el chat ERP
+- mostrar estados estilo WhatsApp en mensajes salientes
+- refrescar la pantalla de factura en vivo cuando cambia el estado
 
 Listo para:
-- Darle a "Verify and Save" en la página de Webhooks de Meta.
-- Probar el flujo real en backend.
+
+- seguir probando con numeros allowlisted del entorno test
+- pasar a un numero productivo real cuando el negocio lo decida
+- implementar templates y flujo de primer contacto en un bloque siguiente
 
 No listo aun para:
-- Pantallas del frontend en Flutter (falta crear todas las UI de chat/botones).
-- Salir a Producción (Recuerda que estas usando el "Número de pruebas" que te dio Meta provisoriamente para que no se desconecte el número real y se caiga la operación de tienda hasta que el ERP esté bien pulido).
+
+- operacion productiva abierta sobre numeros arbitrarios si sigues usando el numero de prueba de Meta
+- flujo completo de templates / ventana de 24h desde UI del ERP
+- administracion completa de canales y auditoria desde pantallas internas
+
+Nota final importante:
+
+- hoy el sistema ya no esta "a medias": ya funciona de verdad dentro de las reglas del entorno test de Meta
+- el siguiente salto ya no es tanto backend basico, sino **producto / operacion**:
+  - numero comercial real
+  - business verification
+  - billing
+  - templates
+  - UX de primer contacto fuera de la ventana de 24h

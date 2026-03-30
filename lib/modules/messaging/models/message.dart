@@ -20,13 +20,21 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> json, {String? currentUserId}) {
+    final metadata = Map<String, dynamic>.from(
+      (json['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    final externalStatus = json['external_status'];
+    if (externalStatus != null) {
+      metadata['external_status'] = externalStatus;
+    }
+
     return Message(
       id: json['id'],
       conversationId: json['conversation_id'],
       senderId: json['sender_id'],
       content: json['content'] ?? '',
       type: json['type'] ?? 'text',
-      metadata: json['metadata'] ?? {},
+      metadata: metadata,
       createdAt: DateTime.parse(json['created_at']),
       isMe: currentUserId != null && json['sender_id'] == currentUserId,
     );

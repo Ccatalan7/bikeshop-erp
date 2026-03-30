@@ -21,7 +21,6 @@ class WhatsAppWebViewer extends StatefulWidget {
 class _WhatsAppWebViewerState extends State<WhatsAppWebViewer> {
   late final WebViewController _controller;
   bool _isLoading = true;
-  String _currentUrl = '';
 
   @override
   void initState() {
@@ -31,11 +30,14 @@ class _WhatsAppWebViewerState extends State<WhatsAppWebViewer> {
 
   void _initializeWebView() {
     final encodedMessage = Uri.encodeComponent(widget.message);
-    final whatsappUrl = 'https://web.whatsapp.com/send?phone=${widget.phoneNumber}&text=$encodedMessage';
+    final whatsappUrl =
+        'https://web.whatsapp.com/send?phone=${widget.phoneNumber}&text=$encodedMessage';
+    final backgroundColor =
+        Platform.isMacOS ? Colors.white : const Color(0x00000000);
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
+      ..setBackgroundColor(backgroundColor)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (int progress) {
@@ -49,13 +51,11 @@ class _WhatsAppWebViewerState extends State<WhatsAppWebViewer> {
           onPageStarted: (String url) {
             setState(() {
               _isLoading = true;
-              _currentUrl = url;
             });
           },
           onPageFinished: (String url) {
             setState(() {
               _isLoading = false;
-              _currentUrl = url;
             });
           },
           onWebResourceError: (WebResourceError error) {
@@ -103,7 +103,7 @@ class _WhatsAppWebViewerState extends State<WhatsAppWebViewer> {
         children: [
           // WebView
           WebViewWidget(controller: _controller),
-          
+
           // Loading indicator
           if (_isLoading)
             Container(

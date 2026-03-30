@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -99,6 +100,16 @@ class WhatsAppService {
   ) async {
     try {
       final formattedPhone = _formatPhoneNumber(phoneNumber);
+      final encodedMessage = Uri.encodeComponent(message);
+      final uri = Uri.parse(
+        'https://wa.me/$formattedPhone?text=$encodedMessage',
+      );
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+        if (await canLaunchUrl(uri)) {
+          return await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      }
 
       // Open WhatsApp Web in WebView (desktop) or app (mobile)
       await Navigator.push(
@@ -354,6 +365,55 @@ Viña Bike
         'text': message,
         'metadata': {
           'source': 'flutter_erp',
+        },
+      },
+    );
+  }
+
+  Future<bool> sendInteractiveAction({
+    required BuildContext context,
+    required String customerPhone,
+    required String customerName,
+    required String conversationId,
+    required String actionType,
+    required String actionKind,
+    required String actionTargetId,
+    required String message,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+    String? jobId,
+    double? amount,
+    bool markQuoteSent = false,
+    Map<String, dynamic>? metadata,
+    String? documentUrl,
+    String? documentFilename,
+  }) async {
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: message,
+      cloudBody: {
+        'conversationId': conversationId,
+        'customerId': customerId,
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': customerName,
+        'contextType': contextType,
+        'contextId': contextId,
+        'jobId': jobId,
+        'type': 'interactive',
+        'text': message,
+        'caption': message,
+        'actionType': actionType,
+        'actionKind': actionKind,
+        'actionTargetId': actionTargetId,
+        'amount': amount,
+        'markQuoteSent': markQuoteSent,
+        if (documentUrl != null) 'documentUrl': documentUrl,
+        if (documentFilename != null) 'documentFilename': documentFilename,
+        'metadata': {
+          'source': 'flutter_erp',
+          ...?metadata,
         },
       },
     );

@@ -48,7 +48,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       // Check if we are an employee/admin before trying to fetch sensitive tenant users
       // This helper check prevents 400 errors for customers
-      final users = await _userService!.getTenantUsers();
+      final users = await _userService.getTenantUsers();
       for (var u in users) {
         _userCache[u['id']] = u;
       }
@@ -288,6 +288,23 @@ class ChatProvider extends ChangeNotifier {
       _activeMessages.removeWhere((m) => m.id == tempId);
       notifyListeners();
       // TODO: Show error toast
+    }
+  }
+
+  void addOptimisticMessage(Message message) {
+    if (_activeConversationId != message.conversationId) {
+      return;
+    }
+
+    _activeMessages.add(message);
+    notifyListeners();
+  }
+
+  void removeMessageById(String messageId) {
+    final previousLength = _activeMessages.length;
+    _activeMessages.removeWhere((message) => message.id == messageId);
+    if (_activeMessages.length != previousLength) {
+      notifyListeners();
     }
   }
 

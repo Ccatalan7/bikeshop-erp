@@ -620,6 +620,176 @@ class MessagingService {
     }
   }
 
+  /// Resolve the customer contact for a support conversation.
+  ///
+  /// Prefers an existing WhatsApp binding and falls back to the customer
+  /// participant linked through `customers.auth_user_id`.
+  Future<Map<String, dynamic>?> getSupportConversationContact(
+    String conversationId,
+  ) async {
+    try {
+      Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
+        if (customerId == null || customerId.isEmpty) {
+          return null;
+        }
+
+        final customer = await _client
+            .from('customers')
+            .select('id, name, phone')
+            .eq('id', customerId)
+            .limit(1)
+            .maybeSingle();
+
+        if (customer == null) {
+          return null;
+        }
+
+        final phone = customer['phone']?.toString();
+        if (phone == null || phone.isEmpty) {
+          return null;
+        }
+
+        return {
+          'customer_id': customer['id']?.toString(),
+          'name': customer['name']?.toString(),
+          'phone': phone,
+        };
+      }
+
+      final binding = await _client
+          .from('whatsapp_conversation_bindings')
+          .select('customer_id, contact_name, external_phone_number')
+          .eq('conversation_id', conversationId)
+          .limit(1)
+          .maybeSingle();
+
+      String? customerId = binding?['customer_id']?.toString();
+      String? contactName = binding?['contact_name']?.toString();
+      String? phoneNumber = binding?['external_phone_number']?.toString();
+
+      if (customerId != null && customerId.isNotEmpty) {
+        final customerContact = await loadCustomerById(customerId);
+        if (customerContact != null) {
+          contactName = customerContact['name']?.toString() ?? contactName;
+          phoneNumber = customerContact['phone']?.toString() ?? phoneNumber;
+        }
+      }
+
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        return {
+          'customer_id': customerId,
+          'name': contactName,
+          'phone': phoneNumber,
+        };
+      }
+
+      final conversation = await _client
+          .from('conversations')
+          .select(
+              'id, context_type, context_id, conversation_contexts(context_type, context_id, is_primary)')
+          .eq('id', conversationId)
+          .limit(1)
+          .maybeSingle();
+
+      if (conversation != null) {
+        String? contextType = conversation['context_type']?.toString();
+        String? contextId = conversation['context_id']?.toString();
+
+        final contexts = conversation['conversation_contexts'];
+        if (contexts is List && contexts.isNotEmpty) {
+          final primaryContext = contexts.firstWhere(
+            (context) => context['is_primary'] == true,
+            orElse: () => contexts.first,
+          );
+          contextType =
+              primaryContext['context_type']?.toString() ?? contextType;
+          contextId = primaryContext['context_id']?.toString() ?? contextId;
+        }
+
+        if (contextType == 'invoice' &&
+            contextId != null &&
+            contextId.isNotEmpty) {
+          final invoice = await _client
+              .from('sales_invoices')
+              .select('customer_id, customer_name')
+              .eq('id', contextId)
+              .limit(1)
+              .maybeSingle();
+
+          customerId = invoice?['customer_id']?.toString();
+          final customerContact = await loadCustomerById(customerId);
+          if (customerContact != null) {
+            return customerContact;
+          }
+
+          final invoiceCustomerName = invoice?['customer_name']?.toString();
+          if (invoiceCustomerName != null &&
+              invoiceCustomerName.isNotEmpty &&
+              phoneNumber != null &&
+              phoneNumber.isNotEmpty) {
+            return {
+              'customer_id': customerId,
+              'name': invoiceCustomerName,
+              'phone': phoneNumber,
+            };
+          }
+        }
+
+        if (contextType == 'job' && contextId != null && contextId.isNotEmpty) {
+          final job = await _client
+              .from('mechanic_jobs')
+              .select('customer_id')
+              .eq('id', contextId)
+              .limit(1)
+              .maybeSingle();
+
+          customerId = job?['customer_id']?.toString();
+          final customerContact = await loadCustomerById(customerId);
+          if (customerContact != null) {
+            return customerContact;
+          }
+        }
+      }
+
+      final participants = await _client
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+
+      final participantIds = (participants as List)
+          .map((row) => row['user_id']?.toString())
+          .whereType<String>()
+          .where((userId) => userId != currentUserId)
+          .toList();
+
+      if (participantIds.isEmpty) {
+        return null;
+      }
+
+      final customers = await _client
+          .from('customers')
+          .select('id, auth_user_id, name, phone')
+          .inFilter('auth_user_id', participantIds);
+
+      for (final rawCustomer in customers) {
+        final customer = Map<String, dynamic>.from(rawCustomer);
+        final phone = customer['phone']?.toString();
+        if (phone != null && phone.isNotEmpty) {
+          return {
+            'customer_id': customer['id']?.toString(),
+            'name': customer['name']?.toString(),
+            'phone': phone,
+          };
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ Error resolving support conversation contact: $e');
+      return null;
+    }
+  }
+
   /// Get all support conversations grouped by status (for ERP inbox)
   Future<Map<String, List<Map<String, dynamic>>>> getSupportInbox() async {
     final response = await _client.from('conversations').select('''

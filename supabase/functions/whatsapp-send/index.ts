@@ -89,6 +89,13 @@ function buildActionInteractivePayload(request: SendRequest) {
 
   return {
     type: 'button',
+    header: request.documentUrl ? {
+      type: 'document',
+      document: {
+        link: request.documentUrl,
+        filename: request.documentFilename ?? 'Documento.pdf'
+      }
+    } : undefined,
     body: {
       text: request.text ?? request.caption ?? 'Revisa esta solicitud y responde desde WhatsApp.',
     },
