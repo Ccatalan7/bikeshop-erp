@@ -1,8 +1,34 @@
 # Handoff: WhatsApp Cloud API
 
-Fecha: 2026-03-29
+*Última actualización: 30 de Marzo de 2026*
 Repo: bikeshop-erp
 Objetivo: dejar documentado el estado actual de la integracion de WhatsApp Cloud API para continuar el trabajo desde otro computador.
+
+## Actualización 30 de Marzo 2026 (Estrategia de Producción y UI)
+
+En la sesión de hoy estructuramos la salida a producción y corregimos la separación de responsabilidades en la UI:
+
+1. **Desacople en UI Facturas:** Se arregló la pantalla de facturas (`InvoiceFormPage`). El botón "Enviar" vuelve a ser una simple transición de estado ERP (`draft` -> `sent`), sin disparar flujos de WhatsApp. El envío de PDF vía Cloud API se mantiene vivo de forma exclusiva desde el Chat Widget.
+2. **Estrategia de Número para Producción:** Se definió usar un **NUEVO NÚMERO** celular asignado exclusivamente al ERP (Cloud API). El número histórico se mantendrá en el teléfono físico en la tienda usando la app WhatsApp Business normal para atenciones complejas (audios, llamadas).
+3. **Estado Meta Business:** La verificación de "NEWEN SpA" quedó temporalmente en espera ("Se necesita más información"). Sin embargo, **se continuará con la integración en estado Unverified**, lo que otorga un límite de 250 conversaciones de negocio iniciadas por el bot al día (suficiente para iniciar).
+4. **Aclaración del Billing Meta:** 
+   - Conversaciones "Utility" (ERP manda cotización/factura primero): **Tienen costo** desde el mensaje 1 (~$0.04 USD por 24 hrs).
+   - Conversaciones "Service" (Cliente dice hola primero, ERP responde con factura): **Gratis** (hasta 1,000 al mes).
+
+### Siguientes pasos exactos para retomar en el nuevo computador:
+1. Ir a Meta for Developers > WhatsApp > API Setup (Ignorar el número de prueba).
+2. Hacer scroll presionar **Agregar número de teléfono** y registrar el **nuevo número (chip nuevo)**.
+3. Copiar de la pantalla los nuevos **Identificador de número de teléfono** y **Identificador de la cuenta de WhatsApp Business**.
+4. Ir a Meta Business Settings > Usuarios del sistema > Generar un **token permanente** con permisos `whatsapp_business_messaging` y `whatsapp_business_management`.
+5. Reemplazar el secreto en Supabase: `supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf WHATSAPP_ACCESS_TOKEN="<NUEVO_TOKEN_PERMANENTE>"`
+6. Registrar el nuevo canal en la BD corriendo este SQL en Supabase:
+   ```sql
+   INSERT INTO whatsapp_channels (tenant_id, phone_number_id, business_account_id, display_name, display_phone_number, is_active) 
+   VALUES ('5443b130-cc28-45af-a420-cd500b288890', '<NUEVO_PHONE_NUMBER_ID>', '<NUEVO_BUSINESS_ACCOUNT_ID>', 'Viñabike Notificaciones', '+569XXXXXXXX', true);
+   ```
+7. Probar flujo enviando un mensaje directo.
+
+---
 
 ## Resumen ejecutivo
 
