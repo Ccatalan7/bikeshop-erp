@@ -641,6 +641,194 @@ La funcion de envio ya soporta `template`, pero Meta exige templates aprobados.
 
 Esto pasa a ser importante de verdad para produccion, porque si quieres iniciar conversaciones desde el ERP a numeros reales fuera de la ventana de 24h, vas a necesitar templates si o si.
 
+### 7. Estado actual de templates (sesion 31 Marzo 2026)
+
+Se dejo creado en Meta un primer template de contacto inicial, actualmente **en revision**:
+
+- nombre: `seguimiento_servicio_bicicleta`
+- categoria: `Utility`
+- idioma: `Spanish (CHL)`
+- variables: `{{1}} = cliente`, `{{2}} = vendedor`
+
+Texto enviado a revision:
+
+```text
+Hola {{1}}, buen día. Soy {{2}} de Viñabike y te escribo por el servicio de tu bicicleta.
+```
+
+Ademas, en Flutter ya quedo preparado un metodo dedicado en `lib/shared/services/whatsapp_service.dart` para disparar este template apenas quede aprobado.
+
+---
+
+## Propuesta de producto: nueva seccion WhatsApp en Configuracion
+
+### Objetivo
+
+Hoy la integracion ya funciona, pero demasiadas decisiones siguen “hardcodeadas” o dependen del desarrollador:
+
+- que canal esta activo
+- que template usar para primer contacto
+- como se hace fallback si falla Cloud API
+- como se muestran estados y errores al usuario interno
+- que textos base se usan para facturas, presupuestos y seguimientos
+
+La recomendacion es crear una seccion formal dentro de `Configuracion` del ERP para que el negocio pueda administrar y tunear el canal sin tocar codigo.
+
+Ruta sugerida:
+
+- `Configuracion > WhatsApp`
+
+### Alcance de esta nueva seccion
+
+La nueva seccion de WhatsApp deberia centralizar TODO lo ajustable del canal.
+
+Subsecciones sugeridas:
+
+1. **Resumen del Canal**
+    - numero activo
+    - `phone_number_id`
+    - nombre comercial mostrado
+    - WABA / business account asociada
+    - estado del canal
+    - ultimo webhook recibido
+    - ultimo mensaje enviado
+    - salud del canal (`ok`, `sin webhook`, `token expirado`, etc.)
+
+2. **Canales y Enrutamiento**
+    - ver `whatsapp_channels`
+    - activar / desactivar canal
+    - elegir canal por defecto
+    - definir si un tenant puede tener mas de un numero
+    - preparar base para futuro multi-canal
+
+3. **Templates**
+    - listado de templates conocidos por el ERP
+    - estado (`pending`, `approved`, `rejected`, `paused`)
+    - categoria (`utility`, `marketing`, etc.)
+    - idioma
+    - nombre exacto en Meta
+    - mapeo de uso interno:
+       - primer contacto
+       - seguimiento de servicio
+       - recordatorio de pago
+       - presupuesto listo
+
+4. **Ventana de 24h y Politica de Envio**
+    - mostrar si el contacto actual esta dentro o fuera de la ventana
+    - indicar si el proximo envio sera:
+       - texto libre
+       - template obligatorio
+    - definir comportamiento por defecto cuando la ventana este cerrada:
+       - usar template configurado
+       - bloquear envio libre
+       - prohibir fallback manual automatico
+
+5. **Mensajes y Comportamiento**
+    - texto base de contacto inicial
+    - texto base de seguimiento
+    - texto base de factura / presupuesto
+    - activar o desactivar envio de PDF adjunto
+    - activar o desactivar botones interactivos
+    - reglas de fallback:
+       - fallback a WhatsApp Web permitido o no
+       - fallback solo en desktop
+       - fallback prohibido para errores de politica Meta (ej. 24h cerrada)
+
+6. **Auditoria y Diagnostico**
+    - vista de `whatsapp_webhook_events`
+    - ultimos errores Graph API
+    - estados `accepted/sent/delivered/read/failed`
+    - detalle de errores como:
+       - `131030` allowlist
+       - `131047` re-engagement / ventana cerrada
+       - template no aprobado
+
+### Idea clave: Template Preview dentro del ERP
+
+Esto ayudaría mucho a operacion, soporte y debugging.
+
+Se recomienda crear un **preview de templates** en la UI de WhatsApp Settings.
+
+Dos niveles posibles:
+
+#### Opcion ideal: preview cableado al template real
+
+El ERP deberia poder mostrar:
+
+- nombre real del template en Meta
+- idioma real
+- body real
+- variables esperadas
+- ejemplos de variables
+- preview visual estilo WhatsApp
+
+Idealmente esto se alimenta de una fuente real y no inventada.
+
+Opciones de implementacion:
+
+- sincronizar templates aprobados desde Meta y cachearlos en Supabase
+- o guardar manualmente en ERP un registro espejo con el body aprobado + variables + estado
+
+Tabla sugerida si se quiere formalizar esto:
+
+- `whatsapp_template_configs`
+
+Campos sugeridos:
+
+- `tenant_id`
+- `template_key` interno (`first_contact`, `payment_reminder`, etc.)
+- `meta_template_name`
+- `language_code`
+- `category`
+- `status`
+- `body_text`
+- `header_type`
+- `footer_text`
+- `button_config jsonb`
+- `sample_values jsonb`
+- `is_active`
+
+#### Opcion minima viable: preview simulado pero fiel
+
+Si al principio no se quiere sincronizar Meta directamente, igual vale mucho tener un preview local que reconstruya la plantilla lo mas fiel posible.
+
+Ese preview deberia:
+
+- renderizar la burbuja estilo WhatsApp
+- reemplazar variables con ejemplos editables
+- simular encabezado / cuerpo / footer / botones
+- mostrar como se veria antes de enviarla
+
+Aunque sea “simulado”, debe basarse en el texto real configurado para que no sea un mock engañoso.
+
+### Personalizaciones concretas que deberia poder hacer negocio sin tocar codigo
+
+La seccion nueva deberia permitir cambiar por UI cosas como estas:
+
+- template por defecto de primer contacto
+- nombre del agente que se usa al rellenar variables
+- estrategia para obtener ese nombre:
+   - usuario logueado
+   - display name del perfil
+   - alias comercial configurable
+- textos base de envio
+- reglas de fallback
+- si adjuntar PDF al presupuesto
+- si usar botones interactivos o solo texto
+- si mostrar botones de WhatsApp en facturas / pegas / chat
+- si bloquear envio cuando falte template aprobado
+- mensaje de error humanizado para el staff interno
+
+### Beneficio esperado
+
+Con esta seccion el ERP deja de depender del desarrollador para cambios operativos pequeños y pasa a tener una capa de administracion real:
+
+- negocio cambia templates y defaults
+- soporte puede inspeccionar errores
+- administracion puede ver estado del canal
+- el equipo interno entiende si un envio es libre o por template
+- se reduce el debugging manual por terminal/Supabase
+
 ## Lo que todavia no hice
 
 ### 1. Integracion Flutter
@@ -656,8 +844,11 @@ Ya se implemento:
 
 Sigue pendiente:
 
+- nueva seccion `Configuracion > WhatsApp`
+- UI de administracion de templates y reglas de envio
 - UI de administracion de `whatsapp_channels`
 - vistas de auditoria para `whatsapp_webhook_events`
+- preview de templates dentro del ERP (real o simulado fiel)
 - limpieza de lints/info en algunos archivos Flutter
 
 ### 2. Testing funcional real
@@ -713,6 +904,7 @@ Pendiente:
    - primer contacto de presupuesto
    - seguimiento de aprobacion
    - recordatorio de pago
+- conectar el template `seguimiento_servicio_bicicleta` al flujo de primer contacto una vez Meta lo apruebe
 
 ### 6. Estados adicionales de pegas
 
@@ -727,10 +919,12 @@ Podrian refinarse segun negocio real:
 
 ### Prioridad alta
 
-1. Crear pantalla ERP para administrar `whatsapp_channels`.
-2. Crear UI de auditoria para `whatsapp_webhook_events`.
-3. Implementar estrategia de templates para primer contacto fuera de la ventana de 24h.
-4. Probar end-to-end con un numero productivo real de negocio.
+1. Crear nueva seccion `Configuracion > WhatsApp` como centro de administracion funcional.
+2. Dentro de esa seccion, crear pantalla ERP para administrar `whatsapp_channels`.
+3. Crear UI de auditoria para `whatsapp_webhook_events` y errores Graph API.
+4. Implementar estrategia de templates para primer contacto fuera de la ventana de 24h.
+5. Agregar preview de templates dentro del ERP, idealmente cableado al template real o al menos reconstruido fielmente.
+6. Probar end-to-end con un numero productivo real de negocio.
 
 ### Prioridad media
 
@@ -738,6 +932,7 @@ Podrian refinarse segun negocio real:
 2. Agregar reintentos y mejor manejo de errores en `whatsapp-send`.
 3. Homologar action types con los ya usados por el modulo de mensajeria.
 4. Mostrar en UI si un contacto esta dentro/fuera de la ventana de 24h.
+5. Permitir configurar por UI el template por defecto de primer contacto y sus ejemplos de variables.
 
 ### Prioridad media/alta
 
@@ -798,13 +993,14 @@ Orden sugerido:
 Si retomas despues, el siguiente bloque razonable seria:
 
 1. Decidir si el siguiente paso es seguir en test o pasar a numero productivo.
-2. Si el objetivo es negocio real: implementar templates y flujo de primer contacto.
-3. Si el objetivo es robustez interna: construir admin UI de canales + auditoria de webhook events.
-4. Endurecer el manejo de errores de Meta en Flutter para casos como:
+2. Si el objetivo es negocio real: implementar la nueva seccion `Configuracion > WhatsApp`.
+3. Dentro de esa seccion, construir admin UI de canales + templates + auditoria + preview.
+4. Conectar el template de primer contacto `seguimiento_servicio_bicicleta` cuando Meta lo apruebe.
+5. Endurecer el manejo de errores de Meta en Flutter para casos como:
    - `131030 Recipient phone number not in allowed list`
    - ventana de 24h cerrada
    - template faltante o no aprobado
-5. Recien despues, limpiar lints Flutter y pulir UI.
+6. Recien despues, limpiar lints Flutter y pulir UI.
 
 ## Estado final de esta sesion
 
@@ -823,12 +1019,13 @@ Listo para:
 - seguir probando con numeros allowlisted del entorno test
 - pasar a un numero productivo real cuando el negocio lo decida
 - implementar templates y flujo de primer contacto en un bloque siguiente
+- crear una seccion de configuracion usable para que negocio/admin pueda tunear WhatsApp sin tocar codigo
 
 No listo aun para:
 
 - operacion productiva abierta sobre numeros arbitrarios si sigues usando el numero de prueba de Meta
 - flujo completo de templates / ventana de 24h desde UI del ERP
-- administracion completa de canales y auditoria desde pantallas internas
+- administracion completa de canales, templates, preview y auditoria desde pantallas internas
 
 Nota final importante:
 

@@ -284,55 +284,68 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() => _isSendingMessage = true);
 
     try {
-      if (widget.conversation.type == 'support') {
-        final contact = await _resolveConversationWhatsAppContact();
-        final phone = contact?['phone']?.toString();
+      final contact = await _resolveConversationWhatsAppContact();
+      final phone = contact?['phone']?.toString();
 
-        if (phone != null && phone.isNotEmpty) {
-          final whatsappService = WhatsAppService();
-          chatProvider.addOptimisticMessage(
-            Message(
-              id: optimisticMessageId,
-              conversationId: widget.conversation.id,
-              senderId: _messagingService.currentUserId,
-              content: pendingText,
-              type: 'text',
-              metadata: const {
-                'channel': 'whatsapp',
-                'provider': 'whatsapp',
-                'pending': true,
-              },
-              createdAt: DateTime.now(),
-              isMe: true,
-            ),
-          );
+      if (phone != null && phone.isNotEmpty) {
+        final whatsappService = WhatsAppService();
+        chatProvider.addOptimisticMessage(
+          Message(
+            id: optimisticMessageId,
+            conversationId: widget.conversation.id,
+            senderId: _messagingService.currentUserId,
+            content: pendingText,
+            type: 'text',
+            metadata: const {
+              'channel': 'whatsapp',
+              'provider': 'whatsapp',
+              'pending': true,
+            },
+            createdAt: DateTime.now(),
+            isMe: true,
+          ),
+        );
 
-          final success = await whatsappService.sendMessage(
-            context: context,
-            customerPhone: phone,
-            message: pendingText,
-          );
+        final success = await whatsappService.sendMessage(
+          context: context,
+          customerPhone: phone,
+          message: pendingText,
+          contactName: contact?['name']?.toString(),
+          conversationId: widget.conversation.id,
+          contextType: widget.conversation.contextType,
+          contextId: widget.conversation.contextId,
+        );
 
-          if (!mounted) {
-            return;
-          }
-
-          if (!success) {
-            chatProvider.removeMessageById(optimisticMessageId);
-            throw Exception('No se pudo enviar el mensaje por WhatsApp');
-          }
-
-          if (whatsappService.lastDeliveryMethod ==
-              WhatsAppDeliveryMethod.manualFallback) {
-            _showWhatsAppResultSnackbar(
-              context: context,
-              deliveryMethod: whatsappService.lastDeliveryMethod,
-              successMessage: 'Mensaje enviado por WhatsApp Cloud API',
-              fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
-            );
-          }
+        if (!mounted) {
           return;
         }
+
+        if (!success) {
+          chatProvider.removeMessageById(optimisticMessageId);
+          throw Exception('No se pudo enviar el mensaje por WhatsApp');
+        }
+
+        if (whatsappService.lastDeliveryMethod ==
+            WhatsAppDeliveryMethod.cloudApi) {
+          chatProvider.updateMessageMetadataById(
+            optimisticMessageId,
+            {
+              'pending': false,
+              'external_status': 'accepted',
+            },
+          );
+        }
+
+        if (whatsappService.lastDeliveryMethod ==
+            WhatsAppDeliveryMethod.manualFallback) {
+          _showWhatsAppResultSnackbar(
+            context: context,
+            deliveryMethod: whatsappService.lastDeliveryMethod,
+            successMessage: 'Mensaje enviado por WhatsApp Cloud API',
+            fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
+          );
+        }
+        return;
       }
 
       await chatProvider.sendMessage(pendingText);

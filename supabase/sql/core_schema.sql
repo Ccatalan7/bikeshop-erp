@@ -21360,7 +21360,7 @@ begin
         p_tenant_id,
         'support',
         v_title,
-        'active',
+        'pending',
         now(),
         now()
       ) returning id into v_conversation_id;

@@ -308,6 +308,34 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  void updateMessageMetadataById(
+    String messageId,
+    Map<String, dynamic> metadataUpdates,
+  ) {
+    final index =
+        _activeMessages.indexWhere((message) => message.id == messageId);
+    if (index == -1) {
+      return;
+    }
+
+    final existing = _activeMessages[index];
+    final updatedMetadata = Map<String, dynamic>.from(existing.metadata)
+      ..addAll(metadataUpdates);
+
+    _activeMessages[index] = Message(
+      id: existing.id,
+      conversationId: existing.conversationId,
+      senderId: existing.senderId,
+      content: existing.content,
+      type: existing.type,
+      metadata: updatedMetadata,
+      createdAt: existing.createdAt,
+      isMe: existing.isMe,
+    );
+
+    notifyListeners();
+  }
+
   /// Create a new support ticket
   Future<void> createTicket(String title) async {
     try {

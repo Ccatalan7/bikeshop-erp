@@ -17,6 +17,10 @@ enum WhatsAppDeliveryMethod {
 /// Sends through WhatsApp Cloud API and falls back to manual WhatsApp Web if needed.
 class WhatsAppService {
   static final WhatsAppService _instance = WhatsAppService._internal();
+  static const String firstContactTemplateName =
+      'seguimiento_servicio_bicicleta';
+  static const String _firstContactTemplateLanguage = 'es_CL';
+
   factory WhatsAppService() => _instance;
   WhatsAppService._internal();
 
@@ -47,6 +51,28 @@ class WhatsAppService {
     }
 
     return '56$cleaned';
+  }
+
+  String _resolveCurrentAgentName() {
+    final user = _client.auth.currentUser;
+    final metadata = user?.userMetadata;
+
+    final fullName = metadata?['full_name']?.toString().trim();
+    if (fullName != null && fullName.isNotEmpty) {
+      return fullName;
+    }
+
+    final name = metadata?['name']?.toString().trim();
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    final email = user?.email?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first;
+    }
+
+    return 'Viñabike';
   }
 
   Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
@@ -354,13 +380,21 @@ Viña Bike
     required BuildContext context,
     required String customerPhone,
     required String message,
+    String? contactName,
+    String? conversationId,
+    String? contextType,
+    String? contextId,
   }) async {
     return _sendWithFallback(
       context: context,
       phoneNumber: customerPhone,
       message: message,
       cloudBody: {
+        'conversationId': conversationId,
         'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': contactName,
+        'contextType': contextType,
+        'contextId': contextId,
         'type': 'text',
         'text': message,
         'metadata': {
@@ -368,6 +402,57 @@ Viña Bike
         },
       },
     );
+  }
+
+  Future<bool> sendFirstContactTemplate({
+    required String customerPhone,
+    required String customerName,
+    String? agentName,
+    String? conversationId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    final resolvedAgentName = (agentName != null && agentName.trim().isNotEmpty)
+        ? agentName.trim()
+        : _resolveCurrentAgentName();
+
+    final success = await _sendViaCloud({
+      'conversationId': conversationId,
+      'phoneNumber': _formatPhoneNumber(customerPhone),
+      'contactName': customerName,
+      'contextType': contextType,
+      'contextId': contextId,
+      'type': 'template',
+      'templateName': firstContactTemplateName,
+      'templateLanguage': _firstContactTemplateLanguage,
+      'caption':
+          'Hola $customerName, buen día. Soy $resolvedAgentName de Viñabike y te escribo por el servicio de tu bicicleta.',
+      'templateComponents': [
+        {
+          'type': 'body',
+          'parameters': [
+            {
+              'type': 'text',
+              'text': customerName,
+            },
+            {
+              'type': 'text',
+              'text': resolvedAgentName,
+            },
+          ],
+        },
+      ],
+      'metadata': {
+        'source': 'flutter_erp',
+        'template_purpose': 'first_contact',
+      },
+    });
+
+    if (!success) {
+      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
+    }
+
+    return success;
   }
 
   Future<bool> sendInteractiveAction({
