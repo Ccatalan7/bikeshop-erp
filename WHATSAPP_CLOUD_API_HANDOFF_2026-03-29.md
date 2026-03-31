@@ -743,6 +743,118 @@ Subsecciones sugeridas:
        - `131047` re-engagement / ventana cerrada
        - template no aprobado
 
+7. **Estimador de Cobro Meta**
+   - contador de primeras interacciones business-initiated
+   - timestamps de apertura y cierre de ventana de 24h
+   - estimacion de conversaciones cobrables por categoria
+   - proyeccion diaria / semanal / mensual de costo
+   - advertencia visual antes de abrir una nueva ventana cobrable
+   - diferencia entre:
+      - conversacion iniciada por negocio
+      - conversacion iniciada por cliente
+      - ventana ya abierta vs nueva ventana
+
+### Idea adicional: calculador estimado de costo Meta
+
+Seria muy util que la nueva seccion de WhatsApp no solo muestre el estado tecnico del canal, sino tambien una **estimacion razonable de cuanto podria cobrar Meta**.
+
+Esto no debe venderse como “billing oficial”, sino como **estimador operativo** para que el negocio entienda:
+
+- cuantas conversaciones nuevas esta abriendo el ERP
+- cuantas de esas pueden ser cobrables
+- cuanto impacto podria tener un flujo de primer contacto mas agresivo
+
+### Como deberia funcionar este estimador
+
+La logica sugerida es llevar un conteo de **primeras interacciones** con timestamps y usar eso para reconstruir ventanas de 24h.
+
+Datos minimos a guardar o derivar:
+
+- telefono / contacto
+- tenant
+- conversation_id
+- categoria estimada (`utility`, `marketing`, `service`, etc.)
+- timestamp del primer outbound que abre ventana
+- timestamp del ultimo inbound del cliente
+- `window_opened_at`
+- `window_expires_at`
+- bandera `estimated_billable`
+- `estimated_charge_bucket`
+
+### Regla operativa sugerida
+
+1. si el cliente escribe primero, se abre una ventana de 24h customer-service
+2. mientras esa ventana este abierta, los mensajes siguientes no deberian contarse como nueva apertura cobrable
+3. si la ventana esta cerrada y el ERP manda un primer outbound via template, eso cuenta como nueva interaccion potencialmente cobrable
+4. todos los mensajes posteriores dentro de esa ventana heredan la misma ventana y no deberian contarse doble
+
+### Lo que deberia mostrar en UI
+
+La seccion `Configuracion > WhatsApp` podria tener un bloque tipo dashboard con:
+
+- `Conversaciones nuevas hoy`
+- `Ventanas abiertas ahora`
+- `Primeros contactos iniciados por negocio hoy`
+- `Estimacion de conversaciones utility del mes`
+- `Estimacion total de costo del mes`
+
+Ademas, a nivel de contacto o chat:
+
+- `Ventana abierta hasta: 31/03 18:42`
+- `Siguiente envio abriria una nueva ventana cobrable`
+- `Costo estimado: utility Chile / revisar tarifa vigente`
+
+### Importante: esto debe ser una estimacion, no un espejo exacto de Meta
+
+Meta puede cambiar:
+
+- tarifas por pais
+- categorias
+- reglas comerciales
+- forma de facturacion visible en manager
+
+Entonces el ERP deberia presentar esto como:
+
+- `estimacion`
+- `aproximado`
+- `revisar tarifa vigente en WhatsApp Manager`
+
+Nunca como liquidacion oficial.
+
+### Posible implementacion tecnica
+
+Si se quiere formalizar, una opcion es crear una tabla o vista derivada, por ejemplo:
+
+- `whatsapp_billing_windows`
+
+Campos sugeridos:
+
+- `tenant_id`
+- `conversation_id`
+- `external_phone_number`
+- `category`
+- `initiated_by` (`business` / `customer`)
+- `window_opened_at`
+- `window_expires_at`
+- `estimated_billable`
+- `estimated_unit_cost`
+- `estimated_total_cost`
+- `source_message_id`
+
+Y complementarlo con una tabla de configuracion por pais/categoria, por ejemplo:
+
+- `whatsapp_rate_cards`
+
+Para guardar:
+
+- pais
+- categoria
+- moneda
+- valor_referencia
+- vigente_desde
+
+Con eso el frontend podria calcular y renderizar un costo aproximado bastante util para operacion.
+
 ### Idea clave: Template Preview dentro del ERP
 
 Esto ayudaría mucho a operacion, soporte y debugging.
@@ -848,6 +960,7 @@ Sigue pendiente:
 - UI de administracion de templates y reglas de envio
 - UI de administracion de `whatsapp_channels`
 - vistas de auditoria para `whatsapp_webhook_events`
+- estimador de costo Meta basado en primeras interacciones y ventanas de 24h
 - preview de templates dentro del ERP (real o simulado fiel)
 - limpieza de lints/info en algunos archivos Flutter
 
@@ -924,7 +1037,8 @@ Podrian refinarse segun negocio real:
 3. Crear UI de auditoria para `whatsapp_webhook_events` y errores Graph API.
 4. Implementar estrategia de templates para primer contacto fuera de la ventana de 24h.
 5. Agregar preview de templates dentro del ERP, idealmente cableado al template real o al menos reconstruido fielmente.
-6. Probar end-to-end con un numero productivo real de negocio.
+6. Agregar estimador de costo Meta basado en primeras interacciones y ventanas de 24h.
+7. Probar end-to-end con un numero productivo real de negocio.
 
 ### Prioridad media
 
@@ -933,6 +1047,7 @@ Podrian refinarse segun negocio real:
 3. Homologar action types con los ya usados por el modulo de mensajeria.
 4. Mostrar en UI si un contacto esta dentro/fuera de la ventana de 24h.
 5. Permitir configurar por UI el template por defecto de primer contacto y sus ejemplos de variables.
+6. Agregar tabla configurable de tarifas de referencia para el estimador de costo.
 
 ### Prioridad media/alta
 
@@ -995,12 +1110,13 @@ Si retomas despues, el siguiente bloque razonable seria:
 1. Decidir si el siguiente paso es seguir en test o pasar a numero productivo.
 2. Si el objetivo es negocio real: implementar la nueva seccion `Configuracion > WhatsApp`.
 3. Dentro de esa seccion, construir admin UI de canales + templates + auditoria + preview.
-4. Conectar el template de primer contacto `seguimiento_servicio_bicicleta` cuando Meta lo apruebe.
-5. Endurecer el manejo de errores de Meta en Flutter para casos como:
+4. Agregar un estimador de costo Meta usando contador de primeras interacciones y ventanas de 24h.
+5. Conectar el template de primer contacto `seguimiento_servicio_bicicleta` cuando Meta lo apruebe.
+6. Endurecer el manejo de errores de Meta en Flutter para casos como:
    - `131030 Recipient phone number not in allowed list`
    - ventana de 24h cerrada
    - template faltante o no aprobado
-6. Recien despues, limpiar lints Flutter y pulir UI.
+7. Recien despues, limpiar lints Flutter y pulir UI.
 
 ## Estado final de esta sesion
 
