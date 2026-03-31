@@ -68,6 +68,7 @@ export '../../modules/settings/pages/backup_management_page.dart';
 export '../../modules/settings/pages/appearance_settings_page.dart';
 export '../../modules/settings/pages/user_management_page.dart';
 export '../../modules/settings/pages/payment_methods_settings_page.dart';
+export '../../modules/settings/pages/whatsapp_settings_page.dart';
 export '../../modules/settings/pages/bluetooth_scanner_page.dart';
 export '../../modules/settings/pages/keyboard_scanner_page.dart';
 export '../../modules/settings/pages/remote_scanner_page.dart';

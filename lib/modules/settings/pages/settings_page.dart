@@ -136,6 +136,14 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _buildSettingTile(
                 context,
+                icon: Icons.forum,
+                title: 'WhatsApp',
+                subtitle: 'Canales, actividad y costo estimado de Meta',
+                iconColor: Colors.green,
+                onTap: () => context.push('/settings/whatsapp'),
+              ),
+              _buildSettingTile(
+                context,
                 icon: Icons.backup,
                 title: 'Respaldo y Restauración',
                 subtitle: 'Crear respaldos automáticos y restaurar datos',

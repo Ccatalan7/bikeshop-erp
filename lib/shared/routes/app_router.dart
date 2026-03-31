@@ -70,6 +70,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         POSReceiptPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        WhatsAppSettingsPage,
         PaymentsPage,
         PegasTablePage,
         ProductFormPage,
@@ -2115,6 +2116,17 @@ class AppRouter {
             erp.loadLibrary(),
             () => MainLayout(
               child: erp.UserManagementPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/whatsapp',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.WhatsAppSettingsPage(),
             ),
           ),
         ),
