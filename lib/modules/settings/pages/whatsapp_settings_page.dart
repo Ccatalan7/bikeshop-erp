@@ -15,17 +15,24 @@ class WhatsAppSettingsPage extends StatefulWidget {
 
 class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
   final WhatsAppSettingsService _service = WhatsAppSettingsService();
+  final TextEditingController _templateNameController = TextEditingController();
+  final TextEditingController _templateLanguageController =
+      TextEditingController();
+  final TextEditingController _utilityRateController = TextEditingController();
+
   final NumberFormat _usdFormat = NumberFormat.currency(
     locale: 'en_US',
-    symbol: 'US\4',
+    symbol: 'US\$',
     decimalDigits: 2,
   );
   final DateFormat _dateTimeFormat = DateFormat('dd/MM/yyyy HH:mm', 'es_CL');
   final DateFormat _shortFormat = DateFormat('dd/MM HH:mm', 'es_CL');
 
-  WhatsAppSettingsSnapshot? _snapshot;
+  WhatsAppSettingsPanelData? _panelData;
   String? _error;
   bool _isLoading = true;
+  bool _isSavingPreferences = false;
+  final Set<String> _channelUpdates = <String>{};
 
   @override
   void initState() {
@@ -33,8 +40,42 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _templateNameController.dispose();
+    _templateLanguageController.dispose();
+    _utilityRateController.dispose();
+    super.dispose();
+  }
+
+  bool get _hasValidRate {
+    final parsed = double.tryParse(
+        _utilityRateController.text.trim().replaceAll(',', '.'));
+    return parsed != null && parsed >= 0;
+  }
+
+  bool get _hasUnsavedChanges {
+    final panelData = _panelData;
+    if (panelData == null) {
+      return false;
+    }
+
+    final preferences = panelData.preferences;
+    final currentRate = double.tryParse(
+        _utilityRateController.text.trim().replaceAll(',', '.'));
+
+    return _templateNameController.text.trim() !=
+            preferences.firstContactTemplateName ||
+        _templateLanguageController.text.trim() !=
+            preferences.firstContactTemplateLanguage ||
+        currentRate == null ||
+        (currentRate - preferences.utilityConversationUsd).abs() > 0.0001;
+  }
+
   Future<void> _load() async {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -42,29 +83,175 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     });
 
     try {
-      final snapshot = await _service.loadSnapshot();
-      if (!mounted) return;
+      final panelData = await _service.loadPanelData();
+      if (!mounted) {
+        return;
+      }
+
+      _applyPreferences(panelData.preferences);
       setState(() {
-        _snapshot = snapshot;
+        _panelData = panelData;
         _isLoading = false;
       });
-    } catch (e) {
-      if (!mounted) return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
-        _error = e.toString();
+        _error = error.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  void _applyPreferences(WhatsAppSettingsPreferences preferences) {
+    _templateNameController.text = preferences.firstContactTemplateName;
+    _templateLanguageController.text = preferences.firstContactTemplateLanguage;
+    _utilityRateController.text =
+        preferences.utilityConversationUsd.toStringAsFixed(2);
+  }
+
+  void _resetToDefaults() {
+    _applyPreferences(WhatsAppSettingsPreferences.defaults());
+    setState(() {});
+  }
+
+  Future<void> _savePreferences() async {
+    final panelData = _panelData;
+    if (panelData == null || !_hasValidRate || _isSavingPreferences) {
+      return;
+    }
+
+    final rate =
+        double.parse(_utilityRateController.text.trim().replaceAll(',', '.'));
+
+    final preferences = panelData.preferences.copyWith(
+      firstContactTemplateName: _templateNameController.text.trim(),
+      firstContactTemplateLanguage: _templateLanguageController.text.trim(),
+      utilityConversationUsd: rate,
+    );
+
+    setState(() => _isSavingPreferences = true);
+
+    try {
+      await _service.savePreferences(preferences);
+      if (!mounted) {
+        return;
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configuracion de WhatsApp guardada')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingPreferences = false);
+      }
+    }
+  }
+
+  Future<void> _toggleChannel(
+      WhatsAppChannelStatus channel, bool isActive) async {
+    setState(() => _channelUpdates.add(channel.id));
+
+    try {
+      await _service.toggleChannelStatus(
+        channelId: channel.id,
+        isActive: isActive,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      final panelData = _panelData;
+      if (panelData != null) {
+        final updatedChannels = panelData.snapshot.channels.map((item) {
+          if (item.id == channel.id) {
+            return item.copyWith(isActive: isActive);
+          }
+          return item;
+        }).toList();
+
+        setState(() {
+          _panelData = WhatsAppSettingsPanelData(
+            preferences: panelData.preferences,
+            snapshot: WhatsAppSettingsSnapshot(
+              tenantId: panelData.snapshot.tenantId,
+              channels: updatedChannels,
+              lastWebhookAt: panelData.snapshot.lastWebhookAt,
+              lastOutboundAt: panelData.snapshot.lastOutboundAt,
+              lastTemplateAt: panelData.snapshot.lastTemplateAt,
+              webhookEvents24h: panelData.snapshot.webhookEvents24h,
+              inboundEvents24h: panelData.snapshot.inboundEvents24h,
+              statusEvents24h: panelData.snapshot.statusEvents24h,
+              outboundMessages30d: panelData.snapshot.outboundMessages30d,
+              templateMessages30d: panelData.snapshot.templateMessages30d,
+              deliveredMessages30d: panelData.snapshot.deliveredMessages30d,
+              readMessages30d: panelData.snapshot.readMessages30d,
+              failedMessages30d: panelData.snapshot.failedMessages30d,
+              activeCustomerServiceWindows:
+                  panelData.snapshot.activeCustomerServiceWindows,
+              openBillableWindows: panelData.snapshot.openBillableWindows,
+              billableWindowsToday: panelData.snapshot.billableWindowsToday,
+              templateMessagesByName: panelData.snapshot.templateMessagesByName,
+              billableWindows30d: panelData.snapshot.billableWindows30d,
+              estimatedCost30dUsd: panelData.snapshot.estimatedCost30dUsd,
+            ),
+          );
+        });
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isActive ? 'Canal activado' : 'Canal desactivado'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar el canal: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _channelUpdates.remove(channel.id));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final body = _buildBody(context);
-    if (widget.embedded) return body;
+    if (widget.embedded) {
+      return body;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('WhatsApp'),
+        actions: [
+          IconButton(
+            onPressed: _isLoading ? null : _load,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar',
+          ),
+        ],
       ),
       body: body,
     );
@@ -89,7 +276,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No se pudo cargar la configuración de WhatsApp',
+                'No se pudo cargar la configuracion de WhatsApp',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
@@ -111,66 +298,86 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
       );
     }
 
-    final snapshot = _snapshot;
-    if (snapshot == null) {
+    final panelData = _panelData;
+    if (panelData == null) {
       return const SizedBox.shrink();
     }
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          _buildEstimateNotice(context),
-          const SizedBox(height: 16),
-          _buildSummaryCards(context, snapshot),
-          const SizedBox(height: 16),
-          _buildTemplateCard(context, snapshot),
-          const SizedBox(height: 16),
-          _buildChannelSection(context, snapshot),
-          const SizedBox(height: 16),
-          _buildBillingWindowsSection(context, snapshot),
-          const SizedBox(height: 16),
-          _buildDiagnosticsSection(context, snapshot),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1240),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context, panelData),
+                  const SizedBox(height: 20),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 980;
+                      if (!isWide) {
+                        return Column(
+                          children: [
+                            _buildConfigurationCard(context, panelData),
+                            const SizedBox(height: 16),
+                            _buildOverviewCard(context, panelData),
+                          ],
+                        );
+                      }
 
-  Widget _buildEstimateNotice(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F3FF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFB7D7FF)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, color: Color(0xFF0E5AA7)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Estimación de cobro Meta',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0E3E73),
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 7,
+                            child: _buildConfigurationCard(context, panelData),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 5,
+                            child: _buildOverviewCard(context, panelData),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Esto no es la factura oficial de Meta. La pantalla estima ventanas cobrables abiertas por plantillas enviadas desde el ERP usando la tarifa de referencia utility ~ US\4 0.04 por conversación.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF214D79),
+                  const SizedBox(height: 16),
+                  _buildChannelsCard(context, panelData),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 980;
+                      if (!isWide) {
+                        return Column(
+                          children: [
+                            _buildBillableWindowsCard(context, panelData),
+                            const SizedBox(height: 16),
+                            _buildDiagnosticsCard(context, panelData),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child:
+                                _buildBillableWindowsCard(context, panelData),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildDiagnosticsCard(context, panelData),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -178,119 +385,230 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  Widget _buildSummaryCards(
+  Widget _buildHeader(
     BuildContext context,
-    WhatsAppSettingsSnapshot snapshot,
+    WhatsAppSettingsPanelData panelData,
   ) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _MetricCard(
-          title: 'Costo estimado 30d',
-          value: _usdFormat.format(snapshot.estimatedCost30dUsd),
-          subtitle: 'Plantillas utility aceptadas',
-          icon: Icons.attach_money,
-          accent: const Color(0xFF14532D),
-          background: const Color(0xFFECFDF3),
+    final theme = Theme.of(context);
+    final snapshot = panelData.snapshot;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF5FAF7), Color(0xFFFFFFFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        _MetricCard(
-          title: 'Ventanas cobrables 30d',
-          value: '${snapshot.billableWindows30d.length}',
-          subtitle: 'Aperturas estimadas por template',
-          icon: Icons.forum_outlined,
-          accent: const Color(0xFF7C2D12),
-          background: const Color(0xFFFFF7ED),
-        ),
-        _MetricCard(
-          title: 'Ventanas abiertas ahora',
-          value: '${snapshot.openBillableWindows}',
-          subtitle: 'Cobrables aún vigentes',
-          icon: Icons.schedule,
-          accent: const Color(0xFF1D4ED8),
-          background: const Color(0xFFEFF6FF),
-        ),
-        _MetricCard(
-          title: 'Ventanas gratis 24h',
-          value: '${snapshot.activeCustomerServiceWindows}',
-          subtitle: 'Con último inbound del cliente',
-          icon: Icons.mark_chat_read_outlined,
-          accent: const Color(0xFF065F46),
-          background: const Color(0xFFECFDF5),
-        ),
-      ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD7EBDD)),
+      ),
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 16,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 620,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Configuracion de WhatsApp',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ahora si es un panel real: configura el template de primer contacto, la tarifa referencial para la estimacion y el estado operativo de cada canal. La telemetria sigue disponible, pero como apoyo, no como protagonista.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.74),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _HeroBadge(
+            label: 'Canales activos',
+            value:
+                '${snapshot.channels.where((channel) => channel.isActive).length}',
+          ),
+          _HeroBadge(
+            label: 'Ultimo template',
+            value:
+                _formatDateTime(snapshot.lastTemplateAt, empty: 'Sin envios'),
+          ),
+          _HeroBadge(
+            label: 'Costo estimado 30d',
+            value: _usdFormat.format(snapshot.estimatedCost30dUsd),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTemplateCard(
+  Widget _buildConfigurationCard(
     BuildContext context,
-    WhatsAppSettingsSnapshot snapshot,
+    WhatsAppSettingsPanelData panelData,
   ) {
     final theme = Theme.of(context);
-    final firstContactCount =
-        snapshot.templateMessagesByName['seguimiento_servicio_bicicleta'] ?? 0;
+    final firstContactCount = panelData.snapshot
+            .templateMessagesByName[_templateNameController.text.trim()] ??
+        0;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFFDCFCE7),
-                  child: Icon(
-                    Icons.campaign_outlined,
-                    color: Colors.green[800],
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Template de primer contacto',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        'Configuracion operativa',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const SizedBox(height: 6),
                       Text(
-                        'seguimiento_servicio_bicicleta · Utility · es_CL',
-                        style: theme.textTheme.bodySmall,
+                        'Estos valores si afectan el envio real del primer mensaje por WhatsApp. Se guardan por tenant en company_settings.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.72),
+                        ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _isSavingPreferences ? null : _resetToDefaults,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Usar defaults'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: (!_hasUnsavedChanges ||
+                          !_hasValidRate ||
+                          _isSavingPreferences)
+                      ? null
+                      : _savePreferences,
+                  icon: _isSavingPreferences
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: const Text('Guardar'),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 760;
+                final fields = [
+                  _ConfigField(
+                    title: 'Template de primer contacto',
+                    description:
+                        'Nombre exacto aprobado en Meta. Este es el que usa el boton inicial del chat de factura.',
+                    child: TextField(
+                      controller: _templateNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre de template',
+                        hintText: 'seguimiento_servicio_bicicleta',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  _ConfigField(
+                    title: 'Idioma del template',
+                    description:
+                        'Codigo de idioma enviado a la Cloud API para ese template.',
+                    child: TextField(
+                      controller: _templateLanguageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Idioma',
+                        hintText: 'es_CL',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  _ConfigField(
+                    title: 'Tarifa referencial por conversacion',
+                    description:
+                        'Valor usado por el estimador interno. No reemplaza la factura oficial de Meta.',
+                    child: TextField(
+                      controller: _utilityRateController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'USD por ventana',
+                        prefixText: 'US\$ ',
+                        border: const OutlineInputBorder(),
+                        errorText: _hasValidRate
+                            ? null
+                            : 'Ingresa un monto valido mayor o igual a 0',
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                ];
+
+                if (!isWide) {
+                  return Column(
+                    children: [
+                      for (var i = 0; i < fields.length; i++) ...[
+                        fields[i],
+                        if (i != fields.length - 1) const SizedBox(height: 16),
+                      ],
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: fields[0]),
+                    const SizedBox(width: 16),
+                    Expanded(child: fields[1]),
+                    const SizedBox(width: 16),
+                    Expanded(child: fields[2]),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 18),
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
-                _InlineStat(
-                  label: 'Envíos 30d',
+                _InlineFact(
+                  label: 'Template actual configurado',
+                  value: _templateNameController.text.trim().isEmpty
+                      ? 'Sin valor'
+                      : _templateNameController.text.trim(),
+                ),
+                _InlineFact(
+                  label: 'Idioma actual',
+                  value: _templateLanguageController.text.trim().isEmpty
+                      ? 'Sin valor'
+                      : _templateLanguageController.text.trim(),
+                ),
+                _InlineFact(
+                  label: 'Envios 30d del template configurado',
                   value: '$firstContactCount',
                 ),
-                _InlineStat(
-                  label: 'Ventanas hoy',
-                  value: '${snapshot.billableWindowsToday}',
-                ),
-                _InlineStat(
-                  label: 'Último envío',
-                  value: snapshot.lastTemplateAt != null
-                      ? _dateTimeFormat
-                          .format(snapshot.lastTemplateAt!.toLocal())
-                      : 'Sin envíos',
-                ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Si ese template ya fue aprobado y se envió fuera de una ventana previa de 24h para ese mismo contacto, esta pantalla lo cuenta como una apertura probablemente cobrable.',
-              style: theme.textTheme.bodyMedium,
             ),
           ],
         ),
@@ -298,85 +616,263 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  Widget _buildChannelSection(
+  Widget _buildOverviewCard(
     BuildContext context,
-    WhatsAppSettingsSnapshot snapshot,
+    WhatsAppSettingsPanelData panelData,
   ) {
     final theme = Theme.of(context);
+    final snapshot = panelData.snapshot;
+    final templateName = panelData.preferences.firstContactTemplateName;
+    final templateCount = snapshot.templateMessagesByName[templateName] ?? 0;
+    final topTemplate = snapshot.templateMessagesByName.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Canales y Salud',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+              'Resumen operativo',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 12),
-            if (snapshot.channels.isEmpty)
-              Text(
-                'No hay canales de WhatsApp configurados para este tenant.',
-                style: theme.textTheme.bodyMedium,
+            const SizedBox(height: 6),
+            Text(
+              'La parte util del dashboard sigue aqui, pero compacta y legible.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.72),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _StatTile(
+                  title: 'Costo estimado 30d',
+                  value: _usdFormat.format(snapshot.estimatedCost30dUsd),
+                  subtitle: 'Con tarifa referencial configurada',
+                  accent: const Color(0xFF14532D),
+                ),
+                _StatTile(
+                  title: 'Ventanas cobrables 30d',
+                  value: '${snapshot.billableWindows30d.length}',
+                  subtitle: 'Aperturas estimadas por template',
+                  accent: const Color(0xFF7C2D12),
+                ),
+                _StatTile(
+                  title: 'Ventanas gratis 24h',
+                  value: '${snapshot.activeCustomerServiceWindows}',
+                  subtitle: 'Con ultimo inbound del cliente',
+                  accent: const Color(0xFF065F46),
+                ),
+                _StatTile(
+                  title: 'Entregados 30d',
+                  value: '${snapshot.deliveredMessages30d}',
+                  subtitle: 'Outbounds confirmados',
+                  accent: const Color(0xFF1D4ED8),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7FB),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE7E7EF)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Lectura rapida',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailLine(
+                    context,
+                    'Template configurado',
+                    '$templateName · ${panelData.preferences.firstContactTemplateLanguage}',
+                  ),
+                  _buildDetailLine(
+                    context,
+                    'Envios 30d de ese template',
+                    '$templateCount',
+                  ),
+                  _buildDetailLine(
+                    context,
+                    'Ultimo webhook',
+                    _formatDateTime(snapshot.lastWebhookAt),
+                  ),
+                  _buildDetailLine(
+                    context,
+                    'Ultimo outbound',
+                    _formatDateTime(snapshot.lastOutboundAt),
+                  ),
+                  _buildDetailLine(
+                    context,
+                    'Template mas usado',
+                    topTemplate.isEmpty
+                        ? 'Sin actividad'
+                        : '${topTemplate.first.key} (${topTemplate.first.value})',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChannelsCard(
+    BuildContext context,
+    WhatsAppSettingsPanelData panelData,
+  ) {
+    final theme = Theme.of(context);
+    final channels = panelData.snapshot.channels;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Canales',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Activa o desactiva cada numero desde aqui. El estado se guarda directamente sobre whatsapp_channels.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.72),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (channels.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'No hay canales de WhatsApp configurados para este tenant.',
+                  style: theme.textTheme.bodyMedium,
+                ),
               )
             else
-              ...snapshot.channels.map((channel) {
-                final chipColor = channel.isActive
+              ...channels.map((channel) {
+                final isUpdating = _channelUpdates.contains(channel.id);
+                final stateColor = channel.isActive
+                    ? const Color(0xFF166534)
+                    : const Color(0xFF6B7280);
+                final stateBackground = channel.isActive
                     ? const Color(0xFFDCFCE7)
                     : const Color(0xFFF3F4F6);
-                final chipTextColor = channel.isActive
-                    ? const Color(0xFF166534)
-                    : const Color(0xFF4B5563);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: theme.dividerColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              channel.displayName?.isNotEmpty == true
-                                  ? channel.displayName!
-                                  : 'Canal sin nombre',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: channel.isActive
+                                  ? const Color(0xFFE7F8ED)
+                                  : const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              Icons.phone_android,
+                              color: stateColor,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  channel.displayName?.isNotEmpty == true
+                                      ? channel.displayName!
+                                      : 'Canal sin nombre',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  channel.displayPhoneNumber ??
+                                      'Numero no configurado',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
-                            decoration: BoxDecoration(
-                              color: chipColor,
-                              borderRadius: BorderRadius.circular(999),
+                          ),
+                          const SizedBox(width: 12),
+                          if (isUpdating)
+                            const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            Switch.adaptive(
+                              value: channel.isActive,
+                              onChanged: (value) =>
+                                  _toggleChannel(channel, value),
                             ),
-                            child: Text(
-                              channel.isActive ? 'Activo' : 'Inactivo',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: chipTextColor,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _MetaPill(
+                            label: channel.isActive ? 'Activo' : 'Inactivo',
+                            background: stateBackground,
+                            color: stateColor,
+                          ),
+                          _MetaPill(
+                            label: 'Bindings: ${channel.trackedConversations}',
+                          ),
+                          _MetaPill(
+                            label:
+                                'Webhook: ${_formatDateTime(channel.lastWebhookAt, empty: 'Sin datos')}',
+                          ),
+                          _MetaPill(
+                            label:
+                                'Inbound: ${_formatDateTime(channel.lastInboundAt, empty: 'Sin datos')}',
+                          ),
+                          _MetaPill(
+                            label:
+                                'Outbound: ${_formatDateTime(channel.lastOutboundAt, empty: 'Sin datos')}',
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      _buildDetailLine(
-                        context,
-                        'Número',
-                        channel.displayPhoneNumber ?? 'No configurado',
-                      ),
+                      const SizedBox(height: 12),
                       _buildDetailLine(
                         context,
                         'Phone Number ID',
@@ -386,26 +882,6 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                         context,
                         'Business Account',
                         channel.businessAccountId ?? 'No configurada',
-                      ),
-                      _buildDetailLine(
-                        context,
-                        'Conversaciones vinculadas',
-                        '${channel.trackedConversations}',
-                      ),
-                      _buildDetailLine(
-                        context,
-                        'Último webhook',
-                        _formatDateTime(channel.lastWebhookAt),
-                      ),
-                      _buildDetailLine(
-                        context,
-                        'Último inbound',
-                        _formatDateTime(channel.lastInboundAt),
-                      ),
-                      _buildDetailLine(
-                        context,
-                        'Último outbound',
-                        _formatDateTime(channel.lastOutboundAt),
                       ),
                     ],
                   ),
@@ -417,44 +893,49 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  Widget _buildBillingWindowsSection(
+  Widget _buildBillableWindowsCard(
     BuildContext context,
-    WhatsAppSettingsSnapshot snapshot,
+    WhatsAppSettingsPanelData panelData,
   ) {
     final theme = Theme.of(context);
+    final windows = panelData.snapshot.billableWindows30d;
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          initiallyExpanded: true,
+          title: Text(
+            'Ventanas cobrables estimadas',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: Text(
+            'Detalle secundario: util para auditar el estimador sin convertir la pantalla en un muro de datos.',
+            style: theme.textTheme.bodySmall,
+          ),
           children: [
-            Text(
-              'Ventanas cobrables estimadas',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Cada fila representa una apertura estimada de conversación business-initiated por template. Si mandaste un template aprobado y no había una ventana previa para ese contacto/categoría, aquí debería aparecer.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            if (snapshot.billableWindows30d.isEmpty)
-              Text(
-                'No hay ventanas cobrables estimadas en los últimos 30 días.',
-                style: theme.textTheme.bodyMedium,
+            if (windows.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No hay ventanas cobrables estimadas en los ultimos 30 dias.',
+                  style: theme.textTheme.bodyMedium,
+                ),
               )
             else
-              ...snapshot.billableWindows30d.take(12).map((window) {
+              ...windows.take(10).map((window) {
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: window.isActive
                         ? const Color(0xFFF0FDF4)
                         : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: window.isActive
                           ? const Color(0xFFBBF7D0)
@@ -472,7 +953,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                                   ? window.contactName!
                                   : window.phoneNumber,
                               style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -485,14 +966,27 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${window.templateName} · ${window.category}',
-                        style: theme.textTheme.bodySmall,
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _MetaPill(label: window.templateName),
+                          _MetaPill(label: window.category),
+                          _MetaPill(
+                            label: window.isActive ? 'Activa' : 'Cerrada',
+                            background: window.isActive
+                                ? const Color(0xFFDCFCE7)
+                                : const Color(0xFFF3F4F6),
+                            color: window.isActive
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF4B5563),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
-                        'Abierta: ${_shortFormat.format(window.openedAt.toLocal())} · Expira: ${_shortFormat.format(window.expiresAt.toLocal())}',
+                        'Abierta ${_shortFormat.format(window.openedAt.toLocal())} · Expira ${_shortFormat.format(window.expiresAt.toLocal())}',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
@@ -505,63 +999,69 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  Widget _buildDiagnosticsSection(
+  Widget _buildDiagnosticsCard(
     BuildContext context,
-    WhatsAppSettingsSnapshot snapshot,
+    WhatsAppSettingsPanelData panelData,
   ) {
     final theme = Theme.of(context);
+    final snapshot = panelData.snapshot;
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Actividad y Diagnóstico',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          title: Text(
+            'Actividad y diagnostico',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
-            const SizedBox(height: 12),
+          ),
+          subtitle: Text(
+            'Salud del webhook, volumenes y senales para soporte operativo.',
+            style: theme.textTheme.bodySmall,
+          ),
+          children: [
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
-                _InlineStat(
+                _InlineFact(
                   label: 'Webhooks 24h',
                   value: '${snapshot.webhookEvents24h}',
                 ),
-                _InlineStat(
+                _InlineFact(
+                  label: 'Inbound 24h',
+                  value: '${snapshot.inboundEvents24h}',
+                ),
+                _InlineFact(
                   label: 'Statuses 24h',
                   value: '${snapshot.statusEvents24h}',
                 ),
-                _InlineStat(
+                _InlineFact(
                   label: 'Outbounds 30d',
                   value: '${snapshot.outboundMessages30d}',
                 ),
-                _InlineStat(
-                  label: 'Delivered 30d',
-                  value: '${snapshot.deliveredMessages30d}',
-                ),
-                _InlineStat(
+                _InlineFact(
                   label: 'Read 30d',
                   value: '${snapshot.readMessages30d}',
                 ),
-                _InlineStat(
+                _InlineFact(
                   label: 'Failed 30d',
                   value: '${snapshot.failedMessages30d}',
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildDetailLine(
               context,
-              'Último webhook global',
+              'Ultimo webhook global',
               _formatDateTime(snapshot.lastWebhookAt),
             ),
             _buildDetailLine(
               context,
-              'Último outbound global',
+              'Ultimo outbound global',
               _formatDateTime(snapshot.lastOutboundAt),
             ),
           ],
@@ -597,56 +1097,90 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
     );
   }
 
-  String _formatDateTime(DateTime? value) {
-    if (value == null) return 'Sin datos';
+  String _formatDateTime(DateTime? value, {String empty = 'Sin datos'}) {
+    if (value == null) {
+      return empty;
+    }
     return _dateTimeFormat.format(value.toLocal());
   }
 }
 
-class _MetricCard extends StatelessWidget {
+class _ConfigField extends StatelessWidget {
   final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final Color background;
+  final String description;
+  final Widget child;
 
-  const _MetricCard({
+  const _ConfigField({
     required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.background,
+    required this.description,
+    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: background,
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: accent),
-              const Spacer(),
-            ],
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Text(
+            description,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final Color accent;
+
+  const _StatTile({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withOpacity(0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
             title,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: accent,
                 ),
@@ -662,16 +1196,16 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _InlineStat extends StatelessWidget {
+class _InlineFact extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InlineStat({required this.label, required this.value});
+  const _InlineFact({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 140),
+      constraints: const BoxConstraints(minWidth: 170),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -690,6 +1224,76 @@ class _InlineStat extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  final String label;
+  final Color? background;
+  final Color? color;
+
+  const _MetaPill({
+    required this.label,
+    this.background,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedBackground =
+        background ?? Theme.of(context).colorScheme.surfaceContainerHighest;
+    final resolvedColor = color ?? Theme.of(context).colorScheme.onSurface;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: resolvedBackground,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: resolvedColor,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
+class _HeroBadge extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HeroBadge({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE6EFE8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
           ),
         ],
       ),

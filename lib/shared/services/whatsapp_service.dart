@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/bikeshop/models/bikeshop_models.dart';
+import '../services/tenant_service.dart';
 import '../widgets/whatsapp_web_viewer.dart';
 
 enum WhatsAppDeliveryMethod {
@@ -19,7 +20,11 @@ class WhatsAppService {
   static final WhatsAppService _instance = WhatsAppService._internal();
   static const String firstContactTemplateName =
       'seguimiento_servicio_bicicleta';
-  static const String _firstContactTemplateLanguage = 'es_CL';
+  static const String firstContactTemplateLanguage = 'es_CL';
+  static const String firstContactTemplateNameSettingKey =
+      'whatsapp_first_contact_template_name';
+  static const String firstContactTemplateLanguageSettingKey =
+      'whatsapp_first_contact_template_language';
   static const int _reengagementErrorCode = 131047;
   static const int _expiredAccessTokenErrorCode = 190;
 
@@ -138,6 +143,58 @@ class WhatsAppService {
 
     return DateTime.now().toUtc().difference(lastInboundAt.toUtc()) <
         const Duration(hours: 24);
+  }
+
+  Future<({String templateName, String templateLanguage})>
+      _loadFirstContactTemplateSettings() async {
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null || tenantId.isEmpty) {
+        return (
+          templateName: firstContactTemplateName,
+          templateLanguage: firstContactTemplateLanguage,
+        );
+      }
+
+      final rows = await _client
+          .from('company_settings')
+          .select('key, value')
+          .eq('tenant_id', tenantId)
+          .inFilter('key', [
+        firstContactTemplateNameSettingKey,
+        firstContactTemplateLanguageSettingKey,
+      ]);
+
+      String templateName = firstContactTemplateName;
+      String templateLanguage = firstContactTemplateLanguage;
+
+      for (final row in rows) {
+        final key = row['key']?.toString();
+        final value = row['value']?.toString().trim();
+        if (value == null || value.isEmpty) {
+          continue;
+        }
+
+        if (key == firstContactTemplateNameSettingKey) {
+          templateName = value;
+        } else if (key == firstContactTemplateLanguageSettingKey) {
+          templateLanguage = value;
+        }
+      }
+
+      return (
+        templateName: templateName,
+        templateLanguage: templateLanguage,
+      );
+    } catch (error) {
+      debugPrint(
+        '⚠️ [WhatsAppService] Falling back to default first-contact template settings: $error',
+      );
+      return (
+        templateName: firstContactTemplateName,
+        templateLanguage: firstContactTemplateLanguage,
+      );
+    }
   }
 
   Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
@@ -528,6 +585,7 @@ Viña Bike
     String? contextType,
     String? contextId,
   }) async {
+    final templateSettings = await _loadFirstContactTemplateSettings();
     final resolvedAgentName = (agentName != null && agentName.trim().isNotEmpty)
         ? agentName.trim()
         : _resolveCurrentAgentName();
@@ -545,8 +603,8 @@ Viña Bike
       'contextType': contextType,
       'contextId': contextId,
       'type': 'template',
-      'templateName': firstContactTemplateName,
-      'templateLanguage': _firstContactTemplateLanguage,
+      'templateName': templateSettings.templateName,
+      'templateLanguage': templateSettings.templateLanguage,
       'caption': renderedMessage,
       'templateComponents': [
         {
@@ -566,6 +624,8 @@ Viña Bike
       'metadata': {
         'source': 'flutter_erp',
         'template_purpose': 'first_contact',
+        'template_name': templateSettings.templateName,
+        'template_language': templateSettings.templateLanguage,
       },
     });
 
