@@ -1,8 +1,72 @@
 # Handoff: WhatsApp Cloud API
 
-*Última actualización: 30 de Marzo de 2026*
+*Última actualización: 31 de Marzo de 2026*
 Repo: bikeshop-erp
 Objetivo: dejar documentado el estado actual de la integracion de WhatsApp Cloud API para continuar el trabajo desde otro computador.
+
+## Actualización 31 de Marzo 2026 — Bugfixes críticos en Chat UI
+
+### 1. Render loop infinito en chat embebido (EntityChatSidebar)
+
+**Síntoma:** Abrir un chat desde la pantalla de factura/pega causaba un bucle de renderizado (assertions `!_debugDuringDeviceUpdate` y `RenderBox was not laid out`). La app se congelaba.
+
+**Causa raíz — Parte 1 (pointer update cycle):**
+`entity_chat_sidebar.dart` hacía `setState` directamente en el callback `onTap` de un `ListTile`, lo que mutaba el estado durante el ciclo de actualización de punteros del MouseTracker de Flutter. Arreglado con `SchedulerBinding.instance.addPostFrameCallback` (método `_safeSetState`).
+
+**Causa raíz — Parte 2 (unbounded RenderBox):**
+`chat_window.dart` usaba `MediaQuery.of(context).size.width * 0.75` para las burbujas de mensaje. Dentro del sidebar embebido (ancho reducido), esto causaba constraints infinitos. Arreglado envolviendo `_buildMessageBubble` en un `LayoutBuilder` y usando `constraints.maxWidth * 0.72` (con fallback de 280px).
+
+**Causa raíz — Parte 3 (infinite FutureBuilder loop):**  
+`_buildMessageBubble` creaba una nueva instancia de `Future` en cada llamada a `_getSenderInfo(senderId)`. `FutureBuilder` detecta objeto Future diferente → resetea a "waiting" → rebuild → nuevo Future → bucle infinito. Arreglado con un cache de Futures por `senderId`:
+
+```dart
+// En _ChatWindowState:
+final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
+
+Future<Map<String, dynamic>?> _getSenderInfo(String senderId) {
+  return _senderInfoFutureCache.putIfAbsent(
+    senderId,
+    () => _messagingService.getSenderInfo(senderId),
+  );
+}
+```
+
+El cache se limpia en `didUpdateWidget` cuando cambia la conversación.
+
+**Estado:** ✅ Arreglado — chat embebido abre sin congelamiento.
+
+---
+
+### 2. Botón "Enviar plantilla inicial" no hacía nada
+
+**Síntoma:** Al tocar el botón "Enviar plantilla inicial" en el modo de primer contacto (ventana de 24h cerrada), no pasaba nada. Sin logs, sin spinner, sin error.
+
+**Causa raíz:** El botón llamaba `_sendMessage()`, que comienza con:
+```dart
+if (text.isEmpty || _isSendingMessage) return;
+```
+En modo primer contacto no hay texto en el compositor → `text.isEmpty` es `true` → sale inmediatamente sin hacer nada.
+
+**Fix:** Se creó un método dedicado `_sendInitialTemplate()` que:
+- No verifica `text.isEmpty`
+- Llama directamente a `WhatsAppService.sendFirstContactTemplate()`
+- Loguea cada paso con `debugPrint('🟠 [ChatWindow] ...')`
+- Muestra SnackBar de éxito o error
+- Recarga mensajes (`_loadMessages()`) si el envío fue exitoso
+
+El botón ahora usa `onPressed: _isSendingMessage ? null : _sendInitialTemplate`.
+
+**Estado:** ✅ Arreglado — botón dispara la plantilla, logs visibles en debug console.
+
+---
+
+### Estado de template `seguimiento_servicio_bicicleta`
+
+- Creado en Meta el 31 de Marzo, **actualmente en revisión** (pending approval)
+- Una vez aprobado, el flujo completo de primer contacto queda 100% operativo
+- El código Flutter ya está listo para usarlo — no se requieren más cambios de código cuando Meta lo apruebe
+
+---
 
 ## Actualización 30 de Marzo 2026 (Estrategia de Producción y UI)
 
@@ -569,6 +633,7 @@ No basta con "activar" el numero de prueba. Hay que pasar a un setup productivo 
 4. Configurar nombre para mostrar y perfil comercial.
 5. Configurar billing/pagos en WhatsApp Manager.
 6. Generar token permanente de system user con permisos:
+   - *Nota: El System User "Whatsapp Backend" ya fue creado como administrador en la configuración del Business Manager anteriormente. Sólo seleccionar ese usuario, ir a la app y generar el token seleccionando "Nunca expirará".*
    - `business_management`
    - `whatsapp_business_messaging`
    - `whatsapp_business_management`
@@ -656,7 +721,11 @@ Texto enviado a revision:
 Hola {{1}}, buen día. Soy {{2}} de Viñabike y te escribo por el servicio de tu bicicleta.
 ```
 
-Ademas, en Flutter ya quedo preparado un metodo dedicado en `lib/shared/services/whatsapp_service.dart` para disparar este template apenas quede aprobado.
+En Flutter ya quedo preparado:
+- `WhatsAppService.sendFirstContactTemplate()` — método dedicado para disparar este template
+- `_sendInitialTemplate()` en `chat_window.dart` — llamado exclusivo desde el botón "Enviar plantilla inicial"
+- El botón muestra spinner mientras envía y SnackBar con resultado
+- Una vez Meta apruebe el template, **no se requieren más cambios de código**
 
 ---
 
@@ -1017,7 +1086,7 @@ Pendiente:
    - primer contacto de presupuesto
    - seguimiento de aprobacion
    - recordatorio de pago
-- conectar el template `seguimiento_servicio_bicicleta` al flujo de primer contacto una vez Meta lo apruebe
+- ✅ ~~conectar el template `seguimiento_servicio_bicicleta` al flujo de primer contacto~~ → **código listo, solo falta aprobación Meta**
 
 ### 6. Estados adicionales de pegas
 
@@ -1098,7 +1167,7 @@ Orden sugerido:
    - verificar negocio
    - agregar numero real
    - configurar billing
-   - generar token permanente
+   - generar token permanente (⚠️ NOTA: El System User administrador ya está configurado en Meta, solo debes entrar allí y regenerar el token sin expiración)
    - actualizar Supabase secrets / canal
 6. Probar enviar y recibir mensajes desde el ERP.
 7. Solo despues meterse al bloque de templates / admin UI / endurecimiento UX.
@@ -1111,7 +1180,7 @@ Si retomas despues, el siguiente bloque razonable seria:
 2. Si el objetivo es negocio real: implementar la nueva seccion `Configuracion > WhatsApp`.
 3. Dentro de esa seccion, construir admin UI de canales + templates + auditoria + preview.
 4. Agregar un estimador de costo Meta usando contador de primeras interacciones y ventanas de 24h.
-5. Conectar el template de primer contacto `seguimiento_servicio_bicicleta` cuando Meta lo apruebe.
+5. ✅ Conectar el template de primer contacto `seguimiento_servicio_bicicleta` — código listo, esperando aprobación Meta.
 6. Endurecer el manejo de errores de Meta en Flutter para casos como:
    - `131030 Recipient phone number not in allowed list`
    - ventana de 24h cerrada

@@ -79,12 +79,12 @@ class ChatProvider extends ChangeNotifier {
 
   /// Get display title for a conversation
   String getChatTitle(Conversation c) {
-    if (c.title != null && c.title!.isNotEmpty) return c.title!;
+    if (c.title != null && c.title!.isNotEmpty) return c.title ?? '';
 
     // For support chats, use customer name
     if (c.type == 'support') {
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
-        return c.creatorName!;
+        return c.creatorName ?? 'Cliente';
       }
       return 'Cliente';
     }
@@ -255,14 +255,15 @@ class ChatProvider extends ChangeNotifier {
   /// Send a message in the active conversation
   Future<void> sendMessage(String content,
       {String type = 'text', Map<String, dynamic>? metadata}) async {
-    if (_activeConversationId == null || content.trim().isEmpty) return;
+    final activeId = _activeConversationId;
+    if (activeId == null || content.trim().isEmpty) return;
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
 
     // 1. Optimistic Update: Add message immediately
     final tempMessage = Message(
       id: tempId,
-      conversationId: _activeConversationId!,
+      conversationId: activeId,
       senderId: _service.currentUserId,
       content: content,
       type: type,
@@ -276,7 +277,7 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       await _service.sendMessage(
-        conversationId: _activeConversationId!,
+        conversationId: activeId,
         content: content,
         type: type,
         metadata: metadata,
@@ -327,6 +328,37 @@ class ChatProvider extends ChangeNotifier {
       conversationId: existing.conversationId,
       senderId: existing.senderId,
       content: existing.content,
+      type: existing.type,
+      metadata: updatedMetadata,
+      createdAt: existing.createdAt,
+      isMe: existing.isMe,
+    );
+
+    notifyListeners();
+  }
+
+  void updateMessageById(
+    String messageId, {
+    String? content,
+    Map<String, dynamic>? metadataUpdates,
+  }) {
+    final index =
+        _activeMessages.indexWhere((message) => message.id == messageId);
+    if (index == -1) {
+      return;
+    }
+
+    final existing = _activeMessages[index];
+    final updatedMetadata = Map<String, dynamic>.from(existing.metadata);
+    if (metadataUpdates != null) {
+      updatedMetadata.addAll(metadataUpdates);
+    }
+
+    _activeMessages[index] = Message(
+      id: existing.id,
+      conversationId: existing.conversationId,
+      senderId: existing.senderId,
+      content: content ?? existing.content,
       type: existing.type,
       metadata: updatedMetadata,
       createdAt: existing.createdAt,

@@ -43,6 +43,7 @@ class _ChatWindowState extends State<ChatWindow> {
   final FocusNode _focusNode = FocusNode();
   final MessagingService _messagingService = MessagingService();
   bool _isSendingMessage = false;
+  late Future<Map<String, dynamic>?> _whatsAppContactFuture;
 
   // Autocomplete State
   List<AutocompleteSuggestion> _suggestions = [];
@@ -50,13 +51,18 @@ class _ChatWindowState extends State<ChatWindow> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
 
+  // Cache futures so FutureBuilder doesn't re-fire on every rebuild (→ infinite loop)
+  final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
+
   // Scroll State
-  int _previousMessageCount = 0;
+  // _previousMessageCount removed in favor of simpler list builder
 
   @override
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
+      _senderInfoFutureCache.clear();
+      _whatsAppContactFuture = _resolveConversationWhatsAppContact();
       _loadMessages();
     }
   }
@@ -64,6 +70,7 @@ class _ChatWindowState extends State<ChatWindow> {
   @override
   void initState() {
     super.initState();
+    _whatsAppContactFuture = _resolveConversationWhatsAppContact();
     _loadMessages();
     _messageController.addListener(_onTextChanged);
   }
@@ -80,7 +87,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _onTextChanged() {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce?.cancel();
 
     final text = _messageController.text;
     final selection = _messageController.selection;
@@ -231,7 +238,10 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    final currentOverlay = _overlayEntry;
+    if (currentOverlay != null) {
+      Overlay.of(context).insert(currentOverlay);
+    }
   }
 
   void _removeOverlay() {
@@ -258,9 +268,6 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _loadMessages() {
-    // Reset count when loading new chat so it triggers scroll on build
-    _previousMessageCount = 0;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context
           .read<ChatProvider>()
@@ -268,12 +275,82 @@ class _ChatWindowState extends State<ChatWindow> {
     });
   }
 
+  Future<void> _sendInitialTemplate() async {
+    if (_isSendingMessage) return;
+    debugPrint('🟠 [ChatWindow] _sendInitialTemplate tapped');
+
+    setState(() => _isSendingMessage = true);
+
+    try {
+      final contact = await _resolveConversationWhatsAppContact();
+      final phone = contact?['phone']?.toString();
+      if (phone == null || phone.isEmpty) {
+        debugPrint('❌ [ChatWindow] No phone number for initial template');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('No hay número de teléfono asociado a este contacto.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final customerName = contact?['name']?.toString() ?? 'cliente';
+      debugPrint(
+          '🟠 [ChatWindow] Sending template to $phone for $customerName');
+
+      final whatsappService = WhatsAppService();
+      final success = await whatsappService.sendFirstContactTemplate(
+        customerPhone: phone,
+        customerName: customerName,
+        conversationId: widget.conversation.id,
+        contextType: widget.conversation.contextType,
+        contextId: widget.conversation.contextId,
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        debugPrint('✅ [ChatWindow] Initial template sent successfully');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Plantilla inicial enviada. Cuando el cliente responda se habilitará el chat normal.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Reload messages so the sent template bubble appears
+        _loadMessages();
+      } else {
+        debugPrint('❌ [ChatWindow] Initial template failed');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'No se pudo enviar la plantilla. Revisa la conexión o el token de WhatsApp.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [ChatWindow] _sendInitialTemplate error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingMessage = false);
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSendingMessage) {
       return;
     }
-
     final chatProvider = context.read<ChatProvider>();
     final pendingText = text;
     final optimisticMessageId =
@@ -286,6 +363,10 @@ class _ChatWindowState extends State<ChatWindow> {
     try {
       final contact = await _resolveConversationWhatsAppContact();
       final phone = contact?['phone']?.toString();
+      final lastInboundRaw = contact?['last_inbound_at'];
+      final lastInboundAt = lastInboundRaw is DateTime
+          ? lastInboundRaw
+          : DateTime.tryParse(lastInboundRaw?.toString() ?? '');
 
       if (phone != null && phone.isNotEmpty) {
         final whatsappService = WhatsAppService();
@@ -314,6 +395,7 @@ class _ChatWindowState extends State<ChatWindow> {
           conversationId: widget.conversation.id,
           contextType: widget.conversation.contextType,
           contextId: widget.conversation.contextId,
+          lastInboundAt: lastInboundAt,
         );
 
         if (!mounted) {
@@ -322,18 +404,36 @@ class _ChatWindowState extends State<ChatWindow> {
 
         if (!success) {
           chatProvider.removeMessageById(optimisticMessageId);
+          if (whatsappService.lastErrorRequiresServerFix) {
+            throw Exception(
+              'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.',
+            );
+          }
           throw Exception('No se pudo enviar el mensaje por WhatsApp');
         }
 
         if (whatsappService.lastDeliveryMethod ==
             WhatsAppDeliveryMethod.cloudApi) {
-          chatProvider.updateMessageMetadataById(
+          chatProvider.updateMessageById(
             optimisticMessageId,
-            {
+            content: whatsappService.lastResolvedMessageText ?? pendingText,
+            metadataUpdates: {
               'pending': false,
               'external_status': 'accepted',
+              if (whatsappService.lastUsedFirstContactTemplate)
+                'template_used': true,
             },
           );
+
+          if (whatsappService.lastUsedFirstContactTemplate) {
+            _showWhatsAppResultSnackbar(
+              context: context,
+              deliveryMethod: whatsappService.lastDeliveryMethod,
+              successMessage:
+                  'Ventana de 24 horas cerrada. Se envió la plantilla inicial de WhatsApp.',
+              fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
+            );
+          }
         }
 
         if (whatsappService.lastDeliveryMethod ==
@@ -632,16 +732,6 @@ class _ChatWindowState extends State<ChatWindow> {
     final messages = chatProvider.activeMessages;
     final isLoading = chatProvider.isLoading;
 
-    // Detect new messages
-    if (messages.length > _previousMessageCount) {
-      _previousMessageCount = messages.length;
-    }
-
-    // Handle case where messages might be cleared (e.g. switching chats)
-    if (messages.length < _previousMessageCount) {
-      _previousMessageCount = messages.length;
-    }
-
     return Column(
       children: [
         // Header
@@ -780,44 +870,7 @@ class _ChatWindowState extends State<ChatWindow> {
             color: Colors.white,
             border: Border(top: BorderSide(color: Colors.grey[200]!)),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.flash_on, color: Colors.amber),
-                tooltip: 'Acciones Rápidas',
-                onPressed: () => _showSmartActions(context),
-              ),
-              IconButton(
-                icon: const Icon(Icons.attach_file),
-                onPressed: _pickAndSendFile,
-              ),
-              Expanded(
-                child: CompositedTransformTarget(
-                  link: _layerLink,
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _focusNode,
-                    decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje... (# para ref)',
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(24)),
-                      ),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.send, color: Colors.blue),
-                onPressed: _sendMessage,
-              ),
-            ],
-          ),
+          child: _buildComposer(context),
         ),
       ],
     );
@@ -937,7 +990,7 @@ class _ChatWindowState extends State<ChatWindow> {
         final bikeshopService = context.read<BikeshopService>();
         final job = await bikeshopService.getJobById(contextId);
         if (job?.invoiceId != null) {
-          invoiceId = job!.invoiceId;
+          invoiceId = job?.invoiceId;
         }
       } catch (e) {
         _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
@@ -1218,14 +1271,41 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  Future<Map<String, dynamic>?> _getSenderInfo(String senderId) async {
-    return _messagingService.getSenderInfo(senderId);
+  Future<Map<String, dynamic>?> _getSenderInfo(String senderId) {
+    return _senderInfoFutureCache.putIfAbsent(
+      senderId,
+      () => _messagingService.getSenderInfo(senderId),
+    );
   }
 
   Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() {
     return _messagingService.getSupportConversationContact(
       widget.conversation.id,
     );
+  }
+
+  DateTime? _parseLastInboundAt(Map<String, dynamic>? contact) {
+    final rawValue = contact?['last_inbound_at'];
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    return DateTime.tryParse(rawValue?.toString() ?? '');
+  }
+
+  bool _requiresFirstContactTemplate(Map<String, dynamic>? contact) {
+    final phone = contact?['phone']?.toString();
+    if (phone == null || phone.isEmpty) {
+      return false;
+    }
+
+    final lastInboundAt = _parseLastInboundAt(contact);
+    if (lastInboundAt == null) {
+      return true;
+    }
+
+    return DateTime.now().toUtc().difference(lastInboundAt.toUtc()) >=
+        const Duration(hours: 24);
   }
 
   Future<bool> _sendWhatsAppInteractiveRequest({
@@ -1279,6 +1359,136 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  Widget _buildComposer(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _whatsAppContactFuture,
+      builder: (context, snapshot) {
+        final contact = snapshot.data;
+        final requiresTemplate = _requiresFirstContactTemplate(contact);
+
+        if (requiresTemplate) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.campaign_outlined,
+                      color: Colors.orange[800],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Primer contacto por WhatsApp',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Aquí no se enviará texto libre. Al tocar el botón se mandará la plantilla aprobada de Meta para abrir la conversación.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _isSendingMessage ? null : _sendInitialTemplate,
+                  icon: _isSendingMessage
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send),
+                  label: Text(
+                    _isSendingMessage
+                        ? 'Enviando plantilla inicial...'
+                        : 'Enviar plantilla inicial',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Cuando el cliente responda, aquí se habilitará el chat normal.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.flash_on, color: Colors.amber),
+              tooltip: 'Acciones Rápidas',
+              onPressed: () => _showSmartActions(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.attach_file),
+              onPressed: _pickAndSendFile,
+            ),
+            Expanded(
+              child: CompositedTransformTarget(
+                link: _layerLink,
+                child: TextField(
+                  controller: _messageController,
+                  focusNode: _focusNode,
+                  decoration: const InputDecoration(
+                    hintText: 'Escribe un mensaje... (# para ref)',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(24)),
+                    ),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.send, color: Colors.blue),
+              onPressed: _sendMessage,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showWhatsAppResultSnackbar({
     required BuildContext context,
     required WhatsAppDeliveryMethod deliveryMethod,
@@ -1320,275 +1530,284 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Widget _buildMessageBubble(BuildContext context, Message msg) {
-    final isMe = msg.isMe; // In ERP context, "Me" is the logged-in employee
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMe = msg.isMe; // In ERP context, "Me" is the logged-in employee
+        final senderId = msg.senderId;
+        final bubbleMaxWidth =
+            constraints.maxWidth > 0 ? constraints.maxWidth * 0.72 : 280.0;
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: msg.senderId != null
-          ? _getSenderInfo(msg.senderId!)
-          : Future.value(null),
-      builder: (context, snapshot) {
-        final senderInfo = snapshot.data;
-        final senderName = senderInfo?['name'] ?? (isMe ? 'Tú' : 'Cliente');
-        final senderAvatar = senderInfo?['avatar_url'];
+        return FutureBuilder<Map<String, dynamic>?>(
+          future:
+              senderId != null ? _getSenderInfo(senderId) : Future.value(null),
+          builder: (context, snapshot) {
+            final senderInfo = snapshot.data;
+            final senderName = senderInfo?['name'] ?? (isMe ? 'Tú' : 'Cliente');
+            final senderAvatar = senderInfo?['avatar_url'];
 
-        // Message Content Widget
-        Widget contentWidget;
-        if (msg.type == 'image') {
-          contentWidget = GestureDetector(
-            onTap: () {
-              // Show full-screen image preview
-              showDialog(
-                context: context,
-                builder: (_) => Dialog(
-                  backgroundColor: Colors.transparent,
-                  child: Stack(
-                    children: [
-                      InteractiveViewer(
-                        child: Image.network(msg.content),
+            // Message Content Widget
+            Widget contentWidget;
+            if (msg.type == 'image') {
+              contentWidget = GestureDetector(
+                onTap: () {
+                  // Show full-screen image preview
+                  showDialog(
+                    context: context,
+                    builder: (_) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: Stack(
+                        children: [
+                          InteractiveViewer(
+                            child: Image.network(msg.content),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.white, size: 32),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ),
+                        ],
                       ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: IconButton(
-                          icon: const Icon(Icons.close,
-                              color: Colors.white, size: 32),
-                          onPressed: () => Navigator.pop(context),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    msg.content,
+                    width: 200,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        color: Colors.grey[300],
+                        child: const Center(child: CircularProgressIndicator()),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 200,
+                      height: 150,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image, size: 48),
+                    ),
+                  ),
+                ),
+              );
+            } else if (msg.metadata['type'] == 'quote_request') {
+              contentWidget = _buildQuoteCard(context, msg, isMe);
+            } else if (msg.type == 'file') {
+              // File attachment (PDF, doc, etc.)
+              contentWidget = GestureDetector(
+                onTap: () async {
+                  // Open URL in browser
+                  final url = Uri.parse(msg.content);
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  } else {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        isMe ? Colors.white.withOpacity(0.3) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getFileIcon(msg.metadata['extension'] ?? ''),
+                        color: isMe ? Colors.black87 : Colors.blue[600],
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              msg.metadata['filename'] ?? 'Archivo',
+                              style: TextStyle(
+                                color: isMe ? Colors.black87 : Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              (msg.metadata['extension'] ?? '').toUpperCase(),
+                              style: TextStyle(
+                                color: isMe ? Colors.black54 : Colors.grey[600],
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.download,
+                        color: isMe ? Colors.black54 : Colors.grey[500],
+                        size: 20,
                       ),
                     ],
                   ),
                 ),
               );
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                msg.content,
-                width: 200,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    width: 200,
-                    height: 150,
-                    color: Colors.grey[300],
-                    child: const Center(child: CircularProgressIndicator()),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 200,
-                  height: 150,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.broken_image, size: 48),
+            } else if (msg.type == 'action_request') {
+              // ACTION REQUEST - Interactive buttons for customers
+              contentWidget = _buildActionRequestCard(context, msg, isMe);
+            } else {
+              // Text Message
+              contentWidget = ParsedMessageText(
+                text: msg.content,
+                isMe: isMe,
+                onReferenceTap: widget.onReferenceTap,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 14,
                 ),
+              );
+            }
+
+            // Timestamp
+            final timeStr = DateFormat('HH:mm').format(msg.createdAt);
+
+            // Bubble Decoration
+            final bubbleDecoration = BoxDecoration(
+              color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(12),
+                topRight: const Radius.circular(12),
+                bottomLeft: Radius.circular(isMe ? 12 : 0),
+                bottomRight: Radius.circular(isMe ? 0 : 12),
               ),
-            ),
-          );
-        } else if (msg.metadata['type'] == 'quote_request') {
-          contentWidget = _buildQuoteCard(context, msg, isMe);
-        } else if (msg.type == 'file') {
-          // File attachment (PDF, doc, etc.)
-          contentWidget = GestureDetector(
-            onTap: () async {
-              // Open URL in browser
-              final url = Uri.parse(msg.content);
-              if (await canLaunchUrl(url)) {
-                await launchUrl(url, mode: LaunchMode.externalApplication);
-              } else {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(
-                          'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
-                );
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isMe ? Colors.white.withOpacity(0.3) : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getFileIcon(msg.metadata['extension'] ?? ''),
-                    color: isMe ? Colors.black87 : Colors.blue[600],
-                    size: 32,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          msg.metadata['filename'] ?? 'Archivo',
-                          style: TextStyle(
-                            color: isMe ? Colors.black87 : Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          (msg.metadata['extension'] ?? '').toUpperCase(),
-                          style: TextStyle(
-                            color: isMe ? Colors.black54 : Colors.grey[600],
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 1,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            );
+
+            if (!isMe) {
+              // INCOMING MESSAGE
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Avatar
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: senderAvatar != null
+                          ? NetworkImage(senderAvatar)
+                          : null,
+                      child: senderAvatar == null
+                          ? Icon(Icons.person,
+                              size: 16, color: Colors.grey[500])
+                          : null,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.download,
-                    color: isMe ? Colors.black54 : Colors.grey[500],
-                    size: 20,
+                    const SizedBox(width: 8),
+
+                    // Bubble
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        constraints: BoxConstraints(
+                          maxWidth: bubbleMaxWidth,
+                        ),
+                        decoration: bubbleDecoration,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Sender Name (Colored)
+                            Text(
+                              senderName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: _getNameColor(senderName),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+
+                            contentWidget,
+
+                            // Timestamp
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 4, left: 8),
+                                child: Text(
+                                  timeStr,
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 40),
+                  ],
+                ),
+              );
+            }
+
+            // OUTGOING MESSAGE
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 40),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      constraints: BoxConstraints(
+                        maxWidth: bubbleMaxWidth,
+                      ),
+                      decoration: bubbleDecoration,
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: contentWidget,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: _buildOutgoingMessageFooter(msg, timeStr),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-          );
-        } else if (msg.type == 'action_request') {
-          // ACTION REQUEST - Interactive buttons for customers
-          contentWidget = _buildActionRequestCard(context, msg, isMe);
-        } else {
-          // Text Message
-          contentWidget = ParsedMessageText(
-            text: msg.content,
-            isMe: isMe,
-            onReferenceTap: widget.onReferenceTap,
-            style: const TextStyle(
-              color: Colors.black87,
-              fontSize: 14,
-            ),
-          );
-        }
-
-        // Timestamp
-        final timeStr = DateFormat('HH:mm').format(msg.createdAt);
-
-        // Bubble Decoration
-        final bubbleDecoration = BoxDecoration(
-          color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: Radius.circular(isMe ? 12 : 0),
-            bottomRight: Radius.circular(isMe ? 0 : 12),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 1,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        );
-
-        if (!isMe) {
-          // INCOMING MESSAGE
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage:
-                      senderAvatar != null ? NetworkImage(senderAvatar) : null,
-                  child: senderAvatar == null
-                      ? Icon(Icons.person, size: 16, color: Colors.grey[500])
-                      : null,
-                ),
-                const SizedBox(width: 8),
-
-                // Bubble
-                Flexible(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75,
-                    ),
-                    decoration: bubbleDecoration,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Sender Name (Colored)
-                        Text(
-                          senderName,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: _getNameColor(senderName),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-
-                        contentWidget,
-
-                        // Timestamp
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 4, left: 8),
-                            child: Text(
-                              timeStr,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 40),
-              ],
-            ),
-          );
-        }
-
-        // OUTGOING MESSAGE
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(width: 40),
-              Flexible(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  decoration: bubbleDecoration,
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: contentWidget,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: _buildOutgoingMessageFooter(msg, timeStr),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

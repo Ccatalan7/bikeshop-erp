@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/messaging_service.dart';
@@ -29,6 +30,23 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   bool _isLoading = true;
   bool _isExpanded = false; // Collapsed by default
   RealtimeChannel? _realtimeChannel;
+
+  void _safeSetState(VoidCallback update) {
+    if (!mounted) return;
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      setState(update);
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(update);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -106,7 +124,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       }
 
       if (mounted) {
-        setState(() {
+        _safeSetState(() {
           _conversations = filtered;
           _isLoading = false;
           // Auto-select if only one conversation
@@ -118,7 +136,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     } catch (e) {
       debugPrint('❌ Error loading entity conversations: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        _safeSetState(() => _isLoading = false);
       }
     }
   }
@@ -135,7 +153,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         contextId: widget.entityId,
       );
 
-      if (newConvId != null && mounted) {
+      if (mounted) {
         // Reload conversations to get the new one as a Conversation object
         await _loadConversations();
         // Find and select the newly created conversation
@@ -143,7 +161,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
           (c) => c.id == newConvId,
           orElse: () => _conversations.first,
         );
-        setState(() {
+        _safeSetState(() {
           _activeConversation = newConv;
         });
       }
@@ -182,7 +200,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
 
   Widget _buildCollapsedBar(ThemeData theme) {
     return InkWell(
-      onTap: () => setState(() => _isExpanded = true),
+      onTap: () => _safeSetState(() => _isExpanded = true),
       child: Column(
         children: [
           const SizedBox(height: 16),
@@ -246,7 +264,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right, size: 20),
-                onPressed: () => setState(() => _isExpanded = false),
+                onPressed: () => _safeSetState(() => _isExpanded = false),
                 tooltip: 'Colapsar',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -334,7 +352,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                         ),
                       )
                     : null,
-                onTap: () => setState(() => _activeConversation = conv),
+                onTap: () => _safeSetState(() => _activeConversation = conv),
               );
             },
           ),
@@ -353,6 +371,9 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   }
 
   Widget _buildChatView() {
+    final activeConv = _activeConversation;
+    if (activeConv == null) return const SizedBox.shrink();
+
     return Column(
       children: [
         // Back button when viewing a chat
@@ -362,7 +383,8 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
             child: Row(
               children: [
                 TextButton.icon(
-                  onPressed: () => setState(() => _activeConversation = null),
+                  onPressed: () =>
+                      _safeSetState(() => _activeConversation = null),
                   icon: const Icon(Icons.arrow_back, size: 18),
                   label: const Text('Lista'),
                   style: TextButton.styleFrom(
@@ -371,7 +393,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                 ),
                 const Spacer(),
                 Text(
-                  _activeConversation?.title ?? '',
+                  activeConv.title ?? '',
                   style: Theme.of(context).textTheme.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -381,7 +403,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         // Chat window
         Expanded(
           child: ChatWindow(
-            conversation: _activeConversation!,
+            conversation: activeConv,
           ),
         ),
       ],

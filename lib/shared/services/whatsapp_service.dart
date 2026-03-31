@@ -20,6 +20,8 @@ class WhatsAppService {
   static const String firstContactTemplateName =
       'seguimiento_servicio_bicicleta';
   static const String _firstContactTemplateLanguage = 'es_CL';
+  static const int _reengagementErrorCode = 131047;
+  static const int _expiredAccessTokenErrorCode = 190;
 
   factory WhatsAppService() => _instance;
   WhatsAppService._internal();
@@ -35,8 +37,17 @@ class WhatsAppService {
   final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CL');
 
   WhatsAppDeliveryMethod _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
+  int? _lastErrorCode;
+  bool _lastUsedFirstContactTemplate = false;
+  String? _lastResolvedMessageText;
 
   WhatsAppDeliveryMethod get lastDeliveryMethod => _lastDeliveryMethod;
+  int? get lastErrorCode => _lastErrorCode;
+  bool get lastUsedFirstContactTemplate => _lastUsedFirstContactTemplate;
+  String? get lastResolvedMessageText => _lastResolvedMessageText;
+
+  bool get lastErrorRequiresServerFix =>
+      _lastErrorCode == _expiredAccessTokenErrorCode;
 
   /// Format Chilean phone number (remove spaces, dashes, +56 prefix)
   String _formatPhoneNumber(String phone) {
@@ -75,6 +86,60 @@ class WhatsAppService {
     return 'Viñabike';
   }
 
+  String _buildFirstContactTemplateText({
+    required String customerName,
+    required String agentName,
+  }) {
+    return 'Hola $customerName, buen día. Soy $agentName de Viñabike y te escribo por el servicio de tu bicicleta.';
+  }
+
+  void _resetLastAttemptState({String? resolvedMessageText}) {
+    _lastErrorCode = null;
+    _lastUsedFirstContactTemplate = false;
+    _lastResolvedMessageText = resolvedMessageText;
+  }
+
+  int? _extractErrorCode(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final directDetails = data['details'];
+      if (directDetails is Map<String, dynamic>) {
+        final error = directDetails['error'];
+        if (error is Map<String, dynamic>) {
+          final code = error['code'];
+          if (code is num) {
+            return code.toInt();
+          }
+        }
+      }
+
+      final errors = data['errors'];
+      if (errors is List && errors.isNotEmpty) {
+        final first = errors.first;
+        if (first is Map<String, dynamic>) {
+          final code = first['code'];
+          if (code is num) {
+            return code.toInt();
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  bool _shouldSkipManualFallback() {
+    return _lastErrorCode == _expiredAccessTokenErrorCode;
+  }
+
+  bool _isCustomerServiceWindowOpen(DateTime? lastInboundAt) {
+    if (lastInboundAt == null) {
+      return true;
+    }
+
+    return DateTime.now().toUtc().difference(lastInboundAt.toUtc()) <
+        const Duration(hours: 24);
+  }
+
   Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
     try {
       final response = await _client.functions.invoke(
@@ -84,15 +149,19 @@ class WhatsAppService {
 
       final status = response.status;
       if (status >= 200 && status < 300) {
+        _lastErrorCode = null;
         _lastDeliveryMethod = WhatsAppDeliveryMethod.cloudApi;
         debugPrint('✅ [WhatsAppService] Message sent via Cloud API');
         return true;
       }
 
+      _lastErrorCode = _extractErrorCode(response.data);
+
       debugPrint(
         '❌ [WhatsAppService] Cloud API failed: status=$status data=${response.data}',
       );
     } catch (error) {
+      _lastErrorCode = null;
       debugPrint('❌ [WhatsAppService] Cloud API error: $error');
     }
 
@@ -107,6 +176,11 @@ class WhatsAppService {
   }) async {
     if (await _sendViaCloud(cloudBody)) {
       return true;
+    }
+
+    if (_shouldSkipManualFallback()) {
+      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
+      return false;
     }
 
     final opened = await _openWhatsApp(context, phoneNumber, message);
@@ -384,24 +458,66 @@ Viña Bike
     String? conversationId,
     String? contextType,
     String? contextId,
+    DateTime? lastInboundAt,
   }) async {
-    return _sendWithFallback(
-      context: context,
-      phoneNumber: customerPhone,
-      message: message,
-      cloudBody: {
-        'conversationId': conversationId,
-        'phoneNumber': _formatPhoneNumber(customerPhone),
-        'contactName': contactName,
-        'contextType': contextType,
-        'contextId': contextId,
-        'type': 'text',
-        'text': message,
-        'metadata': {
-          'source': 'flutter_erp',
-        },
+    _resetLastAttemptState(resolvedMessageText: message);
+
+    final customerDisplayName =
+        (contactName != null && contactName.trim().isNotEmpty)
+            ? contactName.trim()
+            : 'cliente';
+
+    if (!_isCustomerServiceWindowOpen(lastInboundAt)) {
+      return sendFirstContactTemplate(
+        customerPhone: customerPhone,
+        customerName: customerDisplayName,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
+      );
+    }
+
+    final cloudBody = {
+      'conversationId': conversationId,
+      'phoneNumber': _formatPhoneNumber(customerPhone),
+      'contactName': contactName,
+      'contextType': contextType,
+      'contextId': contextId,
+      'type': 'text',
+      'text': message,
+      'metadata': {
+        'source': 'flutter_erp',
       },
-    );
+    };
+
+    if (await _sendViaCloud(cloudBody)) {
+      return true;
+    }
+
+    if (_lastErrorCode == _reengagementErrorCode) {
+      final templateSuccess = await sendFirstContactTemplate(
+        customerPhone: customerPhone,
+        customerName: customerDisplayName,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
+      );
+
+      if (templateSuccess) {
+        return true;
+      }
+    }
+
+    if (_shouldSkipManualFallback()) {
+      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
+      return false;
+    }
+
+    final opened = await _openWhatsApp(context, customerPhone, message);
+    _lastDeliveryMethod = opened
+        ? WhatsAppDeliveryMethod.manualFallback
+        : WhatsAppDeliveryMethod.failed;
+    return opened;
   }
 
   Future<bool> sendFirstContactTemplate({
@@ -415,6 +531,12 @@ Viña Bike
     final resolvedAgentName = (agentName != null && agentName.trim().isNotEmpty)
         ? agentName.trim()
         : _resolveCurrentAgentName();
+    final renderedMessage = _buildFirstContactTemplateText(
+      customerName: customerName,
+      agentName: resolvedAgentName,
+    );
+
+    _resetLastAttemptState(resolvedMessageText: renderedMessage);
 
     final success = await _sendViaCloud({
       'conversationId': conversationId,
@@ -425,8 +547,7 @@ Viña Bike
       'type': 'template',
       'templateName': firstContactTemplateName,
       'templateLanguage': _firstContactTemplateLanguage,
-      'caption':
-          'Hola $customerName, buen día. Soy $resolvedAgentName de Viñabike y te escribo por el servicio de tu bicicleta.',
+      'caption': renderedMessage,
       'templateComponents': [
         {
           'type': 'body',
@@ -448,7 +569,9 @@ Viña Bike
       },
     });
 
-    if (!success) {
+    if (success) {
+      _lastUsedFirstContactTemplate = true;
+    } else {
       _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
     }
 

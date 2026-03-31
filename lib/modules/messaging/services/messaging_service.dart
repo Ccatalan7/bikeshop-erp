@@ -658,7 +658,9 @@ class MessagingService {
 
       final binding = await _client
           .from('whatsapp_conversation_bindings')
-          .select('customer_id, contact_name, external_phone_number')
+          .select(
+            'customer_id, contact_name, external_phone_number, last_inbound_at',
+          )
           .eq('conversation_id', conversationId)
           .limit(1)
           .maybeSingle();
@@ -666,6 +668,7 @@ class MessagingService {
       String? customerId = binding?['customer_id']?.toString();
       String? contactName = binding?['contact_name']?.toString();
       String? phoneNumber = binding?['external_phone_number']?.toString();
+      final lastInboundAt = binding?['last_inbound_at']?.toString();
 
       if (customerId != null && customerId.isNotEmpty) {
         final customerContact = await loadCustomerById(customerId);
@@ -680,6 +683,7 @@ class MessagingService {
           'customer_id': customerId,
           'name': contactName,
           'phone': phoneNumber,
+          'last_inbound_at': lastInboundAt,
         };
       }
 
