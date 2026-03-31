@@ -678,15 +678,6 @@ class MessagingService {
         }
       }
 
-      if (phoneNumber != null && phoneNumber.isNotEmpty) {
-        return {
-          'customer_id': customerId,
-          'name': contactName,
-          'phone': phoneNumber,
-          'last_inbound_at': lastInboundAt,
-        };
-      }
-
       final conversation = await _client
           .from('conversations')
           .select(
@@ -723,19 +714,13 @@ class MessagingService {
           customerId = invoice?['customer_id']?.toString();
           final customerContact = await loadCustomerById(customerId);
           if (customerContact != null) {
-            return customerContact;
+            contactName = customerContact['name']?.toString() ?? contactName;
+            phoneNumber = customerContact['phone']?.toString() ?? phoneNumber;
           }
 
           final invoiceCustomerName = invoice?['customer_name']?.toString();
-          if (invoiceCustomerName != null &&
-              invoiceCustomerName.isNotEmpty &&
-              phoneNumber != null &&
-              phoneNumber.isNotEmpty) {
-            return {
-              'customer_id': customerId,
-              'name': invoiceCustomerName,
-              'phone': phoneNumber,
-            };
+          if (invoiceCustomerName != null && invoiceCustomerName.isNotEmpty) {
+            contactName = invoiceCustomerName;
           }
         }
 
@@ -750,9 +735,19 @@ class MessagingService {
           customerId = job?['customer_id']?.toString();
           final customerContact = await loadCustomerById(customerId);
           if (customerContact != null) {
-            return customerContact;
+            contactName = customerContact['name']?.toString() ?? contactName;
+            phoneNumber = customerContact['phone']?.toString() ?? phoneNumber;
           }
         }
+      }
+
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        return {
+          'customer_id': customerId,
+          'name': contactName,
+          'phone': phoneNumber,
+          'last_inbound_at': lastInboundAt,
+        };
       }
 
       final participants = await _client
@@ -781,8 +776,9 @@ class MessagingService {
         if (phone != null && phone.isNotEmpty) {
           return {
             'customer_id': customer['id']?.toString(),
-            'name': customer['name']?.toString(),
+            'name': customer['name']?.toString() ?? contactName,
             'phone': phone,
+            'last_inbound_at': lastInboundAt,
           };
         }
       }

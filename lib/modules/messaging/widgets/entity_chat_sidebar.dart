@@ -1,5 +1,5 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/messaging_service.dart';
@@ -33,13 +33,6 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
 
   void _safeSetState(VoidCallback update) {
     if (!mounted) return;
-
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    if (phase == SchedulerPhase.idle ||
-        phase == SchedulerPhase.postFrameCallbacks) {
-      setState(update);
-      return;
-    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -179,7 +172,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     final theme = Theme.of(context);
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: kDebugMode ? Duration.zero : const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       width: _isExpanded ? 380 : 48,
       child: Card(

@@ -1284,6 +1284,28 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  String _resolveIncomingSenderName(
+    Message msg,
+    Map<String, dynamic>? senderInfo,
+  ) {
+    final senderName = senderInfo?['name']?.toString().trim();
+    if (senderName != null && senderName.isNotEmpty) {
+      return senderName;
+    }
+
+    final metadataName = msg.metadata['contact_name']?.toString().trim();
+    if (metadataName != null && metadataName.isNotEmpty) {
+      return metadataName;
+    }
+
+    final creatorName = widget.conversation.creatorName?.trim();
+    if (creatorName != null && creatorName.isNotEmpty) {
+      return creatorName;
+    }
+
+    return 'Cliente';
+  }
+
   DateTime? _parseLastInboundAt(Map<String, dynamic>? contact) {
     final rawValue = contact?['last_inbound_at'];
     if (rawValue is DateTime) {
@@ -1542,7 +1564,8 @@ class _ChatWindowState extends State<ChatWindow> {
               senderId != null ? _getSenderInfo(senderId) : Future.value(null),
           builder: (context, snapshot) {
             final senderInfo = snapshot.data;
-            final senderName = senderInfo?['name'] ?? (isMe ? 'Tú' : 'Cliente');
+            final senderName =
+                isMe ? 'Tú' : _resolveIncomingSenderName(msg, senderInfo);
             final senderAvatar = senderInfo?['avatar_url'];
 
             // Message Content Widget
@@ -1705,26 +1728,86 @@ class _ChatWindowState extends State<ChatWindow> {
 
             if (!isMe) {
               // INCOMING MESSAGE
-              return Padding(
+              return SelectionContainer.disabled(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Avatar
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: senderAvatar != null
+                            ? NetworkImage(senderAvatar)
+                            : null,
+                        child: senderAvatar == null
+                            ? Icon(Icons.person,
+                                size: 16, color: Colors.grey[500])
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Bubble
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          constraints: BoxConstraints(
+                            maxWidth: bubbleMaxWidth,
+                          ),
+                          decoration: bubbleDecoration,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Sender Name (Colored)
+                              Text(
+                                senderName,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: _getNameColor(senderName),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+
+                              contentWidget,
+
+                              // Timestamp
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 4, left: 8),
+                                  child: Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 40),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // OUTGOING MESSAGE
+            return SelectionContainer.disabled(
+              child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Avatar
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: senderAvatar != null
-                          ? NetworkImage(senderAvatar)
-                          : null,
-                      child: senderAvatar == null
-                          ? Icon(Icons.person,
-                              size: 16, color: Colors.grey[500])
-                          : null,
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Bubble
+                    const SizedBox(width: 40),
                     Flexible(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -1733,78 +1816,23 @@ class _ChatWindowState extends State<ChatWindow> {
                           maxWidth: bubbleMaxWidth,
                         ),
                         decoration: bubbleDecoration,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Stack(
                           children: [
-                            // Sender Name (Colored)
-                            Text(
-                              senderName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: _getNameColor(senderName),
-                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: contentWidget,
                             ),
-                            const SizedBox(height: 2),
-
-                            contentWidget,
-
-                            // Timestamp
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 4, left: 8),
-                                child: Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: _buildOutgoingMessageFooter(msg, timeStr),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 40),
                   ],
                 ),
-              );
-            }
-
-            // OUTGOING MESSAGE
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(width: 40),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      constraints: BoxConstraints(
-                        maxWidth: bubbleMaxWidth,
-                      ),
-                      decoration: bubbleDecoration,
-                      child: Stack(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: contentWidget,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: _buildOutgoingMessageFooter(msg, timeStr),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
               ),
             );
           },
