@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
@@ -79,6 +80,33 @@ class _AccountListPageState extends State<AccountListPage> {
     });
   }
 
+  bool _isExpenseCategoryDeleteConstraint(Object error) {
+    if (error is PostgrestException) {
+      return error.code == '23503' &&
+          (error.message
+                  .contains('expense_categories_default_account_id_fkey') ||
+              (error.details?.toString().contains('expense_categories') ??
+                  false));
+    }
+
+    final message = error.toString();
+    return message.contains('expense_categories_default_account_id_fkey') ||
+        message.contains(
+            'Key is still referenced from table "expense_categories"');
+  }
+
+  String _buildDeleteAccountErrorMessage(Object error, Account account) {
+    if (_isExpenseCategoryDeleteConstraint(error)) {
+      return 'No se puede eliminar la cuenta ${account.code} porque sigue siendo la cuenta predeterminada de una categoría de gasto. Quita esa referencia en el módulo de Gastos antes de eliminarla.';
+    }
+
+    if (error is PostgrestException && error.message.isNotEmpty) {
+      return 'Error al eliminar cuenta: ${error.message}';
+    }
+
+    return 'Error al eliminar cuenta: $error';
+  }
+
   void _onSearchChanged(String value) {
     setState(() => _searchTerm = value);
     _filterAccounts();
@@ -87,6 +115,21 @@ class _AccountListPageState extends State<AccountListPage> {
   void _onTypeFilterChanged(AccountType? type) {
     setState(() => _selectedType = type);
     _filterAccounts();
+  }
+
+  Future<void> _openCreateAccount() async {
+    final created = await context.push<bool>('/accounting/accounts/new');
+    if (created == true && mounted) {
+      await _loadAccounts();
+    }
+  }
+
+  Future<void> _openEditAccount(Account account) async {
+    final updated =
+        await context.push<bool>('/accounting/accounts/${account.id}/edit');
+    if (updated == true && mounted) {
+      await _loadAccounts();
+    }
   }
 
   @override
@@ -245,7 +288,7 @@ class _AccountListPageState extends State<AccountListPage> {
                 const SizedBox(height: 12),
                 AppButton(
                   text: 'Nueva Cuenta',
-                  onPressed: () => context.push('/accounting/accounts/new'),
+                  onPressed: _openCreateAccount,
                   icon: Icons.add,
                 ),
               ],
@@ -291,7 +334,7 @@ class _AccountListPageState extends State<AccountListPage> {
                 const SizedBox(width: 16),
                 AppButton(
                   text: 'Nueva Cuenta',
-                  onPressed: () => context.push('/accounting/accounts/new'),
+                  onPressed: _openCreateAccount,
                   icon: Icons.add,
                 ),
               ],
@@ -456,7 +499,7 @@ class _AccountListPageState extends State<AccountListPage> {
               onSelected: (value) {
                 switch (value) {
                   case 'edit':
-                    context.push('/accounting/accounts/${account.id}/edit');
+                    _openEditAccount(account);
                     break;
                   case 'view':
                     _showAccountDetails(account);
@@ -561,7 +604,9 @@ class _AccountListPageState extends State<AccountListPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Error al eliminar cuenta: $e'),
+                      content: Text(
+                        _buildDeleteAccountErrorMessage(e, account),
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );

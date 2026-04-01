@@ -13,6 +13,22 @@ class ChartOfAccountsService extends ChangeNotifier {
   final List<Account> _accounts = [];
   bool _isInitialized = false;
 
+  void _normalizeAccountCache() {
+    final deduped = LinkedHashMap<String, Account>();
+
+    for (final account in _accounts) {
+      final key = (account.id != null && account.id!.isNotEmpty)
+          ? account.id!
+          : account.code;
+      deduped[key] = account;
+    }
+
+    _accounts
+      ..clear()
+      ..addAll(deduped.values)
+      ..sort((a, b) => a.code.compareTo(b.code));
+  }
+
   List<Account> get accounts => List.unmodifiable(_accounts);
   bool get isInitialized => _isInitialized;
 
@@ -44,6 +60,7 @@ class ChartOfAccountsService extends ChangeNotifier {
         ..sort((a, b) => a.code.compareTo(b.code));
 
       _accounts.addAll(mappedAccounts);
+      _normalizeAccountCache();
       _isInitialized = true;
       notifyListeners();
 
@@ -113,7 +130,7 @@ class ChartOfAccountsService extends ChangeNotifier {
     }).toList(growable: false);
   }
 
-  Future<void> addAccount(Account account) async {
+  Future<Account> addAccount(Account account) async {
     try {
       final payload = {
         'tenant_id': account.tenantId,
@@ -131,15 +148,16 @@ class ChartOfAccountsService extends ChangeNotifier {
 
       _accounts.removeWhere((existing) => existing.code == newAccount.code);
       _accounts.add(newAccount);
-      _accounts.sort((a, b) => a.code.compareTo(b.code));
+      _normalizeAccountCache();
       notifyListeners();
+      return newAccount;
     } catch (e) {
       debugPrint('Error adding account: $e');
       rethrow;
     }
   }
 
-  Future<void> updateAccount(Account account) async {
+  Future<Account> updateAccount(Account account) async {
     try {
       if (account.id == null) {
         throw ArgumentError(
@@ -166,16 +184,40 @@ class ChartOfAccountsService extends ChangeNotifier {
         _accounts.add(refreshed);
       }
 
-      _accounts.sort((a, b) => a.code.compareTo(b.code));
+      _normalizeAccountCache();
       notifyListeners();
+      return refreshed;
     } catch (e) {
       debugPrint('Error updating account: $e');
       rethrow;
     }
   }
 
+  Future<void> _clearExpenseCategoryDefaultAccountReferences(
+    String accountId,
+  ) async {
+    final linkedCategories = await _databaseService.select(
+      'expense_categories',
+      where: 'default_account_id=$accountId',
+    );
+
+    for (final category in linkedCategories) {
+      final categoryId = category['id']?.toString();
+      if (categoryId == null || categoryId.isEmpty) {
+        continue;
+      }
+
+      await _databaseService.update(
+        'expense_categories',
+        categoryId,
+        {'default_account_id': null},
+      );
+    }
+  }
+
   Future<void> deleteAccount(String accountId) async {
     try {
+      await _clearExpenseCategoryDefaultAccountReferences(accountId);
       await _databaseService.delete('accounts', accountId);
       _accounts.removeWhere((account) => account.id == accountId);
       notifyListeners();

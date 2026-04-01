@@ -1,4 +1,6 @@
 class ExpenseCategory {
+  static const Object _unset = Object();
+
   const ExpenseCategory({
     required this.id,
     required this.name,
@@ -44,8 +46,8 @@ class ExpenseCategory {
   ExpenseCategory copyWith({
     String? id,
     String? name,
-    String? description,
-    String? defaultAccountId,
+    Object? description = _unset,
+    Object? defaultAccountId = _unset,
     double? defaultTaxRate,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -53,8 +55,12 @@ class ExpenseCategory {
     return ExpenseCategory(
       id: id ?? this.id,
       name: name ?? this.name,
-      description: description ?? this.description,
-      defaultAccountId: defaultAccountId ?? this.defaultAccountId,
+      description: identical(description, _unset)
+          ? this.description
+          : description as String?,
+      defaultAccountId: identical(defaultAccountId, _unset)
+          ? this.defaultAccountId
+          : defaultAccountId as String?,
       defaultTaxRate: defaultTaxRate ?? this.defaultTaxRate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

@@ -3334,6 +3334,20 @@ begin
   end if;
 end $$;
 
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.accounts'::regclass
+       and contype = 'u'
+       and conname = 'accounts_tenant_id_id_key'
+  ) then
+    alter table public.accounts
+      add constraint accounts_tenant_id_id_key unique (tenant_id, id);
+  end if;
+end $$;
+
 -- Remove old 'tax' type constraint and add new one without 'tax'
 do $$
 begin
@@ -6893,6 +6907,34 @@ exception
   when undefined_table then raise notice '⚠ Table expense_categories does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in expense_categories';
 end $$;
+
+-- RLS policies for expense_categories table
+alter table expense_categories enable row level security;
+
+drop policy if exists "expense_categories_select" on expense_categories;
+drop policy if exists "expense_categories_insert" on expense_categories;
+drop policy if exists "expense_categories_update" on expense_categories;
+drop policy if exists "expense_categories_delete" on expense_categories;
+
+create policy "expense_categories_select" on expense_categories
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_categories_insert" on expense_categories
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "expense_categories_update" on expense_categories
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_categories_delete" on expense_categories
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),

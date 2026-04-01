@@ -102,14 +102,14 @@ class AccountingService extends ChangeNotifier {
     return _chartOfAccountsService.getAccountByCode(code);
   }
 
-  Future<void> createAccount(Account account) async {
+  Future<Account> createAccount(Account account) async {
     await initialize();
-    await _chartOfAccountsService.addAccount(account);
+    return _chartOfAccountsService.addAccount(account);
   }
 
-  Future<void> updateAccount(Account account) async {
+  Future<Account> updateAccount(Account account) async {
     await initialize();
-    await _chartOfAccountsService.updateAccount(account);
+    return _chartOfAccountsService.updateAccount(account);
   }
 
   Future<void> deleteAccount(String accountId) async {
