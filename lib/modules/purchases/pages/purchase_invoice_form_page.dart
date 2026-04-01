@@ -1086,6 +1086,34 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Future<void> _saveInvoice() async {
+    setState(() => _isSaving = true);
+
+    try {
+      final saved = await _persistInvoiceChanges();
+      if (saved == null || !mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factura de compra guardada correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Navigate back - check if we can pop, otherwise go to list
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go('/purchases');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<PurchaseInvoice?> _persistInvoiceChanges({
+    bool showSuccessFeedback = false,
+  }) async {
     if (_selectedSupplier == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1093,7 +1121,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           backgroundColor: Colors.red,
         ),
       );
-      return;
+      return null;
     }
 
     if (_lineEntries.isEmpty) {
@@ -1103,11 +1131,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           backgroundColor: Colors.red,
         ),
       );
-      return;
+      return null;
     }
 
     if (!_formKey.currentState!.validate()) {
-      return;
+      return null;
     }
 
     final items = _lineEntries
@@ -1122,7 +1150,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           backgroundColor: Colors.red,
         ),
       );
-      return;
+      return null;
     }
 
     final tenantService = context.read<TenantService>();
@@ -1214,7 +1242,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       );
 
       if (shouldContinue != true) {
-        return; // User cancelled, don't save
+        return null; // User cancelled, don't save
       }
     }
 
@@ -1252,34 +1280,110 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     debugPrint('🔍 Save: prepaymentModel = ${invoice.prepaymentModel}');
 
-    setState(() => _isSaving = true);
-
     try {
-      await _purchaseService.savePurchaseInvoice(invoice);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Factura de compra guardada correctamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      // Navigate back - check if we can pop, otherwise go to list
-      if (context.canPop()) {
-        context.pop(true);
-      } else {
-        context.go('/purchases');
+      final saved = await _purchaseService.savePurchaseInvoice(invoice);
+
+      if (!mounted) return saved;
+
+      setState(() {
+        _loadedInvoice = saved;
+        _status = saved.status;
+      });
+
+      if (showSuccessFeedback) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Factura de compra guardada correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
+
+      return saved;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('No se pudo guardar la factura: $e'),
           backgroundColor: Colors.red,
         ),
       );
+      return null;
+    }
+  }
+
+  Future<bool> _persistDraftChangesBeforeStatusTransition() async {
+    // Persist pending edits in draft mode so date/line changes are not lost
+    // when the user goes directly from editing to a workflow action.
+    final saved = await _persistInvoiceChanges(showSuccessFeedback: false);
+    return saved != null;
+  }
+
+  Future<void> _updateStatus(PurchaseInvoiceStatus newStatus) async {
+    if (widget.invoiceId == null) return;
+
+    setState(() => _isUpdatingStatus = true);
+
+    try {
+      if (_status == PurchaseInvoiceStatus.draft && _isEditing) {
+        final didPersist = await _persistDraftChangesBeforeStatusTransition();
+        if (!didPersist || !mounted) {
+          return;
+        }
+      }
+
+      // Update status via service
+      final updated = await _purchaseService.updateInvoiceStatus(
+        widget.invoiceId!,
+        newStatus,
+      );
+
+      if (!mounted) return;
+
+      if (updated != null) {
+        setState(() {
+          _status = updated.status;
+          _loadedInvoice = updated;
+        });
+      }
+
+      String message;
+      switch (newStatus) {
+        case PurchaseInvoiceStatus.sent:
+          message = 'Factura enviada al proveedor';
+          break;
+        case PurchaseInvoiceStatus.confirmed:
+          message = 'Factura confirmada';
+          break;
+        case PurchaseInvoiceStatus.received:
+          message = 'Factura marcada como recibida. Inventario actualizado.';
+          break;
+        case PurchaseInvoiceStatus.draft:
+          message = 'Factura revertida a borrador';
+          break;
+        default:
+          message = 'Estado actualizado';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() => _isUpdatingStatus = false);
       }
     }
   }
@@ -1341,69 +1445,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           content: Text('Error al eliminar: $e'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 5),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdatingStatus = false);
-      }
-    }
-  }
-
-  /// Generic status update method (similar to sales invoice)
-  Future<void> _updateStatus(PurchaseInvoiceStatus newStatus) async {
-    if (widget.invoiceId == null) return;
-
-    setState(() => _isUpdatingStatus = true);
-
-    try {
-      // Update status via service
-      final updated = await _purchaseService.updateInvoiceStatus(
-        widget.invoiceId!,
-        newStatus,
-      );
-
-      if (!mounted) return;
-
-      if (updated != null) {
-        setState(() {
-          _status = updated.status;
-          _loadedInvoice = updated;
-        });
-      }
-
-      String message;
-      switch (newStatus) {
-        case PurchaseInvoiceStatus.sent:
-          message = 'Factura enviada al proveedor';
-          break;
-        case PurchaseInvoiceStatus.confirmed:
-          message = 'Factura confirmada';
-          break;
-        case PurchaseInvoiceStatus.received:
-          message = 'Factura marcada como recibida. Inventario actualizado.';
-          break;
-        case PurchaseInvoiceStatus.draft:
-          message = 'Factura revertida a borrador';
-          break;
-        default:
-          message = 'Estado actualizado';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al actualizar estado: $e'),
-          backgroundColor: Colors.red,
         ),
       );
     } finally {

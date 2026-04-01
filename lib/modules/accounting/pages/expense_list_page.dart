@@ -73,14 +73,12 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       // Fetch payment methods
       final methods = await _expenseService.fetchPaymentMethods();
 
-        // Fetch payments for loaded expenses (to correctly label single vs mixed payments)
-        final expenseIds = expenses
-          .map((e) => e.id)
-          .whereType<String>()
-          .toList(growable: false);
-        final paymentRows =
+      // Fetch payments for loaded expenses (to correctly label single vs mixed payments)
+      final expenseIds =
+          expenses.map((e) => e.id).whereType<String>().toList(growable: false);
+      final paymentRows =
           await _expenseService.fetchPaymentsForExpenses(expenseIds);
-        final paymentSummary = _buildPaymentSummary(paymentRows);
+      final paymentSummary = _buildPaymentSummary(paymentRows);
 
       setState(() {
         _categories = categories;
@@ -128,8 +126,10 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         () => _ExpensePaymentSummary(),
       );
       summary.totalPaid += amount;
-      if (methodId != null && methodId.isNotEmpty) summary.methodIds.add(methodId);
-      if (accountId != null && accountId.isNotEmpty) summary.accountIds.add(accountId);
+      if (methodId != null && methodId.isNotEmpty)
+        summary.methodIds.add(methodId);
+      if (accountId != null && accountId.isNotEmpty)
+        summary.accountIds.add(accountId);
     }
 
     return summaries;
@@ -189,6 +189,94 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   double get _paidTotal => _filteredExpenses
       .where((expense) => expense.paymentStatus == ExpensePaymentStatus.paid)
       .fold(0.0, (sum, expense) => sum + expense.totalAmount);
+
+  Future<void> _openExpenseDetail(Expense expense) async {
+    if (expense.id == null) return;
+
+    final changed =
+        await context.push<bool>('/accounting/expenses/${expense.id}');
+    if (changed == true && mounted) {
+      await _loadData(refresh: true);
+    }
+  }
+
+  Future<void> _editExpense(Expense expense) async {
+    if (expense.id == null) return;
+
+    final changed =
+        await context.push<bool>('/accounting/expenses/${expense.id}/edit');
+    if (changed == true && mounted) {
+      await _loadData(refresh: true);
+    }
+  }
+
+  Future<void> _confirmDeleteExpense(Expense expense) async {
+    if (expense.id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Eliminar gasto'),
+          content: Text(
+            'Se eliminará ${expense.expenseNumber} y también sus líneas, pagos, adjuntos y asientos contables relacionados. Esta acción no se puede deshacer.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+              ),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await _expenseService.deleteExpense(expense.id!);
+      await _loadData(refresh: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gasto ${expense.expenseNumber} eliminado junto con su información contable relacionada.',
+          ),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el gasto: $e'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _showMobileFilters(BuildContext context) {
     showModalBottomSheet(
@@ -638,16 +726,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           paymentMethodsMap: _paymentMethodsMap,
           paymentSummary: _paymentSummaryByExpenseId[expense.id],
           categoryNamesById: _categoryNamesById,
-          onTap: () {
-            if (expense.id == null) return;
-            context
-                .push<bool>('/accounting/expenses/${expense.id}')
-                .then((changed) {
-              if (changed == true) {
-                _loadData(refresh: true);
-              }
-            });
-          },
+          onTap: () => _openExpenseDetail(expense),
+          onEdit: () => _editExpense(expense),
+          onDelete: () => _confirmDeleteExpense(expense),
         );
       },
     );
@@ -799,6 +880,8 @@ class _ExpenseCard extends StatelessWidget {
     this.paymentSummary,
     required this.categoryNamesById,
     required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final Expense expense;
@@ -808,6 +891,8 @@ class _ExpenseCard extends StatelessWidget {
   final _ExpensePaymentSummary? paymentSummary;
   final Map<String, String> categoryNamesById;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -821,7 +906,8 @@ class _ExpenseCard extends StatelessWidget {
       // - 1 distinct method -> show that method name
       // - >1 distinct methods -> "Pago mixto"
       final summary = paymentSummary;
-      if (summary != null && expense.paymentStatus == ExpensePaymentStatus.paid) {
+      if (summary != null &&
+          expense.paymentStatus == ExpensePaymentStatus.paid) {
         if (summary.methodIds.length == 1) {
           final onlyMethodId = summary.methodIds.first;
           return paymentMethodsMap[onlyMethodId] ?? 'Medio de pago';
@@ -861,88 +947,155 @@ class _ExpenseCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ROW 1: Expense Number (Priority) + Category + Amount
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    expense.expenseNumber,
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.blue.shade800),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    expense.category?.name ??
+                                        categoryNamesById[expense.categoryId] ??
+                                        'Sin categoría',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: Text(
-                              expense.expenseNumber,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.blue.shade800),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(Icons.payment,
+                                    size: 14, color: Colors.grey.shade600),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    paymentMethodName,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade700),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text('·',
+                                    style:
+                                        TextStyle(color: Colors.grey.shade400)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  ChileanUtils.formatDate(expense.issueDate),
+                                  style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              expense.category?.name ??
-                                  categoryNamesById[expense.categoryId] ??
-                                  'Sin categoría',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.store,
+                                    size: 14, color: Colors.grey.shade400),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    expense.supplierName ??
+                                        'Proveedor sin nombre',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(currencyFormat.format(expense.totalAmount),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w800, fontSize: 16)),
-                        ],
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      // ROW 2: Payment Method + Date + Status
-                      Row(
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Icon(Icons.payment,
-                              size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 4),
                           Text(
-                            paymentMethodName,
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey.shade700),
+                            currencyFormat.format(expense.totalAmount),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 16),
                           ),
-                          const SizedBox(width: 6),
-                          Text('·',
-                              style: TextStyle(color: Colors.grey.shade400)),
-                          const SizedBox(width: 6),
-                          Text(
-                            ChileanUtils.formatDate(expense.issueDate),
-                            style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 12),
-                          ),
-                          const Spacer(),
+                          const SizedBox(height: 8),
                           _StatusBadge(status: expense.paymentStatus),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // ROW 3: Supplier (Demoted)
-                      Row(
-                        children: [
-                          Icon(Icons.store,
-                              size: 14, color: Colors.grey.shade400),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              expense.supplierName ?? 'Proveedor sin nombre',
-                              style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 6),
+                          PopupMenuButton<String>(
+                            tooltip: 'Ajustes',
+                            icon: Icon(
+                              Icons.more_horiz,
+                              size: 20,
+                              color: Colors.grey.shade500,
                             ),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Editar gasto'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline,
+                                        size: 18, color: Colors.red.shade700),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Eliminar gasto',
+                                      style:
+                                          TextStyle(color: Colors.red.shade700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                onEdit();
+                              } else if (value == 'delete') {
+                                onDelete();
+                              }
+                            },
                           ),
                         ],
                       ),

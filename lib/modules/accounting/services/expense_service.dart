@@ -225,6 +225,17 @@ class ExpenseService extends ChangeNotifier {
 
   Future<void> deleteExpense(String id) async {
     try {
+      final paymentRows = await _databaseService.select(
+        'expense_payments',
+        where: 'expense_id=$id',
+      );
+
+      for (final payment in paymentRows) {
+        final paymentId = payment['id']?.toString();
+        if (paymentId == null || paymentId.isEmpty) continue;
+        await _databaseService.delete('expense_payments', paymentId);
+      }
+
       await _databaseService.delete('expenses', id);
       await fetchExpenses(forceRefresh: true);
       notifyListeners();

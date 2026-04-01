@@ -7298,20 +7298,20 @@ begin
     end if;
     NEW.created_at := coalesce(NEW.created_at, now());
     if v_posting = 'posted' then
-      NEW.posted_at := coalesce(NEW.posted_at, now());
+      NEW.posted_at := coalesce(NEW.posted_at, NEW.issue_date, now());
     end if;
     if v_payment = 'paid' then
-      NEW.paid_at := coalesce(NEW.paid_at, now());
+      NEW.paid_at := coalesce(NEW.paid_at, NEW.issue_date, now());
     end if;
   elsif TG_OP = 'UPDATE' then
     if v_posting = 'posted' and lower(coalesce(OLD.posting_status, 'draft')) <> 'posted' then
-      NEW.posted_at := coalesce(NEW.posted_at, now());
+      NEW.posted_at := coalesce(NEW.posted_at, NEW.issue_date, now());
     elsif v_posting <> 'posted' then
       NEW.posted_at := null;
     end if;
 
     if v_payment = 'paid' and lower(coalesce(OLD.payment_status, 'pending')) <> 'paid' then
-      NEW.paid_at := coalesce(NEW.paid_at, now());
+      NEW.paid_at := coalesce(NEW.paid_at, NEW.issue_date, now());
     elsif v_payment <> 'paid' then
       NEW.paid_at := null;
     end if;
@@ -7456,6 +7456,7 @@ declare
   v_tax numeric(14,2) := 0;
   v_total numeric(14,2) := 0;
   v_paid numeric(14,2) := 0;
+  v_latest_payment_date timestamp with time zone;
   v_payment_method_count integer := 0;
   v_payment_account_count integer := 0;
   v_single_payment_method_id uuid;
@@ -7476,6 +7477,7 @@ begin
     select e.id,
       e.tenant_id,
       e.category_id,
+        e.issue_date,
          lower(coalesce(e.payment_status, 'pending')) as payment_status,
          lower(coalesce(e.posting_status, 'draft')) as posting_status,
          e.paid_at,
@@ -7504,6 +7506,12 @@ begin
     into v_paid
     from public.expense_payments
    where expense_id = p_expense_id;
+
+  select max(payment_date)
+    into v_latest_payment_date
+    from public.expense_payments
+   where expense_id = p_expense_id
+     and coalesce(amount, 0) > 0;
 
   -- If payments exist, reflect the payment method/account in the header when unambiguous.
   -- This keeps list views informative (and avoids "Sin medio de pago" for paid expenses).
@@ -7606,7 +7614,7 @@ begin
          paid_at = case
            when v_expense.posting_status <> 'void'
              and v_total > 0
-             and v_paid + 0.01 >= v_total then coalesce(paid_at, now())
+             and v_paid + 0.01 >= v_total then coalesce(v_latest_payment_date, paid_at, v_expense.issue_date, now())
            when v_new_payment <> 'paid' then null
            else paid_at
          end,
@@ -7614,6 +7622,71 @@ begin
    where id = p_expense_id;
 end;
 $$;
+
+do $$
+declare
+  v_fixed_count integer := 0;
+begin
+  with payment_rollup as (
+    select
+      e.id,
+      max(ep.payment_date) filter (where coalesce(ep.amount, 0) > 0) as latest_payment_date,
+      count(ep.id) filter (where coalesce(ep.amount, 0) > 0) as payment_count
+    from public.expenses e
+    left join public.expense_payments ep
+      on ep.expense_id = e.id
+    where lower(coalesce(e.payment_status, 'pending')) = 'paid'
+      and lower(coalesce(e.posting_status, 'draft')) <> 'void'
+    group by e.id
+  ), targets as (
+    select
+      e.id,
+      case
+        when pr.payment_count > 0 then pr.latest_payment_date
+        when pr.payment_count = 0
+          and e.issue_date is not null
+          and (
+            e.paid_at is null
+            or (
+              e.paid_at is not null
+              and e.created_at is not null
+              and e.created_at::date = e.paid_at::date
+              and e.issue_date::date <> e.paid_at::date
+            )
+          ) then e.issue_date
+        else null
+      end as corrected_paid_at,
+      case
+        when pr.payment_count = 0
+          and e.issue_date is not null
+          and (
+            e.posted_at is null
+            or (
+              e.posted_at is not null
+              and e.created_at is not null
+              and e.created_at::date = e.posted_at::date
+              and e.issue_date::date <> e.posted_at::date
+            )
+          ) then e.issue_date
+        else null
+      end as corrected_posted_at
+    from public.expenses e
+    join payment_rollup pr on pr.id = e.id
+  )
+  update public.expenses e
+     set paid_at = coalesce(t.corrected_paid_at, e.paid_at),
+         posted_at = coalesce(t.corrected_posted_at, e.posted_at),
+         updated_at = now()
+    from targets t
+   where e.id = t.id
+     and (
+       t.corrected_paid_at is distinct from e.paid_at
+       or t.corrected_posted_at is distinct from e.posted_at
+     );
+
+  get diagnostics v_fixed_count = row_count;
+  raise notice 'Backfilled % expense rows with corrected paid_at/posted_at', v_fixed_count;
+end $$;
 
 create or replace function public.create_expense_journal_entry(p_expense_id uuid)
 returns void

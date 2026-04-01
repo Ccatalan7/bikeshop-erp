@@ -1317,6 +1317,10 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       final tax = _ivaAmount;
       final total = _totalPaid;
       final taxRate = _hasIva ? 19.0 : 0.0;
+      final hasExplicitPayments = _existingExpense?.payments.isNotEmpty == true;
+      final effectivePostedAt = _existingExpense?.postedAt ?? _date;
+      final effectivePaidAt =
+          hasExplicitPayments ? (_existingExpense?.paidAt ?? _date) : _date;
 
       // For new expenses, generate the number now (increments counter)
       // For existing expenses, use what's already there
@@ -1355,8 +1359,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
             ? null
             : _referenceController.text.trim(),
         approvalStatus: ExpenseApprovalStatus.approved,
-        postedAt: DateTime.now(),
-        paidAt: DateTime.now(),
+        postedAt: effectivePostedAt,
+        paidAt: effectivePaidAt,
         paymentAccountId: _selectedPaymentMethod!.accountId,
         paymentMethodId: _selectedPaymentMethod!.id,
         createdAt: _existingExpense?.createdAt,
