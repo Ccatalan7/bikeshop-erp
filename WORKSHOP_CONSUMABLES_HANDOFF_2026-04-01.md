@@ -86,6 +86,7 @@ Main files updated:
 - `lib/modules/inventory/pages/product_form_page.dart`
 - `lib/modules/inventory/services/inventory_service.dart`
 - `lib/modules/purchases/models/purchase_invoice.dart`
+- `lib/modules/purchases/models/smart_purchase_list_item.dart`
 - `lib/modules/purchases/pages/purchase_invoice_form_page.dart`
 - `lib/modules/sales/models/sales_models.dart`
 - `lib/modules/sales/pages/invoice_form_page.dart`
@@ -100,11 +101,13 @@ Main application work completed:
 - Added purchase-line override support.
 - Added guided conversion flow in product form.
 - Added clearer accounting preview for conversion in Debe/Haber format.
+- Updated smart purchase list parsing so joined product data can carry `purchase_treatment` safely into downstream purchase flows.
 - Added sales line snapshot persistence for:
   - `purchase_treatment`
   - `is_service`
   - `cost`
 - Updated alternative sales flows so they also send the same snapshot data.
+- Refined inventory list behavior for workshop consumables so they no longer look like broken stock rows.
 
 ## Important Bugfixes Completed During Implementation
 
@@ -114,6 +117,39 @@ Main application work completed:
 - Final DB wire values are stable:
   - `inventory`
   - `workshop_consumable`
+
+## Session Update: 2026-04-02
+
+This session focused on the smart purchase list handoff path, inventory list UX cleanup, and repeatable cleanup tooling for test invoices.
+
+### Additional files added or updated
+
+- `supabase/manual_checks/execute_cleanup_workshop_consumable_test_invoices.sql`
+- `lib/modules/inventory/pages/product_list_page.dart`
+- `lib/modules/purchases/models/smart_purchase_list_item.dart`
+
+### Smart purchase list follow-up
+
+- Audited purchase-side entry paths that build purchase invoice lines from smart purchase list items and ad-hoc fallback rows.
+- Confirmed `purchase_treatment` now propagates through the smart purchase list model instead of getting lost when product join data is available.
+- Fixed a Dart null-safety regression in `SmartPurchaseListItem.fromJson(...)` by giving the local `purchaseTreatment` variable a safe default (`PurchaseTreatment.inventory`) before nested product parsing.
+- Verified the touched Dart files are analyzer-clean after the fix.
+
+### Inventory UI follow-up
+
+- Adjusted the inventory products list so workshop consumables no longer show a misleading numeric `0` stock state.
+- Non-stock workshop consumables now render a compact inline `N/A` stock badge, aligned with the existing table language instead of introducing a large secondary chip in the row.
+- Stock summary counters and stock filter subsets now ignore products that do not track inventory, so workshop consumables do not pollute low-stock or out-of-stock totals.
+- Resulting UX intent: the row should read as a valid non-stock product, not as an inventory exception.
+
+### Cleanup tooling follow-up
+
+- Added an execute-ready cleanup SQL file for known workshop consumable verification prefixes:
+  - sales: `TEST-WC-%`
+  - purchases: `TEST-WCP-%`
+- The cleanup script deletes matching test invoices for tenant `5443b130-cc28-45af-a420-cd500b288890` and reports remaining counts afterward.
+- File:
+  - `supabase/manual_checks/execute_cleanup_workshop_consumable_test_invoices.sql`
 
 ## Verified Results
 
@@ -158,6 +194,7 @@ Conclusion:
 
 Useful file:
 - `supabase/manual_checks/verify_workshop_consumable_sale.sql`
+- `supabase/manual_checks/execute_cleanup_workshop_consumable_test_invoices.sql`
 
 What it does:
 - creates a test confirmed sales invoice for the workshop consumable
@@ -166,6 +203,11 @@ What it does:
 - checks journal entry existence
 - checks `1130` and `4100`
 - checks absence of `1105` credit and `5100` debit
+
+Cleanup helper:
+- deletes workshop consumable verification invoices by known prefixes
+- returns deleted sales and purchase invoices
+- reports whether matching test invoices remain after cleanup
 
 ## What Is Still Left To Do
 
@@ -186,9 +228,11 @@ What it does:
 
 ### Nice to have
 
-- Add a lightweight handoff SQL file to clean workshop-consumable test invoices by prefix.
 - Add a second manual check script for the conversion RPC flow.
 - Improve UI copy so users better understand the accounting consequence of changing a product from inventory to workshop consumable.
+
+Completed from this list:
+- Added a lightweight cleanup SQL file for workshop-consumable verification invoices by prefix.
 
 ## Known Notes / Risks
 
@@ -205,6 +249,7 @@ What it does:
 
 - `WORKSHOP_CONSUMABLES_HANDOFF_2026-04-01.md`
 - `supabase/manual_checks/verify_workshop_consumable_sale.sql`
+- `supabase/manual_checks/execute_cleanup_workshop_consumable_test_invoices.sql`
 - `supabase/migrations/20260401193000_purchase_treatment_workshop_consumables.sql`
 - `supabase/sql/core_schema.sql`
 

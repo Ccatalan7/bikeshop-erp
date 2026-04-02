@@ -1,8 +1,12 @@
+import '../../../shared/models/product.dart'
+    show PurchaseTreatment, parsePurchaseTreatment;
+
 class SmartPurchaseListItem {
   final String id;
   final String? productId;
   final String productName;
   final String? productSku;
+  final PurchaseTreatment purchaseTreatment;
   final String? categoryId;
   final String? categoryName;
   final String? supplierId;
@@ -16,7 +20,8 @@ class SmartPurchaseListItem {
   final int currentStock;
   final int minStockLevel;
   final int? stockAtOrder; // Stock quantity when purchase order was generated
-  final int? stockAtReceipt; // Stock quantity when invoice was received (final stock after purchase)
+  final int?
+      stockAtReceipt; // Stock quantity when invoice was received (final stock after purchase)
   final double? avgDailyConsumption;
   final int leadTimeDays;
   final DateTime? estimatedStockoutDate;
@@ -35,6 +40,7 @@ class SmartPurchaseListItem {
     this.productId,
     required this.productName,
     this.productSku,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
     this.categoryId,
     this.categoryName,
     this.supplierId,
@@ -67,27 +73,36 @@ class SmartPurchaseListItem {
     // Extract category from nested products join
     String? categoryId;
     String? categoryName;
-    
+    var purchaseTreatment = PurchaseTreatment.inventory;
+
     if (json['products'] != null && json['products'] is Map) {
       final products = json['products'] as Map<String, dynamic>;
       categoryId = products['category_id'] as String?;
-      
-      if (products['product_categories'] != null && products['product_categories'] is Map) {
+      purchaseTreatment = parsePurchaseTreatment(
+        products['purchase_treatment'],
+        productType: products['product_type'] as String?,
+        trackStock: products['track_stock'] as bool?,
+      );
+
+      if (products['product_categories'] != null &&
+          products['product_categories'] is Map) {
         final category = products['product_categories'] as Map<String, dynamic>;
         categoryId = category['id'] as String?;
-        categoryName = category['full_path'] as String? ?? category['name'] as String?;
+        categoryName =
+            category['full_path'] as String? ?? category['name'] as String?;
       }
     }
-    
+
     // Fallback to direct fields if they exist
     categoryId ??= json['category_id'] as String?;
     categoryName ??= json['category_name'] as String?;
-    
+
     return SmartPurchaseListItem(
       id: json['id'] as String,
       productId: json['product_id'] as String?,
       productName: json['product_name'] as String? ?? '',
       productSku: json['product_sku'] as String?,
+      purchaseTreatment: purchaseTreatment,
       categoryId: categoryId,
       categoryName: categoryName,
       supplierId: json['supplier_id'] as String?,
@@ -135,6 +150,7 @@ class SmartPurchaseListItem {
       'product_id': productId,
       'product_name': productName,
       'product_sku': productSku,
+      'purchase_treatment': purchaseTreatment.dbValue,
       'category_id': categoryId,
       'category_name': categoryName,
       'supplier_id': supplierId,
@@ -169,6 +185,7 @@ class SmartPurchaseListItem {
     String? productId,
     String? productName,
     String? productSku,
+    PurchaseTreatment? purchaseTreatment,
     String? categoryId,
     String? categoryName,
     String? supplierId,
@@ -201,6 +218,7 @@ class SmartPurchaseListItem {
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
+      purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
       supplierId: supplierId ?? this.supplierId,
@@ -210,18 +228,21 @@ class SmartPurchaseListItem {
       status: status ?? this.status,
       priority: priority ?? this.priority,
       rotationKpi: rotationKpi ?? this.rotationKpi,
-      daysSinceLastPurchase: daysSinceLastPurchase ?? this.daysSinceLastPurchase,
+      daysSinceLastPurchase:
+          daysSinceLastPurchase ?? this.daysSinceLastPurchase,
       currentStock: currentStock ?? this.currentStock,
       minStockLevel: minStockLevel ?? this.minStockLevel,
       stockAtOrder: stockAtOrder ?? this.stockAtOrder,
       stockAtReceipt: stockAtReceipt ?? this.stockAtReceipt,
       avgDailyConsumption: avgDailyConsumption ?? this.avgDailyConsumption,
       leadTimeDays: leadTimeDays ?? this.leadTimeDays,
-      estimatedStockoutDate: estimatedStockoutDate ?? this.estimatedStockoutDate,
+      estimatedStockoutDate:
+          estimatedStockoutDate ?? this.estimatedStockoutDate,
       notes: notes ?? this.notes,
       addedBy: addedBy ?? this.addedBy,
       addedDate: addedDate ?? this.addedDate,
-      linkedPurchaseInvoiceId: linkedPurchaseInvoiceId ?? this.linkedPurchaseInvoiceId,
+      linkedPurchaseInvoiceId:
+          linkedPurchaseInvoiceId ?? this.linkedPurchaseInvoiceId,
       linkedExpenseId: linkedExpenseId ?? this.linkedExpenseId,
       orderedDate: orderedDate ?? this.orderedDate,
       receivedDate: receivedDate ?? this.receivedDate,
@@ -232,15 +253,16 @@ class SmartPurchaseListItem {
 
   // Helper getters
   int get quantityToBuy => actualQuantity ?? suggestedQuantity;
-  
+
   bool get isPending => status == 'pending';
   bool get isOrdered => status == 'ordered';
   bool get isReceived => status == 'received';
   bool get isIgnored => status == 'ignored';
   bool get isCancelled => status == 'cancelled';
-  
-  bool get hasLinkedDocument => linkedPurchaseInvoiceId != null || linkedExpenseId != null;
-  
+
+  bool get hasLinkedDocument =>
+      linkedPurchaseInvoiceId != null || linkedExpenseId != null;
+
   // Priority levels
   String get priorityLevel {
     if (priority >= 80) return 'critical';
@@ -248,7 +270,7 @@ class SmartPurchaseListItem {
     if (priority >= 40) return 'medium';
     return 'low';
   }
-  
+
   // Urgency indicator
   bool get isUrgent => priority >= 80 || currentStock == 0;
   bool get isOutOfStock => currentStock <= 0;

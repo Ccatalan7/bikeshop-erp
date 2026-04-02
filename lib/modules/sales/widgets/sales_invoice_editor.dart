@@ -343,6 +343,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             unitPrice: product.price,
             discount: 0,
             cost: product.cost,
+            purchaseTreatment: product.purchaseTreatment,
+            isService: product.isService,
           );
           final newEntry = _InvoiceLineEntry(newLine);
           newEntry.attachListeners(_handleLinesChanged);

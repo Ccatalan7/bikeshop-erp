@@ -440,6 +440,7 @@ class SmartPurchaseListService extends ChangeNotifier {
               *,
               products!smart_purchase_list_product_id_fkey(
                 category_id,
+                purchase_treatment,
                 track_stock,
                 product_type,
                 product_categories!products_category_id_fkey(
@@ -492,6 +493,7 @@ class SmartPurchaseListService extends ChangeNotifier {
               *,
               products!smart_purchase_list_product_id_fkey(
                 category_id,
+                purchase_treatment,
                 track_stock,
                 product_type,
                 product_categories!products_category_id_fkey(
@@ -883,6 +885,7 @@ class SmartPurchaseListService extends ChangeNotifier {
             *,
             products!smart_purchase_list_product_id_fkey(
               category_id,
+              purchase_treatment,
               product_categories!products_category_id_fkey(
                 id,
                 name,

@@ -9674,7 +9674,7 @@ begin
     select 1
     from public.journal_entries
     where source_module = 'purchase_invoices'
-      and source_reference = p_invoice.id::text
+      and source_reference = p_invoice.invoice_number
   ) into v_exists;
 
   if v_exists then

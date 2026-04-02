@@ -721,6 +721,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       productId: '', // Ad-hoc item (empty string)
                       productName: productName,
                       productSku: productSku,
+                      purchaseTreatment: parsePurchaseTreatment(
+                        item['purchase_treatment'],
+                      ),
                       quantity: suggestedQty.toDouble(),
                       unitCost: 0, // User will fill this
                       discount: 0,
@@ -740,6 +743,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   productId: '', // Ad-hoc item (empty string)
                   productName: productName,
                   productSku: productSku,
+                  purchaseTreatment: parsePurchaseTreatment(
+                    item['purchase_treatment'],
+                  ),
                   quantity: suggestedQty.toDouble(),
                   unitCost: 0, // User will fill this
                   discount: 0,

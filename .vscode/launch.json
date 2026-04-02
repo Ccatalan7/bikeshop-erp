@@ -2,53 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "🍎 Flutter: Run (macOS)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "deviceId": "macos",
-      "env": {
-        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/Users/Claudio/.gem/ruby/2.6.0/bin"
-      }
-    },
-    {
-      "name": "🚀 Flutter: Run (Development)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "env": {
-        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/Users/Claudio/.gem/ruby/2.6.0/bin"
-      },
-      "args": [
-        "--dart-define=ENV=development",
-        "--dart-define=DEBUG_EMAIL=your-email@example.com",
-        "--dart-define=DEBUG_PASSWORD=your-password-here"
-      ]
-    },
-    {
-      "name": "🌐 Flutter: Run (Web - Chrome)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": [
-        "--web-renderer=html",
-        "-d",
-        "chrome"
-      ]
-    },
-    {
-      "name": "📱 Flutter: Run (Android)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "deviceId": "adb-R28M2189XQF-QsJGTZ._adb-tls-connect._tcp",
-      "args": []
-    }
-  ]
-}{
-  "version": "0.2.0",
-  "configurations": [
-    {
       "name": "🚀 Flutter: Run (Development)",
       "request": "launch",
       "type": "dart",

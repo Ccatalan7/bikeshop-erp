@@ -755,7 +755,8 @@ class _ProductListPageState extends State<ProductListPage> {
       case StockFilter.inStock:
         // Show only products with positive stock
         filtered = filtered
-            .where((product) => !product.isService && product.inventoryQty > 0)
+            .where((product) =>
+                product.tracksInventory && product.inventoryQty > 0)
             .toList();
         break;
       case StockFilter.lowStock:
@@ -763,12 +764,12 @@ class _ProductListPageState extends State<ProductListPage> {
         // User said "Bajo stock", "Sin stock", "Con stock".
         // Low stock usually implies it needs attention.
         filtered = filtered
-            .where((product) => !product.isService && product.isLowStock)
+            .where((product) => product.tracksInventory && product.isLowStock)
             .toList();
         break;
       case StockFilter.outOfStock:
         filtered = filtered
-            .where((product) => !product.isService && product.isOutOfStock)
+            .where((product) => product.tracksInventory && product.isOutOfStock)
             .toList();
         break;
     }
@@ -2242,7 +2243,8 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildSlimStatsBar(ThemeData theme) {
     if (_filteredProducts.isEmpty) return const SizedBox.shrink();
 
-    final stockProducts = _filteredProducts.where((p) => !p.isService).toList();
+    final stockProducts =
+        _filteredProducts.where((p) => p.tracksInventory).toList();
     final lowStock =
         stockProducts.where((p) => p.inventoryQty > 0 && p.isLowStock).length;
     final outOfStock = stockProducts.where((p) => p.inventoryQty <= 0).length;
@@ -3227,8 +3229,10 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildMobileProductRow(Product product, ThemeData theme) {
     final stockQty = product.inventoryQty;
-    final isLowStock = stockQty > 0 && stockQty <= product.minStockLevel;
-    final isOutOfStock = stockQty <= 0;
+    final isLowStock = product.tracksInventory &&
+        stockQty > 0 &&
+        stockQty <= product.minStockLevel;
+    final isOutOfStock = product.tracksInventory && stockQty <= 0;
 
     return InkWell(
       onTap: () => _handleProductAction('edit', product),
@@ -3331,20 +3335,24 @@ class _ProductListPageState extends State<ProductListPage> {
             ),
 
             // Stock indicator
-            Container(
-              width: 32,
-              alignment: Alignment.center,
-              child: Text(
-                '$stockQty',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isOutOfStock
-                      ? theme.colorScheme.error
-                      : isLowStock
-                          ? Colors.orange
-                          : theme.colorScheme.primary,
-                ),
+            SizedBox(
+              width: 92,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: product.tracksInventory
+                    ? Text(
+                        '$stockQty',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isOutOfStock
+                              ? theme.colorScheme.error
+                              : isLowStock
+                                  ? Colors.orange
+                                  : theme.colorScheme.primary,
+                        ),
+                      )
+                    : _buildStockBadge(theme, product),
               ),
             ),
 
@@ -3715,10 +3723,13 @@ class _ProductListPageState extends State<ProductListPage> {
                               ],
                             ),
                             if (product.brand != null)
-                              Text(
-                                product.brand!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  product.brand!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
                           ],
@@ -4054,6 +4065,28 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Text(
             'SERV',
             style: theme.textTheme.labelSmall?.copyWith(fontSize: 10),
+          ),
+        ),
+      );
+    }
+
+    if (!product.tracksInventory) {
+      return Center(
+        child: Tooltip(
+          message: 'Consumible de taller: no maneja inventario',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.tertiaryContainer.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              'N/A',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
+                fontSize: 10,
+              ),
+            ),
           ),
         ),
       );

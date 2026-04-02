@@ -3368,6 +3368,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                   'product_id': item.productId,
                   'product_name': item.productName,
                   'product_sku': item.productSku,
+                  'purchase_treatment': item.purchaseTreatment.dbValue,
                   'suggested_quantity': item.suggestedQuantity,
                 })
             .toList(),
