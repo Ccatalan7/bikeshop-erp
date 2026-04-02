@@ -1,0 +1,129 @@
+category	sku	name	supplier	cost	price	track_stock	purchase_treatment	inventory_qty	stock_quantity
+Abrillantadores/Renovadores	790983296100	Abrillantador Pedros Bike Lust 8oz	MKR	7183.0	14990.0	True	inventory	0	0
+Cámaras Anti-Pinchazo	6927116174002	CAMARA 26X1.95-2.125 V/AUTO 48MM CHAOYANG CON LIQUIDO	TeknoBike	2970.0	7500.0	True	inventory	0	0
+Cámaras Anti-Pinchazo	6927116109813	CAMARA 27.5X1.90/2.10 AV 48MM CHAOYANG CON LIQUIDO	TeknoBike	3270.0	8000.0	True	inventory	1	1
+Cámaras Anti-Pinchazo	716281509650	Camara Impinchable Aro 27.5, Slime A/V	MKR	11770.0	19990.0	True	inventory	0	0
+Cámaras Anti-Pinchazo	716281505140	Camara Impinchable Aro 29, Slime A/V	MKR	11800.0	17990.0	True	inventory	2	2
+Desengrasantes	8436577100423	Desengrasante BIO Blub 1 Litro	TeknoBike	8970.0	17990.0	True	inventory	0	0
+Desengrasantes	RL0006	Desengrasante RaceLub 1LT		3950.0	10000.0	True	inventory	2	2
+Desengrasantes	5013863030874	DESENGRASANTE WELDTITE JETBLAST 500 ML	Andes Life	6550.0	14990.0	True	inventory	0	0
+Fittings Hidráulicos	PO02136032480	FITTING HIDRAULICO ALLIGATOR MOD. HK-HST04	Andes Industrial	1240.0	3990.0	True	inventory	4	4
+Fittings Hidráulicos	PO02317032484	FITTING HIDRAULICO ALLIGATOR MOD. HK-HST08	Andes Industrial	1710.0	4490.0	True	inventory	1	1
+Fittings Hidráulicos	OL02	Oliva + Pin Magura	Aliexpress	449.5	1500.0	True	inventory	10	10
+Fittings Hidráulicos	OL03	Oliva + Pin Shimano BH59	Aliexpress	449.5	1500.0	True	inventory	7	7
+Fittings Hidráulicos	OL04	Oliva + Pin Shimano BH90	Aliexpress	449.5	1500.0	True	inventory	10	10
+Fittings Hidráulicos	OL05	Oliva + Pin SRAM	Aliexpress	449.5	1500.0	True	inventory	10	10
+Fittings Hidráulicos	OL01	Oliva + Pin Tektro	Aliexpress	449.5	1500.0	True	inventory	9	9
+Fittings Hidráulicos	REP70000037	Oliva Alligator Compatible SHIMANO	BeldaBike	490.0	1000.0	True	inventory	10	10
+Fundas	17367	FUNDA PROTECTORA BEST COLOR GRIS	Andes Industrial	2380.0	7990.0	True	inventory	0	0
+Fundas y piolas	19227	CABLE CAMBIO LARGO 2.10 MTS. MTB COMPATIBLE / GENERICO (100PCS) 2022 ECONOM.		108.0	600.0	True	inventory	192	192
+Fundas y piolas	19309	CABLE CAMBIO MTB SOLO 1.90 MTS LARGO min.100pcs	Andes Industrial	150.0	500.0	True	inventory	99	99
+Fundas y piolas	2000000113661	Cable Delanter 0.85 m Tope Barril Mtb	MKR	149.5	500.0	True	inventory	20	20
+Fundas y piolas	19234	CABLE FRENO MTB  BARRIL SOLO 2,00 MTS ACERO COMPATIBLE / GENERICO (100PCS) ALTERNATIVO 2022 ECONOM.	Andes Industrial	140.0	600.0	True	inventory	387	387
+Fundas y piolas	12893	CABLE FUNDA CAMBIO 4mm/15mts. TEFLON NEGRA INDEX
+TAIWAN ROL	RBX	7624.0	15200.0	True	inventory	0	0
+Fundas y piolas	2000000113616	Cable Traser 1.40cms Tope Barril Mtb	MKR	171.45	700.0	True	inventory	17	17
+Fundas y piolas	31501	FUNDA 2 P NEGRO (ROLLO 50 MTS) COMPATIBLE / GENERICO	Andes Industrial	284.2	1000.0	True	inventory	97	97
+Fundas y piolas	17020	FUNDA CAMBIO 4MM ALHONGA 30 MTS. GRIS MOD. CC-EY01	Andes Industrial	633.0	1600.0	True	inventory	178	178
+Fundas y piolas	20288	Funda de Cambio 10TEN con Teflón en caja 30 Mts.	Comercial Ciclo	8990.0	22000.0	True	inventory	1	1
+Fundas y piolas	17171	Funda de Cambio Con Teflon Negra. Rollo 20Mts. Taiwán	Comercial Ciclo	5990.0	16000.0	True	inventory	1	1
+Fundas y piolas	S55197	Funda de cambio shimano sp40 300mm	Andes Industrial	198.0	1000.0	True	inventory	1	1
+Fundas y piolas	C483	Funda De Cambio Unex 1 M Negro	MKR	950.0	2300.0	True	inventory	15	15
+Fundas y piolas	2000000113692	Funda Freno Teflon Taiwan	MKR	383.6	1000.0	True	inventory	77	77
+Fundas y piolas	C001	Piola 1.2 Mm X 2100 Mm Para Cambio	MKR	265.0	800.0	True	inventory	9	9
+Fundas y piolas	NNV129	Piola Bicicleta Ruta Pera Garozzo	Garozzo	400.0	600.0	True	inventory	4	4
+Fundas y piolas	C004	Piola de Freno MTB 1.2 (m) MKR	MKR	257.0	800.0	True	inventory	8	8
+Fundas y piolas	445105	ROLLO 50MTS FUNDA DE CAMBIO 4MM NEGRA	Derman	15900.0	40000.0	True	inventory	2	2
+Fundas y piolas	19293	SET 100pcs CABLE CAMBIO LARGO 2.10 MTS. MTB COMP.ALT.GEN. GW 2022 MINIMO DE VENTA SET 100pcs	Andes Industrial	158.1	700.0	True	inventory	299	299
+Fundas y piolas	136	SET 100pcs CABLE CAMBIO LARGO 2.10 MTS. MTB COMPATIBLE / GENERICO MINIMO DE VENTA SET 100pcs	Andes Industrial	203.0	1000.0	False	workshop_consumable	0	0
+Fundas y piolas	PO02776019305	SET 100pcs CABLE FRENO MTB BARRIL SOLO 2,00 MTS ACERO COMP.ALT.GEN. MINIMO DE VENTA SET 100pcs	Andes Industrial	20348.0	100000.0	True	inventory	101	101
+Fundas y piolas	PO02776019291	SET 100pcs CABLE FRENO RUTA PERA SOLO 1,75 MT ACERO COMP.ALT.GEN. MINIMO DE VENTA SET 100pcs	Andes Industrial	183.95	1000.0	True	inventory	98	98
+Fundas y piolas	1985	TERMINAL CABLE DE FRENO (500 PZS) COMPATIBLE / GENERICO	Andes Industrial	9.96	50.0	True	inventory	492	492
+Fundas y piolas	NNV174	Terminal Punta Piola Cambio y Freno Colores	Aliexpress	52.0	100.0	True	inventory	288	288
+Fundas y piolas	T210	Tope " Terminal De Cable " 500 Pcs Taiwan	MKR	20.0	50.0	True	inventory	463	463
+Fundas y piolas	T211	Tope De Funda De Cable Freno 300 Pcs Taiwan	MKR	42.0	100.0	True	inventory	248	248
+Gomas V-Brake	2000000113241	Goma Para Cable V-Brake Taiwan	MKR	90.0	250.0	True	inventory	34	34
+Gomas V-Brake	1541	GOMITA PARA FRENO V-BRAKE COMPATIBLE / GENERICO		30.0	100.0	True	inventory	38	38
+Grasa	998	GRASA LUBRICANTE CHICA 50 GRS	Trip	1590.0	4000.0	True	inventory	1	1
+Grasa	5013863020035	Grasa Weldtite para piezas de Carbono 50 gr	Andes Life	5037.0	9990.0	True	inventory	0	0
+Grasa/Aceites/Soluciones/Limpiadores	2854	Aceite Mineral Chepark	Vittal	21.4	50.0	True	inventory	1000	1000
+Grasa/Aceites/Soluciones/Limpiadores	S56467	ACEITE MINERAL SHIMANO SM-DBOIL 1000CC BULK KSMDBOILO	Andes Industrial	18507.0	45000.0	True	inventory	3	3
+Grasa/Aceites/Soluciones/Limpiadores	67	ACEITE NACIONAL	Trip	1100.0	3000.0	True	inventory	0	0
+Grasa/Aceites/Soluciones/Limpiadores	7887	Dot 5.1 Fluid 60ml ezmtb	TeknoBike	2270.0	6000.0	True	inventory	1	1
+Grasa/Aceites/Soluciones/Limpiadores	1197	Limpiador Cadena y Piñón Chepark	Vittal	16.0	40.0	True	inventory	0	0
+Grasa/Aceites/Soluciones/Limpiadores	1195	Limpiador Disco de Freno Chepark	Vittal	18.0	40.0	True	inventory	750	750
+Grasa/Aceites/Soluciones/Limpiadores	1559	LIMPIADOR TRIPLE PLATO PP-01	RBX	1225.0	3990.0	True	inventory	1	1
+Líquido Frenos	2450170007140007	Aceite Mineral para Freno Hidráulico Shimano SM-DB-OIL		32.0	50.0	True	inventory	759	759
+Líquido Tubeless	6009685090348	Liquido Antipinchazos Squirt Seal Beadblock 1litro	TeknoBike	17.97	50.0	True	inventory	30	30
+Líquido Tubeless	RL0007	Sellador Tubeless 1000cc	RaceLub	12900.0	30000.0	True	inventory	1	1
+Lubricantes	8436577100355	Lubricante Cadena Blub Cerámica 120ML	TeknoBike	5970.0	12990.0	True	inventory	0	0
+Lubricantes	8436577100058	Lubricante Cadena Blub Wet 15ML	TeknoBike	2570.0	5990.0	True	inventory	0	0
+Lubricantes	8436577100027	Lubricante Cadena Blub Wet Lube 120ML	TeknoBike	5970.0	12200.0	True	inventory	0	0
+Lubricantes	RL0009	LUBRICANTE CERAMIC RACELUB 50ml	RaceLub	2700.0	6500.0	True	inventory	1	1
+Lubricantes	RL0004	Lubricante CeramicLub		3850.0	10000.0	True	inventory	2	2
+Lubricantes	RL0003	Lubricante CleanLub		2550.0	7000.0	True	inventory	2	2
+Lubricantes	8436577114741	Lubricante de Cadena Blub Spray 450ML	TeknoBike	6270.0	15990.0	True	inventory	0	0
+Lubricantes	5013863030744	Lubricante de Cadena TF2 Weldtite con Teflón 400 ml	Andes Life	10079.0	19990.0	True	inventory	0	0
+Lubricantes	RL0002	Lubricante EcoLub		2850.0	7000.0	True	inventory	2	2
+Lubricantes	RL0005	Lubricante HidroLub		3950.0	10000.0	True	inventory	0	0
+Lubricantes	4100420060557	Lubricante Liqui Moly Bike Kettenspray 400ml		6232.5	14990.0	True	inventory	1	1
+Lubricantes	RL0001	Lubricante ProLub		3250.0	8000.0	True	inventory	1	1
+Lubricantes	RL0008	LUBRICANTE PROLUB RACELUB 500ml	RaceLub	14900.0	35000.0	True	inventory	1	1
+Lubricantes	RL0010	LUBRICANTE PROLUB RACELUB 50ml	RaceLub	2400.0	6000.0	True	inventory	2	2
+Lubricantes	190BIC100P	LUBRICANTE SECO MOD. BIC-100P CHEPARK	Derman	5579.0	13000.0	True	inventory	0	0
+Lubricantes	7370	LUBRICANTE THUMBS UP YP901 PEQUEÑO	RBX	2173.0	5500.0	True	inventory	0	0
+Missinglink	4715575896793	Conexión Cadena Kmc 10 speed 2 Pcs Plata	MKR	1870.0	4990.0	True	inventory	0	0
+Missinglink	4715575896731	Conexión Cadena Kmc 11 speed, Plata 2 pcs	MKR	2880.0	5500.0	True	inventory	0	0
+Missinglink	4715575894768	Conexión De Cadena Kmc Cl573r 6/7/8 Plata 2p	MKR	1553.0	3300.0	True	inventory	0	0
+Missinglink	C2897	Conexión Titanio Cadena Kmc 9 Speed 2 Pcs	MKR	1690.0	3990.0	True	inventory	1	1
+Missinglink	AE0098	Missinglink RISK 10 V Par (2 piezas)	Aliexpress	355.6	2000.0	True	inventory	0	0
+Missinglink	AE0099	Missinglink RISK 11 V Par (2 piezas)	Aliexpress	426.8	3000.0	True	inventory	8	8
+Missinglink	AE0100	Missinglink RISK 12 V Par (2 piezas)	Aliexpress	558.2	3500.0	True	inventory	4	4
+Missinglink	AE0073	Missinglink RISK 6-7-8 V Par (2 piezas)	Aliexpress	522.0	2000.0	True	inventory	14	14
+Missinglink	AE0097	Missinglink RISK 9 V Par (2 piezas)	Aliexpress	355.6	2000.0	True	inventory	4	4
+Niples	BPS009	Niple 16MM cnSPOKE - Double Square ALUMINIO	Bikepointstore	139.0	350.0	True	inventory	2	2
+Niples	BPS002	Niple cnSPOKE 14MM - Aluminio - Negro	Bikepointstore	107.0	250.0	True	inventory	6	6
+O'rings	BPS006	Wistio - O'ring Válvula Tubeless - 1 unidad	Bikepointstore	84.0	350.0	True	inventory	9	9
+Parches	P002493017282	PARCHE 48 UND. THUMBS UP NO TOLUENO COMPATIBLE / GENERICO	Andes Industrial	25.83	200.0	True	inventory	326	326
+Parches	PO02722000077	PARCHE CAJA 100 UND. RECTANGULAR ROJO-SUN COMPATIBLE / GENERICO	Andes Industrial	18.3	200.0	True	inventory	6	6
+Parches	AE0014	Parche Glueless RideRace 1 Un	Aliexpress	160.0	400.0	True	inventory	2	2
+Parches	AE0036	Parche Thumbs Up 1Un	Aliexpress	130.0	300.0	True	inventory	0	0
+Parches	716281220302	Set De Parches+soluc 5 P Slime Neumat Radial 2030-	MKR	1650.0	3490.0	True	inventory	0	0
+Parches	25340	Set Parches THUMBS UP 24U 32x50mm + Solución 20ml.		1490.0	3500.0	True	inventory	0	0
+Pegamento parches	23406	Pegamento para Parches, 12 Unidades, 20ml		2990.0	7100.0	True	inventory	0	0
+Pegamento parches	PO02609000382	SOLUCION 20CC. THUMBS - NO TOLUENO 1 Unidad COMPATIBLE / GENERICO	Andes Industrial	286.66	1000.0	True	inventory	9	9
+Pernos/Tornillos/Otros	AE0087	Golilla Espaciadora Para Perno M8 2mm	Aliexpress	191.3	400.0	True	inventory	20	20
+Pernos/Tornillos/Otros	AE0088	Golilla Espaciadora Para Perno M8 3mm	Aliexpress	191.3	400.0	True	inventory	20	20
+Pernos/Tornillos/Otros	AE0082	Perno Biela M15 Volante Integrado Meroca	Aliexpress	1052.0	3500.0	True	inventory	5	5
+Pernos/Tornillos/Otros	AE0083	Perno Biela M18 Volante Integrado Meroca	Aliexpress	1168.0	3500.0	True	inventory	3	3
+Pernos/Tornillos/Otros	AE0084	Perno Biela M19 Volante Integrado Meroca	Aliexpress	1052.0	3500.0	True	inventory	4	4
+Pernos/Tornillos/Otros	AE0085	Perno Biela M20 Volante Integrado Meroca	Aliexpress	1010.0	3500.0	True	inventory	3	3
+Pernos/Tornillos/Otros	AE0090	Perno Corona HASSNS M8 6.5mm  NEGRO	Aliexpress	219.2	850.0	True	inventory	1	1
+Pernos/Tornillos/Otros	AE0091	Perno Corona HASSNS M8 8.5mm  NEGRO	Aliexpress	274.0	850.0	True	inventory	0	0
+Pernos/Tornillos/Otros	PO02776019302	PERNO EJE CUADRADO TIPO SHIMANO MINIMO VENTA MULTIPLOS DE 20		240.0	800.0	True	inventory	11	11
+Pernos/Tornillos/Otros	AI039	PERNO EJE PARA CUADRADA NEGRO COMPATIBLE / GENERICO	Andes Industrial	166.0	600.0	True	inventory	2	2
+Pernos/Tornillos/Otros	AE0080	Perno Fijación Corona M8 14mm AE	Aliexpress	621.0	1000.0	True	inventory	1	1
+Pernos/Tornillos/Otros	AE0078	Perno Fijación Corona M8 6mm AE	Aliexpress	443.6	850.0	True	inventory	1	1
+Pernos/Tornillos/Otros	AE0079	Perno Fijación Corona M8 8mm AE	Aliexpress	480.8	850.0	True	inventory	0	0
+Pernos/Tornillos/Otros	PO02609000463	PERNO FRENO DISCO (ROTOR) PARA TORQ T25 ( MINIMO 20 PCS )	Andes Industrial	130.0	300.0	True	inventory	20	20
+Pernos/Tornillos/Otros	P335	Perno Freno Disco Cromo M5x10mm Taiwan 1 unid	MKR	125.88	300.0	True	inventory	0	0
+Pernos/Tornillos/Otros	19264	PERNO PARA EJE CUADRADO NEGRO ALTERNATIVO		88.0	500.0	True	inventory	9	9
+Pernos/Tornillos/Otros	2000000140704	Perno Para Porta Caramayolas Taiwan (20 Unid	MKR	132.5	500.0	True	inventory	13	13
+Pernos/Tornillos/Otros	PO02499002177	PERNO PARA TEE A-HEAD ALLEN COMPATIBLE / GENERICO	Andes Industrial	166.0	800.0	True	inventory	5	5
+Pernos/Tornillos/Otros	AE0028	Tornillo Biela M8x18mm	Aliexpress	998.0	1990.0	True	inventory	2	2
+Silicona	5013863030423	Silicona protectora Weldtite Aerosol 500 ml silicon shine	Andes Life	5037.0	11990.0	True	inventory	0	0
+Tripas Tubeless	AE0047	Kit Tubeless Tripas Deemount	Aliexpress	5122.33	9200.0	True	inventory	3	3
+Tubeless	AE0003	Cinta Tubeless Deemount 10Mt, 21mm	Aliexpress	2908.0	5990.0	True	inventory	0	0
+Tubeless	AE0004	Cinta Tubeless Deemount 10Mt, 23mm	Aliexpress	3099.0	6990.0	True	inventory	0	0
+Tubeless	AE0005	Cinta Tubeless Deemount 10Mt, 25mm	Aliexpress	3331.0	6990.0	True	inventory	0	0
+Tubeless	AE0006	Cinta Tubeless Deemount 10Mt, 27mm	Aliexpress	3583.0	7990.0	True	inventory	1	1
+Tubeless	AE0209	Cinta Tubeless GOLDIX 1Mt 25mm	Aliexpress	147.24	1000.0	True	inventory	44	44
+Tubeless	AE0166	Cinta Tubeless GOLDIX 1Mt, 20mm	Aliexpress	118.62	1000.0	True	inventory	50	50
+Tubeless	AE0153	Cinta Tubeless GOLDIX 1Mt, 30mm	Aliexpress	141.32	1000.0	True	inventory	50	50
+Válvula Tubeless	AE0234	Obús Válvula Deemount F/V 1Un	Aliexpress	258.42	1500.0	True	inventory	10	10
+Válvula Tubeless	AE0208	Válvula Francesa Tubular Deemount 40 mm Roja	Aliexpress	1612.5	5000.0	True	inventory	1	1
+Válvula Tubeless	AE0039	Válvula Tubeless Deemount A/V 1 Un. 40mm	Aliexpress	2392.0	4990.0	True	inventory	2	2
+Válvula Tubeless	AE0046	Válvula Tubeless Deemount F/V 1 Un. 60mm	Aliexpress	2135.17	6000.0	True	inventory	1	1
+Válvula Tubeless	AE0287	Válvula Tubeless Deemount F/V 1un. 40mm	Aliexpress	1928.0	5000.0	True	inventory	5	5
+Válvula Tubeless	AE0152	Válvula Tubeless MANA F/V 1 Un. 50mm	Aliexpress	2327.0	6000.0	True	inventory	0	0
+Válvula Tubeless	BPS005	Wistio - Núcleo de Valvula F/V - Unidad	Bikepointstore	502.0	1500.0	True	inventory	1	1

@@ -39,6 +39,16 @@ class ProductFormPage extends StatefulWidget {
   State<ProductFormPage> createState() => _ProductFormPageState();
 }
 
+class _RestoreProductConversionOptions {
+  const _RestoreProductConversionOptions({
+    required this.reason,
+    required this.restoreInventory,
+  });
+
+  final String reason;
+  final bool restoreInventory;
+}
+
 class _ProductFormPageState extends State<ProductFormPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
@@ -90,7 +100,10 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isLoadingConversionStatus = false;
+  bool _isRestoringConversion = false;
   Product? _existingProduct;
+  Map<String, dynamic>? _conversionStatus;
 
   // Debug error tracking
   String? _lastError;
@@ -550,6 +563,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         if (product.categoryId != null) {
           _loadSpecTemplate(product.categoryId!, productId: product.id);
         }
+
+        unawaited(_loadConversionStatus(product.id));
       }
     } catch (e) {
       if (!mounted) return;
@@ -781,6 +796,372 @@ class _ProductFormPageState extends State<ProductFormPage>
     final product = _existingProduct;
     if (product == null) return 0;
     return _existingTrackedStockQuantity * product.cost;
+  }
+
+  bool get _hasConversionHistory =>
+      _conversionStatus?['has_conversion_history'] == true;
+
+  bool get _canRestoreOriginalState =>
+      _conversionStatus?['can_restore'] == true;
+
+  String? get _conversionReference {
+    final raw = _conversionStatus?['conversion_reference'];
+    if (raw == null) return null;
+    final value = raw.toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
+  int get _conversionOriginalInventoryQty {
+    final originalState = _conversionStatus?['original_state'];
+    if (originalState is Map && originalState['inventory_qty'] != null) {
+      return int.tryParse(originalState['inventory_qty'].toString()) ?? 0;
+    }
+    return 0;
+  }
+
+  double get _conversionInventoryValuePreview {
+    final raw = _conversionStatus?['inventory_value'];
+    if (raw == null) return 0;
+    return double.tryParse(raw.toString()) ?? 0;
+  }
+
+  DateTime? _parseStatusDateTime(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString());
+  }
+
+  String _formatStatusDateTime(dynamic value) {
+    final parsed = _parseStatusDateTime(value);
+    if (parsed == null) return '-';
+    return ChileanUtils.formatDateTime(parsed.toLocal());
+  }
+
+  Future<void> _loadConversionStatus(String? productId) async {
+    if (productId == null || productId.isEmpty) {
+      if (mounted) {
+        setState(() => _conversionStatus = null);
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingConversionStatus = true);
+    }
+
+    try {
+      final status = await _inventoryService.getProductConversionStatus(
+        productId: productId,
+      );
+      if (!mounted) return;
+      setState(() => _conversionStatus = status);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _conversionStatus = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error cargando historial de conversión: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingConversionStatus = false);
+      }
+    }
+  }
+
+  Future<_RestoreProductConversionOptions?> _promptRestoreOptions() async {
+    final defaultReason = _conversionOriginalInventoryQty > 0
+        ? 'Restauración completa del estado original del producto'
+        : 'Restauración de configuración original del producto';
+    final controller = TextEditingController(text: defaultReason);
+    bool restoreInventory = _conversionOriginalInventoryQty > 0;
+
+    final result = await showDialog<_RestoreProductConversionOptions>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: const Text('Restaurar estado original'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Se usará el snapshot guardado en la última conversión para devolver este producto a su estado original.',
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceVariant
+                          .withOpacity(0.45),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Última conversión: ${_formatStatusDateTime(_conversionStatus?['conversion_created_at'])}',
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cantidad original: $_conversionOriginalInventoryQty',
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Valor original: ${ChileanUtils.formatCurrency(_conversionInventoryValuePreview)}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: restoreInventory,
+                    onChanged: _conversionOriginalInventoryQty <= 0
+                        ? null
+                        : (value) {
+                            setModalState(() => restoreInventory = value);
+                          },
+                    title: const Text('Restaurar stock y valor contable'),
+                    subtitle: Text(
+                      _conversionOriginalInventoryQty <= 0
+                          ? 'No hay stock original para restaurar.'
+                          : 'Si hubo actividad posterior, el sistema bloqueará esta opción para evitar inconsistencias.',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo de la restauración',
+                      hintText: 'Describe por qué restauras el estado original',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final reason = controller.text.trim();
+                Navigator.of(context).pop(
+                  _RestoreProductConversionOptions(
+                    reason: reason.isEmpty ? defaultReason : reason,
+                    restoreInventory: restoreInventory,
+                  ),
+                );
+              },
+              child: const Text('Restaurar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _restoreOriginalProductState() async {
+    final product = _existingProduct;
+    if (product?.id == null || !_canRestoreOriginalState) return;
+
+    final options = await _promptRestoreOptions();
+    if (options == null) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isRestoringConversion = true);
+
+    try {
+      final restoredProduct =
+          await _inventoryService.restoreProductConversionState(
+        productId: product!.id!,
+        reason: options.reason,
+        restoreInventory: options.restoreInventory,
+        conversionReference: _conversionReference,
+      );
+
+      _existingProduct = restoredProduct;
+      await _loadProduct();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            options.restoreInventory
+                ? 'Estado original restaurado con stock y valor contable.'
+                : 'Configuración original restaurada sin reconstruir stock.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error restaurando estado original: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRestoringConversion = false);
+      }
+    }
+  }
+
+  Future<void> _showMissingConversionSnapshotInfo() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sin restauracion automatica'),
+        content: const Text(
+          'Este producto no tiene una conversion registrada con snapshot. Fue creado como consumible de taller o se modifico antes de implementar el flujo reversible, por eso aqui no aparece el boton de restaurar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversionStatusCard() {
+    if (_selectedProductType == ProductType.service) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final isWorkshopConsumable =
+        _selectedPurchaseTreatment == PurchaseTreatment.workshopConsumable;
+
+    if (_isLoadingConversionStatus) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 10),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+
+    if (!_hasConversionHistory && !isWorkshopConsumable) {
+      return const SizedBox.shrink();
+    }
+
+    if (!_hasConversionHistory) {
+      return const SizedBox.shrink();
+    }
+
+    final restored = _conversionStatus?['restored'] == true;
+    final convertedQuantity =
+        _conversionStatus?['converted_quantity']?.toString() ?? '0';
+    final conversionReason = (_conversionStatus?['conversion_reason']
+                ?.toString()
+                .trim()
+                .isNotEmpty ??
+            false)
+        ? _conversionStatus!['conversion_reason'].toString().trim()
+        : 'Sin motivo registrado';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _canRestoreOriginalState
+              ? theme.colorScheme.primary.withOpacity(0.25)
+              : theme.dividerColor.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                restored ? Icons.restore : Icons.history,
+                size: 18,
+                color: restored
+                    ? Colors.green.shade700
+                    : theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  restored
+                      ? 'Última conversión restaurada'
+                      : 'Estado original disponible para restaurar',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Conversión: ${_formatStatusDateTime(_conversionStatus?['conversion_created_at'])}',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Cantidad convertida: $convertedQuantity | Valor: ${ChileanUtils.formatCurrency(_conversionInventoryValuePreview)}',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Motivo: $conversionReason',
+            style: theme.textTheme.bodySmall,
+          ),
+          if (restored) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Restaurado: ${_formatStatusDateTime(_conversionStatus?['restored_at'])}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+          if (_canRestoreOriginalState) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _isRestoringConversion
+                    ? null
+                    : _restoreOriginalProductState,
+                icon: _isRestoringConversion
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.restore_outlined),
+                label: Text(
+                  _isRestoringConversion
+                      ? 'Restaurando...'
+                      : 'Restaurar estado original',
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildConversionJournalPreview(BuildContext context) {
@@ -2444,14 +2825,73 @@ class _ProductFormPageState extends State<ProductFormPage>
                 },
                 showSelectedIcon: false,
               ),
-              const SizedBox(height: 8),
-              Text(
-                _selectedPurchaseTreatment == PurchaseTreatment.inventory
-                    ? 'Se capitaliza como inventario y requiere control de stock.'
-                    : 'Se compra para uso rápido en taller, no sube stock y se reconoce como costo directo.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant
+                      .withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor.withOpacity(0.1),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      _selectedPurchaseTreatment == PurchaseTreatment.inventory
+                          ? Icons.inventory_2_outlined
+                          : Icons.build_circle_outlined,
+                      size: 16,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withOpacity(0.7),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedPurchaseTreatment ==
+                                PurchaseTreatment.inventory
+                            ? 'Se capitaliza como inventario y requiere control de stock.'
+                            : 'Se compra para uso rápido en taller, no sube stock y se reconoce como costo directo.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                      ),
+                    ),
+                    if (_selectedPurchaseTreatment ==
+                            PurchaseTreatment.workshopConsumable &&
+                        !_hasConversionHistory &&
+                        !_isLoadingConversionStatus)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Tooltip(
+                          message:
+                              'Este producto fue creado como consumible o modificado antes de existir el historial.',
+                          child: InkWell(
+                            onTap: _showMissingConversionSnapshotInfo,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2.0),
+                              child: Icon(
+                                Icons.help_outline,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               if (_requiresInventoryConversion) ...[
                 const SizedBox(height: 10),
@@ -2469,6 +2909,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   ),
                 ),
               ],
+              _buildConversionStatusCard(),
             ],
           ),
         ),

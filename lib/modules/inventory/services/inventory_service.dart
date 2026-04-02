@@ -473,6 +473,65 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
+  Future<Product> restoreProductConversionState({
+    required String productId,
+    required String reason,
+    required bool restoreInventory,
+    String? conversionReference,
+  }) async {
+    try {
+      final dynamic result = await _db.rpc(
+        'restore_product_conversion_state',
+        params: {
+          'p_product_id': productId,
+          'p_reason': reason,
+          'p_restore_inventory': restoreInventory,
+          'p_conversion_reference': conversionReference,
+        },
+      );
+
+      Map<String, dynamic> productJson;
+      if (result is Map && result['product'] is Map) {
+        productJson = Map<String, dynamic>.from(result['product'] as Map);
+      } else if (result is Map) {
+        productJson = Map<String, dynamic>.from(result);
+      } else {
+        throw Exception('Respuesta inválida al restaurar el producto');
+      }
+
+      invalidateProductsCache();
+      notifyListeners();
+      return Product.fromJson(productJson);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error restoring product conversion state: $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getProductConversionStatus({
+    required String productId,
+  }) async {
+    try {
+      final dynamic result = await _db.rpc(
+        'get_product_conversion_status',
+        params: {'p_product_id': productId},
+      );
+
+      if (result is Map) {
+        return Map<String, dynamic>.from(result);
+      }
+
+      throw Exception('Respuesta inválida al consultar estado de conversión');
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading product conversion status: $e');
+      }
+      rethrow;
+    }
+  }
+
   Future<void> deleteProduct(String id) async {
     try {
       if (id.isEmpty) {
