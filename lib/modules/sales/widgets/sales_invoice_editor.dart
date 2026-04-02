@@ -36,13 +36,13 @@ import '../../settings/services/appearance_service.dart';
 /// A reusable, embeddable widget for creating and editing sales invoices.
 ///
 /// **Usage Context:**
-/// This widget is designed to be used inline within other pages, such as the 
+/// This widget is designed to be used inline within other pages, such as the
 /// Calendar View side panel, Job details views, or modal bottom sheets.
 /// It supports a `compact` mode specifically for constrained spaces.
-/// 
+///
 /// **Important Note for Developers/AI:**
-/// If you are modifying the invoice form UI or logic (like adding fields or changing 
-/// line item behavior), you MUST apply the SAME changes to the main full-page 
+/// If you are modifying the invoice form UI or logic (like adding fields or changing
+/// line item behavior), you MUST apply the SAME changes to the main full-page
 /// invoice form located at `lib/modules/sales/pages/invoice_form_page.dart`.
 class SalesInvoiceEditor extends StatefulWidget {
   final String? invoiceId;
@@ -375,7 +375,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   Future<void> _initialize() async {
     _salesService = Provider.of<SalesService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
-    _inventoryService = Provider.of<shared_inventory.InventoryService>(context, listen: false);
+    _inventoryService =
+        Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
 
     try {
@@ -411,27 +412,31 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             _applyInvoice(invoice);
           }
         }
-        
+
         // Check if this invoice is linked to a job, to load bikes
         final db = Provider.of<DatabaseService>(context, listen: false);
         try {
-          _debugBikeMessage = 'DEBUG: Querying mechanic_jobs for editor invoice ${widget.invoiceId}';
+          _debugBikeMessage =
+              'DEBUG: Querying mechanic_jobs for editor invoice ${widget.invoiceId}';
           final jobDataList = await db.supabase
               .from('mechanic_jobs')
               .select('id')
               .eq('invoice_id', widget.invoiceId as Object)
               .limit(1);
-              
+
           if (jobDataList.isNotEmpty) {
             final jobId = jobDataList.first['id'] as String;
-            _debugBikeMessage = 'DEBUG: Editor found job $jobId, loading bikes...';
+            _debugBikeMessage =
+                'DEBUG: Editor found job $jobId, loading bikes...';
             await _loadJobBikes(jobId);
           } else if (_loadedInvoice != null) {
-            _debugBikeMessage = 'DEBUG: Editor no direct job link, trying fallback...';
+            _debugBikeMessage =
+                'DEBUG: Editor no direct job link, trying fallback...';
             bool foundFallback = false;
             for (final item in _loadedInvoice!.items) {
               if (item.jobBikeId != null && item.jobBikeId!.isNotEmpty) {
-                _debugBikeMessage = 'DEBUG: Editor fallback found jobBikeId ${item.jobBikeId}';
+                _debugBikeMessage =
+                    'DEBUG: Editor fallback found jobBikeId ${item.jobBikeId}';
                 final bikeData = await db.supabase
                     .from('mechanic_job_bikes')
                     .select('job_id')
@@ -439,15 +444,17 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                     .maybeSingle();
                 if (bikeData != null && bikeData['job_id'] != null) {
                   final jobId = bikeData['job_id'] as String;
-                  _debugBikeMessage = 'DEBUG: Editor fallback resolved job $jobId, calling load';
+                  _debugBikeMessage =
+                      'DEBUG: Editor fallback resolved job $jobId, calling load';
                   await _loadJobBikes(jobId);
                   foundFallback = true;
-                  break; 
+                  break;
                 }
               }
             }
             if (!foundFallback) {
-              _debugBikeMessage = 'DEBUG: Editor fallback exhausted without finding job_id';
+              _debugBikeMessage =
+                  'DEBUG: Editor fallback exhausted without finding job_id';
             }
           }
         } catch (e) {
@@ -460,7 +467,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         }
 
         if (widget.preselectedJobId != null) {
-          _debugBikeMessage = 'DEBUG: Editor new invoice from job ${widget.preselectedJobId}, loading bikes...';
+          _debugBikeMessage =
+              'DEBUG: Editor new invoice from job ${widget.preselectedJobId}, loading bikes...';
           await _loadJobAndPreselectCustomer(widget.preselectedJobId!);
           await _loadJobBikes(widget.preselectedJobId!);
         } else if (widget.preselectedCustomerId != null) {
@@ -487,7 +495,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   void _applyInvoice(Invoice invoice) {
     if (!mounted) return;
 
-    // 🛡️ DATA LOSS PROTECTION: If the server returns an empty item list but we currently 
+    // 🛡️ DATA LOSS PROTECTION: If the server returns an empty item list but we currently
     // have items in the editor, this is almost certainly a database sync race condition.
     // We update the metadata (status, dates, etc.) but PRESERVE our current items.
     if (invoice.items.isEmpty && _lineEntries.isNotEmpty) {
@@ -499,7 +507,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         );
         _selectedCustomer = _selectedCustomer; // Keep customer
         _issueDate = invoice.date;
-        _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
+        _dueDate =
+            invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
         _status = invoice.status;
         _taxTreatment = invoice.taxTreatment;
         // Do NOT update _lineEntries from empty list
@@ -555,6 +564,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           unitPrice: item.unitPrice,
           discount: item.discount,
           cost: item.cost,
+          purchaseTreatment: item.purchaseTreatment,
+          isService: item.isService,
           description: item.description,
           isCatalogProduct: item.isCatalogProduct,
           jobBikeId: item.jobBikeId,
@@ -617,12 +628,14 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       final bikes = await _bikeshopService.getJobBikes(jobId);
       if (mounted) {
         setState(() {
-          _debugBikeMessage = 'DEBUG: Editor loaded ${bikes.length} bikes from getJobBikes';
+          _debugBikeMessage =
+              'DEBUG: Editor loaded ${bikes.length} bikes from getJobBikes';
           _availableJobBikes.clear();
           _availableJobBikes.addAll(bikes);
         });
       } else {
-        _debugBikeMessage = 'DEBUG: Editor widget not mounted after getJobBikes';
+        _debugBikeMessage =
+            'DEBUG: Editor widget not mounted after getJobBikes';
       }
     } catch (e) {
       debugPrint('Error loading bikes for job: $e');
@@ -701,7 +714,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
-
   Future<void> _updateStatus(InvoiceStatus newStatus) async {
     final invoiceId = _currentInvoiceId;
     if (invoiceId == null) {
@@ -716,7 +728,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       }
       return;
     }
-     // 🚀 UNIFIED ATOMIC SAVE: We set the new status locally and then call _saveInvoice
+    // 🚀 UNIFIED ATOMIC SAVE: We set the new status locally and then call _saveInvoice
     // This ensures that BOTH the new items AND the new status are sent in a single
     // transaction to the database, eliminating race conditions with triggers.
     final oldStatus = _status;
@@ -874,6 +886,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       unitPrice: product.price,
       discount: 0,
       cost: product.cost,
+      purchaseTreatment: product.purchaseTreatment,
+      isService: product.isService,
       isCatalogProduct: true,
     );
 
@@ -924,6 +938,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         unitPrice: 0,
         discount: 0,
         cost: 0,
+        purchaseTreatment: PurchaseTreatment.inventory,
+        isService: false,
         isCatalogProduct: false,
       );
 
@@ -1079,7 +1095,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           await db.update('mechanic_jobs', widget.preselectedJobId!, {
             'invoice_id': saved.id,
           });
-
         } catch (e) {
           debugPrint('❌ Failed to link/sync invoice to job: $e');
         }
@@ -1097,7 +1112,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       // ALWAYS apply saved invoice to local state to ensure UI reflects latest data
       _applyInvoice(saved);
       _clearDirty(); // Save successful - clear dirty state
-
 
       if (widget.onSaved != null) {
         widget.onSaved!();
@@ -1188,7 +1202,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                   bikeMap['model'] as String,
                 if (bikeMap['year'] != null) bikeMap['year'].toString(),
               ];
-              if (parts.isNotEmpty) resolvedBikeNames[jobBikeId] = parts.join(' ');
+              if (parts.isNotEmpty)
+                resolvedBikeNames[jobBikeId] = parts.join(' ');
             }
           }
         }
@@ -1567,7 +1582,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     final label =
         isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
 
-        return [
+    return [
       pw.Container(
         width: double.infinity,
         padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
@@ -1627,13 +1642,13 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   /// Builds item rows. For multi-bike jobs, inserts a light-blue sub-header
   /// before each new bike group.
-  
+
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-List<pw.Widget> _buildEditorPdfItemRows(
+  List<pw.Widget> _buildEditorPdfItemRows(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
   ) {
@@ -1660,7 +1675,8 @@ List<pw.Widget> _buildEditorPdfItemRows(
           lastBikeName = bikeName;
           widgets.add(
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              padding:
+                  const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
               color: PdfColors.grey100,
               child: pw.Text(
                 bikeName,
@@ -1698,7 +1714,9 @@ List<pw.Widget> _buildEditorPdfItemRows(
                         item.description!.isNotEmpty)
                       pw.Padding(
                         padding: const pw.EdgeInsets.only(top: 2),
-                        child: pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
+                        child: pw.Text(
+                          _cleanPdfText(item.description!),
+                          style: const pw.TextStyle(
                               fontSize: 8, color: PdfColors.grey700),
                         ),
                       ),
@@ -1709,7 +1727,9 @@ List<pw.Widget> _buildEditorPdfItemRows(
                 flex: 1,
                 child: pw.Text(
                   item.quantity.toStringAsFixed(
-                      item.quantity.truncateToDouble() == item.quantity ? 0 : 2),
+                      item.quantity.truncateToDouble() == item.quantity
+                          ? 0
+                          : 2),
                   textAlign: pw.TextAlign.center,
                   style: const pw.TextStyle(fontSize: 9),
                 ),
@@ -2165,10 +2185,8 @@ List<pw.Widget> _buildEditorPdfItemRows(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  if (_shouldShowReadOnlyNotice)
-                    _buildReadOnlyNotice(theme),
-                  if (_shouldShowReadOnlyNotice)
-                    const SizedBox(height: 16),
+                  if (_shouldShowReadOnlyNotice) _buildReadOnlyNotice(theme),
+                  if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
                   _buildSectionCard(
                     theme,
                     icon: Icons.person_outline,
@@ -2226,9 +2244,11 @@ List<pw.Widget> _buildEditorPdfItemRows(
     return Card(
       color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
       child: ListTile(
-        leading: Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
+        leading:
+            Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
         title: const Text('Factura en modo lectura'),
-        subtitle: const Text('Usa “Editar” para habilitar los campos y modificar el borrador.'),
+        subtitle: const Text(
+            'Usa “Editar” para habilitar los campos y modificar el borrador.'),
       ),
     );
   }
@@ -2280,7 +2300,8 @@ List<pw.Widget> _buildEditorPdfItemRows(
             enabled: _canEditFields,
             decoration: const InputDecoration(
               labelText: 'Número de factura',
-              helperText: 'Puedes modificar el folio si tu numeración es manual',
+              helperText:
+                  'Puedes modificar el folio si tu numeración es manual',
             ),
           ),
         if (!widget.isCompact) const SizedBox(height: 20),
@@ -2328,7 +2349,8 @@ List<pw.Widget> _buildEditorPdfItemRows(
             width: tableWidth,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -2337,22 +2359,40 @@ List<pw.Widget> _buildEditorPdfItemRows(
                   // Table header
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
                     child: Row(
                       children: [
-                        SizedBox(width: _colIndexWidth, child: const Center(child: Text('#'))),
-                        const Expanded(child: Padding(padding: EdgeInsets.all(12), child: Text('DETALLES'))),
-                        const SizedBox(width: _colQuantityWidth, child: Center(child: Text('CANT'))),
-                        const SizedBox(width: _colPriceWidth, child: Center(child: Text('PRECIO'))),
-                        const SizedBox(width: _colDiscountWidth, child: Center(child: Text('DESC'))),
-                        const SizedBox(width: _colTotalWidth, child: Center(child: Text('TOTAL'))),
+                        SizedBox(
+                            width: _colIndexWidth,
+                            child: const Center(child: Text('#'))),
+                        const Expanded(
+                            child: Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text('DETALLES'))),
+                        const SizedBox(
+                            width: _colQuantityWidth,
+                            child: Center(child: Text('CANT'))),
+                        const SizedBox(
+                            width: _colPriceWidth,
+                            child: Center(child: Text('PRECIO'))),
+                        const SizedBox(
+                            width: _colDiscountWidth,
+                            child: Center(child: Text('DESC'))),
+                        const SizedBox(
+                            width: _colTotalWidth,
+                            child: Center(child: Text('TOTAL'))),
                         const SizedBox(width: _colActionsWidth),
                       ],
                     ),
                   ),
-                  Divider(height: 1, thickness: 1, color: theme.colorScheme.outline.withOpacity(0.2)),
+                  Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.outline.withOpacity(0.2)),
                   Column(
                     children: [
                       ..._buildGroupedTableRows(theme),
@@ -2753,16 +2793,20 @@ List<pw.Widget> _buildEditorPdfItemRows(
           child: DropdownButton<String?>(
             value: null,
             isExpanded: true,
-            hint: Text(_debugBikeMessage, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+            hint: Text(_debugBikeMessage,
+                style: TextStyle(
+                    fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
             style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
-            icon: Icon(Icons.pedal_bike, size: 14, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+            icon: Icon(Icons.pedal_bike,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
             items: const [],
             onChanged: null,
           ),
         ),
       );
     }
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2778,13 +2822,19 @@ List<pw.Widget> _buildEditorPdfItemRows(
               ? entry.line.jobBikeId
               : null,
           isExpanded: true,
-          hint: Text('General / Venta', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          hint: Text('General / Venta',
+              style: TextStyle(
+                  fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
           style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
-          icon: Icon(Icons.pedal_bike, size: 14, color: theme.colorScheme.primary),
+          icon: Icon(Icons.pedal_bike,
+              size: 14, color: theme.colorScheme.primary),
           items: [
             DropdownMenuItem<String?>(
               value: null,
-              child: Text('General / Venta', style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
+              child: Text('General / Venta',
+                  style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic)),
             ),
             ..._availableJobBikes.map((bike) {
               return DropdownMenuItem<String?>(
@@ -2794,18 +2844,21 @@ List<pw.Widget> _buildEditorPdfItemRows(
               );
             }),
           ],
-          onChanged: _canEditFields ? (String? newBikeId) {
-            setState(() {
-              entry.line.jobBikeId = newBikeId;
-              if (newBikeId == null) {
-                entry.line.bikeName = null;
-              } else {
-                final bike = _availableJobBikes.firstWhere((b) => b.id == newBikeId);
-                entry.line.bikeName = bike.displayName;
-              }
-              _handleLinesChanged();
-            });
-          } : null,
+          onChanged: _canEditFields
+              ? (String? newBikeId) {
+                  setState(() {
+                    entry.line.jobBikeId = newBikeId;
+                    if (newBikeId == null) {
+                      entry.line.bikeName = null;
+                    } else {
+                      final bike = _availableJobBikes
+                          .firstWhere((b) => b.id == newBikeId);
+                      entry.line.bikeName = bike.displayName;
+                    }
+                    _handleLinesChanged();
+                  });
+                }
+              : null,
         ),
       ),
     );
@@ -2843,7 +2896,8 @@ List<pw.Widget> _buildEditorPdfItemRows(
                 () {},
                 () => _autoAddEmptyLineIfNeeded(),
               ),
-              if (_availableJobBikes.isNotEmpty) _buildBikeSelector(theme, entry),
+              if (_availableJobBikes.isNotEmpty)
+                _buildBikeSelector(theme, entry),
             ],
           ),
         ),
@@ -3081,6 +3135,8 @@ class _InvoiceLine {
     required this.unitPrice,
     required this.discount,
     this.cost = 0,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
+    this.isService = false,
     this.description,
     this.isCatalogProduct = true,
     this.jobBikeId,
@@ -3089,7 +3145,9 @@ class _InvoiceLine {
 
   final String? productId;
   final Product? product;
-  final double cost;
+  double cost;
+  PurchaseTreatment purchaseTreatment;
+  bool isService;
   String? description;
   final bool isCatalogProduct;
   String? jobBikeId;
@@ -3163,7 +3221,9 @@ class _InvoiceLineEntry {
       unitPrice: line.unitPrice,
       discount: line.discount,
       lineTotal: line.netAmount,
-      cost: product?.cost ?? line.cost,
+      cost: line.cost,
+      purchaseTreatment: line.purchaseTreatment,
+      isService: line.isService,
       jobBikeId: line.jobBikeId,
       bikeName: line.bikeName,
     );
@@ -3235,12 +3295,19 @@ class _InvoiceLineEntry {
       onProductChanged: (selection) {
         if (selection == null) {
           product = null;
+          line.cost = 0;
+          line.purchaseTreatment = PurchaseTreatment.inventory;
+          line.isService = false;
           productNameController.clear();
           productSkuController.clear();
           descriptionController.clear();
           onUpdate();
         } else {
           product = selection.product;
+          line.cost = selection.product?.cost ?? 0;
+          line.purchaseTreatment = selection.product?.purchaseTreatment ??
+              PurchaseTreatment.inventory;
+          line.isService = selection.product?.isService ?? false;
           productNameController.text = selection.productName ?? '';
           productSkuController.text = selection.productSku ?? '';
           if (selection.price > 0) {

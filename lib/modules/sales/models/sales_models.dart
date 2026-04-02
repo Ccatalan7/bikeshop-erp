@@ -1,3 +1,5 @@
+import '../../../shared/models/product.dart'
+    show PurchaseTreatment, parsePurchaseTreatment;
 import '../../../shared/models/tax_treatment.dart';
 
 Map<String, dynamic> _ensureMap(dynamic value) {
@@ -290,6 +292,7 @@ class InvoiceItem {
   final double discount;
   final double lineTotal;
   final double cost;
+  final PurchaseTreatment purchaseTreatment;
 
   // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Service/Labor fields
   final bool isService; // true = labor/service, false = product
@@ -313,6 +316,7 @@ class InvoiceItem {
     this.discount = 0,
     double? lineTotal,
     this.cost = 0,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
     this.isService = false,
     this.hours,
     this.hourlyRate,
@@ -333,6 +337,7 @@ class InvoiceItem {
     double? discount,
     double? lineTotal,
     double? cost,
+    PurchaseTreatment? purchaseTreatment,
     bool? isService,
     double? hours,
     double? hourlyRate,
@@ -352,6 +357,7 @@ class InvoiceItem {
       discount: discount ?? this.discount,
       lineTotal: lineTotal ?? this.lineTotal,
       cost: cost ?? this.cost,
+      purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       isService: isService ?? this.isService,
       hours: hours ?? this.hours,
       hourlyRate: hourlyRate ?? this.hourlyRate,
@@ -382,6 +388,9 @@ class InvoiceItem {
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
       lineTotal: lineTotal,
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
+      purchaseTreatment: parsePurchaseTreatment(
+        json['purchase_treatment'],
+      ),
       isService:
           json['is_service'] as bool? ?? (json['item_type'] == 'service'),
       hours: (json['hours'] as num?)?.toDouble(),
@@ -405,6 +414,7 @@ class InvoiceItem {
       'discount': discount,
       'line_total': lineTotal,
       'cost': cost,
+      'purchase_treatment': purchaseTreatment.dbValue,
       'is_service': isService,
       if (hours != null) 'hours': hours,
       if (hourlyRate != null) 'hourly_rate': hourlyRate,
@@ -518,7 +528,8 @@ class Payment {
       notes: json['notes'] as String?,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
-      deletedAt: json['deleted_at'] != null ? _parseDate(json['deleted_at']) : null,
+      deletedAt:
+          json['deleted_at'] != null ? _parseDate(json['deleted_at']) : null,
       deletedBy: json['deleted_by']?.toString(),
       taxTreatment: taxTreatment,
       netAmount: (json['net_amount'] as num?)?.toDouble(),

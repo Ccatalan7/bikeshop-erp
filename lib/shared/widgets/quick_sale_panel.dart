@@ -455,7 +455,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                 unitPrice: item.unitPrice,
                 discount: 0,
                 lineTotal: item.lineTotal,
-                cost: item.totalCost,
+                cost: item.product.cost,
+                purchaseTreatment: item.product.purchaseTreatment,
+                isService: item.product.isService,
               ))
           .toList();
 
@@ -1347,11 +1349,11 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                         spacing: 6,
                         runSpacing: 4,
                         children: [
-                          _pill(theme, isDark, subtleBorder, 'SKU: ${product.sku}',
+                          _pill(theme, isDark, subtleBorder,
+                              'SKU: ${product.sku}',
                               isCode: true),
                           if ((product.brand ?? '').isNotEmpty)
-                            _pill(theme, isDark, subtleBorder,
-                                product.brand!),
+                            _pill(theme, isDark, subtleBorder, product.brand!),
                           if ((product.supplierName ?? '').isNotEmpty)
                             _pill(theme, isDark, subtleBorder,
                                 product.supplierName!),

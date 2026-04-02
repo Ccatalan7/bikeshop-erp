@@ -12,6 +12,7 @@ import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/error_reporting_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -20,7 +21,7 @@ import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
 import '../models/inventory_models.dart';
-import '../../../shared/models/product.dart' show SetType;
+import '../../../shared/models/product.dart' show PurchaseTreatment, SetType;
 import '../services/category_service.dart';
 import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
@@ -71,6 +72,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isPublished = true;
   bool _isGoogleMerchant = false;
   ProductType _selectedProductType = ProductType.product;
+  PurchaseTreatment _selectedPurchaseTreatment = PurchaseTreatment.inventory;
 
   // SET CONFIGURATION STATE
   bool _isSet = false;
@@ -524,6 +526,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         _selectedCategoryId = product.categoryId;
         _selectedSupplierId = product.supplierId;
         _selectedProductType = product.productType;
+        _selectedPurchaseTreatment = product.purchaseTreatment;
         _isActive = product.isActive;
         _isPublished = product.isPublished;
         _isGoogleMerchant = product.isGoogleMerchant;
@@ -763,10 +766,350 @@ class _ProductFormPageState extends State<ProductFormPage>
     return ((price - cost) / cost) * 100;
   }
 
+  bool get _tracksInventoryInForm =>
+      _selectedProductType != ProductType.service &&
+      _selectedPurchaseTreatment == PurchaseTreatment.inventory;
+
+  int get _existingTrackedStockQuantity {
+    final product = _existingProduct;
+    if (product == null) return 0;
+
+    return product.inventoryQty;
+  }
+
+  double get _existingTrackedInventoryValue {
+    final product = _existingProduct;
+    if (product == null) return 0;
+    return _existingTrackedStockQuantity * product.cost;
+  }
+
+  Widget _buildConversionJournalPreview(BuildContext context) {
+    final theme = Theme.of(context);
+    final inventoryValue = _existingTrackedInventoryValue;
+    final borderColor = theme.dividerColor.withOpacity(0.35);
+
+    Widget buildHeader() {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: borderColor),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Cuenta',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            SizedBox(
+              width: 110,
+              child: Text(
+                'Debe',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.green.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 110,
+              child: Text(
+                'Haber',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.red.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildLine({
+      required String accountCode,
+      required String accountName,
+      String? debitAmount,
+      String? creditAmount,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: borderColor,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$accountCode - $accountName',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 110,
+              child: Text(
+                debitAmount ?? '',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: debitAmount == null ? null : Colors.green.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 110,
+              child: Text(
+                creditAmount ?? '',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: creditAmount == null ? null : Colors.red.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (inventoryValue <= 0) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Preview contable: no se generará asiento porque el costo promedio actual es ${ChileanUtils.formatCurrency(0)}. Solo se descargará el stock físico.',
+          style: theme.textTheme.bodySmall,
+        ),
+      );
+    }
+
+    final formattedValue = ChileanUtils.formatCurrency(inventoryValue);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+            child: Text(
+              'Preview del asiento contable',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Se reclasifica el valor del inventario existente hacia consumo interno.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          buildHeader(),
+          buildLine(
+            accountCode: '5101',
+            accountName: 'Consumibles de Taller',
+            debitAmount: formattedValue,
+          ),
+          buildLine(
+            accountCode: '1105',
+            accountName: 'Inventarios',
+            creditAmount: formattedValue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _wouldTrackInventory({
+    ProductType? productType,
+    PurchaseTreatment? purchaseTreatment,
+  }) {
+    final nextProductType = productType ?? _selectedProductType;
+    final nextPurchaseTreatment =
+        purchaseTreatment ?? _selectedPurchaseTreatment;
+
+    return nextProductType != ProductType.service &&
+        nextPurchaseTreatment == PurchaseTreatment.inventory;
+  }
+
+  bool get _requiresInventoryConversion {
+    final product = _existingProduct;
+    if (product == null || !product.tracksInventory) {
+      return false;
+    }
+
+    return _existingTrackedStockQuantity > 0 && !_wouldTrackInventory();
+  }
+
+  String _inventoryConversionTargetLabel({
+    ProductType? productType,
+    PurchaseTreatment? purchaseTreatment,
+  }) {
+    final nextProductType = productType ?? _selectedProductType;
+    final nextPurchaseTreatment =
+        purchaseTreatment ?? _selectedPurchaseTreatment;
+
+    if (nextProductType == ProductType.service) {
+      return 'servicio';
+    }
+
+    if (nextPurchaseTreatment == PurchaseTreatment.workshopConsumable) {
+      return 'consumible de taller';
+    }
+
+    return 'producto no inventariable';
+  }
+
+  Future<String?> _promptInventoryConversionReason() async {
+    final targetLabel = _inventoryConversionTargetLabel();
+    final defaultReason = _selectedProductType == ProductType.service
+        ? 'Conversión interna de inventario a servicio'
+        : 'Conversión interna de inventario a consumible de taller';
+    final controller = TextEditingController(text: defaultReason);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Convertir inventario existente'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Este producto tiene ${_existingTrackedStockQuantity} unidades en stock. Al guardarlo como $targetLabel se hará la conversión interna automáticamente.',
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceVariant
+                        .withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          'Unidades a descargar: ${_existingTrackedStockQuantity}'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Valor a reclasificar: ${ChileanUtils.formatCurrency(_existingTrackedInventoryValue)}',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildConversionJournalPreview(context),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo de la conversión',
+                    hintText: 'Describe por qué este stock pasa a uso interno',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final reason = controller.text.trim();
+              Navigator.of(context).pop(
+                reason.isEmpty ? defaultReason : reason,
+              );
+            },
+            child: const Text('Convertir y guardar'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  void _handleProductTypeChanged(ProductType value) {
+    setState(() {
+      _selectedProductType = value;
+      if (value == ProductType.service) {
+        _selectedPurchaseTreatment = PurchaseTreatment.inventory;
+        _inventoryQtyController.text = '0';
+        _minStockController.text = '0';
+      } else if (_selectedPurchaseTreatment ==
+          PurchaseTreatment.workshopConsumable) {
+        _inventoryQtyController.text = '0';
+        _minStockController.text = '0';
+      } else if (_minStockController.text.trim().isEmpty ||
+          _minStockController.text.trim() == '0') {
+        _minStockController.text = '1';
+      }
+    });
+  }
+
+  void _handlePurchaseTreatmentChanged(PurchaseTreatment value) {
+    setState(() {
+      _selectedPurchaseTreatment = value;
+      if (value == PurchaseTreatment.workshopConsumable) {
+        _inventoryQtyController.text = '0';
+        _minStockController.text = '0';
+      } else if (_selectedProductType != ProductType.service &&
+          (_minStockController.text.trim().isEmpty ||
+              _minStockController.text.trim() == '0')) {
+        _minStockController.text = '1';
+      }
+    });
+  }
+
   bool get _isChildProduct => _existingProduct?.parentSetId != null;
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final requiresInventoryConversion = _requiresInventoryConversion;
+    String? conversionReason;
+    if (requiresInventoryConversion) {
+      conversionReason = await _promptInventoryConversionReason();
+      if (conversionReason == null) return;
+    }
 
     FocusScope.of(context).unfocus();
     setState(() => _isSaving = true);
@@ -823,10 +1166,16 @@ class _ProductFormPageState extends State<ProductFormPage>
           double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
       final cost =
           double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
-      final inventoryQty =
-          int.tryParse(_inventoryQtyController.text.trim()) ?? 0;
-      final minStockLevel = int.tryParse(_minStockController.text.trim()) ?? 1;
-      final maxStockLevel = _existingProduct?.maxStockLevel ?? 100;
+      final tracksInventory = _tracksInventoryInForm;
+      final inventoryQty = tracksInventory
+          ? (int.tryParse(_inventoryQtyController.text.trim()) ?? 0)
+          : 0;
+      final minStockLevel = tracksInventory
+          ? (int.tryParse(_minStockController.text.trim()) ?? 1)
+          : 0;
+      final existingMaxStock = _existingProduct?.maxStockLevel ?? 100;
+      final maxStockLevel =
+          tracksInventory ? (existingMaxStock > 0 ? existingMaxStock : 100) : 0;
 
       String? selectedCategoryName;
       for (final category in _categories) {
@@ -842,6 +1191,21 @@ class _ProductFormPageState extends State<ProductFormPage>
           selectedSupplierName = supplier.name;
           break;
         }
+      }
+
+      if (requiresInventoryConversion &&
+          _existingProduct != null &&
+          _existingProduct!.id != null &&
+          conversionReason != null) {
+        final convertedProduct =
+            await _inventoryService.convertProductInventoryToNonStock(
+          productId: _existingProduct!.id!,
+          targetPurchaseTreatment: _selectedPurchaseTreatment,
+          targetProductType: _selectedProductType,
+          reason: conversionReason,
+        );
+        _existingProduct = convertedProduct;
+        _inventoryQtyController.text = '0';
       }
 
       final baseProduct = _existingProduct ??
@@ -873,6 +1237,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             isActive: _isActive,
             isPublished: _isPublished,
             isGoogleMerchant: _isGoogleMerchant,
+            purchaseTreatment: _selectedPurchaseTreatment,
             productType: _selectedProductType,
           );
 
@@ -904,6 +1269,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         isActive: _isActive,
         isPublished: _isPublished,
         isGoogleMerchant: _isGoogleMerchant,
+        purchaseTreatment: _selectedPurchaseTreatment,
         productType: _selectedProductType,
         // Set configuration
         isSet: _isSet,
@@ -1533,7 +1899,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           title: 'Imágenes',
           children: _buildMediaFields(theme),
         ),
-        if (_selectedProductType != ProductType.service) ...[
+        if (_tracksInventoryInForm) ...[
           const SizedBox(height: 16),
           _buildSectionCard(
             theme,
@@ -1618,8 +1984,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           children: _buildDescriptionFields(theme),
         ),
         // Only show set configuration for products, not services AND not child products
-        if (_selectedProductType != ProductType.service &&
-            !_isChildProduct) ...[
+        if (_tracksInventoryInForm && !_isChildProduct) ...[
           const SizedBox(height: 16),
           _buildSectionCard(
             theme,
@@ -2042,10 +2407,99 @@ class _ProductFormPageState extends State<ProductFormPage>
         }).toList(),
         onChanged: (value) {
           if (value != null) {
-            setState(() => _selectedProductType = value);
+            _handleProductTypeChanged(value);
           }
         },
       ),
+      const SizedBox(height: 16),
+      if (_selectedProductType != ProductType.service) ...[
+        InputDecorator(
+          decoration: const InputDecoration(
+            labelText: 'Tratamiento de compra',
+            helperText:
+                'Define si las compras de este producto entran a inventario o se consumen directo en taller',
+            prefixIcon: Icon(Icons.build_circle_outlined),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SegmentedButton<PurchaseTreatment>(
+                segments: const [
+                  ButtonSegment<PurchaseTreatment>(
+                    value: PurchaseTreatment.inventory,
+                    icon: Icon(Icons.inventory_2_outlined),
+                    label: Text('Inventario'),
+                  ),
+                  ButtonSegment<PurchaseTreatment>(
+                    value: PurchaseTreatment.workshopConsumable,
+                    icon: Icon(Icons.build_outlined),
+                    label: Text('Consumible taller'),
+                  ),
+                ],
+                selected: <PurchaseTreatment>{_selectedPurchaseTreatment},
+                onSelectionChanged: (selection) {
+                  if (selection.isNotEmpty) {
+                    _handlePurchaseTreatmentChanged(selection.first);
+                  }
+                },
+                showSelectedIcon: false,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _selectedPurchaseTreatment == PurchaseTreatment.inventory
+                    ? 'Se capitaliza como inventario y requiere control de stock.'
+                    : 'Se compra para uso rápido en taller, no sube stock y se reconoce como costo directo.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              if (_requiresInventoryConversion) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.withOpacity(0.24)),
+                  ),
+                  child: Text(
+                    'Al guardar se descargará el stock existente y se reclasificará su valor contable automáticamente para convertir este producto en ${_inventoryConversionTargetLabel()}.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ] else ...[
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color:
+                Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 18,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Los servicios no manejan stock ni tratamiento de compra.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
       const SizedBox(height: 16),
       DropdownButtonFormField<String?>(
         value: _selectedSupplierId,

@@ -54,6 +54,7 @@ class Product {
   final bool trackStock;
   final bool isActive;
   final bool isPublished;
+  final PurchaseTreatment purchaseTreatment;
   final ProductType productType; // Product or Service
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -122,6 +123,7 @@ class Product {
     this.trackStock = true,
     this.isActive = true,
     this.isPublished = true,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     required this.createdAt,
     required this.updatedAt,
@@ -208,6 +210,11 @@ class Product {
       isPublished: json['is_published'] as bool? ??
           json['show_on_website'] as bool? ??
           (json['published'] as bool? ?? true),
+      purchaseTreatment: parsePurchaseTreatment(
+        json['purchase_treatment'],
+        productType: json['product_type']?.toString(),
+        trackStock: json['track_stock'] as bool?,
+      ),
       productType: ProductType.values.firstWhere(
         (t) => t.name == json['product_type'],
         orElse: () => ProductType.product,
@@ -293,10 +300,13 @@ class Product {
       'tags': tags,
       'unit': unit.name,
       'weight': weight,
-      'track_stock': trackStock,
+      'track_stock': !isService &&
+          purchaseTreatment == PurchaseTreatment.inventory &&
+          trackStock,
       'is_active': isActive,
       'is_published': isPublished,
       'show_on_website': isPublished,
+      'purchase_treatment': purchaseTreatment.dbValue,
       'product_type': productType.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -367,6 +377,7 @@ class Product {
     bool? trackStock,
     bool? isActive,
     bool? isPublished,
+    PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -432,6 +443,7 @@ class Product {
       trackStock: trackStock ?? this.trackStock,
       isActive: isActive ?? this.isActive,
       isPublished: isPublished ?? this.isPublished,
+      purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -457,8 +469,11 @@ class Product {
   /// Returns true if this product is a service (doesn't track inventory)
   bool get isService => productType == ProductType.service;
 
+  bool get isWorkshopConsumable =>
+      purchaseTreatment == PurchaseTreatment.workshopConsumable;
+
   /// Returns true if this product tracks inventory
-  bool get tracksInventory => !isService && trackStock;
+  bool get tracksInventory => !isService && !isWorkshopConsumable && trackStock;
 
   bool get isLowStock => tracksInventory && stockQuantity <= minStockLevel;
 
@@ -571,6 +586,37 @@ enum ProductType {
 
   const ProductType(this.displayName);
   final String displayName;
+}
+
+enum PurchaseTreatment {
+  inventory('inventory', 'Inventario'),
+  workshopConsumable('workshop_consumable', 'Consumible Taller');
+
+  const PurchaseTreatment(this.dbValue, this.displayName);
+  final String dbValue;
+  final String displayName;
+}
+
+PurchaseTreatment parsePurchaseTreatment(
+  dynamic value, {
+  String? productType,
+  bool? trackStock,
+}) {
+  if (value != null) {
+    final raw = value.toString().trim();
+    return PurchaseTreatment.values.firstWhere(
+      (t) => t.name == raw || t.dbValue == raw,
+      orElse: () => PurchaseTreatment.inventory,
+    );
+  }
+
+  final isProduct =
+      productType == null || productType == ProductType.product.name;
+  if (isProduct && trackStock == false) {
+    return PurchaseTreatment.workshopConsumable;
+  }
+
+  return PurchaseTreatment.inventory;
 }
 
 /// Type of product set for UI hints and auto-generation

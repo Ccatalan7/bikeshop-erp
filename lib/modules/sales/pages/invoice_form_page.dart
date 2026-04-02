@@ -568,6 +568,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           unitPrice: item.unitPrice,
           discount: item.discount,
           cost: item.cost,
+          purchaseTreatment: item.purchaseTreatment,
+          isService: item.isService,
           description: item.description,
           isCatalogProduct: item.isCatalogProduct,
           jobBikeId: item.jobBikeId,
@@ -1079,6 +1081,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       unitPrice: product.price,
       discount: 0,
       cost: product.cost,
+      purchaseTreatment: product.purchaseTreatment,
+      isService: product.isService,
       isCatalogProduct: true,
     );
 
@@ -1151,6 +1155,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         unitPrice: 0,
         discount: 0,
         cost: 0,
+        purchaseTreatment: PurchaseTreatment.inventory,
+        isService: false,
         isCatalogProduct: false,
       );
 
@@ -3919,6 +3925,8 @@ class _InvoiceLine {
     required this.unitPrice,
     required this.discount,
     this.cost = 0,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
+    this.isService = false,
     this.description, // Custom description/notes
     this.isCatalogProduct = true, // true = catalog product, false = ad-hoc item
     this.jobBikeId, // Multi-bike sync: links item to specific bike
@@ -3927,7 +3935,9 @@ class _InvoiceLine {
 
   final String? productId; // Nullable for ad-hoc items
   final Product? product;
-  final double cost;
+  double cost;
+  PurchaseTreatment purchaseTreatment;
+  bool isService;
   String?
       description; // Custom notes for line item (mutable so listener can update)
   final bool isCatalogProduct; // Track if catalog vs ad-hoc
@@ -4008,7 +4018,9 @@ class _InvoiceLineEntry {
       unitPrice: line.unitPrice,
       discount: line.discount,
       lineTotal: line.netAmount,
-      cost: product?.cost ?? line.cost,
+      cost: line.cost,
+      purchaseTreatment: line.purchaseTreatment,
+      isService: line.isService,
       jobBikeId: line.jobBikeId,
       bikeName: line.bikeName,
     );
@@ -4102,6 +4114,9 @@ class _InvoiceLineEntry {
         if (selection == null) {
           // Product cleared
           product = null;
+          line.cost = 0;
+          line.purchaseTreatment = PurchaseTreatment.inventory;
+          line.isService = false;
           productNameController.clear();
           productSkuController.clear();
           descriptionController.clear();
@@ -4109,6 +4124,10 @@ class _InvoiceLineEntry {
         } else {
           // Product selected or description changed
           product = selection.product;
+          line.cost = selection.product?.cost ?? 0;
+          line.purchaseTreatment = selection.product?.purchaseTreatment ??
+              PurchaseTreatment.inventory;
+          line.isService = selection.product?.isService ?? false;
           productNameController.text = selection.productName ?? '';
           productSkuController.text = selection.productSku ?? '';
           if (line.jobBikeId == null && defaultJobBikeId != null) {

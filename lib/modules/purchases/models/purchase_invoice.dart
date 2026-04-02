@@ -1,4 +1,6 @@
 import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/models/product.dart'
+    show PurchaseTreatment, parsePurchaseTreatment;
 
 Map<String, dynamic> _ensureMap(dynamic value) {
   if (value is Map<String, dynamic>) return value;
@@ -298,6 +300,7 @@ class PurchaseInvoiceItem {
   final String? productName;
   final String? productSku;
   final String? description; // Add description field
+  final PurchaseTreatment purchaseTreatment;
   final double quantity;
   final double unitCost;
   final double discount;
@@ -309,6 +312,7 @@ class PurchaseInvoiceItem {
     this.productName,
     this.productSku,
     this.description,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
     this.quantity = 1,
     required this.unitCost,
     this.discount = 0,
@@ -321,6 +325,7 @@ class PurchaseInvoiceItem {
     String? productName,
     String? productSku,
     String? description,
+    PurchaseTreatment? purchaseTreatment,
     double? quantity,
     double? unitCost,
     double? discount,
@@ -332,6 +337,7 @@ class PurchaseInvoiceItem {
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
       description: description ?? this.description,
+      purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
       discount: discount ?? this.discount,
@@ -346,6 +352,9 @@ class PurchaseInvoiceItem {
       productName: json['product_name'] as String?,
       productSku: json['product_sku'] as String?,
       description: json['description'] as String?,
+      purchaseTreatment: parsePurchaseTreatment(
+        json['purchase_treatment'],
+      ),
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
@@ -360,6 +369,7 @@ class PurchaseInvoiceItem {
       'product_name': productName,
       'product_sku': productSku,
       'description': description,
+      'purchase_treatment': purchaseTreatment.dbValue,
       'quantity': quantity,
       'unit_cost': unitCost,
       'discount': discount,

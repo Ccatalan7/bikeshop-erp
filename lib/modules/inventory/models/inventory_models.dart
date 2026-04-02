@@ -1,4 +1,5 @@
-import '../../../shared/models/product.dart' show ProductDimensions;
+import '../../../shared/models/product.dart'
+    show ProductDimensions, PurchaseTreatment, parsePurchaseTreatment;
 
 class Product {
   final String? id;
@@ -52,6 +53,7 @@ class Product {
   final bool isPublished;
   final String? websiteDescription; // Defines the description for the website
   final bool isGoogleMerchant;
+  final PurchaseTreatment purchaseTreatment;
   final ProductType productType;
   // Set-related fields
   final bool isSet;
@@ -114,6 +116,7 @@ class Product {
     this.isActive = true,
     this.isPublished = true,
     this.isGoogleMerchant = false,
+    this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     this.isSet = false,
     this.setType,
@@ -129,8 +132,11 @@ class Product {
   /// Returns true if this product is a service (doesn't track inventory)
   bool get isService => productType == ProductType.service;
 
+  bool get isWorkshopConsumable =>
+      purchaseTreatment == PurchaseTreatment.workshopConsumable;
+
   /// Returns true if this product tracks inventory
-  bool get tracksInventory => !isService;
+  bool get tracksInventory => !isService && !isWorkshopConsumable;
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
@@ -195,6 +201,11 @@ class Product {
           json['published'] ??
           true,
       isGoogleMerchant: json['is_google_merchant'] ?? false,
+      purchaseTreatment: parsePurchaseTreatment(
+        json['purchase_treatment'],
+        productType: json['product_type']?.toString(),
+        trackStock: json['track_stock'] as bool?,
+      ),
       productType: _parseProductType(json['product_type']),
       isSet: json['is_set'] ?? false,
       setType: json['set_type'],
@@ -252,8 +263,8 @@ class Product {
       'dimensions': dimensions?.toJson(),
       'price': price,
       'cost': cost,
-      'inventory_qty': inventoryQty,
-      'stock_quantity': inventoryQty,
+      'inventory_qty': tracksInventory ? inventoryQty : 0,
+      'stock_quantity': tracksInventory ? inventoryQty : 0,
       'min_stock_level': minStockLevel,
       'max_stock_level': maxStockLevel,
       'image_url': imageUrl,
@@ -278,6 +289,7 @@ class Product {
       'is_published': isPublished,
       'is_google_merchant': isGoogleMerchant,
       'show_on_website': isPublished,
+      'purchase_treatment': purchaseTreatment.dbValue,
       'product_type': productType.name,
       'is_service': isService, // Computed from product_type for DB triggers
       'track_stock': tracksInventory, // Services don't track stock
@@ -355,6 +367,7 @@ class Product {
     bool? isActive,
     bool? isPublished,
     bool? isGoogleMerchant,
+    PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
     bool? isSet,
     String? setType,
@@ -416,6 +429,7 @@ class Product {
       isActive: isActive ?? this.isActive,
       isPublished: isPublished ?? this.isPublished,
       isGoogleMerchant: isGoogleMerchant ?? this.isGoogleMerchant,
+      purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
       isSet: isSet ?? this.isSet,
       setType: setType ?? this.setType,

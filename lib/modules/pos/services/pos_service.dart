@@ -345,7 +345,10 @@ class POSService extends ChangeNotifier {
           unitPrice: item.unitPrice,
           discount: discountAmount,
           lineTotal: item.total,
-          cost: item.totalCost,
+          cost: item.product?.cost ?? 0,
+          purchaseTreatment:
+              item.product?.purchaseTreatment ?? PurchaseTreatment.inventory,
+          isService: item.product?.isService ?? false,
         );
       }).toList();
 

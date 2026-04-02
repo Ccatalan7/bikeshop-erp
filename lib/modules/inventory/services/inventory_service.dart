@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 
@@ -431,6 +432,43 @@ class InventoryService extends ChangeNotifier {
       return Product.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('Error updating product: $e');
+      rethrow;
+    }
+  }
+
+  Future<Product> convertProductInventoryToNonStock({
+    required String productId,
+    required PurchaseTreatment targetPurchaseTreatment,
+    required ProductType targetProductType,
+    required String reason,
+  }) async {
+    try {
+      final dynamic result = await _db.rpc(
+        'convert_product_inventory_to_non_stock',
+        params: {
+          'p_product_id': productId,
+          'p_target_purchase_treatment': targetPurchaseTreatment.dbValue,
+          'p_target_product_type': targetProductType.name,
+          'p_reason': reason,
+        },
+      );
+
+      Map<String, dynamic> productJson;
+      if (result is Map && result['product'] is Map) {
+        productJson = Map<String, dynamic>.from(result['product'] as Map);
+      } else if (result is Map) {
+        productJson = Map<String, dynamic>.from(result);
+      } else {
+        throw Exception('Respuesta inválida al convertir el producto');
+      }
+
+      invalidateProductsCache();
+      notifyListeners();
+      return Product.fromJson(productJson);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error converting product inventory to non-stock: $e');
+      }
       rethrow;
     }
   }

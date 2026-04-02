@@ -220,6 +220,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             productId: product.id,
             productName: product.name,
             productSku: product.sku,
+            purchaseTreatment: product.purchaseTreatment,
             quantity: 1,
             unitCost: product.cost,
             discount: 0,
@@ -504,6 +505,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               productId: matchedProduct.id,
               productName: matchedProduct.name,
               productSku: matchedProduct.sku,
+              purchaseTreatment: matchedProduct.purchaseTreatment,
               quantity: item.quantity ?? 1,
               unitCost: item.unitPrice ??
                   matchedProduct
@@ -698,6 +700,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     productId: product.id,
                     productName: product.name,
                     productSku: product.sku,
+                    purchaseTreatment: product.purchaseTreatment,
                     quantity: suggestedQty.toDouble(),
                     unitCost: product.cost > 0 ? product.cost : product.price,
                     discount: 0,
@@ -839,8 +842,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           tags: const [],
           unit: ProductUnit.unit,
           weight: 0,
-          trackStock: true,
+          trackStock: item.purchaseTreatment == PurchaseTreatment.inventory,
           isActive: true,
+          purchaseTreatment: item.purchaseTreatment,
           createdAt: item.createdAt,
           updatedAt: item.createdAt,
         ),
@@ -851,6 +855,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           productId: item.productId,
           productName: product.name,
           productSku: product.sku,
+          purchaseTreatment: item.purchaseTreatment,
           quantity: item.quantity,
           unitCost: item.unitCost,
           discount: item.discount,
@@ -2485,6 +2490,104 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  String _purchaseTreatmentLabel(PurchaseTreatment treatment) {
+    switch (treatment) {
+      case PurchaseTreatment.inventory:
+        return 'Inventario';
+      case PurchaseTreatment.workshopConsumable:
+        return 'Consumible taller';
+    }
+  }
+
+  IconData _purchaseTreatmentIcon(PurchaseTreatment treatment) {
+    switch (treatment) {
+      case PurchaseTreatment.inventory:
+        return Icons.inventory_2_outlined;
+      case PurchaseTreatment.workshopConsumable:
+        return Icons.build_outlined;
+    }
+  }
+
+  Color _purchaseTreatmentColor(
+    ThemeData theme,
+    PurchaseTreatment treatment,
+  ) {
+    switch (treatment) {
+      case PurchaseTreatment.inventory:
+        return theme.colorScheme.primary;
+      case PurchaseTreatment.workshopConsumable:
+        return Colors.orange.shade700;
+    }
+  }
+
+  Widget _buildPurchaseTreatmentControl(
+    ThemeData theme,
+    _PurchaseLineEntry entry,
+  ) {
+    final treatment = entry.line.purchaseTreatment;
+    final accentColor = _purchaseTreatmentColor(theme, treatment);
+
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accentColor.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_purchaseTreatmentIcon(treatment), size: 14, color: accentColor),
+          const SizedBox(width: 6),
+          Text(
+            _purchaseTreatmentLabel(treatment),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: accentColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (_canEditFields) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 16, color: accentColor),
+          ],
+        ],
+      ),
+    );
+
+    if (!_canEditFields) {
+      return chip;
+    }
+
+    return PopupMenuButton<PurchaseTreatment>(
+      tooltip: 'Tratamiento de compra',
+      initialValue: treatment,
+      onSelected: (value) {
+        setState(() {
+          entry.line = entry.line.copyWith(purchaseTreatment: value);
+        });
+      },
+      itemBuilder: (context) => PurchaseTreatment.values
+          .map(
+            (value) => PopupMenuItem<PurchaseTreatment>(
+              value: value,
+              child: Row(
+                children: [
+                  Icon(
+                    _purchaseTreatmentIcon(value),
+                    size: 18,
+                    color: _purchaseTreatmentColor(theme, value),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_purchaseTreatmentLabel(value))),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+      child: chip,
+    );
+  }
+
   Widget _buildLineItemsSection(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2778,12 +2881,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: entry.buildSmartProductField(
-                    context,
-                    theme,
-                    _canEditFields,
-                    () {},
-                    () => _autoAddEmptyLineIfNeeded(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      entry.buildSmartProductField(
+                        context,
+                        theme,
+                        _canEditFields,
+                        () {},
+                        () => _autoAddEmptyLineIfNeeded(),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildPurchaseTreatmentControl(theme, entry),
+                    ],
                   ),
                 ),
                 if (_canEditFields)
@@ -2977,12 +3087,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           expanded: true,
           minWidth: 250,
           padding: const EdgeInsets.all(12),
-          child: entry.buildSmartProductField(
-            context,
-            theme,
-            _canEditFields,
-            () {}, // No setState needed - hover is local to wrapper
-            () => _autoAddEmptyLineIfNeeded(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              entry.buildSmartProductField(
+                context,
+                theme,
+                _canEditFields,
+                () {},
+                () => _autoAddEmptyLineIfNeeded(),
+              ),
+              const SizedBox(height: 8),
+              _buildPurchaseTreatmentControl(theme, entry),
+            ],
           ),
         ),
 
@@ -3570,6 +3687,7 @@ class _PurchaseLineEntry {
             productId: '',
             productName: '',
             productSku: '',
+            purchaseTreatment: PurchaseTreatment.inventory,
           );
           onUpdate();
         } else {
@@ -3581,6 +3699,8 @@ class _PurchaseLineEntry {
             productId: selection.product?.id ?? '',
             productName: selection.productName ?? '',
             productSku: selection.productSku,
+            purchaseTreatment: selection.product?.purchaseTreatment ??
+                PurchaseTreatment.inventory,
             unitCost: selection.price > 0 ? selection.price : line.unitCost,
           );
           if (selection.price > 0) {

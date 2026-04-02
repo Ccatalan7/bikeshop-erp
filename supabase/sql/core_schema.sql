@@ -1572,6 +1572,7 @@ create table if not exists products (
   cost numeric(12,2) not null default 0,
   brand_id uuid references public.product_brands(id) on delete set null,
   inventory_qty integer not null default 0,
+  purchase_treatment text not null default 'inventory',
   created_at timestamp with time zone not null default now()
 );
 
@@ -1795,6 +1796,11 @@ begin
     alter table products add column track_stock boolean not null default true;
   end if;
 
+  -- Add purchase_treatment (inventory vs workshop consumable)
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'purchase_treatment') then
+    alter table products add column purchase_treatment text not null default 'inventory';
+  end if;
+
   -- Add is_active
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'is_active') then
     alter table products add column is_active boolean not null default true;
@@ -1856,6 +1862,7 @@ begin
   -- Services must never track stock (backfill existing rows)
   update products
      set is_service = true,
+       purchase_treatment = 'inventory',
          track_stock = false,
          inventory_qty = 0,
          stock_quantity = 0,
@@ -1870,6 +1877,15 @@ begin
        or coalesce(min_stock_level, 0) <> 0
        or coalesce(max_stock_level, 0) <> 0
      );
+
+  -- Legacy compatibility: non-service products that don't track stock
+  -- are treated as workshop consumables by default.
+  update products
+     set purchase_treatment = 'workshop_consumable'
+   where product_type = 'product'
+     and coalesce(track_stock, true) = false
+     and greatest(coalesce(inventory_qty, 0), coalesce(stock_quantity, 0)) = 0
+     and coalesce(purchase_treatment, 'inventory') = 'inventory';
 end $$;
 
 -- Keep service flags consistent even if callers forget.
@@ -1877,14 +1893,58 @@ create or replace function public.sync_product_service_flags()
 returns trigger
 language plpgsql
 as $$
+declare
+  v_old_tracks_inventory boolean := false;
+  v_new_tracks_inventory boolean := false;
+  v_existing_stock integer := 0;
 begin
   if NEW.product_type is null then
     NEW.product_type := 'product';
   end if;
 
+  if NEW.purchase_treatment is null or
+     NEW.purchase_treatment not in ('inventory', 'workshop_consumable') then
+    NEW.purchase_treatment := 'inventory';
+  end if;
+
   NEW.is_service := (NEW.product_type = 'service');
 
+  if TG_OP = 'UPDATE' then
+    v_old_tracks_inventory :=
+      coalesce(OLD.product_type, 'product') <> 'service'
+      and coalesce(OLD.purchase_treatment, 'inventory') = 'inventory'
+      and coalesce(OLD.track_stock, true) = true;
+
+    v_new_tracks_inventory :=
+      NEW.product_type <> 'service'
+      and NEW.purchase_treatment = 'inventory'
+      and coalesce(NEW.track_stock, true) = true;
+
+    v_existing_stock := greatest(
+      coalesce(OLD.inventory_qty, 0),
+      coalesce(OLD.stock_quantity, 0)
+    );
+
+    if v_old_tracks_inventory
+       and not v_new_tracks_inventory
+       and v_existing_stock > 0 then
+      raise exception
+        'No se puede desactivar el control de inventario para el producto % mientras tenga stock (% unidades).',
+        coalesce(NEW.name, OLD.name, 'sin nombre'),
+        v_existing_stock
+        using errcode = 'check_violation',
+              hint = 'Primero deja el stock en 0 y reclasifica el valor contable antes de cambiarlo a consumible de taller o servicio.';
+    end if;
+  end if;
+
   if NEW.is_service then
+    NEW.purchase_treatment := 'inventory';
+    NEW.track_stock := false;
+    NEW.inventory_qty := 0;
+    NEW.stock_quantity := 0;
+    NEW.min_stock_level := 0;
+    NEW.max_stock_level := 0;
+  elsif NEW.purchase_treatment = 'workshop_consumable' then
     NEW.track_stock := false;
     NEW.inventory_qty := 0;
     NEW.stock_quantity := 0;
@@ -1898,10 +1958,251 @@ $$;
 
 drop trigger if exists trg_sync_product_service_flags on products;
 create trigger trg_sync_product_service_flags
-  before insert or update of product_type, is_service, track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
+  before insert or update of product_type, purchase_treatment, is_service, track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
   on products
   for each row
   execute function public.sync_product_service_flags();
+
+create or replace function public.convert_product_inventory_to_non_stock(
+  p_product_id uuid,
+  p_target_purchase_treatment text default 'workshop_consumable',
+  p_target_product_type text default 'product',
+  p_reason text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_product public.products;
+  v_target_purchase_treatment text := coalesce(nullif(p_target_purchase_treatment, ''), 'inventory');
+  v_target_product_type text := coalesce(nullif(p_target_product_type, ''), 'product');
+  v_existing_stock integer := 0;
+  v_inventory_value numeric(14,2) := 0;
+  v_effective_reason text;
+  v_description text;
+  v_reference text;
+  v_inventory_account_id uuid;
+  v_workshop_consumables_account_id uuid;
+  v_entry_id uuid;
+begin
+  if p_product_id is null then
+    raise exception 'Product ID is required';
+  end if;
+
+  if v_target_purchase_treatment not in ('inventory', 'workshop_consumable') then
+    raise exception 'Invalid target purchase_treatment: %', v_target_purchase_treatment;
+  end if;
+
+  if v_target_product_type not in ('product', 'service') then
+    raise exception 'Invalid target product_type: %', v_target_product_type;
+  end if;
+
+  select *
+    into v_product
+    from public.products
+   where id = p_product_id
+     and tenant_id = public.user_tenant_id()
+   for update;
+
+  if not found then
+    raise exception 'Product not found or not accessible';
+  end if;
+
+  if coalesce(v_product.product_type, 'product') = 'service'
+     or coalesce(v_product.purchase_treatment, 'inventory') <> 'inventory'
+     or coalesce(v_product.track_stock, true) = false then
+    raise exception 'Product % is not currently a stock-tracked inventory item', v_product.name;
+  end if;
+
+  if v_target_product_type = 'product'
+     and v_target_purchase_treatment = 'inventory' then
+    raise exception 'Target state still tracks inventory; conversion is not required';
+  end if;
+
+  v_existing_stock := greatest(
+    coalesce(v_product.inventory_qty, 0),
+    coalesce(v_product.stock_quantity, 0)
+  );
+
+  if v_existing_stock <= 0 then
+    raise exception 'Product % has no stock to convert', v_product.name;
+  end if;
+
+  v_inventory_value := round(v_existing_stock * greatest(coalesce(v_product.cost, 0), 0), 2);
+  v_effective_reason := coalesce(
+    nullif(trim(p_reason), ''),
+    case
+      when v_target_product_type = 'service' then 'Conversión de inventario a servicio'
+      else 'Conversión de inventario a consumible de taller'
+    end
+  );
+  v_description := format('%s - %s', v_effective_reason, v_product.name);
+  v_reference := format('product_conversion:%s:%s', v_product.id, extract(epoch from clock_timestamp())::bigint);
+
+  perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+
+  update public.products
+     set inventory_qty = 0,
+         stock_quantity = 0,
+         updated_at = now()
+   where id = v_product.id;
+
+  insert into public.stock_adjustments (
+    tenant_id,
+    product_id,
+    adjustment_type,
+    quantity,
+    stock_before,
+    stock_after,
+    reason,
+    reference,
+    created_by,
+    created_at
+  ) values (
+    v_product.tenant_id,
+    v_product.id,
+    'correction',
+    -v_existing_stock,
+    v_existing_stock,
+    0,
+    v_effective_reason,
+    v_reference,
+    auth.uid(),
+    now()
+  );
+
+  if v_inventory_value > 0 then
+    v_inventory_account_id := public.ensure_account(
+      v_product.tenant_id,
+      '1105',
+      'Inventarios',
+      'asset',
+      'currentAsset',
+      'Valor del inventario de productos',
+      null
+    );
+
+    v_workshop_consumables_account_id := public.ensure_account(
+      v_product.tenant_id,
+      '5101',
+      'Consumibles de Taller',
+      'expense',
+      'costOfGoodsSold',
+      'Materiales y consumibles de uso rápido aplicados directamente en el taller',
+      null
+    );
+
+    v_entry_id := gen_random_uuid();
+
+    insert into public.journal_entries (
+      id,
+      tenant_id,
+      entry_number,
+      entry_date,
+      description,
+      type,
+      source_module,
+      source_reference,
+      status,
+      total_debit,
+      total_credit,
+      created_at,
+      updated_at
+    ) values (
+      v_entry_id,
+      v_product.tenant_id,
+      public.get_next_document_number(v_product.tenant_id, 'journal_entry'),
+      now(),
+      v_description,
+      'adjustment',
+      'product_conversion',
+      v_product.id::text,
+      'posted',
+      v_inventory_value,
+      v_inventory_value,
+      now(),
+      now()
+    );
+
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      tenant_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_workshop_consumables_account_id,
+      v_product.tenant_id,
+      '5101',
+      'Consumibles de Taller',
+      v_description,
+      v_inventory_value,
+      0,
+      now(),
+      now()
+    );
+
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      tenant_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_inventory_account_id,
+      v_product.tenant_id,
+      '1105',
+      'Inventarios',
+      v_description,
+      0,
+      v_inventory_value,
+      now(),
+      now()
+    );
+  end if;
+
+  update public.products
+     set purchase_treatment = v_target_purchase_treatment,
+         product_type = v_target_product_type,
+         updated_at = now()
+   where id = v_product.id
+   returning * into v_product;
+
+  perform set_config('app.skip_stock_adjustment_trigger', '', true);
+
+  return jsonb_build_object(
+    'product', to_jsonb(v_product),
+    'converted_quantity', v_existing_stock,
+    'inventory_value', v_inventory_value,
+    'reference', v_reference,
+    'journal_entry_id', v_entry_id
+  );
+exception
+  when others then
+    perform set_config('app.skip_stock_adjustment_trigger', '', true);
+    raise;
+end;
+$$;
+
+grant execute on function public.convert_product_inventory_to_non_stock(uuid, text, text, text) to authenticated;
 
 create index if not exists idx_products_supplier_id on products(supplier_id);
 create index if not exists idx_products_brand_id on products(brand_id);
@@ -4426,6 +4727,12 @@ begin
     'Costo directo de productos vendidos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5100');
   v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '5101', 'Consumibles de Taller', 'expense', 'costOfGoodsSold',
+    'Materiales y consumibles de uso rápido aplicados directamente en el taller', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5101');
+  v_count := v_count + (case when found then 1 else 0 end);
   
   -- EXPENSES - Personnel
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
@@ -5522,6 +5829,7 @@ begin
     select 
       nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'product_sku')::text as product_sku,
+      coalesce(nullif(item->>'purchase_treatment', ''), 'inventory')::text as purchase_treatment,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
   loop
@@ -5542,11 +5850,20 @@ begin
       continue;
     end if;
 
+    if v_item.purchase_treatment = 'workshop_consumable' then
+      continue;
+    end if;
+
     -- CHECK IF PRODUCT IS A SET
     select is_set, name
       into v_is_set, v_set_name
       from public.products
-     where id = v_resolved_product_id;
+     where id = v_resolved_product_id
+       and coalesce(track_stock, true) = true;
+
+    if not found then
+      continue;
+    end if;
 
     if v_is_set then
        -- Iterate over components
@@ -5566,27 +5883,29 @@ begin
                  updated_at = now()
            where id = v_component.component_product_id;
 
-          -- Log Component Movement (FIXED: Includes tenant_id)
-          insert into public.stock_movements (
-            tenant_id, id, product_id, warehouse_id, type, movement_type, quantity,
-            reference, notes, date, created_at, updated_at
-          ) values (
-            p_invoice.tenant_id, -- ✅ Added tenant_id
-            gen_random_uuid(),
-            v_component.component_product_id,
-            null,
-            'OUT',
-            'sales_invoice_component',
-            -v_qty_to_deduct,
-            v_reference,
-            format('Salida por venta de Set "%s" (Factura %s)', 
-                   v_set_name, 
-                   coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)
-            ),
-            coalesce(p_invoice.date, now()),
-            now(),
-            now()
-          );
+          if found then
+            -- Log Component Movement (FIXED: Includes tenant_id)
+            insert into public.stock_movements (
+              tenant_id, id, product_id, warehouse_id, type, movement_type, quantity,
+              reference, notes, date, created_at, updated_at
+            ) values (
+              p_invoice.tenant_id, -- ✅ Added tenant_id
+              gen_random_uuid(),
+              v_component.component_product_id,
+              null,
+              'OUT',
+              'sales_invoice_component',
+              -v_qty_to_deduct,
+              v_reference,
+              format('Salida por venta de Set "%s" (Factura %s)', 
+                     v_set_name, 
+                     coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)
+              ),
+              coalesce(p_invoice.date, now()),
+              now(),
+              now()
+            );
+          end if;
        end loop;
 
     else
@@ -5596,7 +5915,8 @@ begin
              stock_quantity = greatest(coalesce(stock_quantity, 0) - v_quantity_int, 0),
              updated_at = now()
        where id = v_resolved_product_id
-         and coalesce(is_service, false) = false;
+         and coalesce(is_service, false) = false
+         and coalesce(track_stock, true) = true;
 
       if found then
         -- Create stock movement record (FIXED: Includes tenant_id)
@@ -5870,7 +6190,16 @@ begin
     null
   );
 
-  select coalesce(sum((item->>'cost')::numeric), 0)
+  select coalesce(
+           sum(
+             case
+               when coalesce((item->>'is_service')::boolean, false) then 0
+               when coalesce(nullif(item->>'purchase_treatment', ''), 'inventory') = 'workshop_consumable' then 0
+               else coalesce((item->>'quantity')::numeric, 0) * coalesce((item->>'cost')::numeric, 0)
+             end
+           ),
+           0
+         )
     into v_total_cost
     from jsonb_array_elements(coalesce(p_invoice.items, '[]'::jsonb)) item
    where (item->>'cost') is not null
@@ -9101,6 +9430,7 @@ begin
     select
       nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'product_name')::text as product_name,
+      coalesce(nullif(item->>'purchase_treatment', ''), 'inventory')::text as purchase_treatment,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(v_items) as item
   loop
@@ -9115,6 +9445,11 @@ begin
 
     if v_quantity_int = 0 then
       raise notice 'consume_purchase_invoice_inventory: skipping item % with zero quantity', v_resolved_product_id;
+      continue;
+    end if;
+
+    if v_item.purchase_treatment = 'workshop_consumable' then
+      raise notice 'consume_purchase_invoice_inventory: skipping workshop consumable item %', v_resolved_product_id;
       continue;
     end if;
 
@@ -9247,6 +9582,7 @@ begin
   for v_item in
     select
       nullif(item->>'product_id', '')::uuid as product_id,
+      coalesce(nullif(item->>'purchase_treatment', ''), 'inventory')::text as purchase_treatment,
       (item->>'quantity')::numeric as quantity
     from jsonb_array_elements(v_items) as item
   loop
@@ -9259,6 +9595,10 @@ begin
     v_quantity_int := abs(v_quantity_numeric::integer);
 
     if v_quantity_int = 0 then
+      continue;
+    end if;
+
+    if v_item.purchase_treatment = 'workshop_consumable' then
       continue;
     end if;
 
@@ -9308,9 +9648,17 @@ declare
   v_exists boolean;
   v_entry_id uuid := gen_random_uuid();
   v_inventory_account_id uuid;
+  v_workshop_consumables_account_id uuid;
   v_iva_account_id uuid;
   v_payable_account_id uuid;
   v_description text;
+  v_items jsonb := '[]'::jsonb;
+  v_item record;
+  v_inventory_subtotal numeric(12,2) := 0;
+  v_workshop_subtotal numeric(12,2) := 0;
+  v_total_item_subtotal numeric(12,2) := 0;
+  v_scaled_subtotal numeric(12,2) := 0;
+  v_subtotal_delta numeric(12,2) := 0;
 begin
   raise notice '🔵 START create_purchase_invoice_journal_entry for invoice %', p_invoice.id;
   
@@ -9350,6 +9698,17 @@ begin
   );
   raise notice '✅ Inventory account: %', v_inventory_account_id;
 
+  v_workshop_consumables_account_id := public.ensure_account(
+    p_invoice.tenant_id,
+    '5101',
+    'Consumibles de Taller',
+    'expense',
+    'costOfGoodsSold',
+    'Materiales y consumibles de uso rápido aplicados directamente en el taller',
+    null
+  );
+  raise notice '✅ Workshop consumables account: %', v_workshop_consumables_account_id;
+
   v_iva_account_id := public.ensure_account(
     p_invoice.tenant_id,
     '2120',
@@ -9376,6 +9735,61 @@ begin
     p_invoice.invoice_number, 
     coalesce(p_invoice.supplier_name, 'Proveedor')
   );
+
+  v_items := coalesce(p_invoice.items, '[]'::jsonb);
+
+  for v_item in
+    select
+      coalesce(nullif(item->>'purchase_treatment', ''), 'inventory')::text as purchase_treatment,
+      greatest(
+        (coalesce((item->>'quantity')::numeric, 0) *
+         coalesce((item->>'unit_cost')::numeric, 0)) -
+        coalesce((item->>'discount')::numeric, 0),
+        0
+      )::numeric(12,2) as line_subtotal
+    from jsonb_array_elements(v_items) as item
+  loop
+    if coalesce(v_item.line_subtotal, 0) <= 0 then
+      continue;
+    end if;
+
+    v_total_item_subtotal := v_total_item_subtotal + v_item.line_subtotal;
+
+    if v_item.purchase_treatment = 'workshop_consumable' then
+      v_workshop_subtotal := v_workshop_subtotal + v_item.line_subtotal;
+    else
+      v_inventory_subtotal := v_inventory_subtotal + v_item.line_subtotal;
+    end if;
+  end loop;
+
+  v_scaled_subtotal := coalesce(p_invoice.subtotal, 0);
+
+  if v_total_item_subtotal <= 0 then
+    v_inventory_subtotal := v_scaled_subtotal;
+    v_workshop_subtotal := 0;
+  elsif abs(v_total_item_subtotal - v_scaled_subtotal) > 0.01 then
+    v_inventory_subtotal := round(
+      (v_inventory_subtotal / v_total_item_subtotal) * v_scaled_subtotal,
+      2
+    );
+    v_workshop_subtotal := round(
+      (v_workshop_subtotal / v_total_item_subtotal) * v_scaled_subtotal,
+      2
+    );
+
+    v_subtotal_delta := round(
+      v_scaled_subtotal - v_inventory_subtotal - v_workshop_subtotal,
+      2
+    );
+
+    if v_subtotal_delta <> 0 then
+      if v_inventory_subtotal >= v_workshop_subtotal then
+        v_inventory_subtotal := v_inventory_subtotal + v_subtotal_delta;
+      else
+        v_workshop_subtotal := v_workshop_subtotal + v_subtotal_delta;
+      end if;
+    end if;
+  end if;
   
   raise notice '🔵 Creating journal entry header...';
 
@@ -9410,32 +9824,63 @@ begin
     now()
   );
 
-  -- DR: Inventory (increase asset)
-  insert into public.journal_lines (
-    id,
-    entry_id,
-    account_id,
-    tenant_id,
-    account_code,
-    account_name,
-    description,
-    debit_amount,
-    credit_amount,
-    created_at,
-    updated_at
-  ) values (
-    gen_random_uuid(),
-    v_entry_id,
-    v_inventory_account_id,
-    p_invoice.tenant_id,
-    '1105',
-    'Inventarios',
-    v_description,
-    p_invoice.subtotal,
-    0,
-    now(),
-    now()
-  );
+  if v_inventory_subtotal > 0 then
+    -- DR: Inventory (increase asset)
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      tenant_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_inventory_account_id,
+      p_invoice.tenant_id,
+      '1105',
+      'Inventarios',
+      v_description,
+      v_inventory_subtotal,
+      0,
+      now(),
+      now()
+    );
+  end if;
+
+  if v_workshop_subtotal > 0 then
+    -- DR: Workshop consumables (direct cost, no inventory recognition)
+    insert into public.journal_lines (
+      id,
+      entry_id,
+      account_id,
+      tenant_id,
+      account_code,
+      account_name,
+      description,
+      debit_amount,
+      credit_amount,
+      created_at,
+      updated_at
+    ) values (
+      gen_random_uuid(),
+      v_entry_id,
+      v_workshop_consumables_account_id,
+      p_invoice.tenant_id,
+      '5101',
+      'Consumibles de Taller',
+      v_description,
+      v_workshop_subtotal,
+      0,
+      now(),
+      now()
+    );
+  end if;
 
   -- DR: IVA Crédito (increase asset, recoverable tax)
   insert into public.journal_lines (
