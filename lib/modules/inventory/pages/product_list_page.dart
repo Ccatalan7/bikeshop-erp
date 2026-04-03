@@ -4182,8 +4182,10 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildMarginCell(ThemeData theme, Product product) {
-    final margin = product.price - product.cost;
-    final marginPct = product.price > 0 ? margin / product.price : null;
+    // Calculamos el margen con IVA incluido. El neto se divide por 1.19.
+    final netPrice = product.price / 1.19;
+    final margin = netPrice - product.cost;
+    final marginPct = product.cost > 0 ? margin / product.cost : null;
     final isNegative = margin < 0;
 
     return Tooltip(

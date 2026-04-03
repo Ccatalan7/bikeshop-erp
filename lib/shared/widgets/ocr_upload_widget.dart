@@ -1,5 +1,6 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'dart:async';
 import 'package:flutter/foundation.dart'
@@ -15,7 +16,7 @@ import '../services/veryfi_service.dart';
 import '../services/veryfi_config_loader.dart';
 import '../services/veryfi_adapter.dart';
 import '../services/inventory_service.dart';
-import '../models/product.dart' show Product;
+import '../models/product.dart' show Product, PurchaseTreatment;
 import '../services/database_service.dart';
 import '../services/tenant_service.dart';
 import '../../modules/inventory/services/category_service.dart';
@@ -116,9 +117,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   List<_NewProductEntry> _newProductEntries = [];
   List<Category> _categories = [];
   List<ProductBrand> _brands = [];
-  bool _loadingCategories = false;
   bool _creatingProducts = false;
   final Map<int, TextEditingController> _skuControllers = {};
+  final ScrollController _bulkCreateHorizontalScrollController =
+      ScrollController();
   Timer? _debounceTimer;
   bool _isDialogShowing = false;
   String? _supplierIdForNewProducts; // For potential future use
@@ -774,16 +776,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                       decoration: InputDecoration(
                                         hintText: 'ASIGNAR SKU',
                                         isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 4),
-                                        border: (item.sku == null || item.sku!.isEmpty)
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 4, vertical: 4),
+                                        border: (item.sku == null ||
+                                                item.sku!.isEmpty)
                                             ? OutlineInputBorder(
                                                 borderSide: BorderSide(
-                                                    color: Colors.orange.shade300,
+                                                    color:
+                                                        Colors.orange.shade300,
                                                     width: 0.5),
                                               )
                                             : InputBorder.none,
-                                        filled: (item.sku == null || item.sku!.isEmpty),
+                                        filled: (item.sku == null ||
+                                            item.sku!.isEmpty),
                                         fillColor: Colors.orange.shade50,
                                         hintStyle: TextStyle(
                                             fontSize: 10,
@@ -1072,14 +1078,17 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     // PRIORITY 1: Try to find by SKU (if available)
     if (item.sku != null && item.sku!.trim().isNotEmpty) {
       try {
-        matchedProduct = await inventoryService.getProductBySku(item.sku!.trim());
+        matchedProduct =
+            await inventoryService.getProductBySku(item.sku!.trim());
       } catch (e) {
         debugPrint('   ❌ Error looking up SKU ${item.sku}: $e');
       }
     }
 
     // PRIORITY 2: Try to find by Supplier Code
-    if (matchedProduct == null && item.sku != null && item.sku!.trim().isNotEmpty) {
+    if (matchedProduct == null &&
+        item.sku != null &&
+        item.sku!.trim().isNotEmpty) {
       final cleanSku = item.sku!.trim();
       try {
         matchedProduct =
@@ -1153,7 +1162,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (newProducts.isEmpty) return;
 
     // Load categories and brands
-    setState(() => _loadingCategories = true);
     try {
       final dbService = DatabaseService();
       final tenantService = TenantService();
@@ -1163,8 +1171,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       _brands = await brandService.getBrands(activeOnly: true);
     } catch (e) {
       debugPrint('Failed to load categories/brands: $e');
-    } finally {
-      setState(() => _loadingCategories = false);
     }
 
     // Create entries for each new product
@@ -1298,461 +1304,531 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   /// Build the bulk product creation screen
   Widget _buildBulkCreateScreen() {
-    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double baseWChk = 40;
+        const double baseWImg = 58;
+        const double baseWSku = 130;
+        const double baseWName = 260;
+        const double baseWCost = 110;
+        const double baseWPrice = 110;
+        const double baseWCat = 170;
+        const double baseWBrand = 160;
+        const double baseWTaller = 72;
+        const double gap = 8;
+        const double hPad = 12;
+        const double minTableInnerWidth = hPad * 2 +
+            baseWChk +
+            baseWImg +
+            baseWSku +
+            baseWName +
+            baseWCost +
+            baseWPrice +
+            baseWCat +
+            baseWBrand +
+            baseWTaller +
+            gap * 7;
 
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Row(
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : minTableInnerWidth;
+        final tableInnerWidth = math.max(minTableInnerWidth, availableWidth);
+        final extraWidth = tableInnerWidth - minTableInnerWidth;
+
+        final wChk = baseWChk;
+        final wImg = baseWImg;
+        final wSku = baseWSku + (extraWidth * 0.14);
+        final wName = baseWName + (extraWidth * 0.42);
+        final wCost = baseWCost;
+        final wPrice = baseWPrice;
+        final wCat = baseWCat + (extraWidth * 0.22);
+        final wBrand = baseWBrand + (extraWidth * 0.22);
+        final wTaller = baseWTaller;
+
+        Widget headerCell(String label, double width,
+                {TextAlign align = TextAlign.left}) =>
+            SizedBox(
+              width: width,
+              child: Text(label,
+                  textAlign: align,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: Color(0xFF616161))),
+            );
+
+        return SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.add_circle, color: Colors.orange, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Crear Productos Nuevos',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    Row(
+              // Header
+              Row(
+                children: [
+                  const Icon(Icons.add_circle, color: Colors.orange, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${_newProductEntries.where((e) => e.isSelected).length} de ${_newProductEntries.length} seleccionados',
-                          style: TextStyle(
-                              fontSize: 14, color: Colors.grey.shade600),
-                        ),
-                        Text(
-                          ' • ',
-                          style: TextStyle(
-                              fontSize: 14, color: Colors.grey.shade400),
-                        ),
-                        Icon(
-                          (_ocrSupplierName ?? widget.supplierName) != null
-                              ? Icons.local_shipping_outlined
-                              : Icons.warning_amber_rounded,
-                          size: 14,
-                          color:
+                        const Text('Crear Productos Nuevos',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            Text(
+                              '${_newProductEntries.where((e) => e.isSelected).length} de ${_newProductEntries.length} seleccionados',
+                              style: TextStyle(
+                                  fontSize: 14, color: Colors.grey.shade600),
+                            ),
+                            Text(' • ',
+                                style: TextStyle(
+                                    fontSize: 14, color: Colors.grey.shade400)),
+                            Icon(
                               (_ocrSupplierName ?? widget.supplierName) != null
-                                  ? Colors.orange.shade700
-                                  : Colors.red.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _ocrSupplierName ??
-                              widget.supplierName ??
-                              'Sin proveedor',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: (_ocrSupplierName ?? widget.supplierName) !=
-                                    null
-                                ? Colors.orange.shade700
-                                : Colors.red.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
+                                  ? Icons.local_shipping_outlined
+                                  : Icons.warning_amber_rounded,
+                              size: 14,
+                              color:
+                                  (_ocrSupplierName ?? widget.supplierName) !=
+                                          null
+                                      ? Colors.orange.shade700
+                                      : Colors.red.shade600,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _ocrSupplierName ??
+                                  widget.supplierName ??
+                                  'Sin proveedor',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color:
+                                    (_ocrSupplierName ?? widget.supplierName) !=
+                                            null
+                                        ? Colors.orange.shade700
+                                        : Colors.red.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-          // Product entries table
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                // Table header
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(11)),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 32), // Status icon width
-                      const SizedBox(width: 40), // Checkbox width
-                      const SizedBox(
-                          width: 50, child: Text('Img')), // Image col
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 3,
-                        child: Text('SKU',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade700,
-                                fontSize: 12)),
-                      ),
-                      Expanded(
-                          flex: 14, // Name 7 * 2
-                          child: Text('Nombre',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700))),
-                      Expanded(
-                          flex: 3, // Cost 1.5 * 2
-                          child: Text('Costo',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700))),
-                      Expanded(
-                          flex: 4, // Price 2 * 2
-                          child: Text('Precio',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700))),
-                      Expanded(
-                          flex: 5, // Cat 2.5 * 2
-                          child: Text('Categoría',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700))),
-                      Expanded(
-                          flex: 5, // Brand 2.5 * 2
-                          child: Text('Marca',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700))),
-                    ],
-                  ),
-                ),
-                // Table rows
-                ...List.generate(_newProductEntries.length, (index) {
-                  final entry = _newProductEntries[index];
-                  return Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              // Table — always tableInnerWidth wide, scrolls horizontally if needed
+              Scrollbar(
+                controller: _bulkCreateHorizontalScrollController,
+                thumbVisibility: true,
+                trackVisibility: true,
+                notificationPredicate: (notification) =>
+                    notification.metrics.axis == Axis.horizontal,
+                child: SingleChildScrollView(
+                  controller: _bulkCreateHorizontalScrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    width: tableInnerWidth,
                     decoration: BoxDecoration(
-                      color:
-                          entry.isSelected ? Colors.white : Colors.grey.shade50,
-                      border:
-                          Border(top: BorderSide(color: Colors.grey.shade200)),
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Checkbox
-                        SizedBox(
-                          width: 40,
-                          child: Checkbox(
-                            value: entry.isSelected,
-                            onChanged: (val) =>
-                                setState(() => entry.isSelected = val ?? false),
+                        // ── Header ──────────────────────────────────────────────
+                        Container(
+                          height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: hPad),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(9)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(width: wChk), // checkbox placeholder
+                              headerCell('Img', wImg),
+                              const SizedBox(width: gap),
+                              headerCell('SKU', wSku),
+                              const SizedBox(width: gap),
+                              headerCell('Nombre', wName),
+                              const SizedBox(width: gap),
+                              headerCell('Costo', wCost,
+                                  align: TextAlign.center),
+                              const SizedBox(width: gap),
+                              headerCell('Precio', wPrice,
+                                  align: TextAlign.center),
+                              const SizedBox(width: gap),
+                              headerCell('Categoría', wCat),
+                              const SizedBox(width: gap),
+                              headerCell('Marca', wBrand),
+                              const SizedBox(width: gap),
+                              headerCell('Taller', wTaller,
+                                  align: TextAlign.center),
+                            ],
                           ),
                         ),
-                        // Image Drag & Drop Cell
-                        DropTarget(
-                          onDragDone: (details) async {
-                            if (details.files.isNotEmpty) {
-                              final file = details.files.first;
-                              final bytes = await file.readAsBytes();
-                              _uploadImage(entry, bytes, file.name);
-                            }
-                          },
-                          onDragEntered: (details) =>
-                              setState(() => entry.isHoveringImage = true),
-                          onDragExited: (details) =>
-                              setState(() => entry.isHoveringImage = false),
-                          child: MouseRegion(
-                            onEnter: (_) =>
-                                setState(() => entry.isHoveringImage = true),
-                            onExit: (_) =>
-                                setState(() => entry.isHoveringImage = false),
-                            child: Stack(
+                        // ── Rows ─────────────────────────────────────────────────
+                        ...List.generate(_newProductEntries.length, (index) {
+                          final entry = _newProductEntries[index];
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: hPad, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: entry.isSelected
+                                  ? Colors.white
+                                  : Colors.grey.shade50,
+                              border: Border(
+                                  top: BorderSide(color: Colors.grey.shade200)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                InkWell(
-                                  onTap: () async {
-                                    final result =
-                                        await ImageService.pickImage();
-                                    if (result != null) {
-                                      _uploadImage(
-                                          entry, result.bytes, result.name);
-                                    }
-                                  },
-                                  child: Container(
-                                    width: 50,
-                                    height: 50,
-                                    margin: const EdgeInsets.only(right: 8),
-                                    decoration: BoxDecoration(
-                                      color: entry.isHoveringImage
-                                          ? Colors.blue.withOpacity(0.1)
-                                          : Colors.grey[100],
-                                      border: Border.all(
-                                        color: entry.isHoveringImage
-                                            ? Colors.blue
-                                            : Colors.grey[300]!,
-                                        width: entry.isHoveringImage ? 2 : 1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: entry.isUploadingImage
-                                        ? const Center(
-                                            child: SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 2)))
-                                        : entry.imageUrl != null
-                                            ? ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                child: ImageService
-                                                    .buildProductImage(
-                                                  imageUrl: entry.imageUrl,
-                                                  size: 50,
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons.add_photo_alternate,
-                                                size: 20,
-                                                color: Colors.grey),
+                                // Checkbox
+                                SizedBox(
+                                  width: wChk,
+                                  child: Checkbox(
+                                    value: entry.isSelected,
+                                    onChanged: (v) => setState(
+                                        () => entry.isSelected = v ?? false),
                                   ),
                                 ),
-                                // Remove button overlay (only when image exists and hovering)
-                                if (entry.imageUrl != null &&
-                                    entry.isHoveringImage)
-                                  Positioned(
-                                    right: 8, // Adjust for margin
-                                    top: 0,
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          entry.imageUrl = null;
-                                          entry.imageUrlOptimized = null;
-                                        });
-                                      },
-                                      child: Container(
-                                        width: 18,
-                                        height: 18,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
+                                // Image cell
+                                SizedBox(
+                                  width: wImg - gap,
+                                  child: DropTarget(
+                                    onDragDone: (d) async {
+                                      if (d.files.isNotEmpty) {
+                                        final f = d.files.first;
+                                        _uploadImage(entry,
+                                            await f.readAsBytes(), f.name);
+                                      }
+                                    },
+                                    onDragEntered: (_) => setState(
+                                        () => entry.isHoveringImage = true),
+                                    onDragExited: (_) => setState(
+                                        () => entry.isHoveringImage = false),
+                                    child: MouseRegion(
+                                      onEnter: (_) => setState(
+                                          () => entry.isHoveringImage = true),
+                                      onExit: (_) => setState(
+                                          () => entry.isHoveringImage = false),
+                                      child: Stack(children: [
+                                        InkWell(
+                                          onTap: () async {
+                                            final r =
+                                                await ImageService.pickImage();
+                                            if (r != null)
+                                              _uploadImage(
+                                                  entry, r.bytes, r.name);
+                                          },
+                                          child: Container(
+                                            width: 46,
+                                            height: 46,
+                                            decoration: BoxDecoration(
+                                              color: entry.isHoveringImage
+                                                  ? Colors.blue
+                                                      .withOpacity(0.08)
+                                                  : Colors.grey[100],
+                                              border: Border.all(
+                                                color: entry.isHoveringImage
+                                                    ? Colors.blue
+                                                    : Colors.grey[300]!,
+                                                width: entry.isHoveringImage
+                                                    ? 2
+                                                    : 1,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: entry.isUploadingImage
+                                                ? const Center(
+                                                    child: SizedBox(
+                                                        width: 18,
+                                                        height: 18,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                                strokeWidth:
+                                                                    2)))
+                                                : entry.imageUrl != null
+                                                    ? ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                        child: ImageService
+                                                            .buildProductImage(
+                                                          imageUrl:
+                                                              entry.imageUrl,
+                                                          size: 46,
+                                                        ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons
+                                                            .add_photo_alternate,
+                                                        size: 18,
+                                                        color: Colors.grey),
+                                          ),
                                         ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          size: 12,
-                                          color: Colors.white,
+                                        if (entry.imageUrl != null &&
+                                            entry.isHoveringImage)
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: GestureDetector(
+                                              onTap: () => setState(() {
+                                                entry.imageUrl = null;
+                                                entry.imageUrlOptimized = null;
+                                              }),
+                                              child: Container(
+                                                width: 16,
+                                                height: 16,
+                                                decoration: const BoxDecoration(
+                                                    color: Colors.red,
+                                                    shape: BoxShape.circle),
+                                                child: const Icon(Icons.close,
+                                                    size: 11,
+                                                    color: Colors.white),
+                                              ),
+                                            ),
+                                          ),
+                                      ]),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // SKU
+                                SizedBox(
+                                  width: wSku,
+                                  child: TextField(
+                                    controller: entry.skuController,
+                                    enabled: entry.isSelected,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 8),
+                                      errorText: entry.sku.isEmpty
+                                          ? 'Requerido'
+                                          : null,
+                                      errorStyle: const TextStyle(fontSize: 10),
+                                    ),
+                                    style: const TextStyle(
+                                        fontFamily: 'monospace', fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Name
+                                SizedBox(
+                                  width: wName,
+                                  child: TextField(
+                                    controller: entry.nameController,
+                                    enabled: entry.isSelected,
+                                    onChanged: (_) => setState(() {}),
+                                    minLines: 1,
+                                    maxLines: 2,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                    ),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Cost
+                                SizedBox(
+                                  width: wCost,
+                                  child: TextField(
+                                    controller: entry.costController,
+                                    enabled: entry.isSelected,
+                                    onChanged: (_) => setState(() {}),
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 8),
+                                      prefixText: '\$ ',
+                                      hintText: '0',
+                                      hintStyle: TextStyle(
+                                          color: Colors.grey.shade400),
+                                    ),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Price
+                                SizedBox(
+                                  width: wPrice,
+                                  child: TextField(
+                                    controller: entry.priceController,
+                                    enabled: entry.isSelected,
+                                    onChanged: (_) => setState(() {}),
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 8),
+                                      prefixText: '\$ ',
+                                      hintText: '0',
+                                      hintStyle: TextStyle(
+                                          color: Colors.grey.shade400),
+                                    ),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Category
+                                SizedBox(
+                                  width: wCat,
+                                  child: DropdownMenu<Category>(
+                                    width: wCat,
+                                    menuHeight: 280,
+                                    initialSelection: entry.selectedCategory,
+                                    hintText: 'Categoría',
+                                    textStyle: const TextStyle(fontSize: 12),
+                                    inputDecorationTheme:
+                                        const InputDecorationTheme(
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    enabled: entry.isSelected,
+                                    enableFilter: true,
+                                    requestFocusOnTap: true,
+                                    dropdownMenuEntries: _categories
+                                        .map((c) => DropdownMenuEntry<Category>(
+                                            value: c, label: c.name))
+                                        .toList(),
+                                    onSelected: (v) {
+                                      if (v != null)
+                                        setState(
+                                            () => entry.selectedCategory = v);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Brand
+                                SizedBox(
+                                  width: wBrand,
+                                  child: DropdownMenu<ProductBrand>(
+                                    width: wBrand,
+                                    menuHeight: 280,
+                                    initialSelection: entry.selectedBrand,
+                                    hintText: 'Marca',
+                                    textStyle: const TextStyle(fontSize: 12),
+                                    inputDecorationTheme:
+                                        const InputDecorationTheme(
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    enabled: entry.isSelected,
+                                    enableFilter: true,
+                                    requestFocusOnTap: true,
+                                    dropdownMenuEntries: _brands
+                                        .map((b) =>
+                                            DropdownMenuEntry<ProductBrand>(
+                                                value: b, label: b.name))
+                                        .toList(),
+                                    onSelected: (v) {
+                                      if (v != null)
+                                        setState(() => entry.selectedBrand = v);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: gap),
+                                // Workshop toggle
+                                SizedBox(
+                                  width: wTaller,
+                                  child: Tooltip(
+                                    message: 'Consumible de taller',
+                                    child: Center(
+                                      child: Transform.scale(
+                                        scale: 0.82,
+                                        child: Switch.adaptive(
+                                          value: entry.isWorkshopConsumable,
+                                          onChanged: entry.isSelected
+                                              ? (v) => setState(() => entry
+                                                  .isWorkshopConsumable = v)
+                                              : null,
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
                                         ),
                                       ),
                                     ),
                                   ),
+                                ),
                               ],
                             ),
-                          ),
-                        ),
-                        // SKU (editable)
-                        Expanded(
-                          flex: 3,
-                          child: TextField(
-                            controller: entry.skuController,
-                            enabled: entry.isSelected,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
-                              errorText: entry.sku.isEmpty ? 'Requerido' : null,
-                              errorStyle: const TextStyle(fontSize: 10),
-                            ),
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        // Name (editable)
-                        Expanded(
-                          flex: 14,
-                          child: TextField(
-                            controller: entry.nameController,
-                            enabled: entry.isSelected,
-                            minLines: 1,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Cost (readonly)
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            '\$${entry.cost.toStringAsFixed(0)}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: entry.isSelected
-                                  ? Colors.black87
-                                  : Colors.grey,
-                            ),
-                          ),
-                        ),
-                        // Price (editable)
-                        Expanded(
-                          flex: 4,
-                          child: TextField(
-                            controller: entry.priceController,
-                            enabled: entry.isSelected,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
-                              prefixText: '\$ ',
-                              hintText: 'Precio',
-                              hintStyle: TextStyle(color: Colors.grey.shade400),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Category dropdown
-                        Expanded(
-                          flex: 5,
-                          child: LayoutBuilder(builder: (context, constraints) {
-                            return DropdownMenu<Category>(
-                              width: constraints.maxWidth,
-                              menuHeight: 250,
-                              initialSelection: entry.selectedCategory,
-                              hintText: 'Categoría',
-                              textStyle: const TextStyle(fontSize: 12),
-                              inputDecorationTheme: const InputDecorationTheme(
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 8),
-                                border: OutlineInputBorder(),
-                              ),
-                              enabled: entry.isSelected,
-                              enableFilter: true,
-                              requestFocusOnTap: true,
-                              dropdownMenuEntries: _categories
-                                  .map((cat) => DropdownMenuEntry<Category>(
-                                        value: cat,
-                                        label: cat.name,
-                                      ))
-                                  .toList(),
-                              onSelected: (val) {
-                                if (val != null) {
-                                  setState(() => entry.selectedCategory = val);
-                                }
-                              },
-                            );
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        // Brand dropdown
-                        Expanded(
-                          flex: 5,
-                          child: LayoutBuilder(builder: (context, constraints) {
-                            return DropdownMenu<ProductBrand>(
-                              width: constraints.maxWidth,
-                              menuHeight: 250,
-                              initialSelection: entry.selectedBrand,
-                              hintText: 'Marca',
-                              textStyle: const TextStyle(fontSize: 12),
-                              inputDecorationTheme: const InputDecorationTheme(
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 8),
-                                border: OutlineInputBorder(),
-                              ),
-                              enabled: entry.isSelected,
-                              enableFilter: true,
-                              requestFocusOnTap: true,
-                              dropdownMenuEntries: _brands
-                                  .map((brand) =>
-                                      DropdownMenuEntry<ProductBrand>(
-                                        value: brand,
-                                        label: brand.name,
-                                      ))
-                                  .toList(),
-                              onSelected: (val) {
-                                if (val != null) {
-                                  setState(() => entry.selectedBrand = val);
-                                }
-                              },
-                            );
-                          }),
-                        ),
+                          );
+                        }),
                       ],
                     ),
-                  );
-                }),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Dispose controllers
-                    for (final entry in _newProductEntries) {
-                      entry.dispose();
-                    }
-                    _newProductEntries.clear();
-                    setState(() => _showBulkCreate = false);
-                  },
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Volver'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed:
-                      _newProductEntries.any((e) => e.isSelected && e.isValid)
+
+              const SizedBox(height: 20),
+
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        for (final e in _newProductEntries) {
+                          e.dispose();
+                        }
+                        _newProductEntries.clear();
+                        setState(() => _showBulkCreate = false);
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Volver'),
+                      style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _newProductEntries
+                              .any((e) => e.isSelected && e.isValid)
                           ? _createBulkProducts
                           : null,
-                  icon: _creatingProducts
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.check),
-                  label: Text(
-                      _creatingProducts ? 'Creando...' : 'Crear Productos'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.orange,
+                      icon: _creatingProducts
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.check),
+                      label: Text(
+                          _creatingProducts ? 'Creando...' : 'Crear Productos'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.orange,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1790,6 +1866,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           supplierName: _ocrSupplierName ?? widget.supplierName,
           supplierCode: entry.sku, // Store OCR SKU as supplier code
           isActive: true,
+          purchaseTreatment: entry.isWorkshopConsumable
+              ? PurchaseTreatment.workshopConsumable
+              : PurchaseTreatment.inventory,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
           imageUrl: entry.imageUrl,
@@ -2012,11 +2091,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
 
-      String? matchedSupplierName = parsedData?.supplierName;
+      String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
 
-      if (parsedData?.supplierName != null) {
-        final supplier = await _matchSupplier(parsedData!.supplierName!);
+      if (parsedData.supplierName != null) {
+        final supplier = await _matchSupplier(parsedData.supplierName!);
         if (supplier != null) {
           matchedSupplierName = supplier.name;
           matchedSupplierId = supplier.id;
@@ -2027,13 +2106,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           matchedSupplierName = null;
           debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
           parsedData = ParsedInvoice(
-            rut: parsedData!.rut,
-            invoiceNumber: parsedData!.invoiceNumber,
-            date: parsedData!.date,
-            total: parsedData!.total,
+            rut: parsedData.rut,
+            invoiceNumber: parsedData.invoiceNumber,
+            date: parsedData.date,
+            total: parsedData.total,
             supplierName: null, // Clear supplier name
-            lineItems: parsedData!.lineItems,
-            rawText: parsedData!.rawText,
+            lineItems: parsedData.lineItems,
+            rawText: parsedData.rawText,
           );
         }
       }
@@ -2124,11 +2203,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
 
-      String? matchedSupplierName = parsedData?.supplierName;
+      String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
 
-      if (parsedData?.supplierName != null) {
-        final supplier = await _matchSupplier(parsedData!.supplierName!);
+      if (parsedData.supplierName != null) {
+        final supplier = await _matchSupplier(parsedData.supplierName!);
         if (supplier != null) {
           matchedSupplierName = supplier.name;
           matchedSupplierId = supplier.id;
@@ -2138,13 +2217,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           matchedSupplierName = null;
           debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
           parsedData = ParsedInvoice(
-            rut: parsedData!.rut,
-            invoiceNumber: parsedData!.invoiceNumber,
-            date: parsedData!.date,
-            total: parsedData!.total,
+            rut: parsedData.rut,
+            invoiceNumber: parsedData.invoiceNumber,
+            date: parsedData.date,
+            total: parsedData.total,
             supplierName: null, // Clear supplier name
-            lineItems: parsedData!.lineItems,
-            rawText: parsedData!.rawText,
+            lineItems: parsedData.lineItems,
+            rawText: parsedData.rawText,
           );
         }
       }
@@ -2262,6 +2341,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _bulkCreateHorizontalScrollController.dispose();
     for (var controller in _skuControllers.values) {
       controller.dispose();
     }
@@ -2283,6 +2363,7 @@ class _NewProductEntry {
   bool isSelected;
   final TextEditingController nameController;
   final TextEditingController skuController;
+  final TextEditingController costController;
   final TextEditingController priceController;
   Category? selectedCategory;
   ProductBrand? selectedBrand;
@@ -2290,28 +2371,37 @@ class _NewProductEntry {
   String? imageUrlOptimized;
   bool isUploadingImage = false;
   bool isHoveringImage = false;
+  bool isWorkshopConsumable = false;
 
   _NewProductEntry({
     required this.originalItem,
     this.isSelected = true,
     String? initialName,
     this.selectedCategory,
-    this.selectedBrand,
   })  : nameController = TextEditingController(
             text: initialName ?? _cleanDescription(originalItem.description)),
         skuController = TextEditingController(text: originalItem.sku),
+        costController =
+            TextEditingController(text: _calculateDefaultCost(originalItem)),
         priceController =
             TextEditingController(text: _calculateDefaultPrice(originalItem));
 
+  static String _calculateDefaultCost(ParsedLineItem item) {
+    if (item.unitPrice != null && item.unitPrice! > 0) {
+      return item.unitPrice!.toStringAsFixed(0);
+    }
+    if (item.total != null && item.total! > 0) {
+      final qty = item.quantity ?? 1;
+      final calculatedCost = item.total! / (qty > 0 ? qty : 1);
+      return calculatedCost.toStringAsFixed(0);
+    }
+    return '';
+  }
+
   /// Calculate default sale price: 2x cost, rounded to nearest 100
   static String _calculateDefaultPrice(ParsedLineItem item) {
-    double cost = 0;
-    if (item.unitPrice != null && item.unitPrice! > 0) {
-      cost = item.unitPrice!;
-    } else if (item.total != null && item.total! > 0) {
-      final qty = item.quantity ?? 1;
-      cost = item.total! / (qty > 0 ? qty : 1);
-    }
+    final rawCost = _calculateDefaultCost(item);
+    final cost = double.tryParse(rawCost.replaceAll(',', '.')) ?? 0;
     if (cost <= 0) return '';
     // Cost + IVA (19%) * 2, rounded to nearest 100
     // Formula: Cost * 1.19 * 2
@@ -2332,33 +2422,31 @@ class _NewProductEntry {
   void dispose() {
     nameController.dispose();
     skuController.dispose();
+    costController.dispose();
     priceController.dispose();
   }
 
   /// Get SKU from controller
   String get sku => skuController.text.trim();
 
-  /// Get cost from original item (unitPrice, or calculated from total/quantity)
+  /// Get cost from controller (editable by the user)
   double get cost {
-    if (originalItem.unitPrice != null && originalItem.unitPrice! > 0) {
-      return originalItem.unitPrice!;
-    }
-    // Fallback: calculate from line total divided by quantity
-    if (originalItem.total != null && originalItem.total! > 0) {
-      final qty = originalItem.quantity ?? 1;
-      return originalItem.total! / (qty > 0 ? qty : 1);
-    }
-    return 0;
+    return double.tryParse(costController.text.replaceAll(',', '.')) ?? 0;
   }
 
   /// Get entered price
   double? get price =>
       double.tryParse(priceController.text.replaceAll(',', '.'));
 
+  double? get parsedCost =>
+      double.tryParse(costController.text.replaceAll(',', '.'));
+
   /// Validate entry is complete
   bool get isValid =>
       sku.isNotEmpty &&
       nameController.text.isNotEmpty &&
+      parsedCost != null &&
+      parsedCost! >= 0 &&
       price != null &&
       price! > 0;
 }

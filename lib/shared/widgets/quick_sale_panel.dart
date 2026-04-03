@@ -375,8 +375,12 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   }
 
   double _marginPercent(double salePrice, double cost) {
-    if (salePrice <= 0) return 0;
-    return ((salePrice - cost) / salePrice) * 100;
+    if (cost <= 0) return 100;
+    // El precio de venta incluye IVA (19%). Calculamos el neto.
+    final netPrice = salePrice / 1.19;
+    final pct = ((netPrice - cost) / cost) * 100;
+    if (pct.isInfinite || pct.isNaN) return 100.0;
+    return pct.clamp(-999.0, 999.0);
   }
 
   // ─── Payment ─────────────────────────────────────────────────────

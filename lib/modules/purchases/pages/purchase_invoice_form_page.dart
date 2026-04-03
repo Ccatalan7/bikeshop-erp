@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -272,64 +273,69 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Show OCR upload widget in centered dialog
     await showDialog(
       context: context,
-      barrierDismissible: true, // Allow tapping outside to close
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 1100,
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Close button aligned to right
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Cerrar',
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey.shade100,
-                      foregroundColor: Colors.grey.shade700,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final view = WidgetsBinding.instance.platformDispatcher.views.first;
+        final windowSize = Size(
+          view.physicalSize.width / view.devicePixelRatio,
+          view.physicalSize.height / view.devicePixelRatio,
+        );
+        final dialogWidth = math.min(windowSize.width - 32, 1360.0);
+        final dialogHeight = math.min(windowSize.height * 0.9, 860.0);
+
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: SizedBox(
+            width: dialogWidth,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: dialogHeight),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
+                      child: IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Cerrar',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.grey.shade100,
+                          foregroundColor: Colors.grey.shade700,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              // Content with padding
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: OCRUploadWidget(
-                    documentType: OCRDocumentType.invoice,
-                    showPreview: true,
-                    supplierId: _selectedSupplier?.id,
-                    supplierName: _selectedSupplier?.name,
-                    onComplete: (parsedInvoice) async {
-                      // Close dialog
-                      Navigator.of(context).pop();
-
-                      // Reload products to get any new ones created in OCR
-                      await _loadProducts();
-
-                      // Apply extracted data to form
-                      _applyOCRData(parsedInvoice);
-                    },
-                    onError: (error) {
-                      // Error already shown in widget
-                      debugPrint('OCR Error: $error');
-                    },
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: OCRUploadWidget(
+                        documentType: OCRDocumentType.invoice,
+                        showPreview: true,
+                        supplierId: _selectedSupplier?.id,
+                        supplierName: _selectedSupplier?.name,
+                        onComplete: (parsedInvoice) async {
+                          Navigator.of(dialogContext).pop();
+                          await _loadProducts();
+                          _applyOCRData(parsedInvoice);
+                        },
+                        onError: (error) {
+                          debugPrint('OCR Error: $error');
+                        },
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

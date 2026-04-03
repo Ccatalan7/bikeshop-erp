@@ -778,7 +778,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     final cost =
         double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
     if (cost <= 0) return 0;
-    return ((price - cost) / cost) * 100;
+    final netPrice = price / 1.19;
+    return ((netPrice - cost) / cost) * 100;
   }
 
   bool get _tracksInventoryInForm =>
