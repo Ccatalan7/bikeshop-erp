@@ -1,4 +1,5 @@
 import '../utils/chilean_utils.dart';
+import 'supplier_ocr_template.dart';
 import 'tax_treatment.dart';
 
 class Supplier {
@@ -26,6 +27,7 @@ class Supplier {
   final String? salesRepPhone;
   final String? salesRepEmail;
   final String? purchaseInstructions;
+  final SupplierOcrTemplate ocrTemplate;
   final String? notes;
   final bool isActive;
   final DateTime createdAt;
@@ -55,6 +57,7 @@ class Supplier {
     this.salesRepPhone,
     this.salesRepEmail,
     this.purchaseInstructions,
+    this.ocrTemplate = const SupplierOcrTemplate(),
     this.notes,
     this.isActive = true,
     required this.createdAt,
@@ -93,6 +96,7 @@ class Supplier {
       salesRepPhone: json['sales_rep_phone'] as String?,
       salesRepEmail: json['sales_rep_email'] as String?,
       purchaseInstructions: json['purchase_instructions'] as String?,
+      ocrTemplate: SupplierOcrTemplate.fromJson(json['ocr_template']),
       notes: json['notes'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -125,6 +129,7 @@ class Supplier {
       'sales_rep_phone': salesRepPhone,
       'sales_rep_email': salesRepEmail,
       'purchase_instructions': purchaseInstructions,
+      'ocr_template': ocrTemplate.toJson(),
       'notes': notes,
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),
@@ -156,6 +161,7 @@ class Supplier {
     String? salesRepPhone,
     String? salesRepEmail,
     String? purchaseInstructions,
+    SupplierOcrTemplate? ocrTemplate,
     String? notes,
     bool? isActive,
     DateTime? createdAt,
@@ -185,6 +191,7 @@ class Supplier {
       salesRepPhone: salesRepPhone ?? this.salesRepPhone,
       salesRepEmail: salesRepEmail ?? this.salesRepEmail,
       purchaseInstructions: purchaseInstructions ?? this.purchaseInstructions,
+      ocrTemplate: ocrTemplate ?? this.ocrTemplate,
       notes: notes ?? this.notes,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,

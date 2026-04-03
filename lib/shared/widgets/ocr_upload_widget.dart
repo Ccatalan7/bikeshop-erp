@@ -25,6 +25,7 @@ import '../../modules/inventory/models/inventory_models.dart' as inv_models;
 import '../../modules/inventory/services/brand_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
+import '../models/supplier_ocr_template.dart';
 import '../services/image_service.dart';
 import '../utils/chilean_utils.dart';
 import '../../modules/purchases/services/purchase_service.dart';
@@ -106,6 +107,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _isProcessing = false;
   String? _errorMessage;
   ParsedInvoice? _parsedData;
+  ParsedInvoice? _baseParsedData;
 
   // Determined at runtime based on config
   bool _useVeryfi = false;
@@ -125,7 +127,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _isDialogShowing = false;
   String? _supplierIdForNewProducts; // For potential future use
   String? _ocrSupplierName; // Supplier detected by OCR
+  shared_supplier.Supplier? _ocrSupplier;
   bool _showStock = false; // Toggle to show/hide stock column
+  bool _isSavingSupplierTemplate = false;
 
   @override
   void initState() {
@@ -405,6 +409,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final data = _parsedData!;
     final theme = Theme.of(context);
     final invoiceDiagnostics = _getInvoiceDiagnostics(data);
+    final supplierTemplateActive = _ocrSupplier?.ocrTemplate.enabled ?? false;
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -519,6 +524,70 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                     const Icon(Icons.edit, size: 16, color: Colors.grey),
                   ],
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: supplierTemplateActive
+                          ? Colors.blue.shade50
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: supplierTemplateActive
+                            ? Colors.blue.shade200
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          supplierTemplateActive
+                              ? Icons.auto_fix_high
+                              : Icons.rule,
+                          size: 14,
+                          color: supplierTemplateActive
+                              ? Colors.blue.shade700
+                              : Colors.grey.shade700,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          supplierTemplateActive
+                              ? 'Plantilla OCR activa'
+                              : 'Sin plantilla OCR',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: supplierTemplateActive
+                                ? Colors.blue.shade700
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _isSavingSupplierTemplate
+                        ? null
+                        : _showSaveSupplierTemplateDialog,
+                    icon: _isSavingSupplierTemplate
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_as, size: 16),
+                    label: const Text('Guardar plantilla OCR'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
               const Divider(height: 24),
               Row(
@@ -948,7 +1017,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 onPressed: () {
                   setState(() {
                     _parsedData = null;
+                    _baseParsedData = null;
                     _errorMessage = null;
+                    _ocrSupplier = null;
+                    _ocrSupplierName = null;
+                    _supplierIdForNewProducts = null;
                   });
                 },
                 icon: const Icon(Icons.refresh),
@@ -999,12 +1072,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (diagnostics.hasTotalMismatch) {
       parts.add('dif. ${_formatAmount(diagnostics.delta.abs())}');
     } else if (diagnostics.adjustedRowCount > 0) {
-      parts.add('${diagnostics.adjustedRowCount} autoajustes');
+      parts.add('${diagnostics.adjustedRowCount} con plantilla');
     }
 
-    final summary = hasWarning
-        ? 'Revisar antes de importar'
-        : 'OCR ajustó filas automáticamente';
+    final summary =
+        hasWarning ? 'Revisar antes de importar' : 'OCR con plantilla aplicada';
 
     final tooltipLines = <String>[
       summary,
@@ -1044,7 +1116,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     if (diagnostics.adjustmentSummary != null &&
         diagnostics.adjustmentSummary!.isNotEmpty) {
-      lines.add('Autoajuste: ${diagnostics.adjustmentSummary}');
+      lines.add('Nota OCR: ${diagnostics.adjustmentSummary}');
     }
 
     if (diagnostics.grossAmount != null) {
@@ -1076,7 +1148,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     } else if (!diagnostics.isConsistent) {
       lines.add('La fila no cuadra con los valores actuales.');
     } else if (item.wasAutoAdjusted || item.discountInferred) {
-      lines.add('La fila fue normalizada y ahora sí cuadra.');
+      lines.add('La fila fue completada por una regla OCR del proveedor.');
     }
 
     return lines.join('\n');
@@ -1406,14 +1478,17 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                           : null,
                                       onTap: () {
                                         this.setState(() {
+                                          _ocrSupplier = supplier;
                                           _ocrSupplierName = supplier.name;
                                           _supplierIdForNewProducts =
                                               supplier.id;
 
                                           // Update parsed data to reflect manually selected supplier
-                                          if (_parsedData != null) {
-                                            _parsedData = _parsedData!.copyWith(
-                                              supplierName: supplier.name,
+                                          if (_baseParsedData != null) {
+                                            _parsedData =
+                                                _applySupplierTemplate(
+                                              _baseParsedData!,
+                                              supplier,
                                             );
                                           }
                                         });
@@ -2190,50 +2265,144 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     return null;
   }
 
-  ParsedInvoice _normalizeParsedInvoiceMath(ParsedInvoice invoice) {
-    if (invoice.lineItems.isEmpty) return invoice;
-
-    return invoice.copyWith(
-      lineItems: invoice.lineItems.map(_normalizeParsedLineItemMath).toList(),
+  ParsedInvoice _applySupplierTemplate(
+    ParsedInvoice invoice,
+    shared_supplier.Supplier? supplier,
+  ) {
+    return VeryfiAdapter.applySupplierOcrTemplate(
+      invoice,
+      supplier?.ocrTemplate,
+      supplierName: supplier?.name ?? invoice.supplierName,
     );
   }
 
-  ParsedLineItem _normalizeParsedLineItemMath(ParsedLineItem item) {
-    final qty = item.quantity;
-    final unitPrice = item.unitPrice;
-    final total = item.total;
-
-    if (qty == null ||
-        qty <= 0 ||
-        unitPrice == null ||
-        unitPrice <= 0 ||
-        total == null ||
-        total <= 0) {
-      return item;
+  Future<void> _showSaveSupplierTemplateDialog() async {
+    if (_ocrSupplier == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Selecciona un proveedor antes de guardar una plantilla OCR.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
     }
 
-    final grossAmount = qty * unitPrice;
-    final impliedDiscount = grossAmount - total;
-    final tolerance = math.max(1.0, grossAmount * 0.001);
+    var enabled = _ocrSupplier!.ocrTemplate.enabled;
+    var parser = _ocrSupplier!.ocrTemplate.discountParser;
 
-    if (impliedDiscount <= tolerance) {
-      return item;
-    }
-
-    final normalizedDiscount = double.parse(impliedDiscount.toStringAsFixed(2));
-
-    final currentSummary = item.adjustmentSummary;
-    final newSummary = currentSummary == null || currentSummary.isEmpty
-        ? 'Descuento inferido (monto)'
-        : '$currentSummary · Descuento inferido (monto)';
-
-    return item.copyWith(
-      // Keep existing discount if set, otherwise use the implied amount
-      discount: item.discount ?? normalizedDiscount,
-      discountInferred: true,
-      wasAutoAdjusted: true,
-      adjustmentSummary: newSummary,
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Guardar plantilla OCR del proveedor'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Proveedor: ${_ocrSupplier!.name}'),
+              const SizedBox(height: 12),
+              const Text(
+                'Esta plantilla no inventa montos. Solo permite extraer el descuento desde el texto OCR de la fila cuando el proveedor usa columnas finales del tipo cantidad | precio | descuento | total.',
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Activar plantilla OCR'),
+                subtitle:
+                    const Text('Aplicar fallback determinístico por fila'),
+                value: enabled,
+                onChanged: (value) => setState(() => enabled = value),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<SupplierOcrDiscountParser>(
+                value: parser,
+                decoration: const InputDecoration(
+                  labelText: 'Regla de descuento',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: SupplierOcrDiscountParser.none,
+                    child: Text('Sin regla adicional'),
+                  ),
+                  DropdownMenuItem(
+                    value: SupplierOcrDiscountParser.anchoredTrailingNumeric,
+                    child: Text(
+                        'Texto OCR por fila: descuento entre precio y total'),
+                  ),
+                ],
+                onChanged: enabled
+                    ? (value) {
+                        if (value != null) {
+                          setState(() => parser = value);
+                        }
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
     );
+
+    if (shouldSave != true || _ocrSupplier == null) {
+      return;
+    }
+
+    final template = SupplierOcrTemplate(
+      enabled: enabled,
+      discountParser: enabled ? parser : SupplierOcrDiscountParser.none,
+    );
+
+    setState(() => _isSavingSupplierTemplate = true);
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final updatedSupplier = await purchaseService.saveSupplier(
+        _ocrSupplier!.copyWith(ocrTemplate: template),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _ocrSupplier = updatedSupplier;
+        _ocrSupplierName = updatedSupplier.name;
+        _supplierIdForNewProducts = updatedSupplier.id;
+        if (_baseParsedData != null) {
+          _parsedData =
+              _applySupplierTemplate(_baseParsedData!, updatedSupplier);
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Plantilla OCR guardada para ${updatedSupplier.name}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar la plantilla OCR: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingSupplierTemplate = false);
+      }
+    }
   }
 
   double _resolveParsedLineDiscountAmount(ParsedLineItem item) {
@@ -2370,7 +2539,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             if (diagnostics.incompleteRowCount > 0)
               Text('Filas incompletas: ${diagnostics.incompleteRowCount}'),
             if (diagnostics.adjustedRowCount > 0)
-              Text('Filas autoajustadas: ${diagnostics.adjustedRowCount}'),
+              Text('Filas con plantilla OCR: ${diagnostics.adjustedRowCount}'),
             const SizedBox(height: 12),
             const Text('Puedes continuar igual o volver a revisar el preview.'),
           ],
@@ -2437,23 +2606,25 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
-      parsedData = _normalizeParsedInvoiceMath(parsedData);
+      ParsedInvoice baseParsedData = parsedData;
 
       String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
+      shared_supplier.Supplier? matchedSupplier;
 
       if (parsedData.supplierName != null) {
-        final supplier = await _matchSupplier(parsedData.supplierName!);
-        if (supplier != null) {
-          matchedSupplierName = supplier.name;
-          matchedSupplierId = supplier.id;
-          debugPrint('✅ OCR matched supplier: ${supplier.name}');
+        matchedSupplier = await _matchSupplier(parsedData.supplierName!);
+        if (matchedSupplier != null) {
+          matchedSupplierName = matchedSupplier.name;
+          matchedSupplierId = matchedSupplier.id;
+          parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+          debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
         } else {
           // If supplier not found in DB, clear it to avoid phantom suppliers
           // forcing user to select a valid one later
           matchedSupplierName = null;
           debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-          parsedData = ParsedInvoice(
+          baseParsedData = ParsedInvoice(
             rut: parsedData.rut,
             invoiceNumber: parsedData.invoiceNumber,
             date: parsedData.date,
@@ -2462,11 +2633,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             lineItems: parsedData.lineItems,
             rawText: parsedData.rawText,
           );
+          parsedData = baseParsedData;
         }
       }
 
       setState(() {
+        _baseParsedData = baseParsedData;
         _parsedData = parsedData;
+        _ocrSupplier = matchedSupplier;
         _ocrSupplierName = matchedSupplierName;
         _supplierIdForNewProducts = matchedSupplierId;
         _isProcessing = false;
@@ -2550,22 +2724,24 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
-      parsedData = _normalizeParsedInvoiceMath(parsedData);
+      ParsedInvoice baseParsedData = parsedData;
 
       String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
+      shared_supplier.Supplier? matchedSupplier;
 
       if (parsedData.supplierName != null) {
-        final supplier = await _matchSupplier(parsedData.supplierName!);
-        if (supplier != null) {
-          matchedSupplierName = supplier.name;
-          matchedSupplierId = supplier.id;
-          debugPrint('✅ OCR matched supplier: ${supplier.name}');
+        matchedSupplier = await _matchSupplier(parsedData.supplierName!);
+        if (matchedSupplier != null) {
+          matchedSupplierName = matchedSupplier.name;
+          matchedSupplierId = matchedSupplier.id;
+          parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+          debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
         } else {
           // If supplier not found in DB, clear it to avoid phantom suppliers
           matchedSupplierName = null;
           debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-          parsedData = ParsedInvoice(
+          baseParsedData = ParsedInvoice(
             rut: parsedData.rut,
             invoiceNumber: parsedData.invoiceNumber,
             date: parsedData.date,
@@ -2574,11 +2750,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             lineItems: parsedData.lineItems,
             rawText: parsedData.rawText,
           );
+          parsedData = baseParsedData;
         }
       }
 
       setState(() {
+        _baseParsedData = baseParsedData;
         _parsedData = parsedData;
+        _ocrSupplier = matchedSupplier;
         _ocrSupplierName = matchedSupplierName;
         _supplierIdForNewProducts = matchedSupplierId;
         _isProcessing = false;

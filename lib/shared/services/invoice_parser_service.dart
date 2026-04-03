@@ -50,6 +50,7 @@ class ParsedInvoice {
 class ParsedLineItem {
   final String description;
   final String? sku;
+  final String? rawRowText;
   final double? quantity;
   final double? unitPrice;
   final double? total;
@@ -68,6 +69,7 @@ class ParsedLineItem {
   ParsedLineItem({
     required this.description,
     this.sku,
+    this.rawRowText,
     this.quantity,
     this.unitPrice,
     this.total,
@@ -86,6 +88,7 @@ class ParsedLineItem {
   ParsedLineItem copyWith({
     String? description,
     String? sku,
+    String? rawRowText,
     double? quantity,
     double? unitPrice,
     double? total,
@@ -102,6 +105,7 @@ class ParsedLineItem {
     return ParsedLineItem(
       description: description ?? this.description,
       sku: sku ?? this.sku,
+      rawRowText: rawRowText ?? this.rawRowText,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       total: total ?? this.total,
@@ -626,6 +630,7 @@ class InvoiceParserService {
           items.add(ParsedLineItem(
             description: description.trim(),
             sku: code,
+            rawRowText: description.trim(),
             quantity: quantity,
             unitPrice: unitPrice,
             total: lineTotal,

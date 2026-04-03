@@ -1,10 +1,30 @@
 import '../../modules/sales/models/sales_models.dart';
+import '../models/supplier_ocr_template.dart';
 import '../../shared/models/tax_treatment.dart';
 import 'package:flutter/foundation.dart';
 import '../services/invoice_parser_service.dart';
 
 /// Adapter to convert Veryfi response JSON into our internal `Invoice` model.
 class VeryfiAdapter {
+  static ParsedInvoice applySupplierOcrTemplate(
+    ParsedInvoice invoice,
+    SupplierOcrTemplate? template, {
+    String? supplierName,
+  }) {
+    if (template == null || !template.enabled) {
+      return supplierName == null
+          ? invoice
+          : invoice.copyWith(supplierName: supplierName);
+    }
+
+    return invoice.copyWith(
+      supplierName: supplierName ?? invoice.supplierName,
+      lineItems: invoice.lineItems
+          .map((item) => _applySupplierTemplateToLineItem(item, template))
+          .toList(growable: false),
+    );
+  }
+
   /// Format a number with Chilean thousand separators (dots)
   /// e.g., 12690 → "12.690", 1790 → "1.790"
   static String _formatWithDots(int value) {
@@ -81,7 +101,7 @@ class VeryfiAdapter {
     }
 
     // PRIORITY 4: Alphanumeric codes ending with letters (e.g., "213111BN")
-    // Must have at least 4 digits followed by letters
+    // Must have at least 4 digits followed by letters.
     final alphanumericPattern =
         RegExp(r'\b(\d{4,}[A-Z]{1,3})\b', caseSensitive: false);
     final alphaMatch =
@@ -92,12 +112,143 @@ class VeryfiAdapter {
       return sku;
     }
 
-    // PRIORITY 5 (LOWEST): Size/dimension codes - only if nothing else found
-    // These are less reliable as SKUs, but better than nothing
-    // Skipping this for now - size codes caused confusion
-
     debugPrint('   ⚠ No SKU pattern found in: "$description"');
+
     return null;
+  }
+
+  static ParsedLineItem _applySupplierTemplateToLineItem(
+    ParsedLineItem item,
+    SupplierOcrTemplate template,
+  ) {
+    if (!template.usesRawRowDiscountFallback) {
+      return item;
+    }
+
+    if (item.discount != null && item.discount! > 0) {
+      return item;
+    }
+
+    final extractedDiscount = _extractDiscountFromRawRow(item);
+    if (extractedDiscount == null || extractedDiscount <= 0) {
+      return item;
+    }
+
+    final currentSummary = item.adjustmentSummary;
+    final newSummary = currentSummary == null || currentSummary.isEmpty
+        ? 'Plantilla OCR: descuento extraído desde texto de fila'
+        : '$currentSummary · Plantilla OCR: descuento extraído desde texto de fila';
+
+    return item.copyWith(
+      discount: extractedDiscount,
+      wasAutoAdjusted: true,
+      adjustmentSummary: newSummary,
+    );
+  }
+
+  static double? _extractDiscountFromRawRow(ParsedLineItem item) {
+    final rawRowText = item.rawRowText?.trim();
+    final unitPrice = item.unitPrice;
+    final total = item.total;
+
+    if (rawRowText == null ||
+        rawRowText.isEmpty ||
+        unitPrice == null ||
+        unitPrice <= 0 ||
+        total == null ||
+        total <= 0) {
+      return null;
+    }
+
+    final numericTokens = _extractNumericTokens(rawRowText);
+    if (numericTokens.length < 3) {
+      return null;
+    }
+
+    final totalIndex = _findMatchingTokenIndex(
+      numericTokens,
+      total,
+      endIndexExclusive: numericTokens.length,
+    );
+    if (totalIndex == null) {
+      return null;
+    }
+
+    final unitPriceIndex = _findMatchingTokenIndex(
+      numericTokens,
+      unitPrice,
+      endIndexExclusive: totalIndex,
+    );
+    if (unitPriceIndex == null || unitPriceIndex >= totalIndex - 1) {
+      return null;
+    }
+
+    final tokensBetween = numericTokens.sublist(unitPriceIndex + 1, totalIndex);
+    if (tokensBetween.length != 1) {
+      return null;
+    }
+
+    final discount = tokensBetween.first.value;
+    final grossAmount = (item.quantity ?? 1) * unitPrice;
+    if (discount <= 0 || discount >= grossAmount) {
+      return null;
+    }
+
+    return discount;
+  }
+
+  static List<_NumericToken> _extractNumericTokens(String rawRowText) {
+    final matches = RegExp(r'\d[\d\.,]*').allMatches(rawRowText);
+    final tokens = <_NumericToken>[];
+
+    for (final match in matches) {
+      final rawValue = match.group(0);
+      if (rawValue == null || rawValue.isEmpty) continue;
+
+      final parsedValue = _parseNumericToken(rawValue);
+      if (parsedValue == null) continue;
+
+      tokens.add(_NumericToken(raw: rawValue, value: parsedValue));
+    }
+
+    return tokens;
+  }
+
+  static int? _findMatchingTokenIndex(
+    List<_NumericToken> tokens,
+    double expectedValue, {
+    required int endIndexExclusive,
+  }) {
+    for (int index = endIndexExclusive - 1; index >= 0; index--) {
+      if (_numericValuesMatch(tokens[index].value, expectedValue)) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  static bool _numericValuesMatch(double tokenValue, double expectedValue) {
+    final roundedToken = tokenValue.roundToDouble();
+    final roundedExpected = expectedValue.roundToDouble();
+    return (tokenValue - expectedValue).abs() <= 1 ||
+        (roundedToken - roundedExpected).abs() <= 1;
+  }
+
+  static double? _parseNumericToken(String value) {
+    var normalized = value.trim();
+    if (normalized.isEmpty) return null;
+
+    if (normalized.contains(',') && normalized.contains('.')) {
+      normalized = normalized.replaceAll('.', '').replaceAll(',', '.');
+    } else if (normalized.contains(',')) {
+      normalized = normalized.replaceAll('.', '').replaceAll(',', '.');
+    } else if (RegExp(r'^\d{1,3}(?:\.\d{3})+$').hasMatch(normalized)) {
+      normalized = normalized.replaceAll('.', '');
+    } else if (RegExp(r'^\d+\.\d{3}$').hasMatch(normalized)) {
+      normalized = normalized.replaceAll('.', '');
+    }
+
+    return double.tryParse(normalized);
   }
 
   /// Try to extract a SKU from raw text line (e.g. "2207 CAMARA 26...")
@@ -457,6 +608,7 @@ class VeryfiAdapter {
       parsedItems.add(ParsedLineItem(
         description: desc,
         sku: sku,
+        rawRowText: rawText.isNotEmpty ? rawText : null,
         quantity: qty,
         unitPrice: price,
         total: lineTotal,
@@ -502,4 +654,11 @@ class VeryfiAdapter {
       rawText: buffer.toString(),
     );
   }
+}
+
+class _NumericToken {
+  final String raw;
+  final double value;
+
+  const _NumericToken({required this.raw, required this.value});
 }

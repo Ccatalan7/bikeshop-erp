@@ -15,8 +15,8 @@ class InvoiceParserApiService {
   Future<bool> isServiceAvailable() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/health')).timeout(
-        const Duration(seconds: 2),
-      );
+            const Duration(seconds: 2),
+          );
       return response.statusCode == 200;
     } catch (e) {
       print('⚠️ Invoice parser API not available: $e');
@@ -31,7 +31,8 @@ class InvoiceParserApiService {
     String filename,
   ) async {
     try {
-      print('📤 Sending PDF to parser API ($filename, ${pdfBytes.length} bytes)');
+      print(
+          '📤 Sending PDF to parser API ($filename, ${pdfBytes.length} bytes)');
 
       // Create multipart request
       final request = http.MultipartRequest(
@@ -47,8 +48,8 @@ class InvoiceParserApiService {
 
       // Send request
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 10),
-      );
+            const Duration(seconds: 10),
+          );
 
       final response = await http.Response.fromStream(streamedResponse);
 
@@ -64,6 +65,7 @@ class InvoiceParserApiService {
                   ?.map((item) => ParsedLineItem(
                         description:
                             '[${item['code']}] ${item['description']}'.trim(),
+                        rawRowText: item['rawText'] as String?,
                         quantity: (item['quantity'] as num?)?.toDouble(),
                         unitPrice: (item['unitPrice'] as num?)?.toDouble(),
                         total: (item['total'] as num?)?.toDouble(),
