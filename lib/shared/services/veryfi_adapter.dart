@@ -330,6 +330,8 @@ class VeryfiAdapter {
       // The text field contains the original OCR text like "$1.790\t6\t$10.740"
       // If the text shows a value like "$1.790" but Veryfi parsed it as 1.79,
       // we need to multiply by 1000.
+      final adjustments = <String>[];
+      bool discountInferred = false;
 
       // Helper to check if raw text contains a value that looks like it should be 1000x larger
       // e.g., "$1.790" in text but parsed as 1.79
@@ -361,6 +363,7 @@ class VeryfiAdapter {
             rawText.endsWith('\t$correctedQty')) {
           debugPrint('   🔧 Chilean fix (verified): qty $qty → $correctedQty');
           qty = correctedQty.toDouble();
+          adjustments.add('Cantidad escalada x1000');
         }
       }
 
@@ -370,6 +373,7 @@ class VeryfiAdapter {
         debugPrint(
             '   🔧 Chilean fix (verified): price $price → $correctedPrice');
         price = correctedPrice.toDouble();
+        adjustments.add('Precio escalado x1000');
       }
 
       // Check and fix total
@@ -378,6 +382,7 @@ class VeryfiAdapter {
         debugPrint(
             '   🔧 Chilean fix (verified): total $lineTotal → $correctedTotal');
         lineTotal = correctedTotal.toDouble();
+        adjustments.add('Total escalado x1000');
       }
 
       debugPrint('   ✅ After fix: qty=$qty, price=$price, total=$lineTotal');
@@ -405,6 +410,8 @@ class VeryfiAdapter {
           debugPrint(
               '💡 Heuristic: Mapped "tax" field ($potentialRate) to discount_rate');
           discountRate = potentialRate;
+          discountInferred = true;
+          adjustments.add('Descuento inferido desde campo tax');
         }
       }
 
@@ -422,6 +429,7 @@ class VeryfiAdapter {
         if ((calculatedQty - calculatedQty.round()).abs() < 0.05) {
           qty = calculatedQty.roundToDouble();
           debugPrint('   ✅ Recovered quantity (simple): $qty');
+          adjustments.add('Cantidad recuperada desde total/precio');
         } else {
           // 3. Try to find a standard discount that makes it an integer
           // Common discounts: 5%, 10%, 15%, 20%, 25%, 30%, 35%, 40%, 50%
@@ -446,8 +454,11 @@ class VeryfiAdapter {
               if (discountRate == null) {
                 discountRate = rate.toDouble();
                 debugPrint('   💡 Inferred discount rate: $discountRate%');
+                discountInferred = true;
+                adjustments.add('Descuento inferido para recuperar cantidad');
               }
               debugPrint('   ✅ Recovered quantity (w/ $rate% discount): $qty');
+              adjustments.add('Cantidad recuperada con descuento');
               found = true;
               break;
             }
@@ -459,6 +470,7 @@ class VeryfiAdapter {
             if (calculatedQty > 0.01) {
               qty = double.parse(calculatedQty.toStringAsFixed(2));
               debugPrint('   ⚠️ Recovered quantity (raw ratio): $qty');
+              adjustments.add('Cantidad aproximada desde total/precio');
             }
           }
         }
@@ -486,6 +498,8 @@ class VeryfiAdapter {
           if ((impliedRate - impliedRate.round()).abs() < 1.0) {
             discountRate = impliedRate.roundToDouble();
             discount = expected - lineTotal;
+            discountInferred = true;
+            adjustments.add('Descuento inferido desde total de fila');
             debugPrint(
                 '   💡 Inferred missing discount: $discountRate% ($discount)');
           } else {
@@ -493,6 +507,8 @@ class VeryfiAdapter {
             if ((impliedRate * 2 - (impliedRate * 2).round()).abs() < 1.0) {
               discountRate = double.parse(impliedRate.toStringAsFixed(1));
               discount = expected - lineTotal;
+              discountInferred = true;
+              adjustments.add('Descuento inferido desde total de fila');
               debugPrint(
                   '   💡 Inferred missing discount: $discountRate% ($discount)');
             }
@@ -508,6 +524,9 @@ class VeryfiAdapter {
         total: lineTotal,
         discount: discount,
         discountRate: discountRate,
+        discountInferred: discountInferred,
+        wasAutoAdjusted: adjustments.isNotEmpty,
+        adjustmentSummary: adjustments.isEmpty ? null : adjustments.join(' · '),
       ));
     }
 

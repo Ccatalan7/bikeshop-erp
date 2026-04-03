@@ -55,6 +55,9 @@ class ParsedLineItem {
   final double? total;
   final double? discount;
   final double? discountRate;
+  final bool discountInferred;
+  final bool wasAutoAdjusted;
+  final String? adjustmentSummary;
 
   // Product verification fields (populated after database lookup)
   final bool? existsInDatabase;
@@ -70,6 +73,9 @@ class ParsedLineItem {
     this.total,
     this.discount,
     this.discountRate,
+    this.discountInferred = false,
+    this.wasAutoAdjusted = false,
+    this.adjustmentSummary,
     this.existsInDatabase,
     this.matchedProductId,
     this.matchedProductName,
@@ -85,6 +91,9 @@ class ParsedLineItem {
     double? total,
     double? discount,
     double? discountRate,
+    bool? discountInferred,
+    bool? wasAutoAdjusted,
+    String? adjustmentSummary,
     bool? existsInDatabase,
     String? matchedProductId,
     String? matchedProductName,
@@ -98,6 +107,9 @@ class ParsedLineItem {
       total: total ?? this.total,
       discount: discount ?? this.discount,
       discountRate: discountRate ?? this.discountRate,
+      discountInferred: discountInferred ?? this.discountInferred,
+      wasAutoAdjusted: wasAutoAdjusted ?? this.wasAutoAdjusted,
+      adjustmentSummary: adjustmentSummary ?? this.adjustmentSummary,
       existsInDatabase: existsInDatabase ?? this.existsInDatabase,
       matchedProductId: matchedProductId ?? this.matchedProductId,
       matchedProductName: matchedProductName ?? this.matchedProductName,
@@ -107,7 +119,7 @@ class ParsedLineItem {
 
   @override
   String toString() {
-    return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate, exists: $existsInDatabase)';
+    return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate, inferred: $discountInferred, adjusted: $wasAutoAdjusted, exists: $existsInDatabase)';
   }
 }
 

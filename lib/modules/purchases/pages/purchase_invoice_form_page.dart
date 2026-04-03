@@ -340,6 +340,42 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   /// Apply OCR-extracted data to the form
+  double _resolveOCRLineDiscountAmount(ParsedLineItem item) {
+    final qty = item.quantity;
+    final unitCost = item.unitPrice;
+    final total = item.total;
+
+    if (qty != null &&
+        qty > 0 &&
+        unitCost != null &&
+        unitCost > 0 &&
+        total != null &&
+        total >= 0) {
+      final grossAmount = qty * unitCost;
+      final impliedDiscount = grossAmount - total;
+      final tolerance = math.max(1.0, grossAmount * 0.001);
+
+      if (impliedDiscount > tolerance) {
+        return impliedDiscount.clamp(0, grossAmount).toDouble();
+      }
+    }
+
+    if (item.discount != null && item.discount! > 0) {
+      return item.discount!;
+    }
+
+    if (qty != null &&
+        qty > 0 &&
+        unitCost != null &&
+        unitCost > 0 &&
+        item.discountRate != null &&
+        item.discountRate! > 0) {
+      return (qty * unitCost) * (item.discountRate! / 100);
+    }
+
+    return 0;
+  }
+
   void _applyOCRData(ParsedInvoice parsedInvoice) {
     setState(() {
       // 1. Invoice number (if extracted)
@@ -536,20 +572,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   newLine.unitCost.toStringAsFixed(0);
             }
 
-            // Apply discount from OCR if available
-            if (item.discountRate != null && item.discountRate! > 0) {
-              // Percentage discount detected
-              newEntry.discountType = DiscountType.percentage;
-              newEntry.discountController.text =
-                  item.discountRate!.toStringAsFixed(0);
-              // Force recalculation immediately
-              newEntry.recalculateDiscount();
-            } else if (item.discount != null && item.discount! > 0) {
-              // Amount discount detected
+            final ocrDiscountAmount = _resolveOCRLineDiscountAmount(item);
+
+            if (ocrDiscountAmount > 0) {
               newEntry.discountType = DiscountType.amount;
               newEntry.discountController.text =
-                  item.discount!.toStringAsFixed(0);
-              // Force recalculation immediately
+                  ocrDiscountAmount.toStringAsFixed(0);
               newEntry.recalculateDiscount();
             }
 

@@ -12,8 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import '../services/ocr_service.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
-import '../services/veryfi_service.dart';
-import '../services/veryfi_config_loader.dart';
+import '../services/veryfi_proxy_service.dart';
 import '../services/veryfi_adapter.dart';
 import '../services/inventory_service.dart';
 import '../models/product.dart' show Product, PurchaseTreatment;
@@ -27,6 +26,7 @@ import '../../modules/inventory/services/brand_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
 import '../services/image_service.dart';
+import '../utils/chilean_utils.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../shared/models/supplier.dart' as shared_supplier;
 import 'package:provider/provider.dart';
@@ -154,24 +154,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
 
       // Check Veryfi availability
-      try {
-        await VeryfiConfigLoader.loadEnv();
-        _veryfiAvailable = VeryfiConfigLoader.isConfigured;
-        debugPrint('🔧 Veryfi configured: $_veryfiAvailable');
-      } catch (e) {
-        debugPrint('⚠️ Veryfi config load failed: $e');
-        _veryfiAvailable = false;
-      }
+      _veryfiAvailable = true;
+      debugPrint('🔧 Veryfi proxy available through Supabase Edge Function');
 
       // Determine which provider to use
       switch (widget.provider) {
         case OCRProvider.auto:
-          // On desktop/web, ALWAYS use Veryfi (ML Kit doesn't exist)
-          if (!_isLocalOCRSupported) {
-            _useVeryfi = true;
-          } else {
-            _useVeryfi = _veryfiAvailable;
-          }
+          // Prefer local OCR on supported mobile platforms.
+          // Use cloud OCR on desktop/web where ML Kit is unavailable.
+          _useVeryfi = !_isLocalOCRSupported;
           break;
         case OCRProvider.veryfi:
           _useVeryfi = true;
@@ -186,12 +177,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             _useVeryfi = false;
           }
           break;
-      }
-
-      // If we need Veryfi but it's not configured, show error
-      if (_useVeryfi && !_veryfiAvailable) {
-        _errorMessage =
-            'Veryfi no está configurado. Agrega VERYFI_CLIENT_ID y VERYFI_API_KEY en el archivo .env para usar OCR en escritorio.';
       }
     } catch (e) {
       debugPrint('❌ OCR initialization error: $e');
@@ -353,7 +338,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             ),
           ),
 
-        // Veryfi not configured warning (only when forcing Veryfi)
+        // Cloud OCR warning (shown only if proxy availability is explicitly false)
         if (widget.provider == OCRProvider.veryfi &&
             !_veryfiAvailable &&
             _initialized)
@@ -372,7 +357,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Veryfi no está configurado. Agrega VERYFI_CLIENT_ID y VERYFI_API_KEY en el archivo .env',
+                      'El OCR en la nube no está configurado en el servidor. Configura los secrets de Veryfi en Supabase Edge Functions.',
                       style: TextStyle(color: Colors.orange[700]),
                     ),
                   ),
@@ -419,6 +404,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   Widget _buildPreviewScreen() {
     final data = _parsedData!;
     final theme = Theme.of(context);
+    final invoiceDiagnostics = _getInvoiceDiagnostics(data);
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -583,9 +569,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               _buildDetailRow(
                 Icons.attach_money,
                 'Total',
-                data.total != null
-                    ? '\$${data.total!.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}'
-                    : '---',
+                _formatAmount(data.total),
                 isBold: true,
                 valueColor: theme.colorScheme.primary,
                 valueSize: 18,
@@ -598,14 +582,28 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         // Products Section
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Productos Detectados (${data.lineItems.length})',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Productos Detectados (${data.lineItems.length})',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (data.lineItems.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: _buildCompactDiagnosticsStatus(invoiceDiagnostics),
+                    ),
+                ],
               ),
             ),
+            const SizedBox(width: 12),
             TextButton.icon(
               onPressed: () => setState(() => _showStock = !_showStock),
               icon: Icon(
@@ -734,6 +732,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: data.lineItems.map((item) {
+                            final rowDiagnostics = _getRowDiagnostics(item);
                             // Determine verification status
                             Widget statusIcon;
                             String tooltip;
@@ -860,13 +859,52 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   ),
                                   Expanded(
                                     flex: 3,
-                                    child: Text(
-                                        item.total != null
-                                            ? '\$${item.total!.toStringAsFixed(0)}'
-                                            : '-',
-                                        style: const TextStyle(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        if (!rowDiagnostics.isComplete ||
+                                            !rowDiagnostics.isConsistent ||
+                                            rowDiagnostics.wasAutoAdjusted)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(right: 6),
+                                            child: Tooltip(
+                                              message:
+                                                  _buildRowDiagnosticsTooltip(
+                                                item,
+                                                rowDiagnostics,
+                                              ),
+                                              child: Icon(
+                                                !rowDiagnostics.isComplete ||
+                                                        !rowDiagnostics
+                                                            .isConsistent
+                                                    ? Icons.error_outline
+                                                    : Icons.auto_fix_high,
+                                                size: 16,
+                                                color: !rowDiagnostics
+                                                            .isComplete ||
+                                                        !rowDiagnostics
+                                                            .isConsistent
+                                                    ? Colors.orange.shade700
+                                                    : Colors.blue.shade700,
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          item.total != null
+                                              ? '\$${item.total!.toStringAsFixed(0)}'
+                                              : '-',
+                                          style: TextStyle(
                                             fontSize: 13,
-                                            fontWeight: FontWeight.bold)),
+                                            fontWeight: FontWeight.bold,
+                                            color: !rowDiagnostics.isComplete ||
+                                                    !rowDiagnostics.isConsistent
+                                                ? Colors.orange.shade800
+                                                : null,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -922,9 +960,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton.icon(
-                onPressed: () {
-                  widget.onComplete(data);
-                },
+                onPressed: () => _handleUseParsedData(data),
                 icon: const Icon(Icons.check),
                 label: const Text('Usar Datos'),
                 style: FilledButton.styleFrom(
@@ -936,6 +972,113 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         ),
       ],
     );
+  }
+
+  Widget _buildCompactDiagnosticsStatus(_OCRInvoiceDiagnostics diagnostics) {
+    final hasWarning = diagnostics.hasTotalMismatch ||
+        diagnostics.inconsistentRowCount > 0 ||
+        diagnostics.incompleteRowCount > 0;
+    final hasAdjustments = diagnostics.adjustedRowCount > 0;
+
+    if (!hasWarning && !hasAdjustments) {
+      return const SizedBox.shrink();
+    }
+
+    final color =
+        hasWarning ? Colors.orange.shade700 : Colors.blueGrey.shade700;
+    final icon = hasWarning ? Icons.warning_amber_rounded : Icons.info_outline;
+
+    final parts = <String>[];
+    if (diagnostics.incompleteRowCount > 0) {
+      parts.add('${diagnostics.incompleteRowCount} incompletas');
+    }
+    if (diagnostics.inconsistentRowCount > 0) {
+      parts.add('${diagnostics.inconsistentRowCount} con desfase');
+    }
+    if (diagnostics.hasTotalMismatch) {
+      parts.add('dif. ${_formatAmount(diagnostics.delta.abs())}');
+    } else if (diagnostics.adjustedRowCount > 0) {
+      parts.add('${diagnostics.adjustedRowCount} autoajustes');
+    }
+
+    final summary = hasWarning
+        ? 'Revisar antes de importar'
+        : 'OCR ajustó filas automáticamente';
+
+    final tooltipLines = <String>[
+      summary,
+      'Total OCR: ${_formatAmount(diagnostics.headerTotal)}',
+      'Suma líneas: ${_formatAmount(diagnostics.rowTotal)}',
+      'Diferencia: ${_formatAmount(diagnostics.delta.abs())}',
+    ];
+
+    return Tooltip(
+      message: tooltipLines.join('\n'),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '$summary${parts.isNotEmpty ? ' · ${parts.join(' · ')}' : ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: hasWarning ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildRowDiagnosticsTooltip(
+    ParsedLineItem item,
+    _OCRRowDiagnostics diagnostics,
+  ) {
+    final lines = <String>[];
+
+    if (diagnostics.adjustmentSummary != null &&
+        diagnostics.adjustmentSummary!.isNotEmpty) {
+      lines.add('Autoajuste: ${diagnostics.adjustmentSummary}');
+    }
+
+    if (diagnostics.grossAmount != null) {
+      lines.add('Bruto esperado: ${_formatAmount(diagnostics.grossAmount)}');
+    }
+
+    if (diagnostics.discountAmount > 0) {
+      lines.add(
+        'Descuento aplicado: ${_formatAmount(diagnostics.discountAmount)}',
+      );
+    }
+
+    if (diagnostics.displayedTotal != null) {
+      lines.add('Total OCR: ${_formatAmount(diagnostics.displayedTotal)}');
+    }
+
+    if (diagnostics.computedTotal != null) {
+      lines.add(
+        'Total calculado: ${_formatAmount(diagnostics.computedTotal)}',
+      );
+    }
+
+    if (diagnostics.delta != null && diagnostics.delta!.abs() > 0) {
+      lines.add('Diferencia: ${_formatAmount(diagnostics.delta!.abs())}');
+    }
+
+    if (!diagnostics.isComplete) {
+      lines.add('Fila incompleta: falta cantidad, precio o total.');
+    } else if (!diagnostics.isConsistent) {
+      lines.add('La fila no cuadra con los valores actuales.');
+    } else if (item.wasAutoAdjusted || item.discountInferred) {
+      lines.add('La fila fue normalizada y ahora sí cuadra.');
+    }
+
+    return lines.join('\n');
   }
 
   /// Update SKU for a line item and re-verify against database
@@ -2046,6 +2189,220 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     return null;
   }
 
+  ParsedInvoice _normalizeParsedInvoiceMath(ParsedInvoice invoice) {
+    if (invoice.lineItems.isEmpty) return invoice;
+
+    return invoice.copyWith(
+      lineItems: invoice.lineItems.map(_normalizeParsedLineItemMath).toList(),
+    );
+  }
+
+  ParsedLineItem _normalizeParsedLineItemMath(ParsedLineItem item) {
+    final qty = item.quantity;
+    final unitPrice = item.unitPrice;
+    final total = item.total;
+
+    if (qty == null ||
+        qty <= 0 ||
+        unitPrice == null ||
+        unitPrice <= 0 ||
+        total == null ||
+        total <= 0) {
+      return item;
+    }
+
+    final grossAmount = qty * unitPrice;
+    final impliedDiscount = grossAmount - total;
+    final tolerance = math.max(1.0, grossAmount * 0.001);
+
+    if (impliedDiscount <= tolerance) {
+      return item;
+    }
+
+    final normalizedDiscount = double.parse(impliedDiscount.toStringAsFixed(2));
+    double? normalizedRate;
+
+    final impliedRate = (normalizedDiscount / grossAmount) * 100;
+    final roundedWhole = impliedRate.roundToDouble();
+    final roundedHalf = (impliedRate * 2).roundToDouble() / 2;
+
+    if ((impliedRate - roundedWhole).abs() < 0.05) {
+      normalizedRate = roundedWhole;
+    } else if ((impliedRate - roundedHalf).abs() < 0.05) {
+      normalizedRate = roundedHalf;
+    }
+
+    final currentSummary = item.adjustmentSummary;
+    final newSummary = currentSummary == null || currentSummary.isEmpty
+        ? 'Descuento inferido desde total de fila'
+        : '$currentSummary · Descuento inferido desde total de fila';
+
+    return item.copyWith(
+      discount: normalizedDiscount,
+      discountRate: item.discountRate ?? normalizedRate,
+      discountInferred: true,
+      wasAutoAdjusted: true,
+      adjustmentSummary: newSummary,
+    );
+  }
+
+  double _resolveParsedLineDiscountAmount(ParsedLineItem item) {
+    if (item.discount != null && item.discount! > 0) {
+      return item.discount!;
+    }
+
+    final qty = item.quantity;
+    final unitPrice = item.unitPrice;
+    final discountRate = item.discountRate;
+
+    if (qty != null &&
+        qty > 0 &&
+        unitPrice != null &&
+        unitPrice > 0 &&
+        discountRate != null &&
+        discountRate > 0) {
+      return qty * unitPrice * (discountRate / 100);
+    }
+
+    return 0.0;
+  }
+
+  _OCRRowDiagnostics _getRowDiagnostics(ParsedLineItem item) {
+    final qty = item.quantity;
+    final unitPrice = item.unitPrice;
+    final hasBaseValues =
+        qty != null && qty > 0 && unitPrice != null && unitPrice > 0;
+
+    final grossAmount = hasBaseValues ? qty * unitPrice : null;
+    final discountAmount = _resolveParsedLineDiscountAmount(item);
+    final computedTotal = grossAmount != null
+        ? math.max(0.0, grossAmount - discountAmount).toDouble()
+        : null;
+    final displayedTotal = item.total ?? computedTotal;
+
+    double? delta;
+    bool isConsistent = true;
+    final isComplete = hasBaseValues && displayedTotal != null;
+
+    if (computedTotal != null && displayedTotal != null) {
+      delta = displayedTotal - computedTotal;
+      final tolerance = math
+          .max(
+            1.0,
+            math.max(displayedTotal.abs(), computedTotal.abs()) * 0.001,
+          )
+          .toDouble();
+      isConsistent = delta.abs() <= tolerance;
+    } else if (hasBaseValues || item.total != null) {
+      isConsistent = false;
+    }
+
+    return _OCRRowDiagnostics(
+      isComplete: isComplete,
+      isConsistent: isConsistent,
+      wasAutoAdjusted: item.wasAutoAdjusted || item.discountInferred,
+      grossAmount: grossAmount,
+      discountAmount: discountAmount,
+      displayedTotal: displayedTotal,
+      computedTotal: computedTotal,
+      delta: delta,
+      adjustmentSummary: item.adjustmentSummary,
+    );
+  }
+
+  _OCRInvoiceDiagnostics _getInvoiceDiagnostics(ParsedInvoice invoice) {
+    final rowDiagnostics =
+        invoice.lineItems.map(_getRowDiagnostics).toList(growable: false);
+    final rowTotal = rowDiagnostics.fold<double>(
+      0.0,
+      (sum, row) => sum + (row.displayedTotal ?? 0.0),
+    );
+    final headerTotal = invoice.total;
+    final delta = headerTotal != null ? headerTotal - rowTotal : 0.0;
+    final tolerance = math
+        .max(
+          10.0,
+          math.max(headerTotal?.abs() ?? 0.0, rowTotal.abs()) * 0.002,
+        )
+        .toDouble();
+
+    return _OCRInvoiceDiagnostics(
+      lineCount: invoice.lineItems.length,
+      rowTotal: rowTotal,
+      headerTotal: headerTotal,
+      delta: delta,
+      hasTotalMismatch: headerTotal != null && delta.abs() > tolerance,
+      adjustedRowCount:
+          rowDiagnostics.where((row) => row.wasAutoAdjusted).length,
+      inconsistentRowCount:
+          rowDiagnostics.where((row) => !row.isConsistent).length,
+      incompleteRowCount: rowDiagnostics.where((row) => !row.isComplete).length,
+    );
+  }
+
+  String _formatAmount(double? value) {
+    if (value == null) return '---';
+    return ChileanUtils.formatCurrency(value);
+  }
+
+  Future<void> _handleUseParsedData(ParsedInvoice data) async {
+    final diagnostics = _getInvoiceDiagnostics(data);
+    if (!diagnostics.shouldWarnBeforeApply) {
+      widget.onComplete(data);
+      return;
+    }
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Revisar Totales OCR'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'La factura OCR todavía tiene diferencias que pueden afectar los montos importados.',
+            ),
+            const SizedBox(height: 12),
+            if (diagnostics.headerTotal != null)
+              Text(
+                'Total OCR: ${_formatAmount(diagnostics.headerTotal)} | Líneas: ${_formatAmount(diagnostics.rowTotal)} | Dif.: ${_formatAmount(diagnostics.delta.abs())}',
+              ),
+            if (diagnostics.inconsistentRowCount > 0)
+              Text(
+                  'Filas con desfase matemático: ${diagnostics.inconsistentRowCount}'),
+            if (diagnostics.incompleteRowCount > 0)
+              Text('Filas incompletas: ${diagnostics.incompleteRowCount}'),
+            if (diagnostics.adjustedRowCount > 0)
+              Text('Filas autoajustadas: ${diagnostics.adjustedRowCount}'),
+            const SizedBox(height: 12),
+            const Text('Puedes continuar igual o volver a revisar el preview.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Revisar primero'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continuar igual'),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed == true) {
+      widget.onComplete(data);
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     setState(() {
       _isProcessing = true;
@@ -2090,6 +2447,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
+      parsedData = _normalizeParsedInvoiceMath(parsedData);
 
       String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
@@ -2124,7 +2482,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _isProcessing = false;
       });
       if (!widget.showPreview) {
-        widget.onComplete(parsedData);
+        await _handleUseParsedData(parsedData);
       }
     } catch (e) {
       debugPrint('❌ OCR error: $e');
@@ -2202,6 +2560,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
+      parsedData = _normalizeParsedInvoiceMath(parsedData);
 
       String? matchedSupplierName = parsedData.supplierName;
       String? matchedSupplierId;
@@ -2235,7 +2594,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _isProcessing = false;
       });
       if (!widget.showPreview) {
-        widget.onComplete(parsedData);
+        await _handleUseParsedData(parsedData);
       }
     } catch (e) {
       debugPrint('❌ PDF processing error: $e');
@@ -2257,27 +2616,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       Uint8List bytes, String filename) async {
     debugPrint('☁️ Processing with Veryfi: $filename');
 
-    if (!_veryfiAvailable) {
-      throw Exception('Veryfi no está configurado.\n\n'
-          'Agrega VERYFI_CLIENT_ID y VERYFI_API_KEY en el archivo .env');
-    }
-
-    final config = VeryfiConfigLoader.fromEnv();
-
-    if (!VeryfiConfigLoader.validateConfig(config)) {
-      throw Exception('Configuración de Veryfi incompleta.\n\n'
-          'Verifica que VERYFI_CLIENT_ID y VERYFI_API_KEY están correctos en .env');
-    }
-
-    final veryfi = VeryfiService(config);
-
-    try {
-      final response = await veryfi.parseInvoiceFromBytes(bytes, filename);
-      final parsedData = VeryfiAdapter.toParsedInvoice(response);
-      return parsedData;
-    } finally {
-      veryfi.dispose();
-    }
+    final veryfi = VeryfiProxyService();
+    final response = await veryfi.parseInvoiceFromBytes(bytes, filename);
+    final parsedData = VeryfiAdapter.toParsedInvoice(response);
+    return parsedData;
   }
 
   /// Verify parsed line items against the product database.
@@ -2318,16 +2660,28 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (errorStr.contains('escaneado')) {
       return errorStr;
     }
-    if (errorStr.contains('Veryfi API error: 401')) {
-      return 'Error de autenticación con Veryfi.\n\n'
-          'Verifica que las credenciales en .env son correctas.';
+    if (errorStr.contains('Veryfi proxy error: OCR server not configured')) {
+      return 'El OCR en la nube no está configurado en el servidor.\n\n'
+          'Configura los secrets de Veryfi en Supabase Edge Functions.';
     }
-    if (errorStr.contains('Veryfi API error: 403')) {
-      return 'Acceso denegado por Veryfi.\n\n'
+    if (errorStr.contains('Veryfi proxy error: Missing authentication')) {
+      return 'Tu sesión no es válida para usar OCR en la nube.\n\n'
+          'Inicia sesión nuevamente e inténtalo otra vez.';
+    }
+    if (errorStr.contains('Veryfi proxy error: Veryfi API error: 401')) {
+      return 'Error de autenticación del servidor OCR con Veryfi.\n\n'
+          'Revisa los secrets configurados en Supabase.';
+    }
+    if (errorStr.contains('Veryfi proxy error: Veryfi API error: 403')) {
+      return 'Veryfi rechazó la solicitud desde el servidor OCR.\n\n'
           'Tu cuenta puede haber excedido el límite de documentos.';
     }
-    if (errorStr.contains('Veryfi API error')) {
-      return 'Error del servidor Veryfi: $errorStr';
+    if (errorStr.contains('Veryfi proxy error')) {
+      return 'Error del OCR en la nube: $errorStr';
+    }
+    if (errorStr.contains('Failed to parse invoice JSON') ||
+        errorStr.contains('Invalid response from OCR server')) {
+      return 'El servidor OCR devolvió una respuesta inválida.';
     }
     if (errorStr.contains('SocketException') ||
         errorStr.contains('ClientException')) {
@@ -2387,11 +2741,25 @@ class _NewProductEntry {
             TextEditingController(text: _calculateDefaultPrice(originalItem));
 
   static String _calculateDefaultCost(ParsedLineItem item) {
+    final qty = item.quantity ?? 1;
+    if (item.total != null && item.total! > 0 && qty > 0) {
+      final effectiveCost = item.total! / qty;
+      final unitPrice = item.unitPrice;
+
+      if (unitPrice == null || unitPrice <= 0) {
+        return effectiveCost.toStringAsFixed(0);
+      }
+
+      final grossAmount = qty * unitPrice;
+      if ((grossAmount - item.total!).abs() > 1) {
+        return effectiveCost.toStringAsFixed(0);
+      }
+    }
+
     if (item.unitPrice != null && item.unitPrice! > 0) {
       return item.unitPrice!.toStringAsFixed(0);
     }
     if (item.total != null && item.total! > 0) {
-      final qty = item.quantity ?? 1;
       final calculatedCost = item.total! / (qty > 0 ? qty : 1);
       return calculatedCost.toStringAsFixed(0);
     }
@@ -2449,4 +2817,53 @@ class _NewProductEntry {
       parsedCost! >= 0 &&
       price != null &&
       price! > 0;
+}
+
+class _OCRRowDiagnostics {
+  final bool isComplete;
+  final bool isConsistent;
+  final bool wasAutoAdjusted;
+  final double? grossAmount;
+  final double discountAmount;
+  final double? displayedTotal;
+  final double? computedTotal;
+  final double? delta;
+  final String? adjustmentSummary;
+
+  const _OCRRowDiagnostics({
+    required this.isComplete,
+    required this.isConsistent,
+    required this.wasAutoAdjusted,
+    required this.grossAmount,
+    required this.discountAmount,
+    required this.displayedTotal,
+    required this.computedTotal,
+    required this.delta,
+    required this.adjustmentSummary,
+  });
+}
+
+class _OCRInvoiceDiagnostics {
+  final int lineCount;
+  final double rowTotal;
+  final double? headerTotal;
+  final double delta;
+  final bool hasTotalMismatch;
+  final int adjustedRowCount;
+  final int inconsistentRowCount;
+  final int incompleteRowCount;
+
+  const _OCRInvoiceDiagnostics({
+    required this.lineCount,
+    required this.rowTotal,
+    required this.headerTotal,
+    required this.delta,
+    required this.hasTotalMismatch,
+    required this.adjustedRowCount,
+    required this.inconsistentRowCount,
+    required this.incompleteRowCount,
+  });
+
+  bool get shouldWarnBeforeApply =>
+      hasTotalMismatch || inconsistentRowCount > 0 || incompleteRowCount > 0;
 }
