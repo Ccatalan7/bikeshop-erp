@@ -339,43 +339,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
   }
 
-  /// Apply OCR-extracted data to the form
-  double _resolveOCRLineDiscountAmount(ParsedLineItem item) {
-    final qty = item.quantity;
-    final unitCost = item.unitPrice;
-    final total = item.total;
-
-    if (qty != null &&
-        qty > 0 &&
-        unitCost != null &&
-        unitCost > 0 &&
-        total != null &&
-        total >= 0) {
-      final grossAmount = qty * unitCost;
-      final impliedDiscount = grossAmount - total;
-      final tolerance = math.max(1.0, grossAmount * 0.001);
-
-      if (impliedDiscount > tolerance) {
-        return impliedDiscount.clamp(0, grossAmount).toDouble();
-      }
-    }
-
-    if (item.discount != null && item.discount! > 0) {
-      return item.discount!;
-    }
-
-    if (qty != null &&
-        qty > 0 &&
-        unitCost != null &&
-        unitCost > 0 &&
-        item.discountRate != null &&
-        item.discountRate! > 0) {
-      return (qty * unitCost) * (item.discountRate! / 100);
-    }
-
-    return 0;
-  }
-
   void _applyOCRData(ParsedInvoice parsedInvoice) {
     setState(() {
       // 1. Invoice number (if extracted)
@@ -542,19 +505,34 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             debugPrint(
                 '  ✨ Selected product: ${matchedProduct.name} (ID: ${matchedProduct.id})');
 
+            // ⚠️ CRITICAL MUST BE AN INTEGER: VeryfiAdapter fallback can generate fractional quantities
+            // like 4.503 from (17990 / 3995) to force match a total. This breaks the UI integer math.
+            double finalQty = (item.quantity ?? 1).roundToDouble();
+            if (finalQty <= 0) finalQty = 1;
+
+            double finalUnitCost = item.unitPrice ?? matchedProduct.cost;
+            double finalDiscount = item.discount ?? 0;
+            DiscountType finalDiscountType = DiscountType.amount;
+
+            // Precedence logic if discounts were actually explicitly found by OCR/Adapter:
+            if (item.discount != null && item.discount! > 0) {
+              finalDiscountType = DiscountType.amount;
+              finalDiscount = item.discount!;
+            } else if (item.discountRate != null && item.discountRate! > 0) {
+              finalDiscountType = DiscountType.percentage;
+              finalDiscount = item.discountRate!;
+            }
+
             // Add matched product - Mirroring manual selection logic
             final newLine = PurchaseInvoiceItem(
               productId: matchedProduct.id,
               productName: matchedProduct.name,
               productSku: matchedProduct.sku,
               purchaseTreatment: matchedProduct.purchaseTreatment,
-              quantity: item.quantity ?? 1,
-              unitCost: item.unitPrice ??
-                  matchedProduct
-                      .cost, // Use OCR price if available, else product cost
-              discount: 0,
-              description: matchedProduct
-                  .description, // Initialize with product description
+              quantity: finalQty,
+              unitCost: finalUnitCost,
+              discount: 0, // Gets recalculated below via controller
+              description: matchedProduct.description,
             );
 
             final newEntry = _PurchaseLineEntry(line: newLine);
@@ -572,12 +550,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   newLine.unitCost.toStringAsFixed(0);
             }
 
-            final ocrDiscountAmount = _resolveOCRLineDiscountAmount(item);
-
-            if (ocrDiscountAmount > 0) {
-              newEntry.discountType = DiscountType.amount;
+            if (finalDiscount > 0) {
+              newEntry.discountType = finalDiscountType;
               newEntry.discountController.text =
-                  ocrDiscountAmount.toStringAsFixed(0);
+                  finalDiscount.toStringAsFixed(0);
               newEntry.recalculateDiscount();
             }
 

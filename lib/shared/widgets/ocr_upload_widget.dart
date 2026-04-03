@@ -847,11 +847,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   Expanded(
                                     flex: 2,
                                     child: Text(
-                                        item.discountRate != null
-                                            ? '${item.discountRate!.toStringAsFixed(0)}%'
-                                            : (item.discount != null &&
-                                                    item.discount! > 0)
-                                                ? '\$${item.discount!.toStringAsFixed(0)}'
+                                        (item.discount != null &&
+                                                item.discount! > 0)
+                                            ? '\$${item.discount!.toStringAsFixed(0)}'
+                                            : (item.discountRate != null &&
+                                                    item.discountRate! > 0)
+                                                ? '${item.discountRate!.toStringAsFixed(0)}%'
                                                 : '-',
                                         style: TextStyle(
                                             fontSize: 13,
@@ -2220,26 +2221,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
 
     final normalizedDiscount = double.parse(impliedDiscount.toStringAsFixed(2));
-    double? normalizedRate;
-
-    final impliedRate = (normalizedDiscount / grossAmount) * 100;
-    final roundedWhole = impliedRate.roundToDouble();
-    final roundedHalf = (impliedRate * 2).roundToDouble() / 2;
-
-    if ((impliedRate - roundedWhole).abs() < 0.05) {
-      normalizedRate = roundedWhole;
-    } else if ((impliedRate - roundedHalf).abs() < 0.05) {
-      normalizedRate = roundedHalf;
-    }
 
     final currentSummary = item.adjustmentSummary;
     final newSummary = currentSummary == null || currentSummary.isEmpty
-        ? 'Descuento inferido desde total de fila'
-        : '$currentSummary · Descuento inferido desde total de fila';
+        ? 'Descuento inferido (monto)'
+        : '$currentSummary · Descuento inferido (monto)';
 
     return item.copyWith(
-      discount: normalizedDiscount,
-      discountRate: item.discountRate ?? normalizedRate,
+      // Keep existing discount if set, otherwise use the implied amount
+      discount: item.discount ?? normalizedDiscount,
       discountInferred: true,
       wasAutoAdjusted: true,
       adjustmentSummary: newSummary,
