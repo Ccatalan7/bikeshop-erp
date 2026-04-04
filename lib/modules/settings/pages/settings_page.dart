@@ -274,6 +274,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconColor: Colors.deepPurple,
                 onTap: () => context.push('/settings/remote-scanner'),
               ),
+              _buildSettingTile(
+                context,
+                icon: Icons.label_outline,
+                title: 'Impresora NIIMBOT',
+                subtitle: 'Conectar impresora térmica Bluetooth para etiquetas',
+                iconColor: Colors.orange,
+                onTap: () => context.push('/settings/label-printer'),
+              ),
             ],
           ),
           _buildSection(

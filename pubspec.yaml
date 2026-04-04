@@ -74,7 +74,7 @@ dependencies:
   
   # Bluetooth & Barcode Scanning
   flutter_blue_plus: ^1.32.12
-  flutter_blue_plus_windows: ^1.26.1
+  flutter_blue_plus_windows: ^1.26.1  # NIIMBOT thermal label printer BLE driver
   permission_handler: ^11.3.1
   qr_flutter: ^4.1.0
   

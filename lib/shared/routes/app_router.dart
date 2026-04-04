@@ -56,11 +56,13 @@ import 'erp_routes_barrel.dart' deferred as erp
         JournalEntryListPage,
         KeyboardScannerPage,
         KioskModePage,
+        LabelPrinterPage,
         LoginScreen,
         MailInboxPage,
         MechanicJobFormPage,
         MedicalLeavesPage,
         NavigationManagementPage,
+        NiimbotSettingsPage,
         NotificationSettingsPage,
         NotionModulePage,
         OnlineOrdersPage,
@@ -2166,6 +2168,24 @@ class AppRouter {
             state,
             erp.loadLibrary(),
             () => erp.RemoteScannerPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/label-printer',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.NiimbotSettingsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/label-printer',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.LabelPrinterPage(),
           ),
         ),
         GoRoute(
