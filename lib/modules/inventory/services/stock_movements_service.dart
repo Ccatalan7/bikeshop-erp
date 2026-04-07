@@ -308,7 +308,7 @@ class StockMovementsService extends ChangeNotifier {
   /// Filter movements by type
   List<StockMovement> filterByType(String? type) {
     if (type == null || type == 'all') return _movements;
-    return _movements.where((m) => m.movementType == type).toList();
+    return _movements.where((m) => m.movementCategory == type).toList();
   }
 
   /// Get summary statistics

@@ -1349,6 +1349,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       taxTreatment: _taxTreatment,
       netAmount: _netAmount,
       items: items,
+      source: _loadedInvoice?.source ??
+          (_linkedJobId != null ? 'mechanic_job' : 'manual_sale'),
     );
 
     debugPrint(

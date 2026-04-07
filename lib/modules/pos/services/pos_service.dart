@@ -374,6 +374,7 @@ class POSService extends ChangeNotifier {
         total: cartTotal,
         taxTreatment: _taxTreatment, // ✅ Include tax treatment
         items: invoiceItems,
+        source: 'pos',
       );
 
       final savedInvoice = await _salesService.saveInvoice(invoice);

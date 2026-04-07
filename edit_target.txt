@@ -1,0 +1,280 @@
+  Widget _buildSalesInvoiceInlineView(Invoice invoice) {
+    final invoiceId = invoice.id ?? _selectedLinkedMovement?.referenceId;
+    if (invoiceId == null || invoiceId.isEmpty) {
+      final payments = context.read<SalesService>().getPaymentsForInvoice(invoice.id ?? '');
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInlineSalesHeader(invoice),
+            const SizedBox(height: 16),
+            _buildInlineSalesSummary(invoice),
+            const SizedBox(height: 16),
+            _buildInlineSalesItems(invoice),
+            const SizedBox(height: 16),
+            _buildInlineSalesPayments(payments),
+          ],
+        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor),
+      child: SalesInvoiceEditor(
+        key: ValueKey('movement_sales_invoice_${invoice.id ?? invoice.invoiceNumber}'),
+        invoiceId: invoiceId,
+        isCompact: false,
+        onSaved: () {
+          if (_selectedLinkedMovement != null) {
+            _navigateToReference(_selectedLinkedMovement!);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildPurchaseInvoiceInlineView(PurchaseInvoice invoice) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildInlinePurchaseHeader(invoice),
+          const SizedBox(height: 16),
+          _buildInlinePurchaseSummary(invoice),
+          const SizedBox(height: 16),
+          _buildInlinePurchaseItems(invoice),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineSalesHeader(Invoice invoice) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                invoice.invoiceNumber.isNotEmpty ? 'Factura ${invoice.invoiceNumber}' : 'Factura',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(invoice.customerName ?? 'Cliente'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInlineSalesSummary(Invoice invoice) {
+    final statusColor = _salesStatusColor(invoice.status);
+    final statusText = _salesStatusLabel(invoice.status);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Text('Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
+                    Text(
+                      'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                      style: TextStyle(
+                        color: invoice.balance <= 0 ? Colors.green : Colors.orange[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16),
+                const SizedBox(width: 4),
+                Text('Emisión: ${ChileanUtils.formatDate(invoice.date)}'),
+                if (invoice.dueDate != null) ...[
+                  const SizedBox(width: 16),
+                  const Icon(Icons.schedule, size: 16),
+                  const SizedBox(width: 4),
+                  Text('Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text('Origen: ${invoice.source ?? 'sale'}'),
+            if (invoice.reference != null && invoice.reference!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Referencia: ${invoice.reference}'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineSalesItems(Invoice invoice) {
+    if (invoice.items.isEmpty) {
+      return const Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: Text('Esta factura no tiene ítems asociados.')),
+        ),
+      );
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Detalle de ítems',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: invoice.items.length,
+              separatorBuilder: (_, __) => const Divider(height: 16),
+              itemBuilder: (context, index) {
+                final item = invoice.items[index];
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.productName ?? item.productSku ?? 'Producto',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text('${item.quantity.toStringAsFixed(0)} x ${ChileanUtils.formatCurrency(item.unitPrice)}'),
+                        ],
+                      ),
+                    ),
+                    Text(ChileanUtils.formatCurrency(item.lineTotal)),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineSalesPayments(List<Payment> payments) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Pagos registrados',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                if (payments.isNotEmpty)
+                  Text('${payments.length} en total', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (payments.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('Aún no hay pagos asociados.')),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: payments.length,
+                separatorBuilder: (_, __) => const Divider(height: 16),
+                itemBuilder: (context, index) {
+                  final payment = payments[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ChileanUtils.formatCurrency(payment.amount),
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(ChileanUtils.formatDate(payment.date)),
+                              if (payment.reference != null && payment.reference!.isNotEmpty)
+                                Text('Ref: ${payment.reference}', style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlinePurchaseHeader(PurchaseInvoice invoice) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Factura ${invoice.invoiceNumber}',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(invoice.supplierName ?? 'Proveedor'),
+            ],
+          ),
+        ),
+      ],
+    );

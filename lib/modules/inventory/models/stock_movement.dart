@@ -124,8 +124,52 @@ class StockMovement {
   bool get isIncrease => quantity > 0;
   bool get isDecrease => quantity < 0;
 
-  String get movementTypeDisplay {
+  String get movementCategory {
     switch (movementType) {
+      case 'purchase':
+      case 'purchase_invoice':
+      case 'manual_purchase':
+        return 'purchase';
+      case 'sale':
+      case 'venta':
+      case 'sales_invoice':
+      case 'sales_invoice_component':
+      case 'manual_sale':
+        return 'sale';
+      case 'transfer':
+      case 'transfer_in':
+      case 'transfer_out':
+        return 'transfer';
+      case 'adjustment':
+      case 'manual':
+      case 'import':
+      case 'correction':
+      case 'initial':
+      case 'damage':
+      case 'loss':
+      case 'found':
+      case 'inventory_adjust':
+      case 'inventory_adjustment':
+        return 'adjustment';
+      default:
+        if (source == 'mechanic_job') return 'sale';
+        return 'adjustment';
+    }
+  }
+
+  bool get hasNavigableReference {
+    return referenceId != null &&
+        referenceId!.isNotEmpty &&
+        (movementCategory == 'sale' || movementCategory == 'purchase');
+  }
+
+  String get referenceDisplay {
+    final trimmed = referenceNumber?.trim();
+    return trimmed == null || trimmed.isEmpty ? '-' : trimmed;
+  }
+
+  String get movementTypeDisplay {
+    switch (movementCategory) {
       case 'purchase':
         return 'Compra';
       case 'sale':
@@ -143,10 +187,14 @@ class StockMovement {
     switch (source) {
       case 'pos':
         return 'POS';
+      case 'sale':
+        return 'Venta';
       case 'manual_sale':
         return 'Venta Manual';
       case 'manual_purchase':
         return 'Compra Manual';
+      case 'purchase_invoice':
+        return 'Factura de compra';
       case 'stock_adjustment':
         return 'Ajuste de Stock';
       case 'ecommerce':
