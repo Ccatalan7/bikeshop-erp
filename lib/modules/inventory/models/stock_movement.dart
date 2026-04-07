@@ -1,3 +1,38 @@
+enum StockMovementCategory {
+  purchase,
+  sale,
+  transfer,
+  adjustment,
+}
+
+extension StockMovementCategoryX on StockMovementCategory {
+  String get key {
+    switch (this) {
+      case StockMovementCategory.purchase:
+        return 'purchase';
+      case StockMovementCategory.sale:
+        return 'sale';
+      case StockMovementCategory.transfer:
+        return 'transfer';
+      case StockMovementCategory.adjustment:
+        return 'adjustment';
+    }
+  }
+
+  String get displayName {
+    switch (this) {
+      case StockMovementCategory.purchase:
+        return 'Compra';
+      case StockMovementCategory.sale:
+        return 'Venta';
+      case StockMovementCategory.transfer:
+        return 'Transferencia';
+      case StockMovementCategory.adjustment:
+        return 'Ajuste';
+    }
+  }
+}
+
 class StockMovement {
   final String id;
   final String productId;
@@ -124,22 +159,22 @@ class StockMovement {
   bool get isIncrease => quantity > 0;
   bool get isDecrease => quantity < 0;
 
-  String get movementCategory {
+  StockMovementCategory get category {
     switch (movementType) {
       case 'purchase':
       case 'purchase_invoice':
       case 'manual_purchase':
-        return 'purchase';
+        return StockMovementCategory.purchase;
       case 'sale':
       case 'venta':
       case 'sales_invoice':
       case 'sales_invoice_component':
       case 'manual_sale':
-        return 'sale';
+        return StockMovementCategory.sale;
       case 'transfer':
       case 'transfer_in':
       case 'transfer_out':
-        return 'transfer';
+        return StockMovementCategory.transfer;
       case 'adjustment':
       case 'manual':
       case 'import':
@@ -150,17 +185,26 @@ class StockMovement {
       case 'found':
       case 'inventory_adjust':
       case 'inventory_adjustment':
-        return 'adjustment';
+        return StockMovementCategory.adjustment;
       default:
-        if (source == 'mechanic_job') return 'sale';
-        return 'adjustment';
+        if (source == 'mechanic_job') return StockMovementCategory.sale;
+        return StockMovementCategory.adjustment;
     }
+  }
+
+  String get movementCategory => category.key;
+
+  bool matchesCategoryKey(String? categoryKey) {
+    return categoryKey == null || categoryKey == 'all'
+        ? true
+        : movementCategory == categoryKey;
   }
 
   bool get hasNavigableReference {
     return referenceId != null &&
         referenceId!.isNotEmpty &&
-        (movementCategory == 'sale' || movementCategory == 'purchase');
+        (category == StockMovementCategory.sale ||
+            category == StockMovementCategory.purchase);
   }
 
   String get referenceDisplay {
@@ -169,18 +213,7 @@ class StockMovement {
   }
 
   String get movementTypeDisplay {
-    switch (movementCategory) {
-      case 'purchase':
-        return 'Compra';
-      case 'sale':
-        return 'Venta';
-      case 'adjustment':
-        return 'Ajuste';
-      case 'transfer':
-        return 'Transferencia';
-      default:
-        return movementType;
-    }
+    return category.displayName;
   }
 
   String get sourceDisplay {

@@ -763,6 +763,62 @@ update products
 13. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
 14. ✅ **PROVIDE DEPLOYMENT SNIPPET:** Extract the exact lines to deploy and present them in a canvas artifact for easy copy-paste
 
+## 🚨 Production Incident Inspection Protocol (Inventory / Accounting / Triggers)
+
+**When investigating a serious production data issue, INSPECT FIRST and FIX SECOND.**
+
+### Default investigation order
+1. ✅ Start with **read-only SQL** only. Do not propose repair SQL or deploy fixes until the evidence is clear.
+2. ✅ Query the **symptom table first**:
+  - `stock_adjustments` for unexpected manual/import adjustments
+  - `stock_movements` or `stock_movements_view` for movement chronology
+  - `sales_invoices` / `purchase_invoices` for status transitions and timestamps
+  - `journal_entries` / `journal_lines` for accounting side effects
+3. ✅ Always filter by `tenant_id` and narrow by recent timestamps, product IDs, invoice IDs, or references.
+4. ✅ Correlate evidence in sequence:
+  - suspicious row
+  - related product / invoice / payment
+  - timestamps (`transaction_date`, `created_at`, `updated_at`)
+  - trigger/function path in `core_schema.sql`
+5. ✅ Only after the inspection proves the root cause should you prepare:
+  - the code/schema fix
+  - audit SQL for historical damage
+  - repair SQL if truly needed
+
+### Interactive SQL workflow with the user
+- ✅ If the user is running queries in Supabase SQL Editor and pasting results back, give **ONE query at a time**.
+- ✅ After each result, interpret it briefly and then provide the **next single query**.
+- ✅ Prefer this guided sequence over dumping a long SQL script when the goal is diagnosis.
+- ❌ Do NOT hand the user a 10-query batch unless they explicitly ask for a bundled script.
+- ❌ Do NOT jump straight to `UPDATE`, `DELETE`, or migration SQL during the inspection phase.
+
+### Query design rules for incident inspection
+- ✅ Keep inspection queries **read-only**: `select`, `with`, aggregates, joins, ordering, comparisons.
+- ✅ Show the fields needed for correlation: IDs, tenant_id, product_id, reference, reason, quantity, stock_before, stock_after, status, created_at, updated_at.
+- ✅ Order results by the same chronology the UI is supposed to show.
+- ✅ When debugging ordering bugs, compare both business dates and technical timestamps.
+- ✅ When debugging inventory bugs, inspect both:
+  - movement ledger rows (`stock_movements` / view)
+  - adjustment audit rows (`stock_adjustments`)
+- ✅ When debugging invoice-trigger issues, verify whether the change was:
+  - non-posted → posted
+  - posted → non-posted
+  - posted → posted
+
+### Testing mindset after inspection
+- ✅ First prove the bug with real rows.
+- ✅ Then verify the trigger/function path in `core_schema.sql`.
+- ✅ Then test the exact workflow transition that caused the issue.
+- ✅ Prefer minimal reproduction steps over broad regression testing at first.
+- ✅ For status-driven inventory logic, test transitions explicitly instead of only testing create/update generically.
+
+### Red flags that require inspection before any fix
+- Unexpected `Ajuste Manual` rows with no true manual action
+- Stock increasing after editing a confirmed sales invoice
+- Visible movement order not matching displayed dates
+- Journal entries appearing duplicated, missing, or out of period
+- Trigger-driven side effects on normal edits
+
 **⚠️ CRITICAL: Before creating ANY column:**
 - 🔍 Search for existing columns that could serve the same purpose
 - 🤔 Ask: "Can I calculate this value instead of storing it?"

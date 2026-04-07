@@ -1342,7 +1342,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       reference: _referenceController.text.trim().isEmpty
           ? null
           : _referenceController.text.trim(),
-      status: InvoiceStatus.draft,
+        status: _status,
       subtotal: _subtotal,
       ivaAmount: _iva,
       total: _total,

@@ -6460,6 +6460,8 @@ begin
     return;
   end if;
 
+  perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+
   v_reference := concat('sales_invoice:', p_invoice.id::text);
 
   select exists (
@@ -6510,6 +6512,7 @@ begin
   if not v_has_inventory_qty and not v_has_stock_quantity then
     delete from public.stock_movements
      where reference = v_reference;
+    perform set_config('app.skip_stock_adjustment_trigger', '', true);
     return;
   end if;
 
@@ -6534,6 +6537,7 @@ begin
   if v_update_assignments = '' then
     delete from public.stock_movements
      where reference = v_reference;
+    perform set_config('app.skip_stock_adjustment_trigger', '', true);
     return;
   end if;
 
@@ -6567,6 +6571,8 @@ begin
 
   delete from public.stock_movements
    where reference = v_reference;
+
+  perform set_config('app.skip_stock_adjustment_trigger', '', true);
 end;
 $$;
 
@@ -6996,10 +7002,9 @@ begin
 
     -- Handle inventory changes based on status transition
     if v_old_posted and v_new_posted then
-      -- Both statuses are posted: restore old inventory, consume new
-      raise notice 'handle_sales_invoice_change: both posted, restore and consume';
-      perform public.restore_sales_invoice_inventory(OLD);
-      perform public.consume_sales_invoice_inventory(NEW);
+      -- Posted -> posted edits must NOT move stock.
+      -- Inventory changes only happen on status transitions.
+      raise notice 'handle_sales_invoice_change: both posted, no inventory change';
     elsif v_old_posted and not v_new_posted then
       -- Changed from posted to non-posted: restore inventory
       raise notice 'handle_sales_invoice_change: changed to non-posted, restore only';
@@ -9449,7 +9454,7 @@ movements_with_running_stock as (
     greatest(coalesce(p.stock_quantity, 0), coalesce(p.inventory_qty, 0)) - coalesce(
       sum(m.quantity) over (
         partition by m.product_id, m.tenant_id 
-        order by m.created_at desc, m.id desc
+        order by m.transaction_date desc nulls last, m.created_at desc, m.id desc
         rows between unbounded preceding and 1 preceding
       ), 
       0

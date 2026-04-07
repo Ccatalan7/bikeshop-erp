@@ -4,6 +4,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/stock_movement.dart';
 
+enum StockMovementsViewMode {
+  recent,
+  byProduct,
+}
+
+extension StockMovementsViewModeX on StockMovementsViewMode {
+  String get key {
+    switch (this) {
+      case StockMovementsViewMode.recent:
+        return 'recent';
+      case StockMovementsViewMode.byProduct:
+        return 'by_product';
+    }
+  }
+}
+
 class StockMovementsService extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   final _tenantService = TenantService();
@@ -14,7 +30,7 @@ class StockMovementsService extends ChangeNotifier {
   String? _selectedProductId;
 
   // View mode: 'recent' (all products) or 'by_product' (single product)
-  String _viewMode = 'recent';
+  StockMovementsViewMode _viewMode = StockMovementsViewMode.recent;
 
   // Realtime channels
   RealtimeChannel? _movementsChannel;
@@ -24,8 +40,8 @@ class StockMovementsService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get selectedProductId => _selectedProductId;
-  String get viewMode => _viewMode;
-  bool get isRecentMode => _viewMode == 'recent';
+  String get viewMode => _viewMode.key;
+  bool get isRecentMode => _viewMode == StockMovementsViewMode.recent;
 
   StockMovementsService() {
     _setupRealtime();
@@ -59,12 +75,7 @@ class StockMovementsService extends ChangeNotifier {
             callback: (payload) {
               debugPrint(
                   '🔔 [StockMovementsService] Stock movement changed: ${payload.eventType}');
-              // Reload based on current view mode
-              if (_viewMode == 'recent') {
-                loadRecentMovements();
-              } else if (_selectedProductId != null) {
-                loadMovementsForProduct(_selectedProductId!);
-              }
+              _reloadCurrentView();
             },
           )
           .subscribe();
@@ -84,12 +95,7 @@ class StockMovementsService extends ChangeNotifier {
             callback: (payload) {
               debugPrint(
                   '🔔 [StockMovementsService] Stock adjustment changed: ${payload.eventType}');
-              // Reload based on current view mode
-              if (_viewMode == 'recent') {
-                loadRecentMovements();
-              } else if (_selectedProductId != null) {
-                loadMovementsForProduct(_selectedProductId!);
-              }
+              _reloadCurrentView();
             },
           )
           .subscribe();
@@ -102,100 +108,32 @@ class StockMovementsService extends ChangeNotifier {
 
   /// Set view mode and load appropriate data
   void setViewMode(String mode) {
-    if (mode == _viewMode) return;
-    _viewMode = mode;
+    final nextMode = mode == StockMovementsViewMode.byProduct.key
+        ? StockMovementsViewMode.byProduct
+        : StockMovementsViewMode.recent;
+    if (nextMode == _viewMode) return;
+    _viewMode = nextMode;
     _selectedProductId = null;
     _movements = [];
     notifyListeners();
 
-    if (mode == 'recent') {
+    if (nextMode == StockMovementsViewMode.recent) {
       loadRecentMovements();
     }
   }
 
   /// Load recent movements across ALL products (for 'recent' view mode)
   Future<void> loadRecentMovements({int limit = 100}) async {
-    _isLoading = true;
-    _error = null;
     _selectedProductId = null;
-    _viewMode = 'recent';
-    notifyListeners();
-
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant_id found');
-      }
-
-      // Query stock_movements_view without product_id filter
-      final response = await _supabase
-          .from('stock_movements_view')
-          .select()
-          .eq('tenant_id', tenantId)
-          .order('created_at', ascending: false)
-          .limit(limit);
-
-      final rawMovements = (response as List)
-          .map((json) => StockMovement.fromJson(json))
-          .toList();
-
-      _movements = await _enrichWithImages(rawMovements);
-
-      _error = null;
-      debugPrint(
-          '✅ [StockMovementsService] Loaded ${_movements.length} recent movements');
-    } catch (e) {
-      _error = e.toString();
-      debugPrint(
-          '❌ [StockMovementsService] Error loading recent movements: $e');
-      _movements = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _viewMode = StockMovementsViewMode.recent;
+    await _loadMovements(limit: limit);
   }
 
   /// Load movements for a specific product
   Future<void> loadMovementsForProduct(String productId) async {
-    _isLoading = true;
-    _error = null;
     _selectedProductId = productId;
-    _viewMode = 'by_product';
-    notifyListeners();
-
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant_id found');
-      }
-
-      // Query stock_movements_view with tenant_id filtering
-      final response = await _supabase
-          .from('stock_movements_view')
-          .select()
-          .eq('tenant_id', tenantId) // ⚠️ CRITICAL: Filter by tenant
-          .eq('product_id', productId)
-          .order('created_at',
-              ascending:
-                  false); // Order by actual creation time (UTC), not transaction_date
-
-      final rawMovements = (response as List)
-          .map((json) => StockMovement.fromJson(json))
-          .toList();
-
-      _movements = await _enrichWithImages(rawMovements);
-
-      _error = null;
-      debugPrint(
-          '✅ [StockMovementsService] Loaded ${_movements.length} movements for product $productId');
-    } catch (e) {
-      _error = e.toString();
-      debugPrint('❌ [StockMovementsService] Error loading stock movements: $e');
-      _movements = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _viewMode = StockMovementsViewMode.byProduct;
+    await _loadMovements();
   }
 
   @override
@@ -270,19 +208,7 @@ class StockMovementsService extends ChangeNotifier {
   /// Get movements list without modifying state (Pure Async)
   Future<List<StockMovement>> getMovementsList(String productId) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) throw Exception('No tenant_id');
-
-      final response = await _supabase
-          .from('stock_movements_view')
-          .select()
-          .eq('tenant_id', tenantId)
-          .eq('product_id', productId)
-          .order('created_at', ascending: false);
-
-      return (response as List)
-          .map((json) => StockMovement.fromJson(json))
-          .toList();
+      return await _fetchMovements(productId: productId);
     } catch (e) {
       debugPrint('Error fetching movements list: $e');
       return [];
@@ -308,7 +234,9 @@ class StockMovementsService extends ChangeNotifier {
   /// Filter movements by type
   List<StockMovement> filterByType(String? type) {
     if (type == null || type == 'all') return _movements;
-    return _movements.where((m) => m.movementCategory == type).toList();
+    return _movements
+        .where((movement) => movement.matchesCategoryKey(type))
+        .toList();
   }
 
   /// Get summary statistics
@@ -330,5 +258,74 @@ class StockMovementsService extends ChangeNotifier {
       'net_change': totalIncrease - totalDecrease,
       'transaction_count': _movements.length,
     };
+  }
+
+  Future<void> _reloadCurrentView() async {
+    if (_viewMode == StockMovementsViewMode.recent) {
+      await loadRecentMovements();
+      return;
+    }
+
+    final selectedProductId = _selectedProductId;
+    if (selectedProductId != null) {
+      await loadMovementsForProduct(selectedProductId);
+    }
+  }
+
+  Future<void> _loadMovements({int? limit}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final rawMovements = await _fetchMovements(
+        productId: _viewMode == StockMovementsViewMode.byProduct
+            ? _selectedProductId
+            : null,
+        limit: _viewMode == StockMovementsViewMode.recent ? limit : null,
+      );
+
+      _movements = await _enrichWithImages(rawMovements);
+      _error = null;
+      debugPrint(
+        '✅ [StockMovementsService] Loaded ${_movements.length} movements in ${_viewMode.key} mode',
+      );
+    } catch (e) {
+      _error = e.toString();
+      _movements = [];
+      debugPrint('❌ [StockMovementsService] Error loading stock movements: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<StockMovement>> _fetchMovements({
+    String? productId,
+    int? limit,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) {
+      throw Exception('No tenant_id found');
+    }
+
+    var query = _supabase
+        .from('stock_movements_view')
+        .select()
+        .eq('tenant_id', tenantId);
+
+    if (productId != null && productId.isNotEmpty) {
+      query = query.eq('product_id', productId);
+    }
+
+    final orderedQuery = query
+        .order('transaction_date', ascending: false)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false);
+    final response =
+        limit != null ? await orderedQuery.limit(limit) : await orderedQuery;
+
+    final rows = response as List;
+    return rows.map((json) => StockMovement.fromJson(json)).toList();
   }
 }

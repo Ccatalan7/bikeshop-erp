@@ -100,6 +100,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isGeneratingSku = false;
   bool _isLoadingConversionStatus = false;
   bool _isRestoringConversion = false;
   Product? _existingProduct;
@@ -247,12 +248,31 @@ class _ProductFormPageState extends State<ProductFormPage>
       final suppliers = await _purchaseService.getSuppliers(activeOnly: true);
       if (mounted) {
         setState(() => _suppliers = suppliers);
+        unawaited(_maybeAutoGenerateSupplierSku());
       }
     } catch (e) {
       // Suppliers are optional, silently fail
       if (!mounted) return;
     }
   }
+
+  Supplier? get _selectedSupplier {
+    final selectedSupplierId = _selectedSupplierId;
+    if (selectedSupplierId == null || selectedSupplierId.isEmpty) {
+      return null;
+    }
+
+    for (final supplier in _suppliers) {
+      if (supplier.id == selectedSupplierId) {
+        return supplier;
+      }
+    }
+
+    return null;
+  }
+
+  bool get _usesAliExpressSkuSequence =>
+      _inventoryService.isAliExpressSupplierName(_selectedSupplier?.name);
 
   Future<void> _loadBrands() async {
     if (!mounted) return;
@@ -737,7 +757,49 @@ class _ProductFormPageState extends State<ProductFormPage>
     setState(() => _additionalImages.remove(url));
   }
 
-  void _generateSku() {
+  Future<void> _generateSku({bool autoTriggered = false}) async {
+    if (_usesAliExpressSkuSequence) {
+      await _generateAliExpressSku(autoTriggered: autoTriggered);
+      return;
+    }
+
+    _generateDefaultSku();
+  }
+
+  Future<void> _generateAliExpressSku({bool autoTriggered = false}) async {
+    final supplier = _selectedSupplier;
+    if (supplier == null) return;
+
+    if (mounted) {
+      setState(() => _isGeneratingSku = true);
+    }
+
+    try {
+      final nextSku = await _inventoryService.getNextAliExpressSku(
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _skuController.text = nextSku;
+      });
+    } catch (e) {
+      if (!mounted || autoTriggered) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo generar el SKU de AliExpress: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingSku = false);
+      }
+    }
+  }
+
+  void _generateDefaultSku() {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
@@ -770,6 +832,21 @@ class _ProductFormPageState extends State<ProductFormPage>
       _skuController.text =
           '$categorySegment$brandSegment-$nameSegment-$timestamp';
     });
+  }
+
+  Future<void> _handleSupplierChanged(String? value) async {
+    if (_selectedSupplierId == value) return;
+
+    setState(() => _selectedSupplierId = value);
+    await _maybeAutoGenerateSupplierSku();
+  }
+
+  Future<void> _maybeAutoGenerateSupplierSku() async {
+    if (widget.productId != null) return;
+    if (_skuController.text.trim().isNotEmpty) return;
+    if (!_usesAliExpressSkuSequence) return;
+
+    await _generateSku(autoTriggered: true);
   }
 
   double get _marginPercentage {
@@ -2698,9 +2775,14 @@ class _ProductFormPageState extends State<ProductFormPage>
             flex: 3,
             child: TextFormField(
               controller: _skuController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'SKU interno',
-                hintText: 'Ej. BIC-MTB-TRK-001',
+                hintText: _usesAliExpressSkuSequence
+                    ? 'Se asigna automáticamente como AE####'
+                    : 'Ej. BIC-MTB-TRK-001',
+                helperText: _usesAliExpressSkuSequence
+                    ? 'Proveedor AliExpress: usa la secuencia automática AE####.'
+                    : null,
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -2713,9 +2795,16 @@ class _ProductFormPageState extends State<ProductFormPage>
           const SizedBox(width: 12),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: _generateSku,
-              icon: const Icon(Icons.auto_fix_high_outlined),
-              label: const Text('Generar'),
+              onPressed: _isGeneratingSku ? null : () => _generateSku(),
+              icon: _isGeneratingSku
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_fix_high_outlined),
+              label:
+                  Text(_usesAliExpressSkuSequence ? 'Siguiente AE' : 'Generar'),
             ),
           ),
         ],
@@ -2961,7 +3050,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             ),
           ),
         ],
-        onChanged: (value) => setState(() => _selectedSupplierId = value),
+        onChanged: _handleSupplierChanged,
       ),
       const SizedBox(height: 16),
       Row(

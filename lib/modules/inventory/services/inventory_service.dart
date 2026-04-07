@@ -9,6 +9,9 @@ import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 
 class InventoryService extends ChangeNotifier {
+  static final RegExp _aliExpressSkuPattern =
+      RegExp(r'^AE(\d+)$', caseSensitive: false);
+
   final DatabaseService _db;
   final TenantService _tenantService;
 
@@ -320,6 +323,54 @@ class InventoryService extends ChangeNotifier {
       if (kDebugMode) print('Error fetching product by SKU: $e');
       rethrow;
     }
+  }
+
+  bool isAliExpressSupplierName(String? supplierName) {
+    final normalized = supplierName?.trim().toLowerCase() ?? '';
+    return normalized.contains('aliexpress');
+  }
+
+  Future<String> getNextAliExpressSku({
+    String? supplierId,
+    String? supplierName,
+    bool forceRefresh = true,
+  }) async {
+    if (!isAliExpressSupplierName(supplierName)) {
+      throw Exception('El proveedor seleccionado no usa la secuencia AE');
+    }
+
+    final products = await getProducts(forceRefresh: forceRefresh);
+    var maxSequence = 0;
+
+    void collectSequence(Product product) {
+      final match = _aliExpressSkuPattern.firstMatch(product.sku.trim());
+      if (match == null) return;
+
+      final sequence = int.tryParse(match.group(1) ?? '0') ?? 0;
+      if (sequence > maxSequence) {
+        maxSequence = sequence;
+      }
+    }
+
+    for (final product in products) {
+      final matchesSupplier = supplierId != null &&
+          supplierId.isNotEmpty &&
+          product.supplierId == supplierId;
+      final matchesAliExpressName =
+          isAliExpressSupplierName(product.supplierName);
+
+      if (matchesSupplier || matchesAliExpressName) {
+        collectSequence(product);
+      }
+    }
+
+    if (maxSequence == 0) {
+      for (final product in products) {
+        collectSequence(product);
+      }
+    }
+
+    return 'AE${(maxSequence + 1).toString().padLeft(4, '0')}';
   }
 
   Future<Product> createProduct(Product product) async {

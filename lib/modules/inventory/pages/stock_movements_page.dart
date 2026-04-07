@@ -136,6 +136,14 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     });
   }
 
+  void _clearAllMovementFilters() {
+    setState(() {
+      _movementTypeFilter = 'all';
+      _startDate = null;
+      _endDate = null;
+    });
+  }
+
   Future<void> _navigateToReference(StockMovement movement) async {
     if (!movement.hasNavigableReference || movement.referenceId == null) {
       return;
@@ -150,7 +158,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     });
 
     try {
-      if (movement.movementCategory == 'purchase') {
+      if (movement.category == StockMovementCategory.purchase) {
         final invoice = await context
             .read<PurchaseService>()
             .getPurchaseInvoice(movement.referenceId!);
@@ -523,7 +531,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         return Column(
           children: [
             _buildMovementFilters(movementsService),
-            _buildMovementSummary(movementsService),
+            _buildMovementSummary(movements),
             const Divider(height: 1),
             Expanded(
               child: _buildMovementContent(movements),
@@ -581,9 +589,42 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
     if (movements.isEmpty) {
       return Center(
-        child: Text(
-          'No hay movimientos para este producto',
-          style: TextStyle(color: Colors.grey[600]),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.filter_alt_off, size: 52, color: Colors.grey[350]),
+              const SizedBox(height: 16),
+              Text(
+                _hasActiveMovementFilters
+                    ? 'No hay movimientos con los filtros actuales'
+                    : 'No hay movimientos para este producto',
+                style: TextStyle(
+                  color: Colors.grey[700],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _hasActiveMovementFilters
+                    ? 'Prueba quitando el tipo o el rango de fechas para ver más resultados.'
+                    : 'Este producto todavía no registra cambios de stock.',
+                style: TextStyle(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              if (_hasActiveMovementFilters) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _clearAllMovementFilters,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Limpiar filtros'),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
@@ -1215,6 +1256,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildPurchaseInvoiceInlineView(PurchaseInvoice invoice) {
     final inventoryService = context.watch<InventoryService>();
+    final totalUnits = invoice.items.fold<double>(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
 
     final statusColor = _purchaseStatusColor(invoice.status);
     final statusText = invoice.status.displayName;
@@ -1234,7 +1279,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   children: [
                     Text(
                       invoice.invoiceNumber?.isNotEmpty == true
-                          ? 'Factura de Compra '
+                          ? 'Factura de Compra ${invoice.invoiceNumber}'
                           : 'Factura de Compra',
                       style: const TextStyle(
                           fontSize: 28,
@@ -1302,6 +1347,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 Expanded(
                   child: _buildMetricCol(
                       'FECHA', DateFormat('dd/MM/yyyy').format(invoice.date)),
+                ),
+                Expanded(
+                  child: _buildMetricCol(
+                    'ÍTEMS',
+                    '${invoice.items.length} prod. / ${_formatQuantity(totalUnits)} uds.',
+                  ),
                 ),
                 Expanded(
                   child: _buildMetricCol(
@@ -1787,13 +1838,21 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               icon: const Icon(Icons.clear, size: 18),
               tooltip: 'Limpiar filtro de fecha',
             ),
+          if (_hasActiveMovementFilters) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _clearAllMovementFilters,
+              icon: const Icon(Icons.filter_alt_off, size: 18),
+              label: const Text('Quitar filtros'),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMovementSummary(StockMovementsService service) {
-    final summary = service.getSummary();
+  Widget _buildMovementSummary(List<StockMovement> movements) {
+    final summary = _buildFilteredSummary(movements);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1804,7 +1863,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       child: Row(
         children: [
           _buildSummaryItem(
-            'Transacciones',
+            _hasActiveMovementFilters ? 'Resultados' : 'Transacciones',
             summary['transaction_count'].toString(),
             Icons.receipt_long,
             Colors.blue,
@@ -1835,6 +1894,35 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         ],
       ),
     );
+  }
+
+  bool get _hasActiveMovementFilters {
+    return _movementTypeFilter != 'all' ||
+        _startDate != null ||
+        _endDate != null;
+  }
+
+  Map<String, int> _buildFilteredSummary(List<StockMovement> movements) {
+    var totalIncrease = 0;
+    var totalDecrease = 0;
+    var netChange = 0;
+
+    for (final movement in movements) {
+      final quantity = movement.quantity;
+      netChange += quantity;
+      if (quantity >= 0) {
+        totalIncrease += quantity;
+      } else {
+        totalDecrease += quantity.abs();
+      }
+    }
+
+    return {
+      'transaction_count': movements.length,
+      'total_increase': totalIncrease,
+      'total_decrease': totalDecrease,
+      'net_change': netChange,
+    };
   }
 
   Widget _buildSummaryItem(
@@ -2261,21 +2349,19 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildTypeChip(StockMovement movement) {
     Color color;
-    switch (movement.movementCategory) {
-      case 'purchase':
+    switch (movement.category) {
+      case StockMovementCategory.purchase:
         color = Colors.green;
         break;
-      case 'sale':
+      case StockMovementCategory.sale:
         color = Colors.blue;
         break;
-      case 'adjustment':
+      case StockMovementCategory.adjustment:
         color = Colors.orange;
         break;
-      case 'transfer':
+      case StockMovementCategory.transfer:
         color = Colors.purple;
         break;
-      default:
-        color = Colors.grey;
     }
 
     return Container(
