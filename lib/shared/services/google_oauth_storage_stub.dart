@@ -6,6 +6,8 @@ class _LocalStorageStub {
   void operator []=(String key, String value) => _store[key] = value;
 
   void remove(String key) => _store.remove(key);
+  String? getItem(String key) => _store[key];
+  void setItem(String key, String value) => _store[key] = value;
   void removeItem(String key) => _store.remove(key);
 }
 

@@ -2,9 +2,13 @@
 // This provides a fake 'window' object that does nothing.
 
 class _FakeStorage {
-  String? operator [](String key) => null;
-  void operator []=(String key, String value) {}
-  String? remove(String key) => null;
+  final Map<String, String> _store = {};
+  String? operator [](String key) => _store[key];
+  void operator []=(String key, String value) => _store[key] = value;
+  String? remove(String key) => _store.remove(key);
+  String? getItem(String key) => _store[key];
+  void setItem(String key, String value) => _store[key] = value;
+  void removeItem(String key) => _store.remove(key);
 }
 
 class _FakeLocation {
