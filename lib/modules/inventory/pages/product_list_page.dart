@@ -465,6 +465,12 @@ class _ProductListPageState extends State<ProductListPage> {
     if (!ModalRoute.of(context)!.isCurrent) return false;
     if (event is! KeyDownEvent) return false;
 
+    if (_isTextInputFocused) {
+      _scanBuffer.clear();
+      _hwScanTimer?.cancel();
+      return false;
+    }
+
     final now = DateTime.now();
     if (_lastScanKeyTime != null &&
         now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
@@ -488,6 +494,10 @@ class _ProductListPageState extends State<ProductListPage> {
     if (char != null && char.isNotEmpty) {
       _scanBuffer.write(char);
       _hwScanTimer = Timer(_scanKeyTimeout, () {
+        if (_isTextInputFocused) {
+          _scanBuffer.clear();
+          return;
+        }
         final barcode = _scanBuffer.toString().trim();
         _scanBuffer.clear();
         if (barcode.length >= _minBarcodeLen && mounted) {
@@ -497,6 +507,13 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     return false; // Never consume — let events reach text fields normally
+  }
+
+  bool get _isTextInputFocused {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    if (focusedContext == null) return false;
+
+    return focusedContext.widget is EditableText;
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
