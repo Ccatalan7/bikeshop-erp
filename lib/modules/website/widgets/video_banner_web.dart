@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
@@ -32,37 +32,36 @@ class VideoBannerPlatform {
       ui_web.platformViewRegistry.registerViewFactory(
         viewId,
         (int id) {
-          final iframe = html.IFrameElement()
-            ..src =
-                'https://www.youtube.com/embed/$videoId?autoplay=1&mute=1&loop=1&playlist=$videoId&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${html.window.location.origin}'
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.position = 'absolute'
-            ..style.top = '50%'
-            ..style.left = '50%'
-            ..style.transform = 'translate(-50%, -50%)'
-            ..style.minWidth = '177.78vh' // 16:9 aspect ratio
-            ..style.minHeight = '56.25vw'
-            ..style.pointerEvents =
-                'none' // Allow scroll events to pass through
-            ..style.zIndex = '-1'
-            ..allow = 'autoplay; encrypted-media'
-            ..allowFullscreen = true;
+          final iframe =
+              web.document.createElement('iframe') as web.HTMLIFrameElement;
+          iframe.src =
+              'https://www.youtube.com/embed/$videoId?autoplay=1&mute=1&loop=1&playlist=$videoId&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${web.window.location.origin}';
+          iframe.style.border = 'none';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.position = 'absolute';
+          iframe.style.top = '50%';
+          iframe.style.left = '50%';
+          iframe.style.transform = 'translate(-50%, -50%)';
+          iframe.style.minWidth = '177.78vh'; // 16:9 aspect ratio
+          iframe.style.minHeight = '56.25vw';
+          iframe.style.pointerEvents = 'none';
+          iframe.style.zIndex = '-1';
+          iframe.allow = 'autoplay; encrypted-media';
+          iframe.allowFullscreen = true;
 
           // Hint to browsers that support it.
-          // (For above-the-fold videos this may not delay, but it avoids eager load in some cases.)
           iframe.setAttribute('loading', 'lazy');
 
           // Wrap in a container div to handle sizing
-          final container = html.DivElement()
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.position = 'relative'
-            ..style.overflow = 'hidden'
-            ..style.pointerEvents =
-                'none' // Allow scroll events to pass through
-            ..append(iframe);
+          final container =
+              web.document.createElement('div') as web.HTMLDivElement;
+          container.style.width = '100%';
+          container.style.height = '100%';
+          container.style.position = 'relative';
+          container.style.overflow = 'hidden';
+          container.style.pointerEvents = 'none';
+          container.appendChild(iframe);
 
           return container;
         },
@@ -88,30 +87,30 @@ class VideoBannerPlatform {
       ui_web.platformViewRegistry.registerViewFactory(
         viewId,
         (int id) {
-          final video = html.VideoElement()
-            ..src = videoUrl
-            ..autoplay = true
-            ..muted = true
-            ..loop = true
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.objectFit = 'cover'
-            ..style.position = 'absolute'
-            ..style.top = '0'
-            ..style.left = '0'
-            ..style.zIndex = '-1'
-            ..style.pointerEvents =
-                'none'; // Allow scroll events to pass through
+          final video =
+              web.document.createElement('video') as web.HTMLVideoElement;
+          video.src = videoUrl;
+          video.autoplay = true;
+          video.muted = true;
+          video.loop = true;
+          video.style.width = '100%';
+          video.style.height = '100%';
+          video.style.objectFit = 'cover';
+          video.style.position = 'absolute';
+          video.style.top = '0';
+          video.style.left = '0';
+          video.style.zIndex = '-1';
+          video.style.pointerEvents = 'none';
 
           // Wrap in a container div
-          final container = html.DivElement()
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.position = 'relative'
-            ..style.overflow = 'hidden'
-            ..style.pointerEvents =
-                'none' // Allow scroll events to pass through
-            ..append(video);
+          final container =
+              web.document.createElement('div') as web.HTMLDivElement;
+          container.style.width = '100%';
+          container.style.height = '100%';
+          container.style.position = 'relative';
+          container.style.overflow = 'hidden';
+          container.style.pointerEvents = 'none';
+          container.append(video);
 
           return container;
         },

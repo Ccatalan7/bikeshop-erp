@@ -6,8 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' if (dart.library.io) 'google_business_service_stub.dart'
-    as html;
+import 'package:web/web.dart'
+    if (dart.library.io) 'google_business_service_stub.dart' as web;
 
 class GoogleBusinessService with ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -40,9 +40,8 @@ class GoogleBusinessService with ChangeNotifier {
           session?.user.identities?.map((i) => i.provider).toList();
 
       final tokenChanged = providerToken != _lastProviderToken;
-      final identitiesChanged =
-          (identityProviders ?? const <String>[]) !=
-              (_lastIdentityProviders ?? const <String>[]);
+      final identitiesChanged = (identityProviders ?? const <String>[]) !=
+          (_lastIdentityProviders ?? const <String>[]);
 
       if (tokenChanged || identitiesChanged) {
         _lastProviderToken = providerToken;
@@ -109,7 +108,8 @@ class GoogleBusinessService with ChangeNotifier {
   /// Best-effort: after OAuth returns, some web runtimes may need a short
   /// rehydration window before `provider_token` becomes available to the
   /// running app. This avoids requiring a manual hard refresh.
-  Future<bool> ensureProviderToken({Duration timeout = const Duration(seconds: 3)}) async {
+  Future<bool> ensureProviderToken(
+      {Duration timeout = const Duration(seconds: 3)}) async {
     if (hasProviderToken) return true;
 
     final start = DateTime.now();
@@ -262,7 +262,7 @@ class GoogleBusinessService with ChangeNotifier {
         // Store a flag in localStorage so the app knows to re-enter edit mode
         // after OAuth redirect (Supabase may strip query params from callback)
         try {
-          html.window.localStorage[_kWebReturnToEditorKey] = 'true';
+          web.window.localStorage.setItem(_kWebReturnToEditorKey, 'true');
           debugPrint(
               '💾 [GoogleBusinessService] Saved edit mode flag to localStorage');
 
@@ -270,10 +270,11 @@ class GoogleBusinessService with ChangeNotifier {
           // back to the Integraciones module instead of sending them to '/'
           // (which redirects to /dashboard on ERP hosts).
           final uri = Uri.base;
-          final pathWithQuery = uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
-          html.window.localStorage[_kWebReturnToPathKey] = pathWithQuery;
+          final pathWithQuery =
+              uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
+          web.window.localStorage.setItem(_kWebReturnToPathKey, pathWithQuery);
           // Request opening Integraciones panel on return.
-          html.window.localStorage[_kWebOpenIntegrationsKey] = 'true';
+          web.window.localStorage.setItem(_kWebOpenIntegrationsKey, 'true');
           debugPrint(
               '💾 [GoogleBusinessService] Saved return path for OAuth: $pathWithQuery');
         } catch (e) {

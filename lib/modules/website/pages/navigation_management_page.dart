@@ -208,149 +208,20 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
   Widget _buildLinkItem(WebsiteNavigation link, MenuLocation location,
       {int depth = 0}) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(left: depth * 24.0, bottom: 8),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (depth > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Icon(Icons.subdirectory_arrow_right,
-                          size: 16,
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withOpacity(0.5)),
-                    ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _getLinkTypeColor(link.linkType).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      _getLinkTypeIcon(link.linkType),
-                      color: _getLinkTypeColor(link.linkType),
-                    ),
-                  ),
-                ],
-              ),
-              title: Text(
-                link.label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _getLinkTypeColor(link.linkType).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _getLinkTypeLabel(link.linkType),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _getLinkTypeColor(link.linkType),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      link.linkValue ?? '',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!link.isVisible)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Oculto',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.orange,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                    onPressed: () =>
-                        _showAddLinkDialog(location, parentId: link.id),
-                    tooltip: 'Agregar Sub-item',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 20),
-                    onPressed: () => _showEditLinkDialog(link),
-                    tooltip: 'Editar',
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      link.isVisible ? Icons.visibility : Icons.visibility_off,
-                      size: 20,
-                      color: link.isVisible ? null : Colors.orange,
-                    ),
-                    onPressed: () => _toggleLinkVisibility(link),
-                    tooltip: link.isVisible ? 'Ocultar' : 'Mostrar',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        size: 20, color: Colors.red),
-                    onPressed: () => _confirmDeleteLink(link),
-                    tooltip: 'Eliminar',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_upward, size: 20),
-                    onPressed: () => _moveItem(link, -1, location),
-                    tooltip: 'Mover Arriba',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_downward, size: 20),
-                    onPressed: () => _moveItem(link, 1, location),
-                    tooltip: 'Mover Abajo',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        // Recursively render children
-        if (link.children.isNotEmpty)
-          ...link.children
-              .map((c) => _buildLinkItem(c, location, depth: depth + 1)),
-      ],
+    // We use ValueKey to ensure state preservation when reordering
+    return _NavigationTreeItem(
+      key: ValueKey(link.id),
+      item: link,
+      location: location,
+      depth: depth,
+      onAddSubItem: _showAddLinkDialog,
+      onEdit: _showEditLinkDialog,
+      onDelete: _confirmDeleteLink,
+      onToggleVisibility: _toggleLinkVisibility,
+      onMove: _moveItem,
+      getIcon: _getLinkTypeIcon,
+      getColor: _getLinkTypeColor,
+      getLabel: _getLinkTypeLabel,
     );
   }
 
@@ -551,15 +422,11 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
           // Bulk Add Mode: Create multiple sibling links
           if (subcategories != null && subcategories.isNotEmpty) {
-            // If we are in bulk mode, 'link' is just a dummy container for the configuration
-            // We iterate over the subcategories and create one link for each.
-            int orderIndex =
-                link.orderIndex; // Start from the passed index (or end)
-
-            // If appending to a list, we should probably find the max order index of current children
-            // But for simplicity, we just safely increment.
+            final catService = context.read<CategoryService>();
+            int orderIndex = link.orderIndex;
 
             for (final sub in subcategories) {
+              // 1. Create the Link for this Category (e.g. Transmisión)
               final childLink = WebsiteNavigation(
                 id: '',
                 tenantId: link.tenantId,
@@ -569,12 +436,40 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                 linkValue: '/productos?category=${sub.id}',
                 orderIndex: orderIndex++,
                 isVisible: true,
-                parentId:
-                    link.parentId, // This should be the parentId we passed in
+                parentId: link.parentId,
                 createdAt: DateTime.now(),
                 updatedAt: DateTime.now(),
               );
-              await service.createNavigation(childLink);
+              final createdChild = await service.createNavigation(childLink);
+
+              // 2. INTELLIGENT DEEP IMPORT
+              // Check if this category has children in the DB. If so, create them too.
+              try {
+                final grandChildren =
+                    await catService.getSubcategories(sub.id!);
+                if (grandChildren.isNotEmpty) {
+                  int gcOrder = 0;
+                  for (final gc in grandChildren) {
+                    final gcLink = WebsiteNavigation(
+                      id: '',
+                      tenantId: link.tenantId,
+                      menuLocation: link.menuLocation,
+                      label: gc.name,
+                      linkType: NavLinkType.category,
+                      linkValue: '/productos?category=${gc.id}',
+                      orderIndex: gcOrder++,
+                      isVisible: true,
+                      parentId:
+                          createdChild.id, // Parent is the one we just created
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    );
+                    await service.createNavigation(gcLink);
+                  }
+                }
+              } catch (e) {
+                debugPrint('Error auto-importing grandchildren: $e');
+              }
             }
             _loadNavigation();
             return;
@@ -584,7 +479,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
           // Create the parent link first
           final createdParent = await service.createNavigation(link);
 
-          // If subcategories were selected, create child nav items
+          // If subcategories were selected (via checklist for a SINGLE main link), create child nav items
           if (subcategories != null && subcategories.isNotEmpty) {
             int orderIndex = 0;
             for (final sub in subcategories) {
@@ -623,6 +518,28 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
             {List<cat_models.Category>? subcategories}) async {
           final service = context.read<WebsiteService>();
           await service.updateNavigation(updatedLink);
+
+          if (subcategories != null && subcategories.isNotEmpty) {
+            int orderIndex = 0;
+            for (final sub in subcategories) {
+              final childLink = WebsiteNavigation(
+                id: '',
+                tenantId: updatedLink.tenantId,
+                menuLocation: updatedLink.menuLocation,
+                label: sub.name,
+                linkType: NavLinkType.category,
+                linkValue: '/productos?category=${sub.id}',
+                orderIndex: orderIndex++,
+                isVisible: true,
+                parentId: updatedLink.id,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+                // Keep default showOnDesktop/Mobile as true
+              );
+              await service.createNavigation(childLink);
+            }
+          }
+
           _loadNavigation();
         },
       ),
@@ -670,6 +587,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   String? _selectedRootCategoryId;
   Set<String> _selectedSubcategoryIds = {};
   bool _isLoadingCategories = false;
+  bool _isLoadingSubcategories = false;
 
   // Bulk Add State
   bool _isBulkAddMode = false;
@@ -688,45 +606,121 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _isMegaMenu =
         widget.link?.cssClass?.toLowerCase().contains('megamenu') ?? false;
 
-    // Detect if we should offer Bulk Add
-    _checkForBulkAddOpportunity();
+    // Default to loading established root categories
+    bool loadRoots = true;
 
-    // Load categories when type is category
-    if (_linkType == NavLinkType.category) {
+    // INTELLIGENT DEFAULTS
+    if (widget.link == null && widget.parentLink != null) {
+      if (widget.parentLink!.linkType == NavLinkType.category) {
+        _linkType = NavLinkType.category;
+
+        // If adding to a category, we want to show its children
+        if (widget.parentLink!.linkValue != null) {
+          final uri = Uri.tryParse(widget.parentLink!.linkValue!);
+          final parentCatId = uri?.queryParameters['category'];
+          if (parentCatId != null) {
+            loadRoots = false;
+            // Load children of the parent context
+            _initParentSubcategories(parentCatId);
+          }
+        }
+      }
+    } else if (widget.link?.linkType == NavLinkType.category &&
+        widget.link?.linkValue != null) {
+      final uri = Uri.tryParse(widget.link!.linkValue!);
+      _selectedRootCategoryId = uri?.queryParameters['category'];
+      _checkForBulkAddOpportunity();
+    }
+
+    if (_linkType == NavLinkType.category && loadRoots) {
       _loadRootCategories();
     }
   }
 
-  Future<void> _checkForBulkAddOpportunity() async {
-    // Only if creating new link, has parent, and parent is Category type
-    if (widget.link == null &&
-        widget.parentLink != null &&
-        widget.parentLink!.linkType == NavLinkType.category) {
-      final parentVal = widget.parentLink!.linkValue ?? '';
-      final uri = Uri.tryParse(parentVal);
-      final catId = uri?.queryParameters['category'];
+  Future<void> _initParentSubcategories(String parentId) async {
+    setState(() => _isLoadingCategories = true);
+    try {
+      final categoryService = context.read<CategoryService>();
+      final children = await categoryService.getSubcategories(parentId);
 
-      if (catId != null) {
-        setState(() => _isLoadingCategories = true);
-        try {
-          final categoryService = context.read<CategoryService>();
-          final subs = await categoryService.getSubcategories(catId);
+      // Safety: Remove the parent itself if it was returned (prevents infinite recursion/duplication)
+      final validChildren = children
+          .where((c) => c.id != parentId && c.name != widget.parentLink?.label)
+          .toList();
 
-          if (subs.isNotEmpty) {
-            setState(() {
-              _isBulkAddMode = true;
-              _bulkAvailableSubcategories = subs;
-              // Select all by default? Or none? Let's select all for convenience.
-              _selectedSubcategoryIds = subs.map((s) => s.id!).toSet();
-              _isLoadingCategories = false;
-            });
-          } else {
-            setState(() => _isLoadingCategories = false);
+      if (mounted) {
+        setState(() {
+          // Populate Dropdown Options
+          _rootCategories = validChildren;
+
+          // Populate Bulk Add Options
+          _bulkAvailableSubcategories = validChildren;
+          if (validChildren.isNotEmpty) {
+            _selectedSubcategoryIds = validChildren.map((c) => c.id!).toSet();
           }
-        } catch (e) {
-          debugPrint('Error checking for bulk subcategories: $e');
-          setState(() => _isLoadingCategories = false);
+
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading parent subcategories: $e');
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _checkForBulkAddOpportunity() async {
+    String? catId;
+
+    if (_linkType == NavLinkType.category) {
+      // If specifically using the dropdown for category
+      if (_selectedRootCategoryId != null) {
+        catId = _selectedRootCategoryId;
+      } else if (_linkValueController.text.isNotEmpty) {
+        final uri = Uri.tryParse(_linkValueController.text);
+        catId = uri?.queryParameters['category'];
+      }
+    }
+
+    if (catId != null) {
+      // 1. Try to use local cache first (instant)
+      if (_subcategoriesMap.containsKey(catId) &&
+          _subcategoriesMap[catId]!.isNotEmpty) {
+        final subs = _subcategoriesMap[catId]!;
+        if (mounted) {
+          setState(() {
+            _bulkAvailableSubcategories = subs;
+            _selectedSubcategoryIds = subs.map((s) => s.id!).toSet();
+            _isLoadingCategories = false;
+            _isLoadingSubcategories = false;
+          });
         }
+        return;
+      }
+
+      setState(() => _isLoadingSubcategories = true);
+      try {
+        final categoryService = context.read<CategoryService>();
+        final subs = await categoryService.getSubcategories(catId);
+
+        if (mounted) {
+          setState(() {
+            _bulkAvailableSubcategories = subs;
+            if (subs.isNotEmpty) {
+              // Default to ALL selected
+              _selectedSubcategoryIds = subs.map((s) => s.id!).toSet();
+            }
+            _isLoadingSubcategories = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error checking for bulk subcategories: $e');
+        if (mounted) setState(() => _isLoadingSubcategories = false);
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _bulkAvailableSubcategories = [];
+        });
       }
     }
   }
@@ -844,7 +838,10 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                       hintText: 'ej: Productos, Contacto, Blog',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v?.isEmpty == true ? 'Requerido' : null,
+                    validator: (v) =>
+                        (v?.isEmpty == true && _selectedSubcategoryIds.isEmpty)
+                            ? 'Requerido'
+                            : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -953,91 +950,22 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                         onChanged: (id) async {
                           setState(() {
                             _selectedRootCategoryId = id;
-                            _selectedSubcategoryIds.clear();
-                            // Auto-fill label with category name
-                            if (_labelController.text.isEmpty && id != null) {
-                              final cat = _rootCategories.firstWhere(
-                                (c) => c.id == id,
-                                orElse: () => _rootCategories.first,
-                              );
-                              _labelController.text = cat.name;
-                            }
                           });
-                          if (id != null) {
-                            await _loadSubcategories(id);
-                          }
+                          // Only clear if we are NOT in the special mode of pre-loaded options
+                          // Actually, if they change the root, we should probably check for subcategories of THAT root.
+                          // But here we are likely in the "options loaded" state.
+
+                          // Trigger bulk add check
+                          await _checkForBulkAddOpportunity();
                         },
                         validator: (v) =>
-                            v == null ? 'Selecciona una categoría' : null,
+                            (v == null && _selectedSubcategoryIds.isEmpty)
+                                ? 'Selecciona una categoría'
+                                : null,
                       ),
                       const SizedBox(height: 16),
 
-                      // Subcategory checkboxes (if root selected)
-                      if (_selectedRootCategoryId != null &&
-                          _subcategoriesMap[_selectedRootCategoryId] != null &&
-                          _subcategoriesMap[_selectedRootCategoryId]!
-                              .isNotEmpty) ...[
-                        Text(
-                          'Subcategorías a incluir en el menú:',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Card(
-                          child: Column(
-                            children:
-                                _subcategoriesMap[_selectedRootCategoryId]!
-                                    .map((sub) => CheckboxListTile(
-                                          title: Text(sub.name),
-                                          subtitle: sub.description != null
-                                              ? Text(sub.description!,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis)
-                                              : null,
-                                          value: _selectedSubcategoryIds
-                                              .contains(sub.id),
-                                          onChanged: (checked) {
-                                            setState(() {
-                                              if (checked == true) {
-                                                _selectedSubcategoryIds
-                                                    .add(sub.id!);
-                                              } else {
-                                                _selectedSubcategoryIds
-                                                    .remove(sub.id);
-                                              }
-                                            });
-                                          },
-                                        ))
-                                    .toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Las subcategorías seleccionadas aparecerán como columnas en el Mega Menú.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ] else if (_selectedRootCategoryId != null) ...[
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Icon(Icons.info_outline,
-                                    color: theme.colorScheme.primary),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Esta categoría no tiene subcategorías. Se mostrará como enlace simple.',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                      // Existing Subcategory logic removed in favor of _buildBulkAddUI below
                     ],
                     // Hidden validator field
                     Offstage(
@@ -1113,6 +1041,28 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                       onChanged: (v) => setState(() => _openInNewTab = v),
                       contentPadding: EdgeInsets.zero,
                     ),
+                  const SizedBox(height: 16),
+
+                  // Subcategories Bulk Add Section
+                  if (_isLoadingSubcategories)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_bulkAvailableSubcategories.isNotEmpty)
+                    _buildBulkAddUI()
+                  else if (_linkType == NavLinkType.category &&
+                      _selectedRootCategoryId != null &&
+                      !_isLoadingCategories)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        'Esta categoría no tiene subcategorías para agregar.',
+                        style: TextStyle(
+                            color: theme.colorScheme.secondary,
+                            fontStyle: FontStyle.italic),
+                      ),
+                    ),
                 ],
               ],
             ),
@@ -1181,35 +1131,13 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   Widget _buildBulkAddUI() {
     final theme = Theme.of(context);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.playlist_add, color: Colors.blue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Se detectaron subcategorías para "${widget.parentLink?.label}".\nPodés agregarlas todas juntas aquí.',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.blue[800]),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+        const Divider(height: 32),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Subcategorías disponibles:',
-                style: theme.textTheme.labelLarge),
+            Text('Incluir Subcategorías:', style: theme.textTheme.titleSmall),
             TextButton(
               onPressed: () {
                 setState(() {
@@ -1229,8 +1157,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
         Container(
-          constraints: const BoxConstraints(maxHeight: 300),
+          constraints: const BoxConstraints(maxHeight: 200),
           decoration: BoxDecoration(
             border: Border.all(color: theme.colorScheme.outlineVariant),
             borderRadius: BorderRadius.circular(8),
@@ -1254,118 +1183,310 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
             }).toList(),
           ),
         ),
-        const SizedBox(height: 16),
-        Center(
-          child: TextButton(
-            onPressed: () {
-              setState(() => _isBulkAddMode = false);
-            },
-            child: const Text('Prefiero agregar un enlace manual'),
-          ),
-        ),
       ],
     );
   }
 
   Future<void> _save() async {
-    if (_isBulkAddMode) {
-      if (_selectedSubcategoryIds.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Seleccioná al menos una subcategoría')),
-        );
-        return;
-      }
-
-      setState(() => _isSaving = true);
-      try {
-        final selectedSubs = _bulkAvailableSubcategories
-            .where((s) => _selectedSubcategoryIds.contains(s.id))
-            .toList();
-
-        // Pass dummy link (will be ignored) and the subcategories
-        await widget.onSave(
-            WebsiteNavigation(
-                id: '',
-                tenantId: '',
-                menuLocation: widget.location,
-                label: 'Bulk',
-                linkType: NavLinkType.category,
-                linkValue: '',
-                orderIndex: 0,
-                isVisible: true,
-                parentId: widget.parentId,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now()),
-            subcategories: selectedSubs);
-
-        if (mounted) Navigator.pop(context);
-      } catch (e) {
-        if (mounted) {
-          setState(() => _isSaving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
-          );
-        }
-      }
-      return;
-    }
-
-    if (!_formKey.currentState!.validate()) return;
+    // Check validation
+    final isValid = _formKey.currentState!.validate();
+    // If invalid AND we don't have bulk items, stop.
+    // If invalid BUT we have bulk items, we proceed (assuming validators allowed empty fields)
+    if (!isValid && _selectedSubcategoryIds.isEmpty) return;
 
     setState(() => _isSaving = true);
 
     try {
       // Determine link value based on type
-      String linkValue;
+      String linkValue = '';
 
       if (_linkType == NavLinkType.category &&
           _selectedRootCategoryId != null) {
-        // Build category URL from selected category
         linkValue = '/productos?category=$_selectedRootCategoryId';
       } else {
         linkValue = _linkValueController.text.trim();
       }
 
-      final link = WebsiteNavigation(
+      // If we are doing a bulk add and the user left the main label empty,
+      // we create a placeholder link. The onSave callback should handle this
+      // by ignoring the main link if it's "empty" but has subcategories.
+      // However, looking at the code, onSave (in navigation_management_page)
+      // specifically checks `if (subcategories != null && subcategories.isNotEmpty)`.
+      // If that's true, it DOES NOT create the `link` passed in, it only creates the subcategories.
+      // So we can safely pass a dummy link here.
+
+      final nav = WebsiteNavigation(
         id: widget.link?.id ?? '',
         tenantId: widget.link?.tenantId ?? '',
         menuLocation: widget.location,
-        label: _labelController.text.trim(),
+        label: _labelController.text.trim().isEmpty
+            ? 'BULK_ADD_PLACEHOLDER'
+            : _labelController.text.trim(),
         linkType: _linkType,
         linkValue: linkValue,
         orderIndex: widget.link?.orderIndex ?? 0,
         isVisible: _isVisible,
+        showOnDesktop: true,
+        showOnMobile: true,
         openInNewTab: _openInNewTab,
-        parentId: _selectedParentId,
+        parentId: _selectedParentId ?? widget.parentId,
         // Append 'megamenu' class if selected
         cssClass: _isMegaMenu ? 'megamenu' : null,
         createdAt: widget.link?.createdAt ?? DateTime.now(),
-        updatedAt: widget.link?.updatedAt ?? DateTime.now(),
+        updatedAt: DateTime.now(),
       );
 
-      // Gather selected subcategories to pass to callback
-      List<cat_models.Category>? selectedSubcategories;
-      if (_linkType == NavLinkType.category &&
-          _selectedRootCategoryId != null &&
-          _selectedSubcategoryIds.isNotEmpty) {
-        final subs = _subcategoriesMap[_selectedRootCategoryId] ?? [];
-        selectedSubcategories =
-            subs.where((s) => _selectedSubcategoryIds.contains(s.id)).toList();
-      }
+      // Collect selected subcategories if any
+      final selectedSubs = _bulkAvailableSubcategories
+          .where((s) => _selectedSubcategoryIds.contains(s.id))
+          .toList();
 
-      // Save the link and optionally pass subcategories for child creation
-      await widget.onSave(link, subcategories: selectedSubcategories);
+      // Pass the main link AND the subcategories to create
+      await widget.onSave(nav, subcategories: selectedSubs);
 
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     }
+  }
+}
+
+// ============================================================================
+// COLLAPSIBLE NAVIGATION TREE ITEM
+// ============================================================================
+
+class _NavigationTreeItem extends StatefulWidget {
+  final WebsiteNavigation item;
+  final MenuLocation location;
+  final int depth;
+  final bool isLast;
+
+  // Callbacks
+  final Function(MenuLocation, {String? parentId}) onAddSubItem;
+  final Function(WebsiteNavigation) onEdit;
+  final Function(WebsiteNavigation) onDelete;
+  final Function(WebsiteNavigation) onToggleVisibility;
+  final Function(WebsiteNavigation, int, MenuLocation) onMove;
+
+  // Presentation helper methods from parent
+  final IconData Function(NavLinkType) getIcon;
+  final Color Function(NavLinkType) getColor;
+  final String Function(NavLinkType) getLabel;
+
+  const _NavigationTreeItem({
+    super.key,
+    required this.item,
+    required this.location,
+    required this.depth,
+    this.isLast = false,
+    required this.onAddSubItem,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleVisibility,
+    required this.onMove,
+    required this.getIcon,
+    required this.getColor,
+    required this.getLabel,
+  });
+
+  @override
+  State<_NavigationTreeItem> createState() => _NavigationTreeItemState();
+}
+
+class _NavigationTreeItemState extends State<_NavigationTreeItem> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final link = widget.item;
+    final hasChildren = link.children.isNotEmpty;
+    final theme = Theme.of(context);
+
+    // Indentation based on depth
+    final indent = widget.depth * 24.0;
+
+    return Column(
+      children: [
+        // THE ROW ITEM
+        Padding(
+          padding: EdgeInsets.only(left: indent, right: 8, top: 4, bottom: 4),
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                // Expand/Collapse Button (or spacer)
+                if (hasChildren)
+                  IconButton(
+                    icon: Icon(
+                      _isExpanded
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_right,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: _isExpanded ? 'Contraer' : 'Expandir',
+                  )
+                else
+                  const SizedBox(width: 32), // Spacer for alignment
+
+                // Drag handle (visual only for now, manual sorting via arrows)
+                Icon(Icons.drag_indicator,
+                    size: 16, color: theme.colorScheme.outline),
+                const SizedBox(width: 8),
+
+                // Link Type Icon
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: widget.getColor(link.linkType).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    widget.getIcon(link.linkType),
+                    size: 16,
+                    color: widget.getColor(link.linkType),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        link.label,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              widget.getLabel(link.linkType),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              link.linkValue ?? '',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.colorScheme.outline),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Actions
+                if (!link.isVisible)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      'Oculto',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                  onPressed: () =>
+                      widget.onAddSubItem(widget.location, parentId: link.id),
+                  tooltip: 'Agregar Sub-item',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: () => widget.onEdit(link),
+                  tooltip: 'Editar',
+                ),
+                IconButton(
+                  icon: Icon(
+                    link.isVisible ? Icons.visibility : Icons.visibility_off,
+                    size: 20,
+                    color: link.isVisible ? null : Colors.orange,
+                  ),
+                  onPressed: () => widget.onToggleVisibility(link),
+                  tooltip: link.isVisible ? 'Ocultar' : 'Mostrar',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      size: 20, color: Colors.red),
+                  onPressed: () => widget.onDelete(link),
+                  tooltip: 'Eliminar',
+                ),
+                // Sorting Arrows
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => widget.onMove(link, -1, widget.location),
+                      child: const Icon(Icons.keyboard_arrow_up, size: 18),
+                    ),
+                    InkWell(
+                      onTap: () => widget.onMove(link, 1, widget.location),
+                      child: const Icon(Icons.keyboard_arrow_down, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ),
+
+        // CHILDREN (Collapsible)
+        if (hasChildren && _isExpanded)
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 0), // Already nested by Padding left
+            child: Column(
+              children: link.children
+                  .map((child) => _NavigationTreeItem(
+                        item: child,
+                        location: widget.location,
+                        depth: widget.depth + 1,
+                        onAddSubItem: widget.onAddSubItem,
+                        onEdit: widget.onEdit,
+                        onDelete: widget.onDelete,
+                        onToggleVisibility: widget.onToggleVisibility,
+                        onMove: widget.onMove,
+                        getIcon: widget.getIcon,
+                        getColor: widget.getColor,
+                        getLabel: widget.getLabel,
+                      ))
+                  .toList(),
+            ),
+          ),
+      ],
+    );
   }
 }

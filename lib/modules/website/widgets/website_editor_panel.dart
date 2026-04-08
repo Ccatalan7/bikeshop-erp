@@ -2272,6 +2272,17 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ),
           const SizedBox(height: 12),
         ],
+        _EditorSlider(
+          label: 'Duración animación (ms)',
+          value:
+              (widget.data['animationDurationMs'] as num?)?.toDouble() ?? 600,
+          min: 200,
+          max: 2000,
+          divisions: 18, // (2000-200)/100 = 18 steps of 100ms
+          onChanged: (v) => widget.provider.updateBlockData(
+              widget.blockId, 'animationDurationMs', v.toInt()),
+        ),
+        const SizedBox(height: 12),
         _EditorDropdown(
           label: 'Animación',
           value: animation,

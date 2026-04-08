@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' if (dart.library.io) '../services/google_oauth_storage_stub.dart'
-    as html;
+import 'package:web/web.dart'
+    if (dart.library.io) '../services/google_oauth_storage_stub.dart' as web;
 
 /// Stable landing page for OAuth redirects.
 ///
@@ -54,17 +54,19 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       final session = data.session;
       final hasProviderToken = session?.providerToken != null;
       final provider = session?.user.appMetadata['provider'];
-      final identities = session?.user.identities?.map((i) => i.provider).toList();
+      final identities =
+          session?.user.identities?.map((i) => i.provider).toList();
 
       final sessionJson = session?.toJson();
-          final map = sessionJson is Map
-            ? Map<String, dynamic>.from(sessionJson as Map<dynamic, dynamic>)
-            : null;
-        final hasProviderTokenJson = map?['provider_token'] != null;
-        final hasProviderRefreshTokenJson = map?['provider_refresh_token'] != null;
+      final map = sessionJson is Map
+          ? Map<String, dynamic>.from(sessionJson as Map<dynamic, dynamic>)
+          : null;
+      final hasProviderTokenJson = map?['provider_token'] != null;
+      final hasProviderRefreshTokenJson =
+          map?['provider_refresh_token'] != null;
 
       debugPrint(
-        '🧩 [AuthCallback] Auth event=${data.event}, provider=$provider, identities=$identities, hasProviderToken=$hasProviderToken, hasProviderTokenJson=$hasProviderTokenJson, hasProviderRefreshTokenJson=$hasProviderRefreshTokenJson');
+          '🧩 [AuthCallback] Auth event=${data.event}, provider=$provider, identities=$identities, hasProviderToken=$hasProviderToken, hasProviderTokenJson=$hasProviderTokenJson, hasProviderRefreshTokenJson=$hasProviderRefreshTokenJson');
 
       // If the URL contains an OAuth code, avoid navigating away too early.
       // We need to exchange the code first so provider_token is available.
@@ -111,10 +113,10 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
 
       final session = Supabase.instance.client.auth.currentSession;
       final sessionJson = session?.toJson();
-          final map = sessionJson is Map
-            ? Map<String, dynamic>.from(sessionJson as Map<dynamic, dynamic>)
-            : null;
-        final hasProviderTokenJson = map?['provider_token'] != null;
+      final map = sessionJson is Map
+          ? Map<String, dynamic>.from(sessionJson as Map<dynamic, dynamic>)
+          : null;
+      final hasProviderTokenJson = map?['provider_token'] != null;
       debugPrint(
           '🧩 [AuthCallback] Initial session provider=${session?.user.appMetadata['provider']}, identities=${session?.user.identities?.map((i) => i.provider).toList()}, hasProviderToken=${session?.providerToken != null}, hasProviderTokenJson=$hasProviderTokenJson');
       if (session != null) {
@@ -157,7 +159,8 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
     // edit mode (PublicStoreLayout already consumes this flag).
     if (kIsWeb) {
       try {
-        final flag = html.window.localStorage[AuthCallbackPage.webReturnToEditorKey];
+        final flag = web.window.localStorage
+            .getItem(AuthCallbackPage.webReturnToEditorKey);
         debugPrint('🧩 [AuthCallback] returnToEditor flag=$flag');
         // Keep the flag for PublicStoreLayout to consume & clear.
       } catch (e) {
@@ -170,11 +173,12 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
     // Prefer returning to the exact route where OAuth was initiated.
     if (kIsWeb) {
       try {
-        final returnPath =
-            html.window.localStorage[AuthCallbackPage.webReturnToPathKey];
+        final returnPath = web.window.localStorage
+            .getItem(AuthCallbackPage.webReturnToPathKey);
         if (returnPath != null && returnPath.startsWith('/')) {
           // Clear it to avoid loops.
-          html.window.localStorage.remove(AuthCallbackPage.webReturnToPathKey);
+          web.window.localStorage
+              .removeItem(AuthCallbackPage.webReturnToPathKey);
           debugPrint('🧩 [AuthCallback] Navigating back to: $returnPath');
           context.go(returnPath);
           return;

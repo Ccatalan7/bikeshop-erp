@@ -126,8 +126,8 @@ class _MegaMenuHeaderWrapperState extends State<MegaMenuHeaderWrapper> {
         // Animated background - only this changes, NOT the child
         Positioned.fill(
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
             color: isOpen ? kMegaMenuPanelColor : Colors.transparent,
           ),
         ),
@@ -178,8 +178,8 @@ class _MegaMenuInvertedLogoState extends State<MegaMenuInvertedLogo> {
 
     // Invert colors to white when menu is open
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
       child: ColorFiltered(
         colorFilter: isOpen
             ? const ColorFilter.matrix(<double>[
@@ -251,15 +251,35 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
   bool _isHoveringPanel = false;
   Timer? _closeTimer;
   final GlobalKey _buttonKey = GlobalKey();
+  final GlobalKey<_MegaMenuOverlayState> _overlayKey = GlobalKey();
 
   String get _menuId =>
       widget.parent.id.isNotEmpty ? widget.parent.id : widget.parent.label;
 
   @override
+  void initState() {
+    super.initState();
+    MegaMenuController.instance.addListener(_onControllerChange);
+  }
+
+  @override
   void dispose() {
+    MegaMenuController.instance.removeListener(_onControllerChange);
     _closeTimer?.cancel();
     _forceRemoveOverlay();
     super.dispose();
+  }
+
+  void _onControllerChange() {
+    if (!mounted) return;
+    final activeId = MegaMenuController.instance.activeMenuId;
+    // If we are open, but the active menu is someone else -> Close immediately
+    // ensuring we don't interfere with the global controller state (which is owned by the new menu)
+    if (_isOpen && activeId != _menuId && activeId != null) {
+      _closeTimer?.cancel();
+      _forceRemoveOverlay();
+      setState(() => _isOpen = false);
+    }
   }
 
   void _forceRemoveOverlay() {
@@ -304,6 +324,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
     _overlayEntry = OverlayEntry(
       builder: (context) {
         return _MegaMenuOverlay(
+          key: _overlayKey,
           screenWidth: screenSize.width,
           screenHeight: screenSize.height,
           panelTop: panelTop,
@@ -312,6 +333,11 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
           onEnter: () {
             _isHoveringPanel = true;
             _closeTimer?.cancel();
+            // If we re-entered during a close animation, try to restore
+            if (_overlayKey.currentState?.isClosing ?? false) {
+              _overlayKey.currentState?.animateOpen();
+              MegaMenuController.instance.openMenu(_menuId);
+            }
           },
           onExit: () {
             _isHoveringPanel = false;
@@ -331,13 +357,35 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
     MegaMenuController.instance.openMenu(_menuId);
   }
 
-  void _closeMenu({bool force = false}) {
-    // Only close if we are truly not hovering anything
+  Future<void> _closeMenu({bool force = false}) async {
+    // PRE-CHECK: only close if we are truly not hovering anything
     if (!force && (_isHoveringButton || _isHoveringPanel)) return;
 
     _closeTimer?.cancel();
+    _closeTimer = null;
+
+    final state = _overlayKey.currentState;
+
+    // If overlay exists, animate out first
+    if (state != null) {
+      // 1. Notify header to fade out (matches panel fade out)
+      MegaMenuController.instance.closeMenu();
+
+      // 2. Animate panel opacity out
+      await state.animateClose();
+
+      // 3. POST-CHECK: Did user hover back in during animation?
+      if (!force && (_isHoveringButton || _isHoveringPanel)) {
+        // Abort close!
+        MegaMenuController.instance.openMenu(_menuId);
+        state.animateOpen();
+        return;
+      }
+    }
+
+    // 4. Actually remove overlay
     _forceRemoveOverlay();
-    MegaMenuController.instance.closeMenu();
+    MegaMenuController.instance.closeMenu(); // Ensure closed state matches
     if (mounted) {
       setState(() => _isOpen = false);
     }
@@ -345,8 +393,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
 
   void _scheduleClose() {
     _closeTimer?.cancel();
-    // 150ms delay is enough to move mouse across small gaps without flickering,
-    // but fast enough to feel responsive when actually leaving.
+    // 150ms delay is enough to move mouse across small gaps without flickering
     _closeTimer = Timer(const Duration(milliseconds: 150), () {
       if (mounted) _closeMenu();
     });
@@ -381,7 +428,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
   Widget _buildButtonContent() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(4),
@@ -425,6 +472,7 @@ class _MegaMenuOverlay extends StatefulWidget {
   final double bridgeHeight;
 
   const _MegaMenuOverlay({
+    super.key,
     required this.screenWidth,
     required this.screenHeight,
     required this.panelTop,
@@ -446,16 +494,20 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
   late Animation<double> _opacity;
   WebsiteNavigation? _currentHoveredCategory;
 
+  bool isClosing = false;
+
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(
+          milliseconds: 300), // Increased to 300ms to match header
     );
     _opacity = CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: Curves.easeInOut, // Match header's new curve
+      reverseCurve: Curves.easeInOut, // Match header's exit curve perfectly
     );
     _controller.forward();
 
@@ -463,6 +515,21 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     if (widget.children.isNotEmpty) {
       _currentHoveredCategory = widget.children.first;
     }
+  }
+
+  /// Animate close (fade out)
+  Future<void> animateClose() async {
+    if (!mounted) return;
+    isClosing = true;
+    await _controller.reverse();
+    isClosing = false;
+  }
+
+  /// Animate open (fade in) - used to recover from partial close
+  Future<void> animateOpen() async {
+    if (!mounted) return;
+    isClosing = false;
+    await _controller.forward();
   }
 
   @override
@@ -677,6 +744,84 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
   }
 }
 
+class _MegaMenuExpandableItem extends StatefulWidget {
+  final WebsiteNavigation item;
+  final Function(String href, bool openInNewTab) onNavigate;
+
+  const _MegaMenuExpandableItem({
+    required this.item,
+    required this.onNavigate,
+  });
+
+  @override
+  State<_MegaMenuExpandableItem> createState() =>
+      _MegaMenuExpandableItemState();
+}
+
+class _MegaMenuExpandableItemState extends State<_MegaMenuExpandableItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // If no children, just show the link
+    if (widget.item.children.isEmpty) {
+      return _MegaMenuLink(
+        label: widget.item.label.toUpperCase(),
+        isAccent: true,
+        onTap: () => widget.onNavigate(
+            widget.item.href ?? '/', widget.item.openInNewTab),
+      );
+    }
+
+    // If children exist, wrap in MouseRegion for hover expansion
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MegaMenuLink(
+            label: widget.item.label.toUpperCase(),
+            isAccent: true,
+            onTap: () => widget.onNavigate(
+                widget.item.href ?? '/', widget.item.openInNewTab),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              // If not hovered, height is 0 (hidden)
+              height: _isHovered ? null : 0,
+              child: _isHovered
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: widget.item.children.map((grandChild) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: _MegaMenuLink(
+                              label: grandChild.label,
+                              isAccent: false,
+                              onTap: () => widget.onNavigate(
+                                  grandChild.href ?? '/',
+                                  grandChild.openInNewTab),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // COLUMN HEADER & LINK (Helper Widgets)
 // ============================================================================
@@ -702,7 +847,7 @@ class _MegaMenuColumnHeader extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         style: TextStyle(
           color: isActive ? primaryColor : Colors.white,
-          fontSize: 15, // Slightly larger for master list
+          fontSize: 13,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.0,
         ),
@@ -737,10 +882,7 @@ class _MegaMenuLinkState extends State<_MegaMenuLink> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accentColor = widget.color ??
-        (widget.isAccent ? theme.primaryColor : const Color(0xFF888888));
-    final hoverColor =
-        widget.isAccent ? theme.colorScheme.primaryContainer : Colors.white;
+    final primaryColor = theme.primaryColor;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -751,7 +893,8 @@ class _MegaMenuLinkState extends State<_MegaMenuLink> {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 150),
           style: TextStyle(
-            color: _isHovered ? hoverColor : accentColor,
+            // Non-hovered: white (or custom color override). Hovered: primary accent.
+            color: _isHovered ? primaryColor : (widget.color ?? Colors.white),
             fontSize: widget.fontSize ?? 13,
             fontWeight: widget.isAccent ? FontWeight.w600 : FontWeight.normal,
             height: 1.4,

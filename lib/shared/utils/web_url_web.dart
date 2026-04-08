@@ -1,27 +1,26 @@
-// Web implementation using dart:html
+// Web implementation using package:web
 // This file is only used on web platform
 
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show window, document;
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:js' as js;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:web/web.dart' as web;
 
 String? getInitialBrowserUrl() {
-  return html.window.location.href;
+  return web.window.location.href;
 }
 
 /// Hide the HTML loading screen after Flutter has loaded
 void hideHtmlLoadingScreen() {
-  final loadingScreen = html.document.getElementById('app-shell');
-  loadingScreen?.classes.add('hidden');
+  final loadingScreen = web.document.getElementById('app-shell');
+  loadingScreen?.classList.add('hidden');
 }
 
 /// Check if Firebase should be skipped (Safari/iOS don't support FCM properly)
 /// This reads the window.skipFCM flag set in index.html
 bool shouldSkipFirebase() {
   try {
-    final skipFCM = js.context['skipFCM'];
-    return skipFCM == true;
+    final skipFCM = (web.window as JSObject).getProperty('skipFCM'.toJS);
+    return skipFCM.dartify() == true;
   } catch (e) {
     return false;
   }
@@ -34,7 +33,7 @@ String? _capturedGmailCode;
 /// Check if current URL is a Zoho OAuth callback and capture the code
 String? captureZohoOAuthCode() {
   try {
-    final href = html.window.location.href;
+    final href = web.window.location.href;
     final uri = Uri.parse(href);
 
     if (uri.queryParameters.containsKey('zoho_code')) {
@@ -52,7 +51,7 @@ String? captureZohoOAuthCode() {
 /// Check if current URL is a Gmail OAuth callback and capture the code
 String? captureGmailOAuthCode() {
   try {
-    final href = html.window.location.href;
+    final href = web.window.location.href;
     final uri = Uri.parse(href);
 
     if (uri.queryParameters.containsKey('gmail_code')) {
@@ -70,7 +69,7 @@ String? captureGmailOAuthCode() {
 /// Clean OAuth query parameters from URL
 void _cleanOAuthUrl() {
   try {
-    final href = html.window.location.href;
+    final href = web.window.location.href;
     final uri = Uri.parse(href);
     final newUri = uri.replace(queryParameters: {});
     String newUrl = newUri.toString();
@@ -80,7 +79,7 @@ void _cleanOAuthUrl() {
     }
     newUrl = newUrl.replaceAll('?#', '#');
 
-    html.window.history.replaceState(null, '', newUrl);
+    web.window.history.replaceState(null, '', newUrl);
   } catch (e) {
     // Ignore errors
   }
@@ -103,8 +102,8 @@ String? getAndClearGmailOAuthCode() {
 /// Clean mail URL (remove OAuth params)
 void cleanMailUrl() {
   try {
-    if (html.window.location.href.contains('_code')) {
-      html.window.history.replaceState(null, '', '/#/mail');
+    if (web.window.location.href.contains('_code')) {
+      web.window.history.replaceState(null, '', '/#/mail');
     }
   } catch (e) {
     // Ignore errors
@@ -113,13 +112,13 @@ void cleanMailUrl() {
 
 /// Navigate to a URL (for OAuth redirects)
 void navigateToUrl(String url) {
-  html.window.location.href = url;
+  web.window.location.href = url;
 }
 
 /// Set location hash for anchor navigation
 void setLocationHash(String hash) {
   try {
-    html.window.location.hash = hash;
+    web.window.location.hash = hash;
   } catch (_) {
     // Ignore errors
   }

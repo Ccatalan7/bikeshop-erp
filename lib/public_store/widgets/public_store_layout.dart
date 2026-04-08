@@ -12,9 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html'
+import 'package:web/web.dart'
     if (dart.library.io) '../../modules/website/services/google_business_service_stub.dart'
-    as html;
+    as web;
 
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -313,18 +313,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// Check localStorage for Google OAuth return flag and restore edit mode
   void _checkGoogleOAuthReturn() {
     try {
-      final flag = html.window.localStorage['google_oauth_return_to_editor'];
+      final flag =
+          web.window.localStorage.getItem('google_oauth_return_to_editor');
       final openIntegrations =
-          html.window.localStorage['google_oauth_open_integrations'];
+          web.window.localStorage.getItem('google_oauth_open_integrations');
       if (flag == 'true') {
         debugPrint(
             '🔄 [PublicStoreLayout] Detected OAuth return - restoring edit mode');
         // Clear the flag
-        html.window.localStorage.remove('google_oauth_return_to_editor');
+        web.window.localStorage.removeItem('google_oauth_return_to_editor');
 
         // Clear one-shot "open integrations" request (if present).
         if (openIntegrations == 'true') {
-          html.window.localStorage.remove('google_oauth_open_integrations');
+          web.window.localStorage.removeItem('google_oauth_open_integrations');
         }
 
         // Schedule edit mode activation after the widget tree is built
@@ -430,7 +431,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // to the origin (path stripped) by an unexpected history.replaceState().
     if (kIsWeb && _storeUrlLogsEnabled) {
       try {
-        final browserHref = html.window.location.href;
+        final browserHref = web.window.location.href;
         final signature =
             '${Uri.base.toString()}|$browserHref|${routerState.uri}|${routerState.matchedLocation}';
         if (_lastLoggedUrlSignature != signature) {
@@ -3152,8 +3153,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 child: MegaMenuHeaderWrapper(
                   fixedTop: topOffset,
                   child: AnimatedPhysicalModel(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOut,
+                    duration: const Duration(
+                        milliseconds:
+                            300), // Slightly slower to match menu fade/rendering
+                    curve: Curves
+                        .easeInOut, // Smoother transition than easeOut which effectively snaps to black too fast
                     shape: BoxShape.rectangle,
                     elevation: effectiveElevation,
                     color: effectiveBgColor,
@@ -3299,7 +3303,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   textColor,
                                                   isEditMode: isEditMode,
                                                 ),
-                                                const SizedBox(width: 24),
+                                                const SizedBox(width: 32),
                                                 _buildNavLink(
                                                   context,
                                                   'Productos',
@@ -3324,53 +3328,25 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                             b.orderIndex));
 
                                                   if (children.isNotEmpty) {
-                                                    // Upgrade to MegaMenu if deep nesting is detected OR explicitly requested
-                                                    final isMega = children.any(
-                                                            (c) => c.children
-                                                                .isNotEmpty) ||
-                                                        (nav.cssClass
-                                                                ?.toLowerCase()
-                                                                .contains(
-                                                                    'megamenu') ??
-                                                            false) ||
-                                                        (nav.cssClass
-                                                                ?.toLowerCase()
-                                                                .contains(
-                                                                    'mega-menu') ??
-                                                            false);
-
-                                                    if (isMega) {
-                                                      return Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                right: 24),
-                                                        child: MegaMenuButton(
-                                                          parent: nav,
-                                                          children: children,
-                                                          isEditMode:
-                                                              isEditMode,
-                                                          textColor: textColor,
-                                                          onNavigate: (href,
-                                                                  newTab) =>
-                                                              _navigateToHref(
-                                                                  context, href,
-                                                                  openInNewTab:
-                                                                      newTab),
-                                                        ),
-                                                      );
-                                                    }
-
+                                                    // ALWAYS use Mega Menu for desktop nav items with children
+                                                    // (Per user requirement for "Fox Racing" style)
                                                     return Padding(
                                                       padding:
                                                           const EdgeInsets.only(
-                                                              right: 24),
-                                                      child: _buildNavDropdown(
-                                                        context: context,
+                                                              right: 32),
+                                                      child: MegaMenuButton(
+                                                        key: ValueKey(
+                                                            'mega_${nav.id}_${nav.label}'),
                                                         parent: nav,
                                                         children: children,
                                                         isEditMode: isEditMode,
                                                         textColor: textColor,
+                                                        onNavigate: (href,
+                                                                newTab) =>
+                                                            _navigateToHref(
+                                                                context, href,
+                                                                openInNewTab:
+                                                                    newTab),
                                                       ),
                                                     );
                                                   }
@@ -3378,7 +3354,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   return Padding(
                                                     padding:
                                                         const EdgeInsets.only(
-                                                            right: 24),
+                                                            right: 32),
                                                     child: _buildNavItemLink(
                                                       context,
                                                       nav,
@@ -5337,6 +5313,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final normalized = href.trim();
     if (normalized.isEmpty) return;
 
+    // IMPORTANT: Ensure any open mega menu is closed before navigating.
+    // This resets the header background color (which turns black when menu is open).
+    MegaMenuController.instance.closeMenu();
+
     // Sometimes website blocks/navigation store a bare UUID as a link target.
     // This can be either a product id OR a website_pages.id. Normalize to a
     // real route so we don't hit go_router 404s.
@@ -5481,14 +5461,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // caching or when the route doesn't change (already on home).
     if (kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode) {
       try {
-        final currentPath = Uri.parse(html.window.location.href).path;
+        final currentPath = Uri.parse(web.window.location.href).path;
         final desiredPath = targetPath.isEmpty ? '/' : targetPath;
 
         if (currentPath == desiredPath) {
-          html.window.location.reload();
+          web.window.location.reload();
         } else {
           // Navigate + reload in one step.
-          html.window.location.assign(target);
+          web.window.location.assign(target);
         }
         return;
       } catch (e) {
@@ -5627,56 +5607,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         : PublicStoreTheme.textPrimary),
               ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNavDropdown({
-    required BuildContext context,
-    required WebsiteNavigation parent,
-    required List<WebsiteNavigation> children,
-    bool isEditMode = false,
-    Color textColor = Colors.black87,
-  }) {
-    return PopupMenuButton<WebsiteNavigation>(
-      enabled: !isEditMode,
-      offset: const Offset(0, 40),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      elevation: 8,
-      color: Colors.white,
-      onSelected: isEditMode
-          ? null
-          : (WebsiteNavigation nav) {
-              final href = _routeForPublicStore(nav.href ?? '/');
-              _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
-            },
-      itemBuilder: (BuildContext popupContext) {
-        return <PopupMenuEntry<WebsiteNavigation>>[
-          for (int i = 0; i < children.length; i++) ...[
-            if (i > 0) const PopupMenuDivider(height: 1),
-            PopupMenuItem<WebsiteNavigation>(
-              value: children[i],
-              child: Text(children[i].label),
-            ),
-          ],
-        ];
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            parent.label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.normal,
-                  color: textColor,
-                ),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down, size: 18, color: textColor),
-        ],
       ),
     );
   }

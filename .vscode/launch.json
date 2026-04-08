@@ -23,7 +23,7 @@
       ]
     },
     {
-      "name": "🏪 Public Store (Web • localhost:8080)",
+      "name": "🐞 Debug Vinabike Store (Chrome)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main_store.dart",

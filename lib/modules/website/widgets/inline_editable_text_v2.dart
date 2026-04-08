@@ -175,6 +175,25 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     }
   }
 
+  void _handleFormattingChanged(TextFormatting formatting) {
+    debugPrint(
+        '📝 [InlineText] Formatting changed: bold=${formatting.isBold}, size=${formatting.fontSize}');
+
+    setState(() => _currentFormatting = formatting);
+    widget.onFormattingChanged?.call(formatting);
+
+    // Force overlay repaint so controls reflect changes immediately.
+    _requestToolbarRebuild();
+
+    // Keep toolbar position reasonable after style changes.
+    _scheduleToolbarReposition();
+
+    // Return focus to text field so user can keep typing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
   void _showToolbar() {
     debugPrint('📝 [InlineText] Showing toolbar');
     if (_toolbarEntry != null) return;
@@ -213,21 +232,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                           currentFormatting: _currentFormatting,
                           baseStyle: widget.baseStyle,
                           preset: widget.toolbarPreset,
-                          onFormattingChanged: (formatting) {
-                            setState(() => _currentFormatting = formatting);
-                            widget.onFormattingChanged?.call(formatting);
-
-                            // Force overlay repaint so controls reflect changes immediately.
-                            _requestToolbarRebuild();
-
-                            // Keep toolbar position reasonable after style changes.
-                            _scheduleToolbarReposition();
-
-                            // Return focus to text field so user can keep typing.
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) _focusNode.requestFocus();
-                            });
-                          },
+                          onFormattingChanged: _handleFormattingChanged,
                           onClose: _finishEditing,
                         ),
                       ),

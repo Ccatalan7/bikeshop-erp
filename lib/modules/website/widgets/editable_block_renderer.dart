@@ -1033,6 +1033,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           blockId: widget.blockId,
           blockHeight: blockHeight,
           onSlideUpdated: (index, field, value) {
+            debugPrint(
+                '🔄 [EditableCarousel] Slide update: index=$index, field=$field');
             // Update the slide data in the block
             final updatedSlides = List<Map<String, dynamic>>.from(slides);
             if (index < updatedSlides.length) {

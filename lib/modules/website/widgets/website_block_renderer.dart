@@ -4323,6 +4323,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   late Duration _interval;
   late Duration _transitionDuration;
   late _CarouselAnimation _animation;
+  late Duration _animationDuration;
   Timer? _timer;
 
   @override
@@ -4370,7 +4371,9 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       }
     }
     _transitionDuration = Duration(milliseconds: durationMs);
-
+    _animationDuration = Duration(
+        milliseconds:
+            (widget.data['animationDurationMs'] as num?)?.toInt() ?? 600);
     _animation = _parseAnimation(widget.data['animation']);
 
     _restartTimer();
@@ -4494,20 +4497,33 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final hasYoutubeVideo = youtubeId != null;
     final hasVideo = hasVideoFile || hasYoutubeVideo;
 
-    final headingStyle = WebsiteBlockRenderer._applyThemeFont(
-      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-        fontSize: widget.headingSize,
-        color: Colors.white,
+    // Get formatting data if saved
+    final titleFormatting = TextFormatting.fromJson(
+        slide['titleFormatting'] as Map<String, dynamic>?);
+    final subtitleFormatting = TextFormatting.fromJson(
+        slide['subtitleFormatting'] as Map<String, dynamic>?);
+
+    final headingStyle = titleFormatting.applyTo(
+      WebsiteBlockRenderer._applyThemeFont(
+        (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
+          fontSize: widget.headingSize,
+          color: Colors.white,
+        ),
+        widget.headingFont,
+      ).copyWith(
+        letterSpacing: 3,
+        fontWeight: FontWeight.w900,
       ),
-      widget.headingFont,
     );
 
-    final subtitleStyle = WebsiteBlockRenderer._applyThemeFont(
-      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-        fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : null,
-        color: Colors.white70,
+    final subtitleStyle = subtitleFormatting.applyTo(
+      WebsiteBlockRenderer._applyThemeFont(
+        (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
+          fontSize: widget.bodySize != null ? widget.bodySize! * 1.2 : null,
+          color: Colors.white70,
+        ),
+        widget.bodyFont,
       ),
-      widget.bodyFont,
     );
 
     final ctaTextStyle = WebsiteBlockRenderer._applyThemeFont(
@@ -4543,18 +4559,19 @@ class _CarouselBannerState extends State<_CarouselBanner> {
               children: [
                 Text(
                   (title.isEmpty ? 'Título' : title).toUpperCase(),
-                  style: headingStyle.copyWith(
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  textAlign: TextAlign.center,
+                  style: headingStyle,
+                  textAlign: titleFormatting.textAlign == TextAlign.start
+                      ? TextAlign.center
+                      : titleFormatting.textAlign,
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Text(
                     subtitle,
                     style: subtitleStyle,
-                    textAlign: TextAlign.center,
+                    textAlign: subtitleFormatting.textAlign == TextAlign.start
+                        ? TextAlign.center
+                        : subtitleFormatting.textAlign,
                   ),
                 ],
                 const SizedBox(height: 40),
