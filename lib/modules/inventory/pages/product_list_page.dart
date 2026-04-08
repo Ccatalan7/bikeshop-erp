@@ -16,11 +16,13 @@ import '../../../shared/widgets/main_layout.dart';
 
 import '../../purchases/services/purchase_service.dart';
 import '../models/brand_models.dart';
+import '../models/bulk_product_edit_models.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../widgets/bulk_product_edit_dialog.dart';
 import '../widgets/product_movements_tab.dart';
 
 enum ProductViewMode { table, cards }
@@ -572,6 +574,35 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  Future<void> _openBulkEditWorkspace({bool useSelection = false}) async {
+    final hasSelection = _selectedProductIds.isNotEmpty;
+    final initialSource = useSelection && hasSelection
+        ? BulkProductScopeSource.selected
+        : (hasSelection
+            ? BulkProductScopeSource.selected
+            : BulkProductScopeSource.filtered);
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => BulkProductEditDialog(
+        allProducts: _products,
+        filteredProducts: _filteredProducts,
+        selectedProductIds: _selectedProductIds,
+        categories: _categories,
+        brands: _brands,
+        suppliers: _suppliers,
+        initialSource: initialSource,
+        lockSource: useSelection && hasSelection,
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() => _selectedProductIds.clear());
+      await _loadProducts(forceRefresh: true, preserveState: true);
+    }
+  }
+
   Future<void> _loadCategories() async {
     try {
       final categories = await _categoryService.getCategories(activeOnly: true);
@@ -1083,6 +1114,14 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
               const SizedBox(width: 10),
 
+              _buildSecondaryActionButton(
+                theme: theme,
+                icon: Icons.rule_folder_outlined,
+                label: 'Edición masiva',
+                onPressed: _openBulkEditWorkspace,
+              ),
+              const SizedBox(width: 10),
+
               // Primary CTA - New Product
               _buildPrimaryCTA(
                 theme: theme,
@@ -1220,6 +1259,13 @@ class _ProductListPageState extends State<ProductListPage> {
               Row(
                 children: [
                   // Scanner Toggle (Mobile Compact)
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.rule_folder_outlined, size: 20),
+                    onPressed: _openBulkEditWorkspace,
+                    tooltip: 'Edición masiva',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 8),
                   IconButton.filledTonal(
                     icon: Icon(
                       _isScannerEnabled
@@ -3883,14 +3929,9 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
           const Spacer(),
           TextButton.icon(
-            onPressed: () {
-              // Placeholder for bulk update
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Edición masiva: Próximamente')),
-              );
-            },
+            onPressed: () => _openBulkEditWorkspace(useSelection: true),
             icon: const Icon(Icons.edit, size: 18),
-            label: const Text('Editar'),
+            label: const Text('Editar lote'),
             style: TextButton.styleFrom(
               foregroundColor: theme.colorScheme.onPrimaryContainer,
             ),
