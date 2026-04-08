@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+const String _documentedServiceRoleKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo';
+
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
 /// Why: Firebase Hosting is configured as an SPA (rewrite ** -> /index.html).
@@ -29,7 +32,8 @@ void main(List<String> args) async {
   final buildDirPath = parsed['build-dir'] ?? 'build/web_store';
   final tenantId = parsed['tenant-id'];
   final storeUrl = parsed['store-url'] ?? 'https://vinabike.cl';
-  final productScope = (parsed['product-scope'] ?? 'merchant').trim().toLowerCase();
+  final productScope =
+      (parsed['product-scope'] ?? 'merchant').trim().toLowerCase();
   final onlyMerchant = productScope != 'published';
 
   if (tenantId == null || tenantId.isEmpty) {
@@ -43,22 +47,28 @@ void main(List<String> args) async {
 
   if (!buildDir.existsSync() || !baseIndexFile.existsSync()) {
     stderr.writeln('❌ Build dir/index.html not found: ${baseIndexFile.path}');
-    stderr.writeln('   Run the store build first: flutter build web ... -o $buildDirPath');
+    stderr.writeln(
+        '   Run the store build first: flutter build web ... -o $buildDirPath');
     exitCode = 2;
     return;
   }
 
   final env = await _readDotEnv(File('.env'));
-  final serviceRoleKey = env['SUPABASE_SERVICE_ROLE_KEY']?.trim();
-  if (serviceRoleKey == null || serviceRoleKey.isEmpty) {
-    stderr.writeln('❌ SUPABASE_SERVICE_ROLE_KEY not found in .env');
+  final serviceRoleKey =
+      _resolveEnvValue('SUPABASE_SERVICE_ROLE_KEY', env: env) ??
+          _documentedServiceRoleKey;
+  if (serviceRoleKey.isEmpty) {
+    stderr.writeln(
+      '❌ SUPABASE_SERVICE_ROLE_KEY not found in environment or .env',
+    );
     exitCode = 2;
     return;
   }
 
-  final supabaseUrl = env['SUPABASE_URL']?.trim().isNotEmpty == true
-      ? env['SUPABASE_URL']!.trim()
-      : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
+  final supabaseUrl =
+      _resolveEnvValue('SUPABASE_URL', env: env)?.isNotEmpty == true
+          ? _resolveEnvValue('SUPABASE_URL', env: env)!
+          : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
 
   final baseHtml = await baseIndexFile.readAsString();
 
@@ -74,8 +84,9 @@ void main(List<String> args) async {
 
   final titleTemplate = _getSetting(settings, 'seo_product_title_template') ??
       '{product_name} | $storeName';
-  final descriptionTemplate = _getSetting(settings, 'seo_product_description_template') ??
-      '{product_description}';
+  final descriptionTemplate =
+      _getSetting(settings, 'seo_product_description_template') ??
+          '{product_description}';
 
   final products = await _fetchProducts(
     supabaseUrl: supabaseUrl,
@@ -101,12 +112,15 @@ void main(List<String> args) async {
     final priceNum = _toNum(product['price']);
     final currency = (product['price_currency'] ?? 'CLP').toString();
 
-    final stockQty = _toInt(product['stock_quantity']) ?? _toInt(product['inventory_qty']) ?? 0;
+    final stockQty = _toInt(product['stock_quantity']) ??
+        _toInt(product['inventory_qty']) ??
+        0;
     final inStock = stockQty > 0;
 
     final imageUrl = (product['image_url'] ?? '').toString().trim();
 
-    final productUrl = '${storeUrl.replaceAll(RegExp(r'/+$'), '')}/productos/$id';
+    final productUrl =
+        '${storeUrl.replaceAll(RegExp(r'/+$'), '')}/productos/$id';
 
     final variables = <String, String>{
       'store_name': storeName,
@@ -117,20 +131,25 @@ void main(List<String> args) async {
       'product_description': productDescription,
     };
 
-    final title = _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
-    final description = _truncate(_cleanText(_applyTemplate(descriptionTemplate, variables)), 320);
+    final title =
+        _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
+    final description = _truncate(
+        _cleanText(_applyTemplate(descriptionTemplate, variables)), 320);
 
     final html = _buildProductHtml(
       baseHtml: baseHtml,
       title: title.isNotEmpty ? title : productName,
-      description: description.isNotEmpty ? description : _truncate(productDescription, 320),
+      description: description.isNotEmpty
+          ? description
+          : _truncate(productDescription, 320),
       canonicalUrl: productUrl,
       ogImageUrl: imageUrl,
       jsonLdProduct: _buildProductJsonLd(
         productUrl: productUrl,
         storeName: _cleanText(storeName),
         product: product,
-        description: _cleanText(description.isNotEmpty ? description : productDescription),
+        description: _cleanText(
+            description.isNotEmpty ? description : productDescription),
         inStock: inStock,
         currency: currency,
         priceNum: priceNum,
@@ -164,30 +183,37 @@ String _buildProductHtml({
 }) {
   var html = baseHtml;
 
-  html = _replaceTag(html, RegExp(r'<title>.*?</title>', dotAll: true), '<title>${_escapeHtml(title)}</title>');
+  html = _replaceTag(html, RegExp(r'<title>.*?</title>', dotAll: true),
+      '<title>${_escapeHtml(title)}</title>');
 
   html = _replaceMetaContent(html, name: 'title', content: title);
   html = _replaceMetaContent(html, name: 'description', content: description);
 
   html = _replaceLinkHref(html, rel: 'canonical', href: canonicalUrl);
 
-  html = _replaceMetaProperty(html, property: 'og:type', content: isProduct ? 'product' : 'website');
+  html = _replaceMetaProperty(html,
+      property: 'og:type', content: isProduct ? 'product' : 'website');
   html = _replaceMetaProperty(html, property: 'og:url', content: canonicalUrl);
   html = _replaceMetaProperty(html, property: 'og:title', content: title);
-  html = _replaceMetaProperty(html, property: 'og:description', content: description);
+  html = _replaceMetaProperty(html,
+      property: 'og:description', content: description);
 
   // Set/insert og:image + twitter:image if we have a product image.
   if (ogImageUrl.isNotEmpty) {
-    html = _replaceOrInsertMetaProperty(html, property: 'og:image', content: ogImageUrl);
-    html = _replaceOrInsertMetaName(html, name: 'twitter:image', content: ogImageUrl);
+    html = _replaceOrInsertMetaProperty(html,
+        property: 'og:image', content: ogImageUrl);
+    html = _replaceOrInsertMetaName(html,
+        name: 'twitter:image', content: ogImageUrl);
   }
 
   html = _replaceMetaName(html, name: 'twitter:url', content: canonicalUrl);
   html = _replaceMetaName(html, name: 'twitter:title', content: title);
-  html = _replaceMetaName(html, name: 'twitter:description', content: description);
+  html =
+      _replaceMetaName(html, name: 'twitter:description', content: description);
 
   // Inject product JSON-LD right before </head>.
-  final injection = '\n  <!-- JSON-LD Structured Data for Product (generated at deploy) -->\n'
+  final injection =
+      '\n  <!-- JSON-LD Structured Data for Product (generated at deploy) -->\n'
       '  <script type="application/ld+json" id="seo-product-jsonld">\n'
       '  $jsonLdProduct\n'
       '  </script>\n';
@@ -195,7 +221,9 @@ String _buildProductHtml({
   if (html.contains('id="seo-product-jsonld"')) {
     // If already present, replace the whole block.
     html = html.replaceAll(
-      RegExp(r'<script type="application/ld\+json" id="seo-product-jsonld">.*?</script>', dotAll: true),
+      RegExp(
+          r'<script type="application/ld\+json" id="seo-product-jsonld">.*?</script>',
+          dotAll: true),
       '${injection.trim()}\n',
     );
   } else {
@@ -322,7 +350,8 @@ Future<String> _httpGet(Uri url, {required Map<String, String> headers}) async {
     final res = await req.close();
     final body = await res.transform(utf8.decoder).join();
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpException('GET $url failed: ${res.statusCode} ${res.reasonPhrase}\n$body');
+      throw HttpException(
+          'GET $url failed: ${res.statusCode} ${res.reasonPhrase}\n$body');
     }
     return body;
   } finally {
@@ -395,27 +424,33 @@ String _replaceTag(String html, RegExp pattern, String replacement) {
   return html;
 }
 
-String _replaceMetaContent(String html, {required String name, required String content}) {
+String _replaceMetaContent(String html,
+    {required String name, required String content}) {
   final esc = _escapeHtml(content);
-  final re = RegExp(r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
+  final re = RegExp(
+      r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<meta name="$name" content="$esc">');
   }
   return html;
 }
 
-String _replaceMetaName(String html, {required String name, required String content}) {
+String _replaceMetaName(String html,
+    {required String name, required String content}) {
   final esc = _escapeHtml(content);
-  final re = RegExp(r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
+  final re = RegExp(
+      r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<meta name="$name" content="$esc">');
   }
   return html;
 }
 
-String _replaceOrInsertMetaName(String html, {required String name, required String content}) {
+String _replaceOrInsertMetaName(String html,
+    {required String name, required String content}) {
   final esc = _escapeHtml(content);
-  final re = RegExp(r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
+  final re = RegExp(
+      r'<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<meta name="$name" content="$esc">');
   }
@@ -432,18 +467,24 @@ String _replaceOrInsertMetaName(String html, {required String name, required Str
   return html;
 }
 
-String _replaceMetaProperty(String html, {required String property, required String content}) {
+String _replaceMetaProperty(String html,
+    {required String property, required String content}) {
   final esc = _escapeHtml(content);
-  final re = RegExp(r'<meta\s+property="' + RegExp.escape(property) + r'"\s+content="[^"]*"\s*/?>');
+  final re = RegExp(r'<meta\s+property="' +
+      RegExp.escape(property) +
+      r'"\s+content="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<meta property="$property" content="$esc">');
   }
   return html;
 }
 
-String _replaceOrInsertMetaProperty(String html, {required String property, required String content}) {
+String _replaceOrInsertMetaProperty(String html,
+    {required String property, required String content}) {
   final esc = _escapeHtml(content);
-  final re = RegExp(r'<meta\s+property="' + RegExp.escape(property) + r'"\s+content="[^"]*"\s*/?>');
+  final re = RegExp(r'<meta\s+property="' +
+      RegExp.escape(property) +
+      r'"\s+content="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<meta property="$property" content="$esc">');
   }
@@ -460,9 +501,11 @@ String _replaceOrInsertMetaProperty(String html, {required String property, requ
   return html;
 }
 
-String _replaceLinkHref(String html, {required String rel, required String href}) {
+String _replaceLinkHref(String html,
+    {required String rel, required String href}) {
   final esc = _escapeHtml(href);
-  final re = RegExp(r'<link\s+rel="' + RegExp.escape(rel) + r'"\s+href="[^"]*"\s*/?>');
+  final re =
+      RegExp(r'<link\s+rel="' + RegExp.escape(rel) + r'"\s+href="[^"]*"\s*/?>');
   if (re.hasMatch(html)) {
     return html.replaceAll(re, '<link rel="$rel" href="$esc">');
   }
@@ -481,8 +524,14 @@ Future<Map<String, String>> _readDotEnv(File file) async {
     final idx = line.indexOf('=');
     if (idx <= 0) continue;
 
-    final key = line.substring(0, idx).trim();
+    var key = line.substring(0, idx).trim();
     var value = line.substring(idx + 1).trim();
+
+    if (key.startsWith('export ')) {
+      key = key.substring('export '.length).trim();
+    }
+
+    if (key.isEmpty) continue;
 
     // Strip optional surrounding quotes.
     if ((value.startsWith('"') && value.endsWith('"')) ||
@@ -494,6 +543,20 @@ Future<Map<String, String>> _readDotEnv(File file) async {
   }
 
   return out;
+}
+
+String? _resolveEnvValue(String key, {required Map<String, String> env}) {
+  final fromProcess = Platform.environment[key]?.trim();
+  if (fromProcess != null && fromProcess.isNotEmpty) {
+    return fromProcess;
+  }
+
+  final fromDotEnv = env[key]?.trim();
+  if (fromDotEnv != null && fromDotEnv.isNotEmpty) {
+    return fromDotEnv;
+  }
+
+  return null;
 }
 
 Map<String, String> _parseArgs(List<String> args) {

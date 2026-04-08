@@ -34,6 +34,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   DateTime? _startDate;
   DateTime? _endDate;
   final TextEditingController _searchController = TextEditingController();
+  StockMovementsViewMode _viewMode = StockMovementsViewMode.recent;
 
   // Panel resizing
   static const double _minPanelWidth = 300.0;
@@ -229,8 +230,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final movementsService = context.watch<StockMovementsService>();
-    final isRecentMode = movementsService.isRecentMode;
+    context.watch<StockMovementsService>();
+    final isRecentMode = _viewMode == StockMovementsViewMode.recent;
 
     return MainLayout(
       child: Column(
@@ -281,7 +282,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildHeader() {
     final movementsService = context.watch<StockMovementsService>();
-    final isRecentMode = movementsService.isRecentMode;
+    final isRecentMode = _viewMode == StockMovementsViewMode.recent;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -319,6 +320,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   isSelected: isRecentMode,
                   onTap: () {
                     _closeLinkedDocument();
+                    setState(() => _viewMode = StockMovementsViewMode.recent);
                     movementsService.setViewMode('recent');
                   },
                 ),
@@ -328,6 +330,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   isSelected: !isRecentMode,
                   onTap: () {
                     _closeLinkedDocument();
+                    setState(
+                        () => _viewMode = StockMovementsViewMode.byProduct);
                     movementsService.setViewMode('by_product');
                   },
                 ),
@@ -567,7 +571,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       builder: (context, movementsService, _) {
         final inventoryService = context.watch<InventoryService>();
         final theme = Theme.of(context);
-        final isRecentMode = movementsService.isRecentMode;
+        final isRecentMode = _viewMode == StockMovementsViewMode.recent;
         final selectedProduct = !isRecentMode
             ? _findSelectedMovementProduct(inventoryService, movementsService)
             : null;
@@ -2351,8 +2355,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   }
 
   Widget _buildMovementTableHeader() {
-    final movementsService = context.watch<StockMovementsService>();
-    final showProductColumn = movementsService.isRecentMode;
+    final showProductColumn = _viewMode == StockMovementsViewMode.recent;
     final theme = Theme.of(context);
 
     TextStyle headerStyle = theme.textTheme.labelSmall!.copyWith(
@@ -2455,8 +2458,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildMovementRow(StockMovement movement) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final movementsService = context.watch<StockMovementsService>();
-    final showProductColumn = movementsService.isRecentMode;
+    final showProductColumn = _viewMode == StockMovementsViewMode.recent;
     final theme = Theme.of(context);
 
     return Container(
@@ -2693,6 +2695,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   // Mobile card layout for smaller screens
   Widget _buildMovementCard(StockMovement movement) {
     final dateFormat = DateFormat('dd/MM/yy HH:mm');
+    final showProductHeader = _viewMode == StockMovementsViewMode.recent;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -2702,21 +2705,24 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Product name + type chip
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    movement.productName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            if (showProductHeader)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      movement.productName,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _buildTypeChip(movement),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  _buildTypeChip(movement),
+                ],
+              )
+            else
+              _buildTypeChip(movement),
             const SizedBox(height: 8),
             // Date + Source
             Row(
