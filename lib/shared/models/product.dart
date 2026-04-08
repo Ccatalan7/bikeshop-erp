@@ -258,6 +258,7 @@ class Product {
       'barcode': barcode,
       'price': price,
       'cost': cost,
+      'inventory_qty': stockQuantity,
       'stock_quantity': stockQuantity,
       'min_stock_level': minStockLevel,
       'max_stock_level': maxStockLevel,

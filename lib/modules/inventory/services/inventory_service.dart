@@ -7,6 +7,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
+import '../models/stock_adjustment.dart';
 
 class InventoryService extends ChangeNotifier {
   static final RegExp _aliExpressSkuPattern =
@@ -143,6 +144,20 @@ class InventoryService extends ChangeNotifier {
   void invalidateProductsCache() {
     _cachedProducts = null;
     _productsCacheTime = null;
+  }
+
+  void _updateCachedProductStock(String productId, int stockAfter) {
+    final cachedProducts = _cachedProducts;
+    if (cachedProducts == null) return;
+
+    final index =
+        cachedProducts.indexWhere((product) => product.id == productId);
+    if (index < 0) return;
+
+    cachedProducts[index] = cachedProducts[index].copyWith(
+      inventoryQty: stockAfter,
+      updatedAt: DateTime.now(),
+    );
   }
 
   InventoryService(this._db, this._tenantService);
@@ -399,17 +414,6 @@ class InventoryService extends ChangeNotifier {
 
       final data = await _db.insert('products', productData);
 
-      // Create initial stock movement if inventory > 0
-      if (product.inventoryQty > 0) {
-        await _createStockMovement(
-          productId: data['id'],
-          quantity: product.inventoryQty,
-          type: StockMovementType.adjustment,
-          reference: 'Inventario inicial',
-          unitCost: product.cost,
-        );
-      }
-
       invalidateProductsCache();
       notifyListeners();
       return Product.fromJson(data);
@@ -438,6 +442,10 @@ class InventoryService extends ChangeNotifier {
 
       final productData = updatedProduct.toJson();
 
+      // Stock must change only through explicit stock-adjustment workflows.
+      productData.remove('inventory_qty');
+      productData.remove('stock_quantity');
+
       // Generate/Refresh embedding on update
       try {
         final aiService = AIAssistantService();
@@ -457,6 +465,66 @@ class InventoryService extends ChangeNotifier {
       return Product.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('Error updating product: $e');
+      rethrow;
+    }
+  }
+
+  Future<StockAdjustmentDetail> applyStockAdjustment({
+    required String productId,
+    required int quantity,
+    required String type,
+    required String reasonType,
+    String? note,
+    DateTime? effectiveAt,
+  }) async {
+    try {
+      final response = await _db.rpc(
+        'apply_inventory_stock_adjustment',
+        params: {
+          'p_product_id': productId,
+          'p_quantity': quantity,
+          'p_type': type.trim().toUpperCase(),
+          'p_reason_type': reasonType,
+          'p_note': note,
+          'p_effective_at': (effectiveAt ?? DateTime.now()).toIso8601String(),
+        },
+      );
+
+      final result = Map<String, dynamic>.from(response as Map);
+      final adjustmentId = result['adjustment_id']?.toString();
+      if (adjustmentId == null || adjustmentId.isEmpty) {
+        throw Exception(
+            'La respuesta del ajuste no incluyó un identificador válido.');
+      }
+
+      final detail = await getStockAdjustmentDetails(adjustmentId);
+      _updateCachedProductStock(productId, detail.stockAfter);
+      notifyListeners();
+      return detail;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error applying stock adjustment: $e');
+      }
+      rethrow;
+    }
+  }
+
+  Future<StockAdjustmentDetail> getStockAdjustmentDetails(
+    String adjustmentId,
+  ) async {
+    try {
+      final response = await _db.rpc(
+        'get_stock_adjustment_details',
+        params: {'p_adjustment_id': adjustmentId},
+      );
+
+      return StockAdjustmentDetail.fromJson(
+        Map<String, dynamic>.from(response as Map),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching stock adjustment details: $e');
+      }
       rethrow;
     }
   }
@@ -587,20 +655,11 @@ class InventoryService extends ChangeNotifier {
       final difference = newQuantity - product.inventoryQty;
       if (difference == 0) return; // No change needed
 
-      // Update product inventory
-      await _db.update('products', productId, {
-        'inventory_qty': newQuantity,
-        'stock_quantity': newQuantity,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      // Create stock movement
-      await _createStockMovement(
-        productId: productId,
-        quantity: difference.abs(),
-        type: StockMovementType.adjustment,
-        reference: reason,
-        unitCost: unitCost ?? product.cost,
+      await _db.adjustStock(
+        productId,
+        difference.abs(),
+        difference > 0 ? 'IN' : 'OUT',
+        reason,
       );
 
       notifyListeners();

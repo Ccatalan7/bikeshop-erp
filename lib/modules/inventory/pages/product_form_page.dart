@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/image_service.dart';
@@ -48,6 +49,72 @@ class _RestoreProductConversionOptions {
   final String reason;
   final bool restoreInventory;
 }
+
+class _StockAdjustmentReasonOption {
+  const _StockAdjustmentReasonOption({
+    required this.key,
+    required this.label,
+    required this.description,
+  });
+
+  final String key;
+  final String label;
+  final String description;
+}
+
+class _StockAdjustmentDialogResult {
+  const _StockAdjustmentDialogResult({
+    required this.quantity,
+    required this.type,
+    required this.reasonType,
+    required this.note,
+    required this.effectiveAt,
+  });
+
+  final int quantity;
+  final String type;
+  final String reasonType;
+  final String note;
+  final DateTime effectiveAt;
+}
+
+const List<_StockAdjustmentReasonOption> _stockAdjustmentReasonOptions = [
+  _StockAdjustmentReasonOption(
+    key: 'count',
+    label: 'Reconteo / reevaluación',
+    description: 'Regulariza diferencias detectadas al contar o revisar stock.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'loss',
+    label: 'Merma',
+    description: 'Baja por merma, vencimiento o deterioro no recuperable.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'damage',
+    label: 'Daño',
+    description: 'Baja por producto roto, defectuoso o inutilizable.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'theft',
+    label: 'Robo / extravío',
+    description: 'Baja por robo, pérdida o faltante no localizado.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'internal_use',
+    label: 'Uso interno / taller',
+    description: 'Consumo interno de inventario para operaciones del taller.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'found',
+    label: 'Hallazgo / recuperación',
+    description: 'Alta por unidades recuperadas o detectadas físicamente.',
+  ),
+  _StockAdjustmentReasonOption(
+    key: 'manual',
+    label: 'Otro ajuste manual',
+    description: 'Uso excepcional cuando ninguna razón estructurada aplica.',
+  ),
+];
 
 class _ProductFormPageState extends State<ProductFormPage>
     with SingleTickerProviderStateMixin {
@@ -100,6 +167,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isApplyingStockAdjustment = false;
   bool _isGeneratingSku = false;
   bool _isLoadingConversionStatus = false;
   bool _isRestoringConversion = false;
@@ -863,6 +931,11 @@ class _ProductFormPageState extends State<ProductFormPage>
       _selectedProductType != ProductType.service &&
       _selectedPurchaseTreatment == PurchaseTreatment.inventory;
 
+  bool get _canAdjustExistingStock =>
+      _existingProduct?.id != null &&
+      _tracksInventoryInForm &&
+      !_isChildProduct;
+
   int get _existingTrackedStockQuantity {
     final product = _existingProduct;
     if (product == null) return 0;
@@ -878,6 +951,475 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool get _hasConversionHistory =>
       _conversionStatus?['has_conversion_history'] == true;
+
+  _StockAdjustmentReasonOption _stockAdjustmentOption(String reasonType) {
+    return _stockAdjustmentReasonOptions.firstWhere(
+      (option) => option.key == reasonType,
+      orElse: () => _stockAdjustmentReasonOptions.first,
+    );
+  }
+
+  List<String> _allowedDirectionsForReason(String reasonType) {
+    switch (reasonType) {
+      case 'loss':
+      case 'damage':
+      case 'theft':
+      case 'internal_use':
+        return const ['OUT'];
+      case 'found':
+        return const ['IN'];
+      default:
+        return const ['OUT', 'IN'];
+    }
+  }
+
+  List<_StockAdjustmentReasonOption> _reasonOptionsForDirection(String type) {
+    return _stockAdjustmentReasonOptions
+        .where(
+            (option) => _allowedDirectionsForReason(option.key).contains(type))
+        .toList();
+  }
+
+  String _directionLabel(String type) {
+    return type == 'IN' ? 'Entrada' : 'Salida';
+  }
+
+  String _stockAdjustmentCounterpartPreview(String reasonType, String type) {
+    if (type == 'IN') {
+      if (reasonType == 'found') {
+        return 'Recuperaciones de Inventario (4202)';
+      }
+      return 'Ajustes Positivos de Inventario (4203)';
+    }
+
+    switch (reasonType) {
+      case 'internal_use':
+        return 'Consumibles de Taller (5101)';
+      case 'damage':
+        return 'Pérdidas por Daño de Inventario (6196)';
+      case 'theft':
+        return 'Pérdidas por Robo de Inventario (6197)';
+      case 'loss':
+        return 'Mermas de Inventario (6195)';
+      default:
+        return 'Diferencias de Inventario (6198)';
+    }
+  }
+
+  Future<_StockAdjustmentDialogResult?> _promptStockAdjustment() async {
+    final existingProduct = _existingProduct;
+    if (existingProduct?.id == null) return null;
+    final product = existingProduct!;
+
+    final quantityController = TextEditingController();
+    final noteController = TextEditingController();
+    final currentUserEmail =
+        Supabase.instance.client.auth.currentUser?.email ?? 'Usuario actual';
+    var type = 'OUT';
+    var reasonType = 'count';
+    var effectiveAt = DateTime.now();
+    String? validationMessage;
+
+    Future<void> pickDate(
+      BuildContext dialogContext,
+      void Function(void Function()) setModalState,
+    ) async {
+      final picked = await showDatePicker(
+        context: dialogContext,
+        initialDate: effectiveAt,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now().add(const Duration(days: 30)),
+      );
+
+      if (picked == null) return;
+      setModalState(() {
+        effectiveAt = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          effectiveAt.hour,
+          effectiveAt.minute,
+        );
+      });
+    }
+
+    Future<void> pickTime(
+      BuildContext dialogContext,
+      void Function(void Function()) setModalState,
+    ) async {
+      final picked = await showTimePicker(
+        context: dialogContext,
+        initialTime: TimeOfDay.fromDateTime(effectiveAt),
+      );
+
+      if (picked == null) return;
+      setModalState(() {
+        effectiveAt = DateTime(
+          effectiveAt.year,
+          effectiveAt.month,
+          effectiveAt.day,
+          picked.hour,
+          picked.minute,
+        );
+      });
+    }
+
+    final result = await showDialog<_StockAdjustmentDialogResult>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final reasonOptions = _reasonOptionsForDirection(type);
+            if (!reasonOptions.any((option) => option.key == reasonType)) {
+              reasonType = reasonOptions.first.key;
+            }
+
+            final option = _stockAdjustmentOption(reasonType);
+            final quantity = int.tryParse(quantityController.text.trim()) ?? 0;
+            final estimatedValue = quantity * product.cost;
+
+            return AlertDialog(
+              title: const Text('Registrar ajuste de stock'),
+              content: SizedBox(
+                width: 560,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                      if (product.sku.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          product.sku,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withOpacity(0.45),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Stock actual: ${product.inventoryQty} unidades',
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Costo unitario: ${ChileanUtils.formatCurrency(product.cost)}',
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Responsable: $currentUserEmail'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Dirección del movimiento',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['OUT', 'IN']
+                            .map(
+                              (direction) => ChoiceChip(
+                                label: Text(_directionLabel(direction)),
+                                selected: type == direction,
+                                onSelected: (_) {
+                                  setModalState(() {
+                                    type = direction;
+                                    final nextReasonOptions =
+                                        _reasonOptionsForDirection(direction);
+                                    if (!nextReasonOptions.any(
+                                      (option) => option.key == reasonType,
+                                    )) {
+                                      reasonType = nextReasonOptions.first.key;
+                                    }
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: reasonType,
+                        decoration: const InputDecoration(
+                          labelText: 'Motivo del ajuste',
+                        ),
+                        items: reasonOptions
+                            .map(
+                              (reason) => DropdownMenuItem<String>(
+                                value: reason.key,
+                                child: Text(reason.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setModalState(() {
+                            reasonType = value;
+                            validationMessage = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        option.description,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: quantityController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: (_) {
+                          if (validationMessage != null) {
+                            setModalState(() => validationMessage = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => pickDate(context, setModalState),
+                              icon: const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 18,
+                              ),
+                              label: Text(ChileanUtils.formatDate(effectiveAt)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => pickTime(context, setModalState),
+                              icon: const Icon(
+                                Icons.schedule_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                '${effectiveAt.hour.toString().padLeft(2, '0')}:${effectiveAt.minute.toString().padLeft(2, '0')}',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: noteController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Detalle / observación',
+                          hintText:
+                              'Explica el contexto del ajuste para auditoría y contabilidad.',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Impacto esperado',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              type == 'IN'
+                                  ? 'Débita Inventario (1105) y acredita ${_stockAdjustmentCounterpartPreview(reasonType, type)}.'
+                                  : 'Débita ${_stockAdjustmentCounterpartPreview(reasonType, type)} y acredita Inventario (1105).',
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Valor estimado: ${ChileanUtils.formatCurrency(estimatedValue)}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (product.cost <= 0) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Este producto no tiene costo valorizado. El ajuste quedará auditado, pero no generará monto contable hasta que exista costo.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (validationMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          validationMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final quantity =
+                        int.tryParse(quantityController.text.trim()) ?? 0;
+                    if (quantity <= 0) {
+                      setModalState(() {
+                        validationMessage =
+                            'Ingresa una cantidad mayor a cero.';
+                      });
+                      return;
+                    }
+
+                    if (!_allowedDirectionsForReason(reasonType)
+                        .contains(type)) {
+                      setModalState(() {
+                        validationMessage =
+                            'El motivo seleccionado no corresponde a la dirección elegida.';
+                      });
+                      return;
+                    }
+
+                    if (type == 'OUT' && quantity > product.inventoryQty) {
+                      setModalState(() {
+                        validationMessage =
+                            'La salida no puede dejar stock negativo. Stock actual: ${product.inventoryQty}.';
+                      });
+                      return;
+                    }
+
+                    Navigator.of(context).pop(
+                      _StockAdjustmentDialogResult(
+                        quantity: quantity,
+                        type: type,
+                        reasonType: reasonType,
+                        note: noteController.text.trim(),
+                        effectiveAt: effectiveAt,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                  label: const Text('Registrar ajuste'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    quantityController.dispose();
+    noteController.dispose();
+    return result;
+  }
+
+  Future<void> _handleStockAdjustment() async {
+    final product = _existingProduct;
+    if (product?.id == null || _isApplyingStockAdjustment) return;
+
+    final dialogResult = await _promptStockAdjustment();
+    if (dialogResult == null) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isApplyingStockAdjustment = true);
+
+    try {
+      final detail = await _inventoryService.applyStockAdjustment(
+        productId: product!.id!,
+        quantity: dialogResult.quantity,
+        type: dialogResult.type,
+        reasonType: dialogResult.reasonType,
+        note: dialogResult.note,
+        effectiveAt: dialogResult.effectiveAt,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _existingProduct = product.copyWith(
+          inventoryQty: detail.stockAfter,
+          updatedAt: DateTime.now(),
+        );
+        _inventoryQtyController.text = detail.stockAfter.toString();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            detail.journalEntryNumber != null &&
+                    detail.journalEntryNumber!.isNotEmpty
+                ? 'Ajuste ${detail.referenceNumber} registrado. Asiento ${detail.journalEntryNumber} generado.'
+                : 'Ajuste ${detail.referenceNumber} registrado correctamente.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo registrar el ajuste: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isApplyingStockAdjustment = false);
+      }
+    }
+  }
 
   bool get _canRestoreOriginalState =>
       _conversionStatus?['can_restore'] == true;
@@ -1627,7 +2169,9 @@ class _ProductFormPageState extends State<ProductFormPage>
           double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
       final tracksInventory = _tracksInventoryInForm;
       final inventoryQty = tracksInventory
-          ? (int.tryParse(_inventoryQtyController.text.trim()) ?? 0)
+          ? (_existingProduct != null
+              ? _existingProduct!.inventoryQty
+              : (int.tryParse(_inventoryQtyController.text.trim()) ?? 0))
           : 0;
       final minStockLevel = tracksInventory
           ? (int.tryParse(_minStockController.text.trim()) ?? 1)
@@ -3241,55 +3785,110 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   List<Widget> _buildInventoryFields(ThemeData theme) {
+    final stockIsManagedByAdjustments = _canAdjustExistingStock;
+    final stockAdjustmentTooltip =
+        'Stock valorizado actual: ${ChileanUtils.formatCurrency(_existingTrackedInventoryValue)}\n\n'
+        'Cada ajuste queda referenciado en movimientos de stock y, si el producto tiene costo, genera el asiento contable correspondiente.';
+
     return [
       Text(
-        'Controla cantidades disponibles y stock mínimo para alertas.',
+        stockIsManagedByAdjustments
+            ? 'El stock actual solo cambia mediante ajustes auditables con motivo, fecha, usuario y asiento contable.'
+            : 'Controla cantidades disponibles y stock mínimo para alertas.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
       const SizedBox(height: 16),
-      LayoutBuilder(builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 600;
-        final children = [
-          Expanded(
-            flex: isMobile ? 0 : 1,
-            child: TextFormField(
-              controller: _inventoryQtyController,
-              decoration: const InputDecoration(
-                labelText: 'Stock disponible',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-            ),
-          ),
-          SizedBox(width: 16, height: isMobile ? 16 : 0),
-          Expanded(
-            flex: isMobile ? 0 : 1,
-            child: TextFormField(
-              controller: _minStockController,
-              decoration: const InputDecoration(
-                labelText: 'Stock mínimo',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-            ),
-          ),
-        ];
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
 
-        return isMobile
-            ? Column(
-                children: children
-                    .map((w) => w is Expanded
-                        ? SizedBox(width: double.infinity, child: w.child)
-                        : w)
-                    .toList())
-            : Row(children: children);
-      }),
+          final stockField = TextFormField(
+            controller: _inventoryQtyController,
+            readOnly: stockIsManagedByAdjustments,
+            decoration: InputDecoration(
+              labelText: stockIsManagedByAdjustments
+                  ? 'Stock actual'
+                  : 'Stock disponible',
+              helperText: stockIsManagedByAdjustments
+                  ? 'Haz clic en el ícono azul para registrar un ajuste.'
+                  : null,
+              suffixIcon: stockIsManagedByAdjustments
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Tooltip(
+                        message: stockAdjustmentTooltip,
+                        waitDuration: const Duration(milliseconds: 150),
+                        showDuration: const Duration(seconds: 6),
+                        preferBelow: false,
+                        child: Material(
+                          color: theme.colorScheme.primary.withOpacity(0.12),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            tooltip: 'Registrar ajuste de stock',
+                            onPressed: _isApplyingStockAdjustment
+                                ? null
+                                : _handleStockAdjustment,
+                            color: theme.colorScheme.primary,
+                            splashRadius: 20,
+                            icon: _isApplyingStockAdjustment
+                                ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.playlist_add_check_circle,
+                                    size: 20,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+          );
+
+          final children = [
+            Expanded(
+              flex: isMobile ? 0 : 1,
+              child: stockField,
+            ),
+            SizedBox(width: 16, height: isMobile ? 16 : 0),
+            Expanded(
+              flex: isMobile ? 0 : 1,
+              child: TextFormField(
+                controller: _minStockController,
+                decoration: const InputDecoration(
+                  labelText: 'Stock mínimo',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+              ),
+            ),
+          ];
+
+          return isMobile
+              ? Column(
+                  children: children
+                      .map((w) => w is Expanded
+                          ? SizedBox(width: double.infinity, child: w.child)
+                          : w)
+                      .toList(),
+                )
+              : Row(children: children);
+        },
+      ),
     ];
   }
 

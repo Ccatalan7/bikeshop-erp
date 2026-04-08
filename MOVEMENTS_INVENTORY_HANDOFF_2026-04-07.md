@@ -35,22 +35,74 @@ Those 26 rows were then cleaned. Their stock deltas were reversed on `products`,
 
 One cleanup gotcha occurred: the first version of the null-user cleanup updated `products`, which caused `trg_track_product_stock_changes` to emit new manual rows for the reversal itself. Those new rows were later cleaned by an ad hoc orphan movement delete query, and the migration file was corrected to disable the trigger around the reversal update.
 
+## Post-Handoff Update (Applied After Original Draft)
+
+After the original handoff draft was written, a follow-up production investigation found that the production state no longer matched the draft's final verification snapshot.
+
+### What was found later
+
+- production still had **16 null-user manual adjustments**
+- all 16 belonged to **one single timestamp batch**:
+  - `2026-04-08 01:00:47.921421+00`
+- all 16 still had paired `stock_movements` rows
+- there were **no other** null-user manual rows outside that exact batch
+- `products.inventory_qty` vs `products.stock_quantity` drift was still **0**
+
+This strongly indicates the remaining issue was **not** a fresh drift bug or a broad ongoing generator. It was a leftover cleanup-reversal artifact batch consistent with the trigger-recursion gotcha documented below.
+
+### Final production actions applied after the draft
+
+Two additional migrations were created and deployed directly to production:
+
+- `supabase/migrations/20260408021500_fix_manual_stock_adjustment_duplication.sql`
+  - adds `public.apply_manual_stock_adjustment(...)`
+  - fixes the `stock_adjustments` constraint so `'purchase'` is valid, matching existing trigger logic
+  - establishes the correct architecture for manual stock changes:
+    - update `products` once
+    - insert one `stock_adjustments` row
+    - let the existing `stock_adjustments -> stock_movements` trigger create exactly one movement row
+
+- `supabase/migrations/20260408022500_cleanup_leftover_null_user_cleanup_reversal_artifacts.sql`
+  - deletes the exact leftover 16-row null-user artifact batch and their paired manual movement rows
+  - **does not** reverse product stock again, because current stock already reflected the intended cleanup reversal
+
+### Final live verification after deployment
+
+Verified directly in production after applying those two migrations:
+
+- `null_user_manual_adjustments = 0`
+- `leftover_batch_movements = 0`
+- `stock_column_drift = 0`
+- `manual_adjustment_rpc_exists = 1`
+
+### Remaining caveat after DB deploy
+
+The **database** is fixed and production cleanup is complete.
+
+However, the **ERP client still needs the corresponding app deploy** so the UI stops using old manual-adjustment code paths. Until the ERP app is rebuilt/deployed with the latest Dart changes, an old client could still create duplicate stock history through legacy direct-write behavior.
+
 ## Current State
 
 ### Confirmed good
 
 - The two known phantom classes have been retroactively cleaned.
-- The null-user anomaly bucket has been cleaned.
-- Latest verification observed during the session:
-  - `remaining_null_user_adjustments = 0`
-  - `orphaned_manual_movements = 0`
-  - `stock_column_drift_rows = 0`
-- After the ad hoc orphan cleanup query, `orphaned_remaining = 0`.
+- The original null-user anomaly bucket was cleaned.
+- A later leftover 16-row null-user artifact batch was identified and cleaned.
+- Final production verification after the direct deploy:
+  - `null_user_manual_adjustments = 0`
+  - `leftover_batch_movements = 0`
+  - `stock_column_drift = 0`
+  - `manual_adjustment_rpc_exists = 1`
 - The surviving **124 manual adjustments** are currently treated as legitimate admin corrections.
+- The database-side manual adjustment flow now has a single-transaction RPC path.
 
 ### Important nuance
 
 The stock movements screen may still show manual adjustments after cleanup. That is **not automatically a bug** now, because the audit concluded that 124 remaining rows are genuine operator-created adjustments. Any screen still showing manual entries must be correlated against DB rows before assuming the cleanup failed.
+
+### Important deployment nuance
+
+The DB-side fix is live, but the matching ERP Dart changes still need to be deployed to the client. If the ERP app is still running an older build, a manual adjustment triggered from the UI can still use the legacy duplicate-write path until the app deploy happens.
 
 ## Main Findings / Root Causes
 
@@ -194,6 +246,18 @@ The following migrations were created during today’s investigation.
   - deletes the bad adjustment rows
   - current file version disables `trg_track_product_stock_changes` during the reversal update to avoid recreating noise
 
+#### Post-draft production hardening and final cleanup
+
+- `supabase/migrations/20260408021500_fix_manual_stock_adjustment_duplication.sql`
+  - adds `public.apply_manual_stock_adjustment(...)`
+  - fixes the `stock_adjustments` allowed enum/check values to include `'purchase'`
+  - prevents future duplicate movement history for manual stock adjustments by moving the operation into one DB transaction
+
+- `supabase/migrations/20260408022500_cleanup_leftover_null_user_cleanup_reversal_artifacts.sql`
+  - removes the exact leftover 16-row null-user artifact batch discovered after the original handoff draft
+  - deletes the paired `stock_movements` rows at the same timestamp
+  - intentionally does **not** reverse product stock again
+
 ### B. Database trigger fix in source of truth
 
 `supabase/sql/core_schema.sql`
@@ -225,6 +289,25 @@ These app files were changed so product stock writes update **both** stock colum
 
 This is important because the DB trigger fix helps, but preventing drift at the app layer is the real long-term defense.
 
+### C2. App-layer manual adjustment hardening
+
+Additional app changes were made after the original draft so manual adjustments stop creating duplicate movement history:
+
+- `lib/shared/models/product.dart`
+  - now writes **both** `inventory_qty` and `stock_quantity`
+
+- `lib/shared/services/database_service.dart`
+  - `adjustStock(...)` now calls the DB RPC `apply_manual_stock_adjustment(...)` instead of:
+    - inserting `stock_movements` directly and then
+    - updating `products` separately
+
+- `lib/modules/inventory/services/stock_movement_service.dart`
+  - manual adjustment UI now goes through the same RPC path
+
+- `lib/modules/inventory/services/inventory_service.dart`
+  - removed duplicate initial-stock movement creation after product insert
+  - manual stock adjustment path now uses the RPC-backed shared DB service instead of double-writing movement + product update
+
 ### D. Other non-movements code changes made in the same working period
 
 These are not part of the stock-movements cleanup, but they were also changed today and should be part of the session handoff:
@@ -240,6 +323,20 @@ These are not part of the stock-movements cleanup, but they were also changed to
   - same preferred-bike behavior and explicit invoice->job sync logic in the editor path
 
 ## What Was Actually Observed in Production Today
+
+### Post-draft production finding
+
+After the original handoff draft, direct production inspection found that the draft's earlier verification snapshot was stale.
+
+Specifically:
+
+- `stock_adjustments` still contained **16** null-user manual rows
+- all 16 had `created_at = 2026-04-08 01:00:47.921421+00`
+- all 16 had paired `stock_movements` rows
+- there were **0** null-user manual rows outside that timestamp
+- `stock_column_drift = 0`
+
+Those rows matched the known reversal-artifact class, not a broad new anomaly family.
 
 ### Final manual-adjustment audit result
 
@@ -277,6 +374,22 @@ After running the null-user cleanup migration:
   }
 ]
 ```
+
+  ### Final verification after the direct production deploy
+
+  After deploying:
+
+  - `20260408021500_fix_manual_stock_adjustment_duplication.sql`
+  - `20260408022500_cleanup_leftover_null_user_cleanup_reversal_artifacts.sql`
+
+  the live verification returned:
+
+  ```text
+  null_user_manual_adjustments=0
+  leftover_batch_movements=0
+  stock_column_drift=0
+  manual_adjustment_rpc_exists=1
+  ```
 
 Then an additional ad hoc orphan cleanup query was run because the first execution of the migration had created new reversal rows through the stock-tracking trigger. The ad hoc verifier returned:
 
@@ -352,6 +465,12 @@ Recommended next check:
 - query DB directly against `stock_movements` and matching `stock_adjustments`
 - verify whether those rows belong to the 124 legitimate manual corrections or are something else
 
+### 1b. ERP client still needs the matching app deploy
+
+The database-side fix is already live, but the Dart client changes must also be deployed so the UI stops using the legacy direct-write path for manual adjustments.
+
+Until that ERP deploy happens, a stale client build can still create duplicate movement history even though production SQL is now correct.
+
 ### 2. Posted->posted journal entry recreation issue is still not fixed
 
 This remains outstanding from the wider sales incident thread.
@@ -379,15 +498,21 @@ Today’s audit concluded the remaining 124 rows were legitimate, but if more su
 
 ### Highest priority
 
-1. **Verify the stock movements UI rows you still distrust**
+1. **Deploy the ERP client with the latest Dart changes**
+  - especially the updated manual-adjustment path in:
+    - `lib/shared/services/database_service.dart`
+    - `lib/modules/inventory/services/stock_movement_service.dart`
+    - `lib/modules/inventory/services/inventory_service.dart`
+
+2. **Verify the stock movements UI rows you still distrust**
    - identify 3 to 5 top rows from the UI
    - query them directly in DB by product/timestamp
    - determine whether they map to the known-good 124 admin adjustments
 
-2. **Check current production definition of `track_product_stock_changes()`**
-   - ensure it matches the fixed logic from `20260407150000_fix_product_form_sync_manual_adjustment_noise.sql` / `core_schema.sql`
+3. **Check current production definition of `track_product_stock_changes()`**
+  - ensure it still matches the fixed logic from `20260407150000_fix_product_form_sync_manual_adjustment_noise.sql` / `core_schema.sql`
 
-3. **Treat the journal-entry issue as separate work**
+4. **Treat the journal-entry issue as separate work**
    - do not assume inventory cleanup solved the accounting side
 
 ### Good follow-up hardening
@@ -443,12 +568,16 @@ Database / SQL:
 - `supabase/migrations/20260407155500_verify_retroactive_product_form_sync_noise_fully_cleared.sql`
 - `supabase/migrations/20260407160000_audit_real_manual_adjustments.sql`
 - `supabase/migrations/20260407161000_cleanup_null_user_manual_adjustment_anomalies.sql`
+- `supabase/migrations/20260408021500_fix_manual_stock_adjustment_duplication.sql`
+- `supabase/migrations/20260408022500_cleanup_leftover_null_user_cleanup_reversal_artifacts.sql`
 
 App layer:
 
 - `lib/modules/inventory/models/inventory_models.dart`
 - `lib/modules/inventory/services/inventory_service.dart`
 - `lib/shared/services/database_service.dart`
+- `lib/shared/models/product.dart`
+- `lib/modules/inventory/services/stock_movement_service.dart`
 - `lib/modules/settings/services/factory_reset_service.dart`
 
 Other same-session but separate changes:
@@ -460,16 +589,26 @@ Other same-session but separate changes:
 ## Testing / Validation Notes
 
 - No full automated Flutter test pass was run as part of this handoff.
-- The production verification relied primarily on SQL inspection and the user-reported SQL Editor outputs.
-- The UI screenshot at the end indicates there is still perceived confusion in the stock movements screen, but that was not fully proven to be a DB integrity issue.
+- Production verification relied on:
+  - direct REST inspection with service role
+  - direct `psql` inspection with the production DB password
+  - direct deployment of the two post-draft migrations via `psql -f`
+- The original draft's verification snapshot became stale later in the same session; this file now reflects the **final** verified production state after the direct deploy.
+- No full post-deploy ERP UI smoke test was run from an updated client build.
+- The stock movements screen can still show legitimate manual rows; UI distrust must still be correlated against DB rows.
 
 ## Bottom Line
 
-As of the end of this session:
+As of the end of the session **after the final direct production deploy**:
 
 - the known phantom adjustment classes were cleaned
 - the null-user anomaly bucket was cleaned and its stock effect was reversed
+- the later leftover 16-row null-user artifact batch was also cleaned
 - stock column drift was cleared
 - the trigger gotcha in reversal cleanup was discovered and documented
-- the strongest unresolved item is **not** the cleaned data itself, but whether the remaining manual rows visible in UI are simply the 124 legitimate admin corrections or a separate display/data issue
+- the database now has a dedicated single-transaction RPC for manual stock adjustments
+- the strongest unresolved inventory item is no longer the cleanup itself, but ensuring the ERP client is redeployed so the UI uses the new RPC path
+- after that, any remaining manual rows visible in UI should be evaluated as either:
+  - the legitimate retained 124 admin corrections, or
+  - a separate display/filter/caching issue
 - the posted->posted journal-entry recreation issue still needs its own investigation/fix

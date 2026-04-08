@@ -7,6 +7,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/image_service.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../purchases/models/purchase_invoice.dart';
@@ -16,6 +17,8 @@ import '../../sales/services/sales_service.dart';
 import '../../../shared/models/tax_treatment.dart';
 
 import '../models/stock_movement.dart';
+import '../models/stock_adjustment.dart';
+import '../services/inventory_service.dart' as module_inventory;
 import '../services/stock_movements_service.dart';
 
 class StockMovementsPage extends StatefulWidget {
@@ -53,6 +56,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   StockMovement? _selectedLinkedMovement;
   Invoice? _selectedSalesInvoice;
   PurchaseInvoice? _selectedPurchaseInvoice;
+  StockAdjustmentDetail? _selectedStockAdjustment;
   bool _isLoadingLinkedDocument = false;
   String? _linkedDocumentError;
 
@@ -153,11 +157,25 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _selectedLinkedMovement = movement;
       _selectedSalesInvoice = null;
       _selectedPurchaseInvoice = null;
+      _selectedStockAdjustment = null;
       _linkedDocumentError = null;
       _isLoadingLinkedDocument = true;
     });
 
     try {
+      if (movement.category == StockMovementCategory.adjustment) {
+        final adjustment = await context
+            .read<module_inventory.InventoryService>()
+            .getStockAdjustmentDetails(movement.referenceId!);
+        if (!mounted) return;
+
+        setState(() {
+          _selectedStockAdjustment = adjustment;
+          _isLoadingLinkedDocument = false;
+        });
+        return;
+      }
+
       if (movement.category == StockMovementCategory.purchase) {
         final invoice = await context
             .read<PurchaseService>()
@@ -203,6 +221,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _selectedLinkedMovement = null;
       _selectedSalesInvoice = null;
       _selectedPurchaseInvoice = null;
+      _selectedStockAdjustment = null;
       _linkedDocumentError = null;
       _isLoadingLinkedDocument = false;
     });
@@ -425,46 +444,120 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   Widget _buildProductTile(Product product) {
     final movementsService = context.watch<StockMovementsService>();
     final isSelected = movementsService.selectedProductId == product.id;
+    final theme = Theme.of(context);
+    final thumbnailUrl = product.imageUrlOptimized ?? product.imageUrl;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.blue.withOpacity(0.1) : null,
-        border: Border(
-          left: BorderSide(
-            color: isSelected ? Colors.blue : Colors.transparent,
-            width: 4,
-          ),
-        ),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
-          child: Text(
-            product.stockQuantity.toString(),
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          product.name,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-        subtitle: Text(product.sku),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: isSelected ? Colors.blue : Colors.grey,
-        ),
+    return Material(
+      color: isSelected
+          ? theme.colorScheme.primary.withOpacity(0.06)
+          : Colors.transparent,
+      child: InkWell(
         onTap: () {
           _closeLinkedDocument();
           context
               .read<StockMovementsService>()
               .loadMovementsForProduct(product.id);
         },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color:
+                    isSelected ? theme.colorScheme.primary : Colors.transparent,
+                width: 3,
+              ),
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.18),
+              ),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                      ? ImageService.buildProductImage(
+                          imageUrl: thumbnailUrl,
+                          size: 52,
+                          isListThumbnail: true,
+                        )
+                      : Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      product.sku,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Stock',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    product.stockQuantity.toString(),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -472,7 +565,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   Widget _buildMovementDetails() {
     return Consumer<StockMovementsService>(
       builder: (context, movementsService, _) {
+        final inventoryService = context.watch<InventoryService>();
+        final theme = Theme.of(context);
         final isRecentMode = movementsService.isRecentMode;
+        final selectedProduct = !isRecentMode
+            ? _findSelectedMovementProduct(inventoryService, movementsService)
+            : null;
 
         // Only show "select a product" message in by_product mode with no selection
         if (!isRecentMode && movementsService.selectedProductId == null) {
@@ -498,28 +596,51 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         }
 
         if (movementsService.isLoading) {
-          return const Center(child: BrandedLoading());
+          return Column(
+            children: [
+              if (selectedProduct != null)
+                _buildSelectedProductHeader(
+                  theme,
+                  selectedProduct,
+                  movementCount: movementsService.movements.length,
+                ),
+              const Expanded(child: Center(child: BrandedLoading())),
+            ],
+          );
         }
 
         if (movementsService.error != null) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(
-                  'Error al cargar movimientos',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+          return Column(
+            children: [
+              if (selectedProduct != null)
+                _buildSelectedProductHeader(
+                  theme,
+                  selectedProduct,
+                  movementCount: movementsService.movements.length,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  movementsService.error!,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error al cargar movimientos',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        movementsService.error!,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         }
 
@@ -530,6 +651,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
         return Column(
           children: [
+            if (selectedProduct != null)
+              _buildSelectedProductHeader(
+                theme,
+                selectedProduct,
+                movementCount: movements.length,
+              ),
             _buildMovementFilters(movementsService),
             _buildMovementSummary(movements),
             const Divider(height: 1),
@@ -539,6 +666,142 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           ],
         );
       },
+    );
+  }
+
+  Product? _findSelectedMovementProduct(
+    InventoryService inventoryService,
+    StockMovementsService movementsService,
+  ) {
+    final selectedId = movementsService.selectedProductId;
+    if (selectedId == null) return null;
+
+    for (final product in inventoryService.products) {
+      if (product.id == selectedId) {
+        return product;
+      }
+    }
+
+    return null;
+  }
+
+  Widget _buildSelectedProductHeader(
+    ThemeData theme,
+    Product product, {
+    required int movementCount,
+  }) {
+    final thumbnailUrl = product.imageUrlOptimized ?? product.imageUrl;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.35),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                  ? ImageService.buildProductImage(
+                      imageUrl: thumbnailUrl,
+                      size: 56,
+                      isListThumbnail: true,
+                    )
+                  : Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.inventory_2_outlined,
+                        size: 22,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Producto seleccionado',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.sku,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          _buildSelectedProductMetric(
+            theme,
+            label: 'Stock actual',
+            value: product.stockQuantity.toString(),
+          ),
+          const SizedBox(width: 20),
+          _buildSelectedProductMetric(
+            theme,
+            label: 'Movimientos',
+            value: movementCount.toString(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedProductMetric(
+    ThemeData theme, {
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 
@@ -576,6 +839,14 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         title: null,
         subtitle: null,
         child: _buildSalesInvoiceInlineView(_selectedSalesInvoice!),
+      );
+    }
+
+    if (_selectedStockAdjustment != null) {
+      return _buildInlineDocumentScaffold(
+        title: 'Detalle de ajuste',
+        subtitle: _selectedStockAdjustment!.referenceDisplay,
+        child: _buildStockAdjustmentInlineView(_selectedStockAdjustment!),
       );
     }
 
@@ -725,6 +996,248 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           ),
         ),
         Expanded(child: child),
+      ],
+    );
+  }
+
+  Widget _buildStockAdjustmentInlineView(StockAdjustmentDetail detail) {
+    final theme = Theme.of(context);
+    final metrics = <Widget>[
+      _buildAdjustmentMetricCard(
+        'Cantidad',
+        detail.quantity > 0 ? '+${detail.quantity}' : '${detail.quantity}',
+        valueColor: detail.isIncrease ? Colors.green[700] : Colors.red[700],
+      ),
+      _buildAdjustmentMetricCard(
+        'Stock antes',
+        '${detail.stockBefore}',
+      ),
+      _buildAdjustmentMetricCard(
+        'Stock despues',
+        '${detail.stockAfter}',
+      ),
+      _buildAdjustmentMetricCard(
+        'Valor inventario',
+        ChileanUtils.formatCurrency(detail.inventoryValue),
+      ),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      detail.productName,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if ((detail.productSku ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        detail.productSku!,
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: detail.isIncrease
+                      ? Colors.green.withOpacity(0.12)
+                      : Colors.red.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  detail.adjustmentTypeLabel,
+                  style: TextStyle(
+                    color:
+                        detail.isIncrease ? Colors.green[700] : Colors.red[700],
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildAdjustmentMetaItem('Referencia', detail.referenceDisplay),
+                _buildAdjustmentMetaItem(
+                  'Fecha efectiva',
+                  DateFormat('dd/MM/yyyy HH:mm').format(detail.adjustmentDate),
+                ),
+                _buildAdjustmentMetaItem(
+                    'Registrado por', detail.createdByDisplay),
+                if ((detail.journalEntryNumber ?? '').isNotEmpty)
+                  _buildAdjustmentMetaItem(
+                    'Asiento',
+                    detail.journalEntryNumber!,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: metrics,
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:
+                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Motivo registrado',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(detail.reasonDisplay),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Impacto contable',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if ((detail.journalEntryNumber ?? '').isEmpty)
+                  Text(detail.accountingImpactMessage)
+                else ...[
+                  _buildAdjustmentMetaItem(
+                    'Descripción',
+                    detail.journalEntryDescription ?? '-',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildAdjustmentMetaItem(
+                    'Cuenta contraparte',
+                    [
+                      if ((detail.counterpartAccountCode ?? '').isNotEmpty)
+                        detail.counterpartAccountCode,
+                      if ((detail.counterpartAccountName ?? '').isNotEmpty)
+                        detail.counterpartAccountName,
+                    ].whereType<String>().join(' - '),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildAdjustmentMetaItem(
+                    detail.isIncrease
+                        ? 'Crédito contraparte'
+                        : 'Débito contraparte',
+                    ChileanUtils.formatCurrency(detail.counterpartAmount),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdjustmentMetricCard(
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdjustmentMetaItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
@@ -1278,7 +1791,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      invoice.invoiceNumber?.isNotEmpty == true
+                      invoice.invoiceNumber.isNotEmpty
                           ? 'Factura de Compra ${invoice.invoiceNumber}'
                           : 'Factura de Compra',
                       style: const TextStyle(
@@ -1460,8 +1973,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   final product =
                       productList.isNotEmpty ? productList.first : null;
 
-                  final imageUrl = product?.imageUrls?.isNotEmpty == true
-                      ? product!.imageUrls!.first
+                  final imageUrl = product?.imageUrls.isNotEmpty == true
+                      ? product!.imageUrls.first
                       : (product?.imageUrl);
                   final isLast = invoice.items.last == item;
 
@@ -1567,168 +2080,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     ); // Ensure SingleChildScrollView is closed here
   }
 
-  Widget _buildInlinePurchaseSummary(PurchaseInvoice invoice) {
-    final statusColor = _purchaseStatusColor(invoice.status);
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    invoice.status.displayName,
-                    style: TextStyle(
-                        color: statusColor, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Total: ${ChileanUtils.formatCurrency(invoice.total)}',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                        'Pagado: ${ChileanUtils.formatCurrency(invoice.paidAmount)}'),
-                    Text(
-                      'Saldo: ${ChileanUtils.formatCurrency(invoice.balance)}',
-                      style: TextStyle(
-                        color: invoice.balance <= 0
-                            ? Colors.green
-                            : Colors.orange[800],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16),
-                const SizedBox(width: 4),
-                Text('Emisión: ${ChileanUtils.formatDate(invoice.date)}'),
-                if (invoice.dueDate != null) ...[
-                  const SizedBox(width: 16),
-                  const Icon(Icons.schedule, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                      'Vencimiento: ${ChileanUtils.formatDate(invoice.dueDate!)}'),
-                ],
-              ],
-            ),
-            if (invoice.reference != null && invoice.reference!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text('Referencia: ${invoice.reference}'),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInlinePurchaseItems(PurchaseInvoice invoice) {
-    if (invoice.items.isEmpty) {
-      return const Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: Text('Esta factura no tiene ítems asociados.')),
-        ),
-      );
-    }
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Detalle de ítems',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: invoice.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 16),
-              itemBuilder: (context, index) {
-                final item = invoice.items[index];
-                final lineTotal =
-                    (item.quantity * item.unitCost) - item.discount;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.productName ?? item.productSku ?? 'Producto',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                              '${item.quantity.toStringAsFixed(0)} x ${ChileanUtils.formatCurrency(item.unitCost)}'),
-                        ],
-                      ),
-                    ),
-                    Text(ChileanUtils.formatCurrency(lineTotal)),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _formatQuantity(double value) {
     final rounded = value.roundToDouble();
     if ((value - rounded).abs() < 0.0001) {
       return rounded.toInt().toString();
     }
     return value.toStringAsFixed(2);
-  }
-
-  String _salesItemLabel(InvoiceItem item) {
-    final name = item.productName?.trim();
-    final sku = item.productSku?.trim();
-    if (name != null && name.isNotEmpty && sku != null && sku.isNotEmpty) {
-      return '$name ($sku)';
-    }
-    return name?.isNotEmpty == true
-        ? name!
-        : (sku?.isNotEmpty == true ? sku! : 'Ítem');
-  }
-
-  String _purchaseItemLabel(PurchaseInvoiceItem item) {
-    final name = item.productName?.trim();
-    final sku = item.productSku?.trim();
-    if (name != null && name.isNotEmpty && sku != null && sku.isNotEmpty) {
-      return '$name ($sku)';
-    }
-    return name?.isNotEmpty == true
-        ? name!
-        : (sku?.isNotEmpty == true ? sku! : 'Ítem');
   }
 
   String _salesStatusLabel(InvoiceStatus status) {
@@ -1996,12 +2353,22 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   Widget _buildMovementTableHeader() {
     final movementsService = context.watch<StockMovementsService>();
     final showProductColumn = movementsService.isRecentMode;
+    final theme = Theme.of(context);
+
+    TextStyle headerStyle = theme.textTheme.labelSmall!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.onSurfaceVariant,
+      letterSpacing: 0.3,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.35)),
+        ),
       ),
       child: Row(
         children: [
@@ -2009,61 +2376,62 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           if (showProductColumn) ...[
             SizedBox(
               width: _colProductWidth,
-              child: const Text('Producto',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              child: Text('Producto', style: headerStyle),
             ),
             _buildResizeHandle((delta) => setState(() => _colProductWidth =
                 (_colProductWidth + delta).clamp(_minColWidth, 400))),
           ],
           SizedBox(
             width: _colDateWidth,
-            child: const Text('Fecha',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text('Fecha', style: headerStyle),
           ),
           _buildResizeHandle((delta) => setState(() => _colDateWidth =
               (_colDateWidth + delta).clamp(_minColWidth, 200))),
           SizedBox(
             width: _colTypeWidth,
-            child: const Text('Tipo',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text('Movimiento', style: headerStyle),
           ),
           _buildResizeHandle((delta) => setState(() => _colTypeWidth =
               (_colTypeWidth + delta).clamp(_minColWidth, 150))),
           SizedBox(
             width: _colSourceWidth,
-            child: const Text('Origen',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text('Origen', style: headerStyle),
           ),
           _buildResizeHandle((delta) => setState(() => _colSourceWidth =
               (_colSourceWidth + delta).clamp(_minColWidth, 200))),
           SizedBox(
             width: _colRefWidth,
-            child: const Text('Referencia',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text('Referencia', style: headerStyle),
           ),
           _buildResizeHandle((delta) => setState(() =>
               _colRefWidth = (_colRefWidth + delta).clamp(_minColWidth, 200))),
           SizedBox(
             width: _colIniWidth,
-            child: const Text('Ini',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                textAlign: TextAlign.right),
+            child: Text(
+              'Inicial',
+              style: headerStyle,
+              textAlign: TextAlign.right,
+            ),
           ),
           _buildResizeHandle((delta) => setState(
               () => _colIniWidth = (_colIniWidth + delta).clamp(35, 80))),
           SizedBox(
             width: _colMovWidth,
-            child: const Text('Mov',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                textAlign: TextAlign.right),
+            child: Text(
+              'Cambio',
+              style: headerStyle,
+              textAlign: TextAlign.right,
+            ),
           ),
           _buildResizeHandle((delta) => setState(
               () => _colMovWidth = (_colMovWidth + delta).clamp(35, 80))),
           SizedBox(
             width: _colFinWidth,
-            child: const Text('Fin',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                textAlign: TextAlign.right),
+            child: Text(
+              'Final',
+              style: headerStyle,
+              textAlign: TextAlign.right,
+            ),
           ),
         ],
       ),
@@ -2089,13 +2457,18 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final movementsService = context.watch<StockMovementsService>();
     final showProductColumn = movementsService.isRecentMode;
+    final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        border: Border(
+          bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.22)),
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Product column (only in recent mode)
           if (showProductColumn) ...[
@@ -2156,14 +2529,16 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             width: _colDateWidth,
             child: Text(
               dateFormat.format(movement.transactionDate),
-              style: const TextStyle(fontSize: 11),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
           const SizedBox(width: 8),
           // Type
           SizedBox(
             width: _colTypeWidth,
-            child: _buildTypeChip(movement),
+            child: _buildMovementTypeCell(movement),
           ),
           const SizedBox(width: 8),
           // Source
@@ -2171,8 +2546,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             width: _colSourceWidth,
             child: Text(
               movement.sourceDisplay,
-              style: const TextStyle(fontSize: 11),
-              maxLines: 1,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2180,24 +2557,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           // Reference
           SizedBox(
             width: _colRefWidth,
-            child: movement.hasNavigableReference
-                ? InkWell(
-                    onTap: () => _navigateToReference(movement),
-                    child: Text(
-                      movement.referenceDisplay,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.blue,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  )
-                : Text(
-                    movement.referenceDisplay,
-                    style: const TextStyle(fontSize: 11),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            child: _buildReferenceCell(movement),
           ),
           const SizedBox(width: 8),
           // Stock Before
@@ -2205,7 +2565,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             width: _colIniWidth,
             child: Text(
               movement.stockBefore.toString(),
-              style: const TextStyle(fontSize: 11),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
               textAlign: TextAlign.right,
             ),
           ),
@@ -2217,10 +2580,11 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               movement.quantity >= 0
                   ? '+${movement.quantity}'
                   : movement.quantity.toString(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: movement.isIncrease ? Colors.green : Colors.red,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color:
+                    movement.isIncrease ? Colors.green[700] : Colors.red[700],
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
               textAlign: TextAlign.right,
             ),
@@ -2231,12 +2595,98 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             width: _colFinWidth,
             child: Text(
               movement.stockAfter.toString(),
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
               textAlign: TextAlign.right,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMovementTypeCell(StockMovement movement) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          movement.movementTypeDisplay,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+            height: 1.15,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          movement.category.displayName,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReferenceCell(StockMovement movement) {
+    final theme = Theme.of(context);
+    final child = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: movement.hasNavigableReference
+              ? theme.colorScheme.primary.withOpacity(0.22)
+              : theme.colorScheme.outlineVariant.withOpacity(0.35),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: Text(
+              movement.referenceDisplay,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: movement.hasNavigableReference
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          if (movement.hasNavigableReference) ...[
+            const SizedBox(width: 6),
+            Icon(
+              Icons.open_in_new,
+              size: 14,
+              color: theme.colorScheme.primary,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (!movement.hasNavigableReference) {
+      return child;
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _navigateToReference(movement),
+      child: child,
     );
   }
 

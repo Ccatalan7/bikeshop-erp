@@ -411,43 +411,24 @@ class DatabaseService extends ChangeNotifier {
   }
 
   // Inventory operations
-  Future<void> adjustStock(
+  Future<Map<String, dynamic>> adjustStock(
     String productId,
     int quantity,
     String type,
     String reference,
   ) async {
     try {
-      final now = DateTime.now().toUtc().toIso8601String();
-      await _client.from('stock_movements').insert({
-        'product_id': productId,
-        'quantity': quantity,
-        'type': type,
-        'reference': reference,
-        'date': now,
-        'created_at': now,
-        'updated_at': now,
+      final normalizedType = type.trim().toUpperCase();
+      final result =
+          await _client.rpc('apply_manual_stock_adjustment', params: {
+        'p_product_id': productId,
+        'p_quantity': quantity,
+        'p_type': normalizedType,
+        'p_reason': reference,
       });
 
-      final product = await _client
-          .from('products')
-          .select('inventory_qty')
-          .eq('id', productId)
-          .maybeSingle();
-      final productMap =
-          product == null ? null : Map<String, dynamic>.from(product as Map);
-      final currentQty =
-          productMap == null ? 0 : (productMap['inventory_qty'] as int? ?? 0);
-      final newQty =
-          type == 'IN' ? currentQty + quantity : currentQty - quantity;
-
-      await _client.from('products').update({
-        'inventory_qty': newQty,
-        'stock_quantity': newQty,
-        'updated_at': now,
-      }).eq('id', productId);
-
       notifyListeners();
+      return Map<String, dynamic>.from(result as Map);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Stock adjustment error: $e');

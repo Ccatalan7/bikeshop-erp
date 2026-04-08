@@ -34,6 +34,11 @@ extension StockMovementCategoryX on StockMovementCategory {
 }
 
 class StockMovement {
+  static final RegExp _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _hashReferencePattern = RegExp(r'#([A-Za-z0-9-]+)');
+
   final String id;
   final String productId;
   final String productName;
@@ -163,12 +168,14 @@ class StockMovement {
     switch (movementType) {
       case 'purchase':
       case 'purchase_invoice':
+      case 'purchase_invoice_reversal':
       case 'manual_purchase':
         return StockMovementCategory.purchase;
       case 'sale':
       case 'venta':
       case 'sales_invoice':
       case 'sales_invoice_component':
+      case 'sales_invoice_reversal':
       case 'manual_sale':
         return StockMovementCategory.sale;
       case 'transfer':
@@ -183,6 +190,10 @@ class StockMovement {
       case 'damage':
       case 'loss':
       case 'found':
+      case 'count_gain':
+      case 'count_loss':
+      case 'theft':
+      case 'internal_use':
       case 'inventory_adjust':
       case 'inventory_adjustment':
         return StockMovementCategory.adjustment;
@@ -204,12 +215,86 @@ class StockMovement {
     return referenceId != null &&
         referenceId!.isNotEmpty &&
         (category == StockMovementCategory.sale ||
-            category == StockMovementCategory.purchase);
+            category == StockMovementCategory.purchase ||
+            category == StockMovementCategory.adjustment);
   }
 
   String get referenceDisplay {
     final trimmed = referenceNumber?.trim();
-    return trimmed == null || trimmed.isEmpty ? '-' : trimmed;
+    if (trimmed == null || trimmed.isEmpty) {
+      return _legacyReferenceFallback;
+    }
+
+    if (trimmed == 'Manual adjustment via product form') {
+      return 'Ajuste manual desde producto';
+    }
+
+    if (trimmed.startsWith('product_conversion:')) {
+      final note = notes?.trim();
+      if (note != null && note.isNotEmpty) {
+        return note;
+      }
+      return 'Conversión interna de inventario';
+    }
+
+    if (_isFriendlyReference(trimmed)) {
+      if (trimmed == 'Initial stock on product creation') {
+        return 'Stock inicial';
+      }
+      return trimmed;
+    }
+
+    return _legacyReferenceFallback;
+  }
+
+  bool _isFriendlyReference(String value) {
+    return !_uuidPattern.hasMatch(value);
+  }
+
+  String? get _embeddedReasonReference {
+    final note = notes?.trim();
+    if (note == null || note.isEmpty) return null;
+    final match = _hashReferencePattern.firstMatch(note);
+    return match?.group(1)?.trim();
+  }
+
+  String get _legacyReferenceFallback {
+    final embeddedReference = _embeddedReasonReference;
+    if (embeddedReference != null) {
+      switch (source) {
+        case 'correction':
+          return 'Compra $embeddedReference';
+        case 'sale':
+        case 'sales_invoice':
+          return 'Venta $embeddedReference';
+        default:
+          return embeddedReference;
+      }
+    }
+
+    if (source == 'initial' || movementType == 'initial') {
+      return 'Stock inicial';
+    }
+
+    if (source == 'correction' || movementType == 'correction') {
+      final note = notes?.trim();
+      if (note != null && note.isNotEmpty) {
+        if (note == 'Manual adjustment via product form') {
+          return 'Ajuste manual desde producto';
+        }
+        return note;
+      }
+      return 'Corrección histórica';
+    }
+
+    if (source == 'manual' || movementType == 'manual') {
+      if (notes?.trim() == 'Manual adjustment via product form') {
+        return 'Ajuste manual desde producto';
+      }
+      return 'Ajuste manual';
+    }
+
+    return 'Sin referencia';
   }
 
   String get movementTypeDisplay {
@@ -228,6 +313,10 @@ class StockMovement {
         return 'Compra Manual';
       case 'purchase_invoice':
         return 'Factura de compra';
+      case 'purchase_invoice_reversal':
+        return 'Reversión de compra';
+      case 'sales_invoice_reversal':
+        return 'Reversión de venta';
       case 'stock_adjustment':
         return 'Ajuste de Stock';
       case 'ecommerce':
@@ -249,6 +338,14 @@ class StockMovement {
         return 'Pérdida';
       case 'found':
         return 'Hallazgo';
+      case 'count_gain':
+        return 'Reconteo positivo';
+      case 'count_loss':
+        return 'Reconteo negativo';
+      case 'theft':
+        return 'Robo / extravío';
+      case 'internal_use':
+        return 'Uso interno / taller';
       default:
         return source;
     }

@@ -40,7 +40,6 @@ export '../../modules/inventory/pages/hierarchical_category_page.dart';
 export '../../modules/inventory/pages/category_form_page.dart';
 export '../../modules/inventory/pages/brand_list_page.dart';
 export '../../modules/inventory/pages/brand_form_page.dart';
-export '../../modules/inventory/pages/stock_movement_list_page.dart';
 export '../../modules/inventory/pages/stock_movements_page.dart';
 export '../../modules/sales/pages/invoice_list_page.dart';
 export '../../modules/sales/pages/invoice_form_page.dart';
