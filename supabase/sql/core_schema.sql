@@ -3113,6 +3113,9 @@ declare
   v_reason text;
   v_reference text;
   v_context text;
+  v_stock_before integer;
+  v_stock_after integer;
+  v_adjustment_qty integer;
 begin
   -- Services and non-stock-tracked items should not generate stock adjustments.
   if coalesce(NEW.product_type, 'product') = 'service'
@@ -3128,6 +3131,24 @@ begin
 
   -- Only track if stock_quantity actually changed
   if (TG_OP = 'UPDATE' and OLD.stock_quantity <> NEW.stock_quantity) then
+
+    -- If the legacy inventory_qty column had drifted and a form save rewrites
+    -- both columns consistently, measure the real change from inventory_qty.
+    if OLD.inventory_qty is distinct from OLD.stock_quantity
+       and NEW.stock_quantity = NEW.inventory_qty then
+      v_stock_before := OLD.inventory_qty;
+      v_stock_after := NEW.inventory_qty;
+    else
+      v_stock_before := OLD.stock_quantity;
+      v_stock_after := NEW.stock_quantity;
+    end if;
+
+    v_adjustment_qty := v_stock_after - v_stock_before;
+
+    -- Pure column resync with no real stock change should not create a manual adjustment.
+    if v_adjustment_qty = 0 then
+      return NEW;
+    end if;
     
     v_context := current_setting('app.stock_adjustment_context', true);
 
@@ -3164,9 +3185,9 @@ begin
       NEW.tenant_id,
       NEW.id,
       v_adjustment_type,
-      NEW.stock_quantity - OLD.stock_quantity,
-      OLD.stock_quantity,
-      NEW.stock_quantity,
+      v_adjustment_qty,
+      v_stock_before,
+      v_stock_after,
       v_reason,
       v_reference,
       auth.uid()

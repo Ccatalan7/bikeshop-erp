@@ -2,7 +2,9 @@
 --
 -- Heuristic:
 --   - stock_adjustments.adjustment_type = 'manual'
---   - reason = 'Ajuste Manual'
+--   - reason matches known trigger leak labels observed in production
+--       * 'Manual adjustment via product form'
+--       * 'Ajuste Manual'
 --   - product appears inside a posted sales invoice
 --   - adjustment timestamp is very close to the invoice updated_at timestamp
 --
@@ -40,7 +42,10 @@ suspicious_manual_adjustments as (
     sa.created_by
   from public.stock_adjustments sa
   where sa.adjustment_type = 'manual'
-    and coalesce(sa.reason, '') = 'Ajuste Manual'
+    and coalesce(sa.reason, '') in (
+      'Manual adjustment via product form',
+      'Ajuste Manual'
+    )
 )
 select
   sma.adjustment_id,

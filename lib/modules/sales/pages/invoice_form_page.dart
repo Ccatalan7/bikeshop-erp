@@ -333,6 +333,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             purchaseTreatment: product.purchaseTreatment,
             isService: product.isService,
           );
+          _applyPreferredJobBike(newLine);
           final newEntry = _InvoiceLineEntry(newLine);
           newEntry.attachListeners(() {
             setState(() {});
@@ -597,6 +598,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _lineEntries
         ..clear()
         ..addAll(newEntries);
+      _syncDefaultJobBikeIdFromContext();
     });
   }
 
@@ -711,6 +713,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               'DEBUG: Loaded ${bikes.length} bikes from getJobBikes';
           _availableJobBikes.clear();
           _availableJobBikes.addAll(bikes);
+          _syncDefaultJobBikeIdFromContext();
         });
       } else {
         _debugBikeMessage = 'DEBUG: Widget not mounted after getJobBikes';
@@ -733,6 +736,48 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         _selectedCustomer = customer;
       });
     }
+  }
+
+  MechanicJobBike? _preferredJobBikeForNewLines() {
+    if (_availableJobBikes.isEmpty) return null;
+
+    if (_defaultJobBikeId != null) {
+      final explicitBike = _availableJobBikes
+          .where((bike) => bike.id == _defaultJobBikeId)
+          .firstOrNull;
+      if (explicitBike != null) return explicitBike;
+    }
+
+    if (_availableJobBikes.length == 1) {
+      return _availableJobBikes.first;
+    }
+
+    final distinctAssignedBikeIds = _lineEntries
+        .map((entry) => entry.line.jobBikeId)
+        .whereType<String>()
+        .where((bikeId) => _availableJobBikes.any((bike) => bike.id == bikeId))
+        .toSet();
+
+    if (distinctAssignedBikeIds.length == 1) {
+      final inferredBikeId = distinctAssignedBikeIds.first;
+      return _availableJobBikes
+          .where((bike) => bike.id == inferredBikeId)
+          .firstOrNull;
+    }
+
+    return null;
+  }
+
+  void _syncDefaultJobBikeIdFromContext() {
+    _defaultJobBikeId = _preferredJobBikeForNewLines()?.id;
+  }
+
+  void _applyPreferredJobBike(_InvoiceLine line) {
+    final preferredBike = _preferredJobBikeForNewLines();
+    if (preferredBike == null) return;
+
+    line.jobBikeId = preferredBike.id;
+    line.bikeName = preferredBike.displayName;
   }
 
   void _handleLinesChanged() {
@@ -1088,15 +1133,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       isCatalogProduct: true,
     );
 
-    if (_defaultJobBikeId != null) {
-      final bike = _availableJobBikes
-          .where((b) => b.id == _defaultJobBikeId)
-          .firstOrNull;
-      if (bike != null) {
-        line.jobBikeId = bike.id;
-        line.bikeName = bike.displayName;
-      }
-    }
+    _applyPreferredJobBike(line);
 
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
@@ -1121,15 +1158,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       description: description,
     );
 
-    if (_defaultJobBikeId != null) {
-      final bike = _availableJobBikes
-          .where((b) => b.id == _defaultJobBikeId)
-          .firstOrNull;
-      if (bike != null) {
-        line.jobBikeId = bike.id;
-        line.bikeName = bike.displayName;
-      }
-    }
+    _applyPreferredJobBike(line);
 
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
@@ -1162,16 +1191,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         isCatalogProduct: false,
       );
 
-      // Pre-assign the global default bike if one is selected
-      if (_defaultJobBikeId != null) {
-        final bike = _availableJobBikes
-            .where((b) => b.id == _defaultJobBikeId)
-            .firstOrNull;
-        if (bike != null) {
-          line.jobBikeId = bike.id;
-          line.bikeName = bike.displayName;
-        }
-      }
+      _applyPreferredJobBike(line);
 
       // Create entry with shouldAutoFocus=true so the product field auto-focuses and shows overlay
       final entry = _InvoiceLineEntry(line, shouldAutoFocus: true);
@@ -1383,8 +1403,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           await db.supabase
               .from('mechanic_jobs')
               .update({'invoice_id': saved.id}).eq('id', _linkedJobId!);
+          await _salesService.triggerLinkedJobSync(saved.id!);
           debugPrint(
-              '🔗 [InvoiceFormPage] Linked invoice ${saved.id} to job $_linkedJobId');
+              '🔗 [InvoiceFormPage] Linked invoice ${saved.id} to job $_linkedJobId and triggered invoice→job sync');
         } catch (e) {
           debugPrint('⚠️ [InvoiceFormPage] Could not link invoice to job: $e');
         }
@@ -3001,7 +3022,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                 _canEditFields,
                 () {}, // No setState needed - hover is local to wrapper
                 () => _autoAddEmptyLineIfNeeded(),
-                defaultJobBikeId: _defaultJobBikeId,
+                defaultJobBikeId: _preferredJobBikeForNewLines()?.id,
                 availableJobBikes: _availableJobBikes,
               ),
               _buildBikeSelector(theme, entry),

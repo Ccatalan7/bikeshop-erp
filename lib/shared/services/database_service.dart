@@ -443,6 +443,7 @@ class DatabaseService extends ChangeNotifier {
 
       await _client.from('products').update({
         'inventory_qty': newQty,
+        'stock_quantity': newQty,
         'updated_at': now,
       }).eq('id', productId);
 

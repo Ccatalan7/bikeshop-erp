@@ -590,6 +590,7 @@ class InventoryService extends ChangeNotifier {
       // Update product inventory
       await _db.update('products', productId, {
         'inventory_qty': newQuantity,
+        'stock_quantity': newQuantity,
         'updated_at': DateTime.now().toIso8601String(),
       });
 
@@ -630,6 +631,7 @@ class InventoryService extends ChangeNotifier {
       final newQuantity = product.inventoryQty - quantity;
       await _db.update('products', productId, {
         'inventory_qty': newQuantity,
+        'stock_quantity': newQuantity,
         'updated_at': DateTime.now().toIso8601String(),
       });
 
@@ -680,6 +682,7 @@ class InventoryService extends ChangeNotifier {
 
       await _db.update('products', productId, {
         'inventory_qty': newQuantity,
+        'stock_quantity': newQuantity,
         'cost': newAverageCost,
         'updated_at': DateTime.now().toIso8601String(),
       });

@@ -28,7 +28,10 @@ left join public.products p
  and p.tenant_id = sa.tenant_id
 where sa.tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
   and sa.adjustment_type = 'manual'
-  and coalesce(sa.reason, '') = 'Ajuste Manual'
+  and coalesce(sa.reason, '') in (
+    'Manual adjustment via product form',
+    'Ajuste Manual'
+  )
 order by sa.created_at desc
 limit 100;
 
@@ -94,7 +97,10 @@ suspicious_manual_adjustments as (
   from public.stock_adjustments sa
   where sa.tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
     and sa.adjustment_type = 'manual'
-    and coalesce(sa.reason, '') = 'Ajuste Manual'
+    and coalesce(sa.reason, '') in (
+      'Manual adjustment via product form',
+      'Ajuste Manual'
+    )
 )
 select
   sma.adjustment_created_at,
@@ -242,7 +248,10 @@ matched as (
     on sa.tenant_id = pii.tenant_id
    and sa.product_id = pii.product_id
    and sa.adjustment_type = 'manual'
-   and coalesce(sa.reason, '') = 'Ajuste Manual'
+   and coalesce(sa.reason, '') in (
+     'Manual adjustment via product form',
+     'Ajuste Manual'
+   )
    and abs(extract(epoch from (sa.created_at - pii.invoice_updated_at))) <= 30
 )
 select
@@ -296,7 +305,10 @@ with suspicious as (
   from public.stock_adjustments sa
   where sa.tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
     and sa.adjustment_type = 'manual'
-    and coalesce(sa.reason, '') = 'Ajuste Manual'
+    and coalesce(sa.reason, '') in (
+      'Manual adjustment via product form',
+      'Ajuste Manual'
+    )
 )
 select
   s.created_at as adjustment_created_at,

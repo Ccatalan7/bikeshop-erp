@@ -332,6 +332,33 @@ class SalesService extends ChangeNotifier {
     }
   }
 
+  /// Trigger the full invoice -> linked job sync after mechanic_jobs.invoice_id
+  /// has been written. This is required for newly linked invoices because the
+  /// initial save happens before the job points back to the invoice.
+  Future<void> triggerLinkedJobSync(String invoiceId) async {
+    try {
+      await _databaseService.rpc(
+        'sync_invoice_items_to_job',
+        params: {'p_invoice_id': invoiceId},
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Failed to trigger invoice item sync: $e');
+      }
+    }
+
+    try {
+      await _databaseService.rpc(
+        'sync_invoice_status_to_job',
+        params: {'p_invoice_id': invoiceId},
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Failed to trigger invoice status sync: $e');
+      }
+    }
+  }
+
   Future<Payment> registerPayment(Payment payment) async {
     try {
       final payload = payment.toFirestoreMap();

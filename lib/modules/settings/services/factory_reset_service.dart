@@ -20,25 +20,30 @@ class FactoryResetService {
         .order('name');
 
     return (response as List<dynamic>)
-        .map((json) => ResetConfiguration.fromJson(json as Map<String, dynamic>))
+        .map(
+            (json) => ResetConfiguration.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
   /// Save a new reset configuration
-  Future<ResetConfiguration> saveConfiguration(ResetConfiguration config) async {
+  Future<ResetConfiguration> saveConfiguration(
+      ResetConfiguration config) async {
     final data = config.toJson();
-    final response = await _databaseService.insert('reset_configurations', data);
+    final response =
+        await _databaseService.insert('reset_configurations', data);
     return ResetConfiguration.fromJson(response);
   }
 
   /// Update an existing reset configuration
-  Future<ResetConfiguration> updateConfiguration(ResetConfiguration config) async {
+  Future<ResetConfiguration> updateConfiguration(
+      ResetConfiguration config) async {
     if (config.id == null) {
       throw Exception('Cannot update configuration without ID');
     }
-    
+
     final data = config.toJson();
-    final response = await _databaseService.update('reset_configurations', config.id!, data);
+    final response =
+        await _databaseService.update('reset_configurations', config.id!, data);
     return ResetConfiguration.fromJson(response);
   }
 
@@ -89,7 +94,7 @@ class FactoryResetService {
               .from(table)
               .delete()
               .eq('tenant_id', tenantId); // ← TENANT FILTER - DO NOT REMOVE!
-          
+
           print('✅ Deleted tenant data from $table');
         } catch (e) {
           print('⚠️ Could not delete from $table: $e');
@@ -208,24 +213,45 @@ class FactoryResetService {
 
     switch (moduleName) {
       case 'sales':
-        await _supabase.from('sales_payments').delete().eq('tenant_id', tenantId);
-        await _supabase.from('sales_invoices').delete().eq('tenant_id', tenantId);
+        await _supabase
+            .from('sales_payments')
+            .delete()
+            .eq('tenant_id', tenantId);
+        await _supabase
+            .from('sales_invoices')
+            .delete()
+            .eq('tenant_id', tenantId);
         break;
 
       case 'purchases':
-        await _supabase.from('purchase_payments').delete().eq('tenant_id', tenantId);
-        await _supabase.from('purchase_invoices').delete().eq('tenant_id', tenantId);
+        await _supabase
+            .from('purchase_payments')
+            .delete()
+            .eq('tenant_id', tenantId);
+        await _supabase
+            .from('purchase_invoices')
+            .delete()
+            .eq('tenant_id', tenantId);
         break;
 
       case 'inventory':
-        await _supabase.from('stock_movements').delete().eq('tenant_id', tenantId);
+        await _supabase
+            .from('stock_movements')
+            .delete()
+            .eq('tenant_id', tenantId);
         await _supabase.from('products').delete().eq('tenant_id', tenantId);
         await _supabase.from('categories').delete().eq('tenant_id', tenantId);
         break;
 
       case 'accounting':
-        await _supabase.from('journal_lines').delete().eq('tenant_id', tenantId);
-        await _supabase.from('journal_entries').delete().eq('tenant_id', tenantId);
+        await _supabase
+            .from('journal_lines')
+            .delete()
+            .eq('tenant_id', tenantId);
+        await _supabase
+            .from('journal_entries')
+            .delete()
+            .eq('tenant_id', tenantId);
         break;
 
       case 'crm':
@@ -290,7 +316,7 @@ class FactoryResetService {
 
     return stats;
   }
-  
+
   /// Performs selective deletion based on user choices
   Future<void> performSelectiveReset({
     required bool deleteSales,
@@ -321,10 +347,7 @@ class FactoryResetService {
       // Helper function to safely delete from table WITH TENANT FILTER
       Future<void> safeDelete(String table) async {
         try {
-          await _supabase
-              .from(table)
-              .delete()
-              .eq('tenant_id', tenantId);
+          await _supabase.from(table).delete().eq('tenant_id', tenantId);
           print('✅ Deleted tenant data from $table');
         } catch (e) {
           print('⚠️ Could not delete from $table: $e');
@@ -368,25 +391,26 @@ class FactoryResetService {
               .from('stock_adjustments')
               .select('product_id, quantity')
               .eq('tenant_id', tenantId);
-          
+
           final adjustments = adjustmentsResponse as List<dynamic>;
-          
+
           if (adjustments.isNotEmpty) {
             print('🔄 Reverting ${adjustments.length} stock adjustments...');
-            
+
             // Group adjustments by product_id to calculate total adjustment per product
             final Map<String, int> productAdjustments = {};
             for (final adj in adjustments) {
               final productId = adj['product_id'] as String;
               final quantity = adj['quantity'] as int;
-              productAdjustments[productId] = (productAdjustments[productId] ?? 0) + quantity;
+              productAdjustments[productId] =
+                  (productAdjustments[productId] ?? 0) + quantity;
             }
-            
+
             // Update each product's inventory by reversing the adjustments
             for (final entry in productAdjustments.entries) {
               final productId = entry.key;
               final totalAdjustment = entry.value;
-              
+
               try {
                 // Fetch current inventory
                 final productData = await _supabase
@@ -395,38 +419,45 @@ class FactoryResetService {
                     .eq('id', productId)
                     .eq('tenant_id', tenantId)
                     .maybeSingle();
-                
+
                 if (productData == null) {
                   print('  ⚠️ Product $productId not found, skipping revert');
                   continue;
                 }
-                
+
                 final currentQty = productData['inventory_qty'] as int;
-                final revertedQty = currentQty - totalAdjustment; // Subtract the adjustment
-                
+                final revertedQty =
+                    currentQty - totalAdjustment; // Subtract the adjustment
+
                 // Update product with reverted quantity
                 await _supabase
                     .from('products')
-                    .update({'inventory_qty': revertedQty})
+                    .update({
+                      'inventory_qty': revertedQty,
+                      'stock_quantity': revertedQty,
+                    })
                     .eq('id', productId)
                     .eq('tenant_id', tenantId);
-                
-                print('  ↩️ Product $productId: $currentQty → $revertedQty (reverted $totalAdjustment)');
+
+                print(
+                    '  ↩️ Product $productId: $currentQty → $revertedQty (reverted $totalAdjustment)');
               } catch (e) {
                 print('  ⚠️ Error reverting product $productId: $e');
                 // Continue with next product
               }
             }
-            
-            print('✅ Stock adjustments reverted for ${productAdjustments.length} products');
+
+            print(
+                '✅ Stock adjustments reverted for ${productAdjustments.length} products');
           } else {
-            print('ℹ️ No stock adjustments to revert (history already deleted?)');
+            print(
+                'ℹ️ No stock adjustments to revert (history already deleted?)');
           }
         } catch (e) {
           print('⚠️ Error reverting stock adjustments: $e');
           // Continue with deletion even if revert fails
         }
-        
+
         // Step 2: Now delete the records (even if there's no history, clean up what's left)
         await safeDelete('stock_movements');
         await safeDelete('stock_adjustments');
@@ -495,4 +526,3 @@ class FactoryResetService {
     }
   }
 }
-

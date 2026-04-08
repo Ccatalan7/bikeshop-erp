@@ -346,6 +346,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             purchaseTreatment: product.purchaseTreatment,
             isService: product.isService,
           );
+          _applyPreferredJobBike(newLine);
           final newEntry = _InvoiceLineEntry(newLine);
           newEntry.attachListeners(_handleLinesChanged);
           _lineEntries.add(newEntry);
@@ -649,6 +650,37 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
+  MechanicJobBike? _preferredJobBikeForNewLines() {
+    if (_availableJobBikes.isEmpty) return null;
+
+    if (_availableJobBikes.length == 1) {
+      return _availableJobBikes.first;
+    }
+
+    final distinctAssignedBikeIds = _lineEntries
+        .map((entry) => entry.line.jobBikeId)
+        .whereType<String>()
+        .where((bikeId) => _availableJobBikes.any((bike) => bike.id == bikeId))
+        .toSet();
+
+    if (distinctAssignedBikeIds.length == 1) {
+      final inferredBikeId = distinctAssignedBikeIds.first;
+      return _availableJobBikes
+          .where((bike) => bike.id == inferredBikeId)
+          .firstOrNull;
+    }
+
+    return null;
+  }
+
+  void _applyPreferredJobBike(_InvoiceLine line) {
+    final preferredBike = _preferredJobBikeForNewLines();
+    if (preferredBike == null) return;
+
+    line.jobBikeId = preferredBike.id;
+    line.bikeName = preferredBike.displayName;
+  }
+
   Future<void> _loadJobAndPreselectCustomer(String jobId) async {
     try {
       final db = Provider.of<DatabaseService>(context, listen: false);
@@ -893,6 +925,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       isCatalogProduct: true,
     );
 
+    _applyPreferredJobBike(line);
+
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
 
@@ -915,6 +949,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       isCatalogProduct: false,
       description: description,
     );
+
+    _applyPreferredJobBike(line);
 
     final entry = _InvoiceLineEntry(line);
     entry.attachListeners(_handleLinesChanged);
@@ -944,6 +980,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         isService: false,
         isCatalogProduct: false,
       );
+
+      _applyPreferredJobBike(line);
 
       final entry = _InvoiceLineEntry(line, shouldAutoFocus: true);
       entry.attachListeners(_handleLinesChanged);
@@ -1097,6 +1135,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           await db.update('mechanic_jobs', widget.preselectedJobId!, {
             'invoice_id': saved.id,
           });
+          if (saved.id != null) {
+            await _salesService.triggerLinkedJobSync(saved.id!);
+          }
         } catch (e) {
           debugPrint('❌ Failed to link/sync invoice to job: $e');
         }
@@ -2897,6 +2938,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 _canEditFields,
                 () {},
                 () => _autoAddEmptyLineIfNeeded(),
+                preferredJobBikeId: _preferredJobBikeForNewLines()?.id,
+                availableJobBikes: _availableJobBikes,
               ),
               if (_availableJobBikes.isNotEmpty)
                 _buildBikeSelector(theme, entry),
@@ -3276,7 +3319,9 @@ class _InvoiceLineEntry {
   }
 
   Widget buildSmartProductField(BuildContext context, ThemeData theme,
-      bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd) {
+      bool canEdit, VoidCallback onUpdate, VoidCallback onAutoAdd,
+      {String? preferredJobBikeId,
+      List<MechanicJobBike> availableJobBikes = const []}) {
     // Simplified for brevity, reusing SmartProductField
     return SmartProductField(
       key: ValueKey('product_$hashCode'),
@@ -3312,6 +3357,15 @@ class _InvoiceLineEntry {
           line.isService = selection.product?.isService ?? false;
           productNameController.text = selection.productName ?? '';
           productSkuController.text = selection.productSku ?? '';
+          if (line.jobBikeId == null && preferredJobBikeId != null) {
+            final bike = availableJobBikes
+                .where((b) => b.id == preferredJobBikeId)
+                .firstOrNull;
+            if (bike != null) {
+              line.jobBikeId = bike.id;
+              line.bikeName = bike.displayName;
+            }
+          }
           if (selection.price > 0) {
             unitPriceController.text = selection.price.toStringAsFixed(0);
           }

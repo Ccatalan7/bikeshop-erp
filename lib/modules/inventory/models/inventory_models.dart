@@ -167,7 +167,8 @@ class Product {
       dimensions: ProductDimensions.fromJsonNullable(json['dimensions']),
       price: (json['price'] as num).toDouble(),
       cost: (json['cost'] as num).toDouble(),
-      inventoryQty: json['inventory_qty'] ?? 0,
+      inventoryQty:
+          (json['stock_quantity'] ?? json['inventory_qty'] ?? 0) as int,
       minStockLevel: json['min_stock_level'] ?? 1,
       maxStockLevel: json['max_stock_level'],
       imageUrl: json['image_url'],
