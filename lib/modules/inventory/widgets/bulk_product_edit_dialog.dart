@@ -67,6 +67,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   bool _isRefreshingScope = false;
   bool _isApplying = false;
   bool _isDraggingImages = false;
+  String? _hoveringImageProductId;
   bool _onlyAssignWhenMissingImage = true;
   String? _applySummary;
   List<String> _applyErrors = const [];
@@ -474,10 +475,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
     if (files.isEmpty) return;
 
-    setState(() {
-      _imagePool = [..._imagePool, ...files];
-      _syncImageAssignments();
-    });
+    _appendFilesToPool(files);
   }
 
   Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
@@ -489,11 +487,137 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
     if (!mounted || files.isEmpty) return;
 
+    _appendFilesToPool(files);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDraggingImages = false;
+    });
+  }
+
+  Future<void> _pickImageFileForRow(Product product) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final picked = result.files.first;
+    if (picked.bytes == null) return;
+
+    _assignFilesToImageRow(
+      product,
+      [BulkImageFile(name: picked.name, bytes: picked.bytes!)],
+    );
+  }
+
+  Future<void> _handleDroppedFilesForRow(
+      Product product, List<XFile> droppedFiles) async {
+    final files = <BulkImageFile>[];
+    for (final file in droppedFiles) {
+      final bytes = await file.readAsBytes();
+      files.add(BulkImageFile(name: file.name, bytes: bytes));
+    }
+
+    if (!mounted || files.isEmpty) return;
+
+    _assignFilesToImageRow(product, files);
+  }
+
+  void _appendFilesToPool(List<BulkImageFile> rawFiles) {
+    final files = _normalizeIncomingImageFiles(rawFiles);
+    if (files.isEmpty) return;
+
     setState(() {
       _imagePool = [..._imagePool, ...files];
-      _isDraggingImages = false;
       _syncImageAssignments();
     });
+  }
+
+  void _assignFilesToImageRow(Product product, List<BulkImageFile> rawFiles) {
+    final productId = product.id;
+    if (productId == null || rawFiles.isEmpty) return;
+
+    final files = _normalizeIncomingImageFiles(rawFiles);
+    if (files.isEmpty) return;
+
+    final suggestedMatch = _service.autoAssignImages(
+      products: [product],
+      files: files,
+    )[productId];
+    final selectedFile = suggestedMatch ?? files.first;
+
+    setState(() {
+      _enabledRowIds.add(productId);
+      _imagePool = [..._imagePool, ...files];
+      final current = _imageAssignments[productId] ??
+          BulkImageAssignment(productId: productId);
+      _imageAssignments[productId] = current.copyWith(
+        file: selectedFile,
+        enabled: true,
+        forceReplace: true,
+      );
+      _hoveringImageProductId = null;
+    });
+  }
+
+  List<BulkImageFile> _normalizeIncomingImageFiles(
+      List<BulkImageFile> rawFiles) {
+    final usedNames = <String>{
+      for (final file in _imagePool) file.name.toLowerCase(),
+    };
+    final normalized = <BulkImageFile>[];
+
+    for (final file in rawFiles) {
+      final uniqueName = _buildUniqueImageFileName(file.name, usedNames);
+      if (uniqueName == file.name) {
+        normalized.add(file);
+      } else {
+        normalized.add(BulkImageFile(name: uniqueName, bytes: file.bytes));
+      }
+    }
+
+    return normalized;
+  }
+
+  String _buildUniqueImageFileName(String originalName, Set<String> usedNames) {
+    final dotIndex = originalName.lastIndexOf('.');
+    final baseName =
+        dotIndex > 0 ? originalName.substring(0, dotIndex) : originalName;
+    final extension = dotIndex > 0 ? originalName.substring(dotIndex) : '';
+
+    var candidate = originalName;
+    var suffix = 2;
+
+    while (usedNames.contains(candidate.toLowerCase())) {
+      candidate = '${baseName}_$suffix$extension';
+      suffix += 1;
+    }
+
+    usedNames.add(candidate.toLowerCase());
+    return candidate;
+  }
+
+  bool _rowImageAssignmentWillReplace(Product product) {
+    final productId = product.id;
+    if (productId == null) return false;
+    final assignment = _imageAssignments[productId];
+    if (assignment == null || assignment.file == null) return false;
+    return assignment.forceReplace &&
+        (product.imageUrl ?? '').trim().isNotEmpty;
+  }
+
+  String _rowImageAssignmentHint(
+      Product product, BulkImageAssignment assignment) {
+    if (assignment.file != null) {
+      if (_rowImageAssignmentWillReplace(product)) {
+        return 'Reemplaza la imagen actual';
+      }
+      return 'Archivo listo para aplicar';
+    }
+    return 'Arrastra o elige directo';
   }
 
   Future<void> _pickEffectiveDate() async {
@@ -649,13 +773,23 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+    final horizontalInset = mediaQuery.size.width >= 1800
+        ? 16.0
+        : mediaQuery.size.width >= 1400
+            ? 20.0
+            : 24.0;
+    final verticalInset = mediaQuery.size.height >= 1100 ? 16.0 : 24.0;
     final dialogWidth =
-        math.min(MediaQuery.of(context).size.width - 48, 1260.0);
+        math.min(mediaQuery.size.width - (horizontalInset * 2), 1680.0);
     final dialogHeight =
-        math.min(MediaQuery.of(context).size.height - 48, 860.0);
+        math.min(mediaQuery.size.height - (verticalInset * 2), 980.0);
 
     return Dialog(
-      insetPadding: const EdgeInsets.all(24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
         width: dialogWidth,
@@ -1510,42 +1644,65 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   Widget _buildReviewStep(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '3. Revisa y aplica',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _reviewDescription,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 18),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 4,
-                child: _buildOperationConfigPanel(theme),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 1280;
+        final shouldStack = constraints.maxWidth < 980;
+        final (configFlex, reviewFlex) = switch (_operation) {
+          BulkProductEditOperation.stock => isWide ? (3, 8) : (4, 7),
+          BulkProductEditOperation.images => isWide ? (3, 8) : (4, 7),
+          BulkProductEditOperation.classification => isWide ? (3, 9) : (4, 7),
+          BulkProductEditOperation.channels => isWide ? (3, 9) : (4, 7),
+          BulkProductEditOperation.pricing => isWide ? (3, 9) : (4, 7),
+          null => (4, 7),
+        };
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '3. Revisa y aplica',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _reviewDescription,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 18),
-              Expanded(
-                flex: 7,
-                child: _buildOperationReviewTable(theme),
-              ),
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: shouldStack
+                  ? Column(
+                      children: [
+                        _buildOperationConfigPanel(theme),
+                        const SizedBox(height: 16),
+                        Expanded(child: _buildOperationReviewTable(theme)),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          flex: configFlex,
+                          child: _buildOperationConfigPanel(theme),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          flex: reviewFlex,
+                          child: _buildOperationReviewTable(theme),
+                        ),
+                      ],
+                    ),
+            ),
+            if (_applySummary != null) ...[
+              const SizedBox(height: 12),
+              _buildApplySummary(theme),
             ],
-          ),
-        ),
-        if (_applySummary != null) ...[
-          const SizedBox(height: 12),
-          _buildApplySummary(theme),
-        ],
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -2075,7 +2232,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Se intentará asociar cada archivo por SKU, código, nombre o coincidencias fuertes del nombre del producto.',
+                          'Se intentará asociar cada archivo usando SKU, códigos y coincidencias fuertes de marca/nombre. Nombres genéricos como test, img o photo ya no se autoasignan.',
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant),
                         ),
@@ -2553,71 +2710,247 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         final product = _matchedProducts[index];
         final productId = product.id;
         if (productId == null) return const SizedBox.shrink();
+        final rowEnabled = _enabledRowIds.contains(productId);
         final assignment = _imageAssignments[productId] ??
             BulkImageAssignment(productId: productId);
+        final isRowDropTarget = _hoveringImageProductId == productId;
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Checkbox(
-                value: _enabledRowIds.contains(productId),
+                value: rowEnabled,
                 onChanged: (value) => _toggleRow(productId, value ?? false),
               ),
-              Expanded(flex: 4, child: _buildProductIdentity(theme, product)),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 62,
-                height: 62,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: product.imageUrl != null
-                      ? ImageService.buildProductImage(
-                          imageUrl: product.imageUrl,
-                          size: 62,
-                        )
-                      : Container(
-                          color: theme.colorScheme.surfaceVariant,
-                          child: Icon(Icons.image_not_supported_outlined,
-                              color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 flex: 5,
-                child: _buildDropdownField<String?>(
+                child: _buildImageRowIdentity(
                   theme: theme,
-                  label: 'Archivo asignado',
-                  value: assignment.file?.name,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Sin asignar')),
-                    ..._imagePool.map(
-                      (file) => DropdownMenuItem<String?>(
-                        value: file.name,
-                        child: Text(file.name, overflow: TextOverflow.ellipsis),
+                  product: product,
+                  assignment: assignment,
+                  rowEnabled: rowEnabled,
+                  isRowDropTarget: isRowDropTarget,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            assignment.file?.name ?? 'Sin asignar',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: rowEnabled
+                              ? () => _pickImageFileForRow(product)
+                              : null,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.attach_file_rounded,
+                            size: 15,
+                          ),
+                          label: const Text('Elegir'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _rowImageAssignmentHint(product, assignment),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _rowImageAssignmentWillReplace(product)
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String?>(
+                      isExpanded: true,
+                      value: assignment.file?.name,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Sin asignar'),
+                        ),
+                        ..._imagePool.map(
+                          (file) => DropdownMenuItem<String?>(
+                            value: file.name,
+                            child: Text(
+                              file.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: !rowEnabled
+                          ? null
+                          : (value) {
+                              final file = _imagePool
+                                  .where((item) => item.name == value)
+                                  .firstOrNull;
+                              setState(() {
+                                _imageAssignments[productId] =
+                                    assignment.copyWith(
+                                  file: file,
+                                  clearFile: value == null,
+                                  forceReplace: value != null,
+                                );
+                              });
+                            },
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        labelText: 'Archivo',
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ],
-                  onChanged: !_enabledRowIds.contains(productId)
-                      ? null
-                      : (value) {
-                          final file = _imagePool
-                              .where((item) => item.name == value)
-                              .firstOrNull;
-                          setState(() {
-                            _imageAssignments[productId] = assignment.copyWith(
-                              file: file,
-                              clearFile: value == null,
-                            );
-                          });
-                        },
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildImageRowIdentity({
+    required ThemeData theme,
+    required Product product,
+    required BulkImageAssignment assignment,
+    required bool rowEnabled,
+    required bool isRowDropTarget,
+  }) {
+    final productId = product.id;
+    final hasAssignedFile = assignment.file != null;
+
+    return Row(
+      children: [
+        DropTarget(
+          onDragEntered: rowEnabled && productId != null
+              ? (_) => setState(() => _hoveringImageProductId = productId)
+              : null,
+          onDragExited: rowEnabled && productId != null
+              ? (_) {
+                  if (_hoveringImageProductId == productId) {
+                    setState(() => _hoveringImageProductId = null);
+                  }
+                }
+              : null,
+          onDragDone: rowEnabled
+              ? (details) => _handleDroppedFilesForRow(product, details.files)
+              : null,
+          child: MouseRegion(
+            onEnter: rowEnabled && productId != null
+                ? (_) => setState(() => _hoveringImageProductId = productId)
+                : null,
+            onExit: rowEnabled && productId != null
+                ? (_) {
+                    if (_hoveringImageProductId == productId) {
+                      setState(() => _hoveringImageProductId = null);
+                    }
+                  }
+                : null,
+            child: InkWell(
+              onTap: rowEnabled ? () => _pickImageFileForRow(product) : null,
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isRowDropTarget
+                      ? theme.colorScheme.primary.withOpacity(0.08)
+                      : theme.colorScheme.surfaceVariant.withOpacity(0.35),
+                  border: Border.all(
+                    color: isRowDropTarget
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant.withOpacity(0.6),
+                    width: isRowDropTarget ? 2 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: hasAssignedFile
+                      ? Image.memory(
+                          assignment.file!.bytes,
+                          fit: BoxFit.cover,
+                        )
+                      : product.imageUrl != null
+                          ? ImageService.buildProductImage(
+                              imageUrl: product.imageUrl,
+                              size: 56,
+                            )
+                          : Container(
+                              color: Colors.transparent,
+                              child: Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 22,
+                                color: rowEnabled
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(product.sku,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              if (product.brand != null || product.categoryName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    [product.brand, product.categoryName]
+                        .whereType<String>()
+                        .join(' · '),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

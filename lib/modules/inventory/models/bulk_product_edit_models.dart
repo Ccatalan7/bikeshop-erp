@@ -494,21 +494,25 @@ class BulkImageAssignment {
     required this.productId,
     this.file,
     this.enabled = true,
+    this.forceReplace = false,
   });
 
   final String productId;
   final BulkImageFile? file;
   final bool enabled;
+  final bool forceReplace;
 
   BulkImageAssignment copyWith({
     BulkImageFile? file,
     bool clearFile = false,
     bool? enabled,
+    bool? forceReplace,
   }) {
     return BulkImageAssignment(
       productId: productId,
       file: clearFile ? null : (file ?? this.file),
       enabled: enabled ?? this.enabled,
+      forceReplace: forceReplace ?? this.forceReplace,
     );
   }
 }

@@ -179,27 +179,21 @@ class BulkProductEditService {
     required List<BulkImageFile> files,
   }) {
     final assignments = <String, BulkImageFile>{};
-    final usedFiles = <String>{};
+    final usedProductIds = <String>{};
+    final candidateProducts =
+        products.where((product) => product.id != null).toList(growable: false);
 
-    for (final product in products) {
-      final productId = product.id;
+    for (final file in files) {
+      final match = _findBestImageMatch(
+        file,
+        candidateProducts,
+        usedProductIds,
+      );
+      if (match == null) continue;
+      final productId = match.product.id;
       if (productId == null) continue;
-
-      BulkImageFile? bestFile;
-      var bestScore = 0;
-      for (final file in files) {
-        if (usedFiles.contains(file.name)) continue;
-        final score = _scoreFileAgainstProduct(file.name, product);
-        if (score > bestScore) {
-          bestScore = score;
-          bestFile = file;
-        }
-      }
-
-      if (bestFile != null && bestScore >= 40) {
-        assignments[productId] = bestFile;
-        usedFiles.add(bestFile.name);
-      }
+      assignments[productId] = file;
+      usedProductIds.add(productId);
     }
 
     return assignments;
@@ -456,7 +450,9 @@ class BulkProductEditService {
         continue;
       }
 
-      if (onlyWhenMissingImage && (product.imageUrl ?? '').trim().isNotEmpty) {
+      if (onlyWhenMissingImage &&
+          !assignment.forceReplace &&
+          (product.imageUrl ?? '').trim().isNotEmpty) {
         continue;
       }
 
@@ -494,29 +490,209 @@ class BulkProductEditService {
 
   Future<String?> getTenantId() => _tenantService.getTenantId();
 
-  int _scoreFileAgainstProduct(String fileName, Product product) {
-    final stem = _normalizeText(fileName.replaceAll(RegExp(r'\.[^.]+ ?$'), ''));
-    final tokens = <String>{
-      _normalizeText(product.sku),
-      _normalizeText(product.barcode ?? ''),
-      _normalizeText(product.manufacturerSku ?? ''),
-      _normalizeText(product.supplierCode ?? ''),
-      _normalizeText(product.name),
-      _normalizeText(product.model ?? ''),
-    }..removeWhere((value) => value.trim().isEmpty);
+  _BulkImageAutoMatch? _findBestImageMatch(
+    BulkImageFile file,
+    List<Product> products,
+    Set<String> usedProductIds,
+  ) {
+    final evidence = _buildImageEvidence(file.name);
+    if (!evidence.hasStrongSignal) return null;
 
-    var score = 0;
-    for (final token in tokens) {
-      if (stem == token) {
-        score = math.max(score, 100);
-      } else if (stem.contains(token)) {
-        score = math.max(score, token.length >= 4 ? 80 : 50);
-      } else if (token.contains(stem) && stem.length >= 4) {
-        score = math.max(score, 60);
+    final ranked = <_BulkImageAutoMatch>[];
+    for (final product in products) {
+      final productId = product.id;
+      if (productId == null || usedProductIds.contains(productId)) continue;
+      final score = _scoreFileAgainstProduct(evidence, product);
+      if (score > 0) {
+        ranked.add(_BulkImageAutoMatch(product: product, score: score));
       }
     }
 
+    if (ranked.isEmpty) return null;
+    ranked.sort((a, b) => b.score.compareTo(a.score));
+
+    final top = ranked.first;
+    final secondScore = ranked.length > 1 ? ranked[1].score : 0;
+    final hasComfortableLead =
+        top.score >= 95 || (top.score - secondScore) >= 15;
+
+    if (!hasComfortableLead || top.score < 52) {
+      return null;
+    }
+
+    return top;
+  }
+
+  int _scoreFileAgainstProduct(_BulkImageEvidence evidence, Product product) {
+    final compactStem = evidence.compactStem;
+    final productCodes = _productCodeTokens(product);
+
+    for (final code in productCodes) {
+      if (code.isEmpty) continue;
+      if (compactStem == code) return 140;
+      if (evidence.codeLikeTokens.contains(code)) return 125;
+      if (compactStem.contains(code) && code.length >= 5) return 118;
+    }
+
+    if (evidence.looksGeneric) return 0;
+
+    final productName = _normalizeEvidenceText(product.name);
+    final brandText = _normalizeEvidenceText(product.brand ?? '');
+    final modelText = _normalizeEvidenceText(product.model ?? '');
+
+    var score = 0;
+
+    if (productName.isNotEmpty &&
+        !_isGenericImagePhrase(productName) &&
+        evidence.normalizedStem == productName) {
+      score = math.max(score, 92);
+    }
+
+    if (productName.isNotEmpty &&
+        productName.length >= 8 &&
+        evidence.normalizedStem.contains(productName)) {
+      score = math.max(score, 84);
+    }
+
+    final productTokens = _productMeaningfulTokens(product);
+    final overlap = evidence.tokens.intersection(productTokens);
+    if (overlap.isNotEmpty) {
+      score += overlap.length * 16;
+    }
+
+    final brandTokens = _extractMeaningfulTokens(brandText);
+    if (brandTokens.isNotEmpty &&
+        overlap.intersection(brandTokens).isNotEmpty) {
+      score += 12;
+    }
+
+    final modelTokens = _extractMeaningfulTokens(modelText);
+    if (modelTokens.isNotEmpty &&
+        overlap.intersection(modelTokens).isNotEmpty) {
+      score += 10;
+    }
+
+    if (evidence.tokens.length == 1 && overlap.length == 1) {
+      score -= 18;
+    }
+
+    if (overlap.length >= 2) {
+      score += 10;
+    }
+
     return score;
+  }
+
+  _BulkImageEvidence _buildImageEvidence(String fileName) {
+    final stem = fileName.replaceAll(RegExp(r'\.[^.]+$'), '');
+    final normalizedStem = _normalizeEvidenceText(stem);
+    final tokens = _extractMeaningfulTokens(normalizedStem);
+    final codeLikeTokens = tokens.where(_looksLikeProductCode).toSet();
+    final looksGeneric = tokens.isEmpty ||
+        tokens.every(_isGenericImageToken) ||
+        (tokens.length == 1 && _isGenericImagePhrase(normalizedStem));
+
+    return _BulkImageEvidence(
+      normalizedStem: normalizedStem,
+      compactStem: normalizedStem.replaceAll(' ', ''),
+      tokens: tokens,
+      codeLikeTokens: codeLikeTokens,
+      looksGeneric: looksGeneric,
+    );
+  }
+
+  Set<String> _productCodeTokens(Product product) {
+    return {
+      _normalizeCode(product.sku),
+      _normalizeCode(product.barcode ?? ''),
+      _normalizeCode(product.manufacturerSku ?? ''),
+      _normalizeCode(product.supplierCode ?? ''),
+    }..removeWhere((value) => value.trim().isEmpty);
+  }
+
+  Set<String> _productMeaningfulTokens(Product product) {
+    return {
+      ..._extractMeaningfulTokens(_normalizeEvidenceText(product.name)),
+      ..._extractMeaningfulTokens(_normalizeEvidenceText(product.brand ?? '')),
+      ..._extractMeaningfulTokens(_normalizeEvidenceText(product.model ?? '')),
+      ..._extractMeaningfulTokens(
+          _normalizeEvidenceText(product.categoryName ?? '')),
+      ..._extractMeaningfulTokens(
+          _normalizeEvidenceText(product.manufacturerSku ?? '')),
+    };
+  }
+
+  Set<String> _extractMeaningfulTokens(String text) {
+    return text
+        .split(RegExp(r'\s+'))
+        .map((token) => _stemSearchTerm(token.trim()))
+        .where((token) => token.isNotEmpty)
+        .where((token) => !_isGenericImageToken(token))
+        .where((token) => token.length >= 3 || _looksLikeProductCode(token))
+        .toSet();
+  }
+
+  bool _looksLikeProductCode(String token) {
+    if (token.length < 4) return false;
+    if (RegExp(r'^\d{8,}$').hasMatch(token)) return true;
+    return RegExp(r'^(?=.*\d)[a-z0-9]+$').hasMatch(token);
+  }
+
+  bool _isGenericImagePhrase(String text) {
+    return {
+      'test',
+      'image',
+      'photo',
+      'picture',
+      'screenshot',
+      'scan',
+      'archivo',
+      'file',
+      'untitled',
+      'nuevo',
+      'copy',
+      'copia',
+    }.contains(text);
+  }
+
+  bool _isGenericImageToken(String token) {
+    return {
+      'img',
+      'image',
+      'photo',
+      'pic',
+      'picture',
+      'screenshot',
+      'screen',
+      'scan',
+      'archivo',
+      'file',
+      'test',
+      'temp',
+      'tmp',
+      'copy',
+      'copia',
+      'new',
+      'nuevo',
+      'final',
+      'whatsapp',
+      'documento',
+      'document',
+      'camera',
+      'foto',
+    }.contains(token);
+  }
+
+  String _normalizeEvidenceText(String text) {
+    final normalized = _normalizeText(text)
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return normalized;
+  }
+
+  String _normalizeCode(String text) {
+    return _normalizeText(text).replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
   bool _matchesTokens(Product product, List<String> tokens) {
@@ -584,4 +760,33 @@ class BulkProductEditService {
       yield items.sublist(index, math.min(index + size, items.length));
     }
   }
+}
+
+class _BulkImageEvidence {
+  const _BulkImageEvidence({
+    required this.normalizedStem,
+    required this.compactStem,
+    required this.tokens,
+    required this.codeLikeTokens,
+    required this.looksGeneric,
+  });
+
+  final String normalizedStem;
+  final String compactStem;
+  final Set<String> tokens;
+  final Set<String> codeLikeTokens;
+  final bool looksGeneric;
+
+  bool get hasStrongSignal =>
+      codeLikeTokens.isNotEmpty || (!looksGeneric && tokens.length >= 2);
+}
+
+class _BulkImageAutoMatch {
+  const _BulkImageAutoMatch({
+    required this.product,
+    required this.score,
+  });
+
+  final Product product;
+  final int score;
 }
