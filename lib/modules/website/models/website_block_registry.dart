@@ -16,7 +16,7 @@ class WebsiteBlockRegistry {
 
   static final Map<WebsiteBlockType, WebsiteBlockDefinition>
       _fallbackDefinitions = {
-    WebsiteBlockType.hero: WebsiteBlockDefinition(
+    WebsiteBlockType.hero: const WebsiteBlockDefinition(
       type: WebsiteBlockType.hero,
       title: 'Hero / Banner',
       description:
@@ -37,7 +37,7 @@ class WebsiteBlockRegistry {
         'mobileFocalPointX': 0.5,
         'mobileFocalPointY': 0.5,
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -97,7 +97,7 @@ class WebsiteBlockRegistry {
           defaultValue: 0.5,
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -120,7 +120,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.carousel: WebsiteBlockDefinition(
+    WebsiteBlockType.carousel: const WebsiteBlockDefinition(
       type: WebsiteBlockType.carousel,
       title: 'Carrusel Hero',
       description:
@@ -147,7 +147,7 @@ class WebsiteBlockRegistry {
     // =====================================================================
     // SIMPLE STRUCTURE / ELEMENT BLOCKS
     // =====================================================================
-    WebsiteBlockType.canvas: WebsiteBlockDefinition(
+    WebsiteBlockType.canvas: const WebsiteBlockDefinition(
       type: WebsiteBlockType.canvas,
       title: 'Canvas',
       description:
@@ -160,7 +160,7 @@ class WebsiteBlockRegistry {
       },
       usesCustomEditor: true,
     ),
-    WebsiteBlockType.text: WebsiteBlockDefinition(
+    WebsiteBlockType.text: const WebsiteBlockDefinition(
       type: WebsiteBlockType.text,
       title: 'Texto',
       description: 'Sección simple de texto con editor inline.',
@@ -169,7 +169,7 @@ class WebsiteBlockRegistry {
         'preset': 'paragraph',
         'maxWidth': 800,
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'text',
           label: 'Texto',
@@ -200,7 +200,7 @@ class WebsiteBlockRegistry {
           group: 'layout',
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -213,7 +213,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.button: WebsiteBlockDefinition(
+    WebsiteBlockType.button: const WebsiteBlockDefinition(
       type: WebsiteBlockType.button,
       title: 'Botón',
       description: 'Botón con enlace (CTA).',
@@ -222,7 +222,7 @@ class WebsiteBlockRegistry {
         'link': '/productos',
         'style': 'filled',
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'label',
           label: 'Texto',
@@ -250,7 +250,7 @@ class WebsiteBlockRegistry {
           group: 'design',
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -263,7 +263,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.divider: WebsiteBlockDefinition(
+    WebsiteBlockType.divider: const WebsiteBlockDefinition(
       type: WebsiteBlockType.divider,
       title: 'Separador',
       description: 'Línea divisoria para separar secciones.',
@@ -272,7 +272,7 @@ class WebsiteBlockRegistry {
         'thickness': 1,
         'color': '#E5E7EB',
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'thickness',
           label: 'Grosor',
@@ -298,7 +298,7 @@ class WebsiteBlockRegistry {
           defaultValue: '#E5E7EB',
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'appearance',
           label: 'Apariencia',
@@ -306,7 +306,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.products: WebsiteBlockDefinition(
+    WebsiteBlockType.products: const WebsiteBlockDefinition(
       type: WebsiteBlockType.products,
       title: 'Productos Destacados',
       description: 'Lista productos seleccionados desde tu inventario.',
@@ -319,7 +319,7 @@ class WebsiteBlockRegistry {
       },
       usesCustomEditor: true,
     ),
-    WebsiteBlockType.services: WebsiteBlockDefinition(
+    WebsiteBlockType.services: const WebsiteBlockDefinition(
       type: WebsiteBlockType.services,
       title: 'Servicios',
       description:
@@ -328,7 +328,7 @@ class WebsiteBlockRegistry {
         'title': 'Nuestros Servicios',
         'services': <Map<String, dynamic>>[],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título de la sección',
@@ -347,7 +347,7 @@ class WebsiteBlockRegistry {
               label: 'Ícono',
               type: WebsiteBlockFieldType.select,
               defaultValue: 'build',
-              options: const [
+              options: [
                 WebsiteBlockFieldOption(value: 'build', label: 'Herramientas'),
                 WebsiteBlockFieldOption(
                     value: 'support_agent', label: 'Soporte'),
@@ -372,7 +372,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -380,7 +380,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.about: WebsiteBlockDefinition(
+    WebsiteBlockType.about: const WebsiteBlockDefinition(
       type: WebsiteBlockType.about,
       title: 'Sobre Nosotros',
       description:
@@ -393,7 +393,7 @@ class WebsiteBlockRegistry {
         'imageUrl': null,
       },
       usesCustomEditor: false,
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -420,14 +420,14 @@ class WebsiteBlockRegistry {
           label: 'Posición de la imagen',
           type: WebsiteBlockFieldType.select,
           defaultValue: 'right',
-          options: const [
+          options: [
             WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
             WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
           ],
           group: 'layout',
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -445,7 +445,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.testimonials: WebsiteBlockDefinition(
+    WebsiteBlockType.testimonials: const WebsiteBlockDefinition(
       type: WebsiteBlockType.testimonials,
       title: 'Testimonios',
       description: 'Destaca comentarios de clientes para generar confianza.',
@@ -453,7 +453,7 @@ class WebsiteBlockRegistry {
         'title': 'Lo que dicen nuestros clientes',
         'testimonials': <Map<String, dynamic>>[],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -497,7 +497,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -505,7 +505,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.features: WebsiteBlockDefinition(
+    WebsiteBlockType.features: const WebsiteBlockDefinition(
       type: WebsiteBlockType.features,
       title: 'Características',
       description:
@@ -515,7 +515,7 @@ class WebsiteBlockRegistry {
         'layout': 'grid',
         'features': <Map<String, dynamic>>[],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título principal',
@@ -528,7 +528,7 @@ class WebsiteBlockRegistry {
           label: 'Diseño',
           type: WebsiteBlockFieldType.select,
           defaultValue: 'grid',
-          options: const [
+          options: [
             WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
             WebsiteBlockFieldOption(value: 'list', label: 'Lista'),
           ],
@@ -546,7 +546,7 @@ class WebsiteBlockRegistry {
               label: 'Ícono',
               type: WebsiteBlockFieldType.select,
               defaultValue: 'verified',
-              options: const [
+              options: [
                 WebsiteBlockFieldOption(
                     value: 'verified', label: 'Certificado'),
                 WebsiteBlockFieldOption(
@@ -575,7 +575,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -588,7 +588,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.cta: WebsiteBlockDefinition(
+    WebsiteBlockType.cta: const WebsiteBlockDefinition(
       type: WebsiteBlockType.cta,
       title: 'Llamado a la Acción',
       description: 'Invita a tus visitantes a realizar la siguiente acción.',
@@ -608,7 +608,7 @@ class WebsiteBlockRegistry {
         'overlayColor': '#000000',
         'overlayOpacity': 0.5,
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -654,7 +654,7 @@ class WebsiteBlockRegistry {
           defaultValue: 0.5,
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -667,7 +667,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.gallery: WebsiteBlockDefinition(
+    WebsiteBlockType.gallery: const WebsiteBlockDefinition(
       type: WebsiteBlockType.gallery,
       title: 'Galería',
       description:
@@ -677,7 +677,7 @@ class WebsiteBlockRegistry {
         'layout': 'grid',
         'images': <Map<String, dynamic>>[],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -688,7 +688,7 @@ class WebsiteBlockRegistry {
           label: 'Diseño',
           type: WebsiteBlockFieldType.select,
           defaultValue: 'grid',
-          options: const [
+          options: [
             WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
             WebsiteBlockFieldOption(value: 'masonry', label: 'Mosaico'),
           ],
@@ -713,7 +713,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -726,7 +726,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.contact: WebsiteBlockDefinition(
+    WebsiteBlockType.contact: const WebsiteBlockDefinition(
       type: WebsiteBlockType.contact,
       title: 'Contacto',
       description: 'Entrega información de contacto y formulario de consulta.',
@@ -736,7 +736,7 @@ class WebsiteBlockRegistry {
         'showForm': true,
         'showMap': false,
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -760,7 +760,7 @@ class WebsiteBlockRegistry {
           defaultValue: false,
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -773,7 +773,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.faq: WebsiteBlockDefinition(
+    WebsiteBlockType.faq: const WebsiteBlockDefinition(
       type: WebsiteBlockType.faq,
       title: 'Preguntas Frecuentes',
       description:
@@ -793,7 +793,7 @@ class WebsiteBlockRegistry {
           },
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título principal',
@@ -826,7 +826,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -834,7 +834,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.pricing: WebsiteBlockDefinition(
+    WebsiteBlockType.pricing: const WebsiteBlockDefinition(
       type: WebsiteBlockType.pricing,
       title: 'Planes y Precios',
       description:
@@ -866,7 +866,7 @@ class WebsiteBlockRegistry {
           },
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -906,7 +906,7 @@ class WebsiteBlockRegistry {
               key: 'features',
               label: 'Beneficios',
               type: WebsiteBlockFieldType.chips,
-              defaultValue: const <String>[],
+              defaultValue: <String>[],
             ),
             WebsiteBlockFieldSchema(
               key: 'highlighted',
@@ -917,7 +917,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -929,7 +929,7 @@ class WebsiteBlockRegistry {
     // =====================================================================
     // MODERN BLOCKS
     // =====================================================================
-    WebsiteBlockType.categoryGrid: WebsiteBlockDefinition(
+    WebsiteBlockType.categoryGrid: const WebsiteBlockDefinition(
       type: WebsiteBlockType.categoryGrid,
       title: 'Categorías',
       description:
@@ -951,7 +951,7 @@ class WebsiteBlockRegistry {
           },
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -990,7 +990,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -998,7 +998,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.videoBanner: WebsiteBlockDefinition(
+    WebsiteBlockType.videoBanner: const WebsiteBlockDefinition(
       type: WebsiteBlockType.videoBanner,
       title: 'Video Banner',
       description: 'Banner con video (web) o imagen fallback.',
@@ -1020,7 +1020,7 @@ class WebsiteBlockRegistry {
         ],
         'overlayOpacity': 0.5,
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -1078,7 +1078,7 @@ class WebsiteBlockRegistry {
           defaultValue: 0.5,
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -1101,7 +1101,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.partnersBanner: WebsiteBlockDefinition(
+    WebsiteBlockType.partnersBanner: const WebsiteBlockDefinition(
       type: WebsiteBlockType.partnersBanner,
       title: 'Partners',
       description: 'Banner de partners/sucursales con texto simple.',
@@ -1113,7 +1113,7 @@ class WebsiteBlockRegistry {
           'Servicio técnico certificado',
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -1126,7 +1126,7 @@ class WebsiteBlockRegistry {
           defaultValue: <String>[],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -1134,7 +1134,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.brandLogos: WebsiteBlockDefinition(
+    WebsiteBlockType.brandLogos: const WebsiteBlockDefinition(
       type: WebsiteBlockType.brandLogos,
       title: 'Logos de Marcas',
       description: 'Carrusel/cuadrícula de logos de marcas.',
@@ -1142,7 +1142,7 @@ class WebsiteBlockRegistry {
         'title': 'Marcas',
         'logos': <String>[],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -1155,7 +1155,7 @@ class WebsiteBlockRegistry {
           defaultValue: <String>[],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -1163,7 +1163,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.googleReviews: WebsiteBlockDefinition(
+    WebsiteBlockType.googleReviews: const WebsiteBlockDefinition(
       type: WebsiteBlockType.googleReviews,
       title: 'Google Reviews',
       description: 'Carrusel de reseñas desde Google Business Profile.',
@@ -1174,7 +1174,7 @@ class WebsiteBlockRegistry {
       },
       usesCustomEditor: true,
     ),
-    WebsiteBlockType.team: WebsiteBlockDefinition(
+    WebsiteBlockType.team: const WebsiteBlockDefinition(
       type: WebsiteBlockType.team,
       title: 'Equipo',
       description:
@@ -1198,7 +1198,7 @@ class WebsiteBlockRegistry {
           },
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -1238,12 +1238,12 @@ class WebsiteBlockRegistry {
               key: 'socialLinks',
               label: 'Redes sociales',
               type: WebsiteBlockFieldType.chips,
-              defaultValue: const <String>[],
+              defaultValue: <String>[],
             ),
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
@@ -1251,7 +1251,7 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
-    WebsiteBlockType.stats: WebsiteBlockDefinition(
+    WebsiteBlockType.stats: const WebsiteBlockDefinition(
       type: WebsiteBlockType.stats,
       title: 'Indicadores',
       description:
@@ -1273,7 +1273,7 @@ class WebsiteBlockRegistry {
           },
         ],
       },
-      fields: const [
+      fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
@@ -1302,7 +1302,7 @@ class WebsiteBlockRegistry {
               key: 'icon',
               label: 'Ícono',
               type: WebsiteBlockFieldType.select,
-              options: const [
+              options: [
                 WebsiteBlockFieldOption(
                     value: 'military_tech', label: 'Medalla'),
                 WebsiteBlockFieldOption(value: 'emoji_events', label: 'Trofeo'),
@@ -1314,7 +1314,7 @@ class WebsiteBlockRegistry {
           ],
         ),
       ],
-      controlSections: const [
+      controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',

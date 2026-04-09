@@ -860,7 +860,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                           ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<ExpenseDocumentType>(
-                            value: _documentType,
+                            initialValue: _documentType,
                             isExpanded: true,
                             decoration: InputDecoration(
                               isDense: true,
@@ -881,8 +881,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                               );
                             }).toList(),
                             onChanged: (value) {
-                              if (value != null)
+                              if (value != null) {
                                 setState(() => _documentType = value);
+                              }
                             },
                           ),
                         ],
@@ -966,7 +967,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
                           ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<PaymentMethod>(
-                            value: _selectedPaymentMethod,
+                            initialValue: _selectedPaymentMethod,
                             isExpanded: true,
                             decoration: InputDecoration(
                               isDense: true,

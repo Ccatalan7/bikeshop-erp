@@ -57,7 +57,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Map<String, _CategoryNode> _allCategoriesById = {};
   
   // Track which parent categories are expanded in the UI
-  Set<String> _expandedCategories = {};
+  final Set<String> _expandedCategories = {};
 
   final TextEditingController _filtersSearchController =
       TextEditingController();
@@ -1194,7 +1194,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             ),
             Text(
               titleText,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,

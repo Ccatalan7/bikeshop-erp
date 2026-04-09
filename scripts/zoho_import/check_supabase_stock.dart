@@ -40,7 +40,7 @@ void main() async {
     
     if (supabaseItem.isEmpty) {
       print('❌ SKU: $sku - NOT FOUND in Supabase');
-      final displayName = zohoName.length > 50 ? zohoName.substring(0, 50) + '...' : zohoName;
+      final displayName = zohoName.length > 50 ? '${zohoName.substring(0, 50)}...' : zohoName;
       print('   Zoho: $displayName (Stock: $zohoStock)');
     } else {
       final currentStock = supabaseItem['stock_quantity'] as int;
@@ -50,7 +50,7 @@ void main() async {
       print('$symbol SKU: $sku');
       print('   Current: $currentStock → New: $zohoStock (Δ $diff)');
       final name = supabaseItem['name'] as String;
-      final displayName = name.length > 50 ? name.substring(0, 50) + '...' : name;
+      final displayName = name.length > 50 ? '${name.substring(0, 50)}...' : name;
       print('   Name: $displayName');
     }
     print('');

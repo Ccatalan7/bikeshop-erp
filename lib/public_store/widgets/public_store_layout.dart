@@ -1466,7 +1466,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     );
                   }
                 },
-                activeColor: Colors.green,
+                activeThumbColor: Colors.green,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
@@ -2792,7 +2792,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<PageTemplate>(
-                    value: template,
+                    initialValue: template,
                     decoration: const InputDecoration(
                       labelText: 'Plantilla',
                       prefixIcon: Icon(Icons.layers_outlined),
@@ -3557,8 +3557,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       navItems: navItems,
       isEditMode: isEditMode,
       buildHeader: _buildHeader,
-      child: child,
       footer: footer,
+      child: child,
     );
   }
 
@@ -3583,7 +3583,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final dividerColor = Colors.white24;
+    const dividerColor = Colors.white24;
     // final iconColor = primaryColor; // Unused now, switching to white
 
     return Container(
@@ -3694,7 +3694,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ],
             ),
           ),
-          Divider(color: dividerColor),
+          const Divider(color: dividerColor),
 
           const SizedBox(height: 32),
 
@@ -4496,7 +4496,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   ),
                         ),
                         const SizedBox(height: 16),
-                        Row(
+                        const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -4506,21 +4506,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mercadopago.svg',
                               isSvg: true,
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: 12),
                             _PaymentBadge(
                               name: 'Visa',
                               imageUrl:
                                   'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/visa.svg',
                               isSvg: true,
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: 12),
                             _PaymentBadge(
                               name: 'Mastercard',
                               imageUrl:
                                   'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mastercard.svg',
                               isSvg: true,
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: 12),
                             _PaymentBadge(
                               name: 'Redcompra',
                               imageUrl:
@@ -4945,7 +4945,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isEditMode,
   }) {
     final theme = Theme.of(context);
-    final dividerColor = Colors.white24;
+    const dividerColor = Colors.white24;
 
     final mobileItems = footerNavItems
         .where((n) => n.isVisible)
@@ -4981,7 +4981,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ],
           ),
         ),
-        Divider(color: dividerColor),
+        const Divider(color: dividerColor),
         Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
@@ -5001,7 +5001,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ],
           ),
         ),
-        Divider(color: dividerColor),
+        const Divider(color: dividerColor),
       ];
     }
 
@@ -5041,7 +5041,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
         );
-        sections.add(Divider(color: dividerColor));
+        sections.add(const Divider(color: dividerColor));
       }
 
       return sections;
@@ -5065,7 +5065,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ],
         ),
       ),
-      Divider(color: dividerColor),
+      const Divider(color: dividerColor),
     ];
   }
 

@@ -275,7 +275,7 @@ class _PaymentFormState extends State<PaymentForm> {
             )
           else
             DropdownButtonFormField<PaymentMethod>(
-              value: _selectedPaymentMethod,
+              initialValue: _selectedPaymentMethod,
               decoration: const InputDecoration(labelText: 'Medio de pago'),
               items: paymentMethodService.paymentMethods
                   .map((method) => DropdownMenuItem(

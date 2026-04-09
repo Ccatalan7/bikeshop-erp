@@ -14,7 +14,7 @@ class ChartOfAccountsService extends ChangeNotifier {
   bool _isInitialized = false;
 
   void _normalizeAccountCache() {
-    final deduped = LinkedHashMap<String, Account>();
+    final deduped = <String, Account>{};
 
     for (final account in _accounts) {
       final key = (account.id != null && account.id!.isNotEmpty)

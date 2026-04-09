@@ -730,7 +730,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             label: 'Pendientes',
             value: _pendingExpenseCount == 0
                 ? '0'
-                : '${_pendingExpenseCount} · ${_currencyFormat.format(_pendingBalanceTotal)}',
+                : '$_pendingExpenseCount · ${_currencyFormat.format(_pendingBalanceTotal)}',
             icon: Icons.schedule_rounded,
             accentColor: const Color(0xFFFF8F00),
           ),
@@ -851,7 +851,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<Account>(
-                  value: _selectedAccount,
+                  initialValue: _selectedAccount,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Cuenta',
@@ -877,7 +877,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<PaymentMethod>(
-                  value: _selectedPaymentMethod,
+                  initialValue: _selectedPaymentMethod,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Pago',

@@ -150,7 +150,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
           return;
         }
         
-        throw signupError;
+        rethrow;
       }
 
       if (authResponse.user == null) {

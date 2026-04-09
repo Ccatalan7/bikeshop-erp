@@ -528,8 +528,9 @@ class VinabikeApp extends StatelessWidget {
                   _logTiming('DATA_LOAD_START');
                   await ws.loadPublicStoreDataUnified(tid);
                   _logTiming('ALL_DATA_LOADED');
-                  if (kIsWeb)
+                  if (kIsWeb) {
                     _hideLoadingScreen(); // Hide splash screen when data is ready
+                  }
                 }
               });
             }
@@ -548,8 +549,9 @@ class VinabikeApp extends StatelessWidget {
 
             // Tenant detection failed
             if (tenantProvider.hasError) {
-              if (kIsWeb)
+              if (kIsWeb) {
                 _hideLoadingScreen(); // Fail safe: hide if error occurs
+              }
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
                 home: Scaffold(

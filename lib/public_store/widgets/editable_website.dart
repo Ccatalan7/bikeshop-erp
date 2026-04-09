@@ -206,13 +206,13 @@ class _EditableWebsiteState extends State<EditableWebsite> {
     final cart = context.watch<CartProvider>();
     
     final header = Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: PublicStoreTheme.shadow,
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),

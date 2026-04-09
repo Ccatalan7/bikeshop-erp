@@ -509,13 +509,13 @@ class _PegasListPageState extends State<PegasListPage> {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'calendar',
                 child: Row(
                   children: [
-                    const Icon(Icons.calendar_month, size: 20),
-                    const SizedBox(width: 12),
-                    const Text('Ver Calendario'),
+                    Icon(Icons.calendar_month, size: 20),
+                    SizedBox(width: 12),
+                    Text('Ver Calendario'),
                   ],
                 ),
               ),
@@ -535,13 +535,13 @@ class _PegasListPageState extends State<PegasListPage> {
                 ),
               ),
               const PopupMenuDivider(),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'refresh',
                 child: Row(
                   children: [
-                    const Icon(Icons.refresh, size: 20),
-                    const SizedBox(width: 12),
-                    const Text('Actualizar'),
+                    Icon(Icons.refresh, size: 20),
+                    SizedBox(width: 12),
+                    Text('Actualizar'),
                   ],
                 ),
               ),
@@ -1687,7 +1687,7 @@ class _PegasListPageState extends State<PegasListPage> {
                               ),
                               if (job.isOverdue) ...[
                                 const SizedBox(width: 4),
-                                Text(
+                                const Text(
                                   '(ATRASADO)',
                                   style: TextStyle(
                                     fontSize: 11,
@@ -1937,8 +1937,8 @@ class _PegasListPageState extends State<PegasListPage> {
                         });
                       },
                     ),
-                    DataColumn(
-                      label: const Text('Bicicleta',
+                    const DataColumn(
+                      label: Text('Bicicleta',
                           style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     DataColumn(
@@ -2067,7 +2067,7 @@ class _PegasListPageState extends State<PegasListPage> {
                               ),
                               if (isOverdue) ...[
                                 const SizedBox(width: 4),
-                                Icon(Icons.warning,
+                                const Icon(Icons.warning,
                                     size: 16, color: Colors.red),
                               ],
                             ],

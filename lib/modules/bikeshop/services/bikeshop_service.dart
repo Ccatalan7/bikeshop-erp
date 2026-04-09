@@ -220,6 +220,53 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  Future<BikeProfile?> getBikeProfile(String bikeId) async {
+    try {
+      if (bikeId.isEmpty) return null;
+      final data = await Supabase.instance.client
+          .from('bike_profiles')
+          .select()
+          .eq('bike_id', bikeId)
+          .maybeSingle();
+
+      return data != null ? BikeProfile.fromJson(data) : null;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeProfile> upsertBikeProfile(BikeProfile profile) async {
+    try {
+      BikeProfile? existing;
+
+      if (profile.id != null && profile.id!.isNotEmpty) {
+        final existingData = await _db.selectById('bike_profiles', profile.id!);
+        existing =
+            existingData != null ? BikeProfile.fromJson(existingData) : null;
+      }
+
+      existing ??= await getBikeProfile(profile.bikeId);
+
+      if (existing != null && existing.id != null) {
+        final data = await _db.update(
+          'bike_profiles',
+          existing.id!,
+          profile
+              .copyWith(id: existing.id, createdAt: existing.createdAt)
+              .toJson(),
+        );
+        return BikeProfile.fromJson(data);
+      }
+
+      final data = await _db.insert('bike_profiles', profile.toJson());
+      return BikeProfile.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error upserting bike profile: $e');
+      rethrow;
+    }
+  }
+
   // ============================================================
   // BIKE BRAND OPERATIONS
   // ============================================================
@@ -1116,8 +1163,9 @@ class BikeshopService extends ChangeNotifier {
         return result.toString();
       }
 
-      if (kDebugMode)
+      if (kDebugMode) {
         print('⚠️ Invoice creation returned null for job: $jobId');
+      }
       return null;
     } catch (e) {
       if (kDebugMode) print('❌ Error creating invoice from job: $e');
@@ -1296,7 +1344,7 @@ class BikeshopService extends ChangeNotifier {
               // This is critical because invoice updates change job totals via DB triggers
               try {
                 final newRecord = payload.newRecord;
-                if (newRecord != null && _cachedJobs != null) {
+                if (_cachedJobs != null) {
                   final invoiceId = newRecord['id']?.toString();
                   if (invoiceId != null) {
                     final jobIndex = _cachedJobs!
@@ -1542,8 +1590,9 @@ class BikeshopService extends ChangeNotifier {
       invalidateJobsCache();
       _debouncedNotify();
       final updated = await getJobById(jobId);
-      if (updated == null)
+      if (updated == null) {
         throw Exception('Job not found after conversion: $jobId');
+      }
       return updated;
     } catch (e) {
       if (kDebugMode) print('Error converting job to service: $e');

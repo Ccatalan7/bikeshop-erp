@@ -168,7 +168,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     if (href.startsWith('#')) return 'Ancla: $href';
 
     // Check special mapping
-    final specialMap = _WebsiteLinkConfigurator._specialDestinations;
+    const specialMap = _WebsiteLinkConfigurator._specialDestinations;
     // Try exact match first
     for (final entry in specialMap.entries) {
       if (entry.key == href) return entry.value;
@@ -342,7 +342,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
     // Internal type: special
     final normalized = _normalizeInternalHref(v);
-    final specialMap = _WebsiteLinkConfigurator._specialDestinations;
+    const specialMap = _WebsiteLinkConfigurator._specialDestinations;
     final specialKey = specialMap.keys.firstWhere(
       (k) => _normalizeInternalHref(k) == normalized,
       orElse: () => '',
@@ -571,7 +571,6 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final editorTheme = isDark
         ? parentTheme.copyWith(
             scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-            dialogBackgroundColor: const Color(0xFF1E1E1E),
             dividerColor: Colors.white.withOpacity(0.1),
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF1E1E1E),
@@ -601,7 +600,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             listTileTheme: ListTileThemeData(
               iconColor: Colors.white.withOpacity(0.7),
               textColor: Colors.white,
-            ),
+            ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
         : parentTheme;
 
@@ -758,7 +757,6 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final editorTheme = isDark
         ? parentTheme.copyWith(
             scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-            dialogBackgroundColor: const Color(0xFF1E1E1E),
             dividerColor: Colors.white.withOpacity(0.1),
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF1E1E1E),
@@ -788,7 +786,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             listTileTheme: ListTileThemeData(
               iconColor: Colors.white.withOpacity(0.7),
               textColor: Colors.white,
-            ),
+            ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
         : parentTheme;
 
@@ -948,7 +946,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<WebsiteLinkEditMode>(
-                value: _mode,
+                initialValue: _mode,
                 decoration: _decoration('Tipo de enlace'),
                 items: [
                   if (widget.allowInternal)
@@ -1012,7 +1010,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<_InternalDestinationType>(
-          value: _internalType,
+          initialValue: _internalType,
           decoration: _decoration('Destino'),
           items: const [
             DropdownMenuItem(
@@ -1036,7 +1034,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         const SizedBox(height: 16),
         if (_internalType == _InternalDestinationType.special)
           DropdownButtonFormField<String>(
-            value: _selectedSpecialHref,
+            initialValue: _selectedSpecialHref,
             decoration: _decoration('Seleccionar destino'),
             items: _WebsiteLinkConfigurator._specialDestinations.entries
                 .map(
@@ -1153,7 +1151,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<_CatalogTypeFilter>(
-            value: _catalogType,
+            initialValue: _catalogType,
             decoration: _decoration('Tipo'),
             items: const [
               DropdownMenuItem(
@@ -1179,7 +1177,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String?>(
-                  value: (_catalogCategoryId != null &&
+                  initialValue: (_catalogCategoryId != null &&
                           _catalogCategoryId!.isNotEmpty)
                       ? _catalogCategoryId
                       : null,

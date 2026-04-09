@@ -27,14 +27,14 @@ class TasksTabView extends StatefulWidget {
   final List<MechanicJobItem>? externalItems;
 
   const TasksTabView({
-    Key? key,
+    super.key,
     required this.jobId,
     this.readOnly = false,
     this.onItemAdded,
     this.onItemRemoved,
     this.onAddItemPressed,
     this.externalItems,
-  }) : super(key: key);
+  });
 
   @override
   State<TasksTabView> createState() => _TasksTabViewState();
@@ -335,13 +335,13 @@ class _TasksTabViewState extends State<TasksTabView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
+          const Padding(
+            padding: EdgeInsets.all(12),
             child: Row(
               children: [
-                const Icon(Icons.task_alt, size: 20),
-                const SizedBox(width: 8),
-                const Expanded(
+                Icon(Icons.task_alt, size: 20),
+                SizedBox(width: 8),
+                Expanded(
                   child: Text(
                     'Standalone Tasks',
                     style: TextStyle(
@@ -805,7 +805,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       if (tenantId == null) throw Exception('No tenant ID');
 
       // ⚠️ CRITICAL: Verify product has ID
-      if (product.id == null || product.id!.isEmpty) {
+      if (product.id.isEmpty) {
         throw Exception('Product must have an ID to link to catalog');
       }
 

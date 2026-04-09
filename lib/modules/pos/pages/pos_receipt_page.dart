@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../models/pos_transaction.dart';
 import '../widgets/receipt_preview.dart';
 
 class POSReceiptPage extends StatefulWidget {

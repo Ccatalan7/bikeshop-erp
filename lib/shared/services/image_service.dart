@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -468,8 +467,8 @@ class ImageService {
     final uri = Uri.tryParse(imageUrl);
     if (uri == null) return null;
 
-    final publicPattern = '/storage/v1/object/public/';
-    final securePattern = '/storage/v1/object/sign/';
+    const publicPattern = '/storage/v1/object/public/';
+    const securePattern = '/storage/v1/object/sign/';
 
     final path = uri.path;
     if (path.contains(publicPattern)) {

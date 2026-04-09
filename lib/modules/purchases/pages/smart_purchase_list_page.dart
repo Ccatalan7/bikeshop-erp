@@ -412,7 +412,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     // Extract diameters (9mm, 12mm, 15mm, 33mm, 48mm, etc.)
     final diameterPattern = RegExp(r'\b(\d+)\s*mm\b');
     for (final match in diameterPattern.allMatches(nameLower)) {
-      final diameter = match.group(1)! + 'mm';
+      final diameter = '${match.group(1)!}mm';
       if (!specs['diameters']!.contains(diameter)) {
         specs['diameters']!.add(diameter);
       }
@@ -422,10 +422,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     if (nameLower.contains('presta')) specs['standards']!.add('presta');
     if (nameLower.contains('schrader')) specs['standards']!.add('schrader');
     if (nameLower.contains('auto')) specs['standards']!.add('auto');
-    if (nameLower.contains('qr') || nameLower.contains('quick'))
+    if (nameLower.contains('qr') || nameLower.contains('quick')) {
       specs['standards']!.add('qr');
-    if (nameLower.contains('thru') || nameLower.contains('eje pasante'))
+    }
+    if (nameLower.contains('thru') || nameLower.contains('eje pasante')) {
       specs['standards']!.add('thru-axle');
+    }
 
     return specs;
   }
@@ -554,11 +556,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.shopping_bag, color: Colors.green),
-            const SizedBox(width: 8),
-            const Text('Alternativas Disponibles'),
+            Icon(Icons.shopping_bag, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Alternativas Disponibles'),
           ],
         ),
         content: SizedBox(
@@ -1373,7 +1375,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
                   // Status
                   DropdownButtonFormField<String>(
-                    value: _statusFilter,
+                    initialValue: _statusFilter,
                     decoration: const InputDecoration(
                       labelText: 'Estado',
                       border: OutlineInputBorder(),
@@ -1402,7 +1404,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
                   // Supplier
                   DropdownButtonFormField<String>(
-                    value: _supplierFilter,
+                    initialValue: _supplierFilter,
                     decoration: const InputDecoration(
                       labelText: 'Proveedor',
                       border: OutlineInputBorder(),
@@ -1428,7 +1430,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
                   // Priority
                   DropdownButtonFormField<String>(
-                    value: _priorityFilter,
+                    initialValue: _priorityFilter,
                     decoration: const InputDecoration(
                       labelText: 'Prioridad',
                       border: OutlineInputBorder(),
@@ -1614,7 +1616,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final paginatedItems = _getPaginatedItems(filteredItems);
 
     debugPrint(
-        '⏱️ [LIST BUILD] Building page $_currentPage/$totalPages with ${paginatedItems.length} items (${totalItems} total)...');
+        '⏱️ [LIST BUILD] Building page $_currentPage/$totalPages with ${paginatedItems.length} items ($totalItems total)...');
 
     final widget = LayoutBuilder(
       builder: (context, constraints) {
@@ -2120,7 +2122,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               child: InkWell(
                 onTap: item.isPending
                     ? () {
-                        this.setState(() {
+                        setState(() {
                           if (isSelected) {
                             _selectedItems.remove(item.id);
                             _selectAll = false;
@@ -2724,7 +2726,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
                       final suppliers = snapshot.data!;
                       return DropdownButtonFormField<String>(
-                        value: selectedSupplierId,
+                        initialValue: selectedSupplierId,
                         decoration: const InputDecoration(
                           labelText: 'Proveedor',
                           border: OutlineInputBorder(),
@@ -3256,8 +3258,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       String? finalSupplierId = selectedSupplier;
       if (selectedSupplier == 'SELECT_OTHER') {
         finalSupplierId = await _showSupplierPicker();
-        if (finalSupplierId == null)
+        if (finalSupplierId == null) {
           return; // User cancelled supplier selection
+        }
       }
 
       debugPrint(

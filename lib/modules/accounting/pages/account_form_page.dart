@@ -446,8 +446,8 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                 decoration: InputDecoration(
                                   labelText: 'Código *',
                                   hintText: 'Ej: 1155',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.numbers),
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.numbers),
                                   helperText: widget.accountId == null
                                       ? 'Código sugerido según la clasificación. Puedes cambiarlo.'
                                       : 'Código único de la cuenta',
@@ -535,7 +535,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
 
                               // Type Dropdown
                               DropdownButtonFormField<AccountType>(
-                                value: _selectedType,
+                                initialValue: _selectedType,
                                 decoration: const InputDecoration(
                                   labelText: 'Naturaleza contable *',
                                   border: OutlineInputBorder(),
@@ -566,7 +566,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
 
                               // Category Dropdown
                               DropdownButtonFormField<AccountCategory>(
-                                value: _selectedCategory,
+                                initialValue: _selectedCategory,
                                 decoration: const InputDecoration(
                                   labelText: 'Categoría principal *',
                                   border: OutlineInputBorder(),
@@ -643,7 +643,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
 
                               // Parent Account Dropdown (optional)
                               DropdownButtonFormField<String?>(
-                                value: _selectedParentId,
+                                initialValue: _selectedParentId,
                                 decoration: const InputDecoration(
                                   labelText:
                                       'Cuenta padre (jerarquía opcional)',
@@ -668,7 +668,7 @@ class _AccountFormPageState extends State<AccountFormPage> {
                                       child: Text(
                                           '${account.code} - ${account.name}'),
                                     );
-                                  }).toList(),
+                                  }),
                                 ],
                                 onChanged: (value) {
                                   setState(() => _selectedParentId = value);

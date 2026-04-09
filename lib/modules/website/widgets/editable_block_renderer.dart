@@ -1138,7 +1138,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           }
         }
 
-        return Container(
+        return SizedBox(
           height: blockHeight,
           width: double.infinity,
           child: Stack(
@@ -2821,7 +2821,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final value = (stat['value'] ?? '').toString();
     final label = (stat['label'] ?? '').toString();
 
-    return Container(
+    return SizedBox(
       width: 200,
       child: Stack(
         children: [
@@ -3127,7 +3127,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                     : maxWidth >= 520
                         ? 2
                         : 1;
-            final gap = 16.0;
+            const gap = 16.0;
             final tileWidth =
                 cols == 1 ? maxWidth : (maxWidth - (gap * (cols - 1))) / cols;
 

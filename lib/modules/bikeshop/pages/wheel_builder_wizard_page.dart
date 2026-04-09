@@ -441,7 +441,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                     const Text('No bikes found. Add bikes in the Bikeshop module first.')
                   else
                     DropdownButtonFormField<Bike>(
-                      value: _selectedBike,
+                      initialValue: _selectedBike,
                       decoration: const InputDecoration(
                         labelText: 'Select Bike',
                         border: OutlineInputBorder(),
@@ -767,7 +767,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
           const SizedBox(height: 8),
           Text(
             _wheelSize != null
-                ? 'Showing ${_wheelSize} rims compatible with ${_spokeCount}H hubs'
+                ? 'Showing $_wheelSize rims compatible with ${_spokeCount}H hubs'
                 : 'Choose the rim for your wheel build',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: Colors.grey.shade600,
@@ -1154,7 +1154,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                   ? const Icon(Icons.check_circle, color: Colors.green)
                                   : const Icon(Icons.error, color: Colors.red),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
@@ -1196,7 +1196,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                   ? const Icon(Icons.check_circle, color: Colors.green)
                                   : const Icon(Icons.error, color: Colors.red),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),

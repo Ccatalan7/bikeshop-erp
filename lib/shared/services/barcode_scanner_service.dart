@@ -8,7 +8,7 @@ class BarcodeScannerService extends ChangeNotifier {
   final StreamController<String> _barcodeController = StreamController<String>.broadcast();
   Stream<String> get barcodeStream => _barcodeController.stream;
   
-  StringBuffer _scanBuffer = StringBuffer();
+  final StringBuffer _scanBuffer = StringBuffer();
   Timer? _scanTimer;
   DateTime? _lastKeyTime;
   

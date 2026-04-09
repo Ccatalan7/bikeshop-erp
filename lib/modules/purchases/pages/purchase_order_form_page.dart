@@ -15,7 +15,7 @@ class PurchaseOrderFormPage extends StatefulWidget {
 
 class _PurchaseOrderFormPageState extends State<PurchaseOrderFormPage> {
   final _formKey = GlobalKey<FormState>();
-  bool _isSaving = false;
+  final bool _isSaving = false;
 
   @override
   Widget build(BuildContext context) {

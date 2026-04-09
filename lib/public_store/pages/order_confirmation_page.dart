@@ -561,8 +561,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: const [
+                        const Row(
+                          children: [
                             Icon(Icons.info_outline, color: Color(0xFFF59E0B)),
                             SizedBox(width: 8),
                             Text(

@@ -2,27 +2,27 @@ part of excel;
 
 Archive _cloneArchive(
   Archive archive,
-  Map<String, ArchiveFile> _archiveFiles, {
+  Map<String, ArchiveFile> archiveFiles, {
   String? excludedFile,
 }) {
   var clone = Archive();
-  archive.files.forEach((file) {
+  for (var file in archive.files) {
     if (file.isFile) {
       if (excludedFile != null &&
           file.name.toLowerCase() == excludedFile.toLowerCase()) {
-        return;
+        continue;
       }
       ArchiveFile copy;
-      if (_archiveFiles.containsKey(file.name)) {
-        copy = _archiveFiles[file.name]!;
+      if (archiveFiles.containsKey(file.name)) {
+        copy = archiveFiles[file.name]!;
       } else {
-        var content = file.content as Uint8List;
+        var content = file.content;
         // var compress = !_noCompression.contains(file.name);
         copy = ArchiveFile(file.name, content.length, content);
         // ..compress = compress; // Removed for archive 4 compatibility
       }
       clone.addFile(copy);
     }
-  });
+  }
   return clone;
 }

@@ -61,8 +61,9 @@ class CustomerService extends ChangeNotifier {
         while (_isLoadingCustomers) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
-        if (_cachedCustomers != null && !isFilteredQuery)
+        if (_cachedCustomers != null && !isFilteredQuery) {
           return _cachedCustomers!;
+        }
       }
 
       if (!isFilteredQuery) _isLoadingCustomers = true;

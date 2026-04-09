@@ -976,8 +976,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     if (widget.editable)
                       Positioned.fill(
                         child: DragTarget<String>(
-                          onWillAccept: (data) =>
-                              data != null && data.startsWith('canvas_el:'),
+                          onWillAcceptWithDetails: (data) =>
+                              data.data.startsWith('canvas_el:'),
                           onAcceptWithDetails: (details) {
                             final payload = details.data;
                             if (!payload.startsWith('canvas_el:')) return;
@@ -985,8 +985,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
                             final ctx = _canvasKey.currentContext;
                             final box = ctx?.findRenderObject() as RenderBox?;
-                            if (box == null || !box.attached || !box.hasSize)
+                            if (box == null || !box.attached || !box.hasSize) {
                               return;
+                            }
                             final local = box.globalToLocal(details.offset);
                             _addElementAtCanvasOffset(
                                 type, local, Size(canvasW, canvasH));
@@ -994,8 +995,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
                           builder: (context, candidate, rejected) {
                             // Keep the DragTarget active without blocking normal interactions:
                             // only paint the overlay when dragging a compatible payload.
-                            if (candidate.isEmpty)
+                            if (candidate.isEmpty) {
                               return const SizedBox.expand();
+                            }
                             return Container(
                               decoration: BoxDecoration(
                                 border: Border.all(

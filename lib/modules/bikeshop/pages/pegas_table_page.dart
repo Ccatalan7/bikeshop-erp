@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -704,8 +703,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               job.status == JobStatus.entregado ||
               (job.customStatus?.code.toLowerCase() == 'entregado');
 
-          if (isDelivered && isInvoicedEffective && isPaidEffective)
+          if (isDelivered && isInvoicedEffective && isPaidEffective) {
             return false;
+          }
 
           // Also exclude finished warranties from active list
           if (isFinishedWarranty) return false;
@@ -2967,7 +2967,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Final layout container (Fixed width vs Expanded)
     if (col.maxWidth != null && col.maxWidth == col.width) {
-      return Container(
+      return SizedBox(
         key: ValueKey(col.id),
         width: col.width,
         // No padding here - it's inside headerWidget
@@ -3171,8 +3171,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     final visibleColumns = _columns.where((col) => col.visible).toList();
     final sourceDisplayIndex =
         visibleColumns.indexWhere((c) => c.id == sourceId);
-    if (sourceDisplayIndex == -1 || sourceDisplayIndex == targetDisplayIndex)
+    if (sourceDisplayIndex == -1 || sourceDisplayIndex == targetDisplayIndex) {
       return;
+    }
 
     // Get the actual column indices in _columns (not just visible)
     final sourceActualIndex = _columns.indexWhere((c) => c.id == sourceId);
@@ -4849,7 +4850,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                                 setDialogState(() {});
                                 _applyFiltersAndSort();
                               },
-                              style: ButtonStyle(
+                              style: const ButtonStyle(
                                 visualDensity: VisualDensity.compact,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
@@ -6040,7 +6041,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Check if anything changed
     if (newDiagnostic == job.diagnosticDeadline &&
-        newDelivery == job.deliveryDeadline) return;
+        newDelivery == job.deliveryDeadline) {
+      return;
+    }
 
     // Start local operation to suppress reload
     _startLocalOperation();
@@ -6068,9 +6071,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       await _bikeshopService.updateJob(updatedJob);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Plazos actualizados'),
-            duration: const Duration(seconds: 1),
+            duration: Duration(seconds: 1),
           ),
         );
       }

@@ -98,15 +98,15 @@ class _HoverZoomImageState extends State<HoverZoomImage> {
                   width: _zoomSize,
                   height: _zoomSize,
                   fit: BoxFit.cover,
-                  placeholder: (context, url) => SizedBox(
+                  placeholder: (context, url) => const SizedBox(
                     width: _zoomSize,
                     height: _zoomSize,
-                    child: const Center(child: CircularProgressIndicator()),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-                  errorWidget: (context, url, error) => SizedBox(
+                  errorWidget: (context, url, error) => const SizedBox(
                     width: _zoomSize,
                     height: _zoomSize,
-                    child: const Center(child: Icon(Icons.broken_image)),
+                    child: Center(child: Icon(Icons.broken_image)),
                   ),
                 ),
               ),

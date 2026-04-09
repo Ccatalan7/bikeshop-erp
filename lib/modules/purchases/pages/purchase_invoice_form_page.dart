@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -467,8 +466,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           }
 
           // FALLBACK: If no pre-matched product, try to match locally
-          if (matchedProduct == null) {
-            matchedProduct = _productCache.cast<Product?>().firstWhere(
+          matchedProduct ??= _productCache.cast<Product?>().firstWhere(
               (product) {
                 if (product == null) return false;
 
@@ -499,7 +497,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               },
               orElse: () => null,
             );
-          }
 
           if (matchedProduct != null) {
             debugPrint(
@@ -575,13 +572,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Show success message
     if (mounted) {
       final extractedFields = <String>[];
-      if (parsedInvoice.invoiceNumber != null)
+      if (parsedInvoice.invoiceNumber != null) {
         extractedFields.add('N° Factura');
+      }
       if (parsedInvoice.supplierName != null) extractedFields.add('Proveedor');
       if (parsedInvoice.date != null) extractedFields.add('Fecha');
       if (parsedInvoice.total != null) extractedFields.add('Total');
-      if (parsedInvoice.lineItems.isNotEmpty)
+      if (parsedInvoice.lineItems.isNotEmpty) {
         extractedFields.add('${parsedInvoice.lineItems.length} productos');
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2376,7 +2375,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           contentPadding: EdgeInsets.zero,
           leading: CircleAvatar(
             backgroundColor: _selectedSupplier == null
-                ? theme.colorScheme.surfaceVariant
+                ? theme.colorScheme.surfaceContainerHighest
                 : theme.colorScheme.primary.withOpacity(0.12),
             child: Icon(
               Icons.store,
@@ -2453,7 +2452,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           title: const Text('Tratamiento de IVA'),
           subtitle: DropdownButtonFormField<TaxTreatment>(
             isExpanded: true,
-            value: _taxTreatment,
+            initialValue: _taxTreatment,
             decoration: InputDecoration(
               isDense: true,
               contentPadding:
@@ -2692,7 +2691,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   // Table header
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(7),
                         topRight: Radius.circular(7),
@@ -2805,7 +2804,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                           ),
 
                           // Actions column
-                          SizedBox(width: _colActionsWidth),
+                          const SizedBox(width: _colActionsWidth),
                         ],
                       ),
                     ),
@@ -2892,7 +2891,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Header with Product Name and Delete Action
           Container(
             padding: const EdgeInsets.all(12),
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3674,7 +3673,7 @@ class _PurchaseLineEntry {
 
     _cachedCanEdit = canEdit;
     _cachedSmartProductField = SmartProductField(
-      key: ValueKey('product_${hashCode}'),
+      key: ValueKey('product_$hashCode'),
       initialData: ProductFieldData(
         product: product,
         productName:

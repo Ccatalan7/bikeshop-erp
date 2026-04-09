@@ -159,8 +159,6 @@ class BackupService extends ChangeNotifier {
           .eq('id', backupId)
           .single();
 
-      if (response == null) return null;
-
       return {
         'backup_name': response['backup_name'],
         'created_at': response['created_at'],

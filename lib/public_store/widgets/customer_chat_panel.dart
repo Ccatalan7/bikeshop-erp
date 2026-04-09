@@ -32,7 +32,7 @@ class _CustomerChatPanelState extends State<CustomerChatPanel> {
   bool _isLoading = true;
   bool _isSending = false;
   String? _conversationStatus;
-  Map<String, Map<String, dynamic>> _senderCache = {};
+  final Map<String, Map<String, dynamic>> _senderCache = {};
 
   @override
   void initState() {

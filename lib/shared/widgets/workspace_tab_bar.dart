@@ -199,9 +199,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
         borderRadius: BorderRadius.circular(8),
       ),
       itemBuilder: (context) => [
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Dashboard', 'route': '/dashboard'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.dashboard, size: 18),
               SizedBox(width: 12),
@@ -209,9 +209,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Productos', 'route': '/inventory/products'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.shopping_bag, size: 18),
               SizedBox(width: 12),
@@ -219,9 +219,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Ventas', 'route': '/sales/invoices'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.receipt, size: 18),
               SizedBox(width: 12),
@@ -229,9 +229,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Clientes', 'route': '/clientes'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.people, size: 18),
               SizedBox(width: 12),
@@ -239,9 +239,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Compras', 'route': '/purchases/suppliers'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.shopping_cart, size: 18),
               SizedBox(width: 12),
@@ -249,9 +249,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'POS', 'route': '/pos'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.point_of_sale, size: 18),
               SizedBox(width: 12),
@@ -259,9 +259,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Taller', 'route': '/taller/pegas'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.build, size: 18),
               SizedBox(width: 12),
@@ -269,9 +269,9 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: {'title': 'Contabilidad', 'route': '/accounting/accounts'},
-          child: const Row(
+          child: Row(
             children: [
               Icon(Icons.account_balance, size: 18),
               SizedBox(width: 12),

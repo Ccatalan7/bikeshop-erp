@@ -10,7 +10,7 @@ void main() async {
     if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) key = line.split('=')[1].trim();
   }
   
-  final jobId = '19ca1b77-f2a1-4d83-9c38-ee5ea3100835';
+  const jobId = '19ca1b77-f2a1-4d83-9c38-ee5ea3100835';
   
   final res = await Process.run('curl', [
     '-s',

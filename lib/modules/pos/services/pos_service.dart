@@ -199,8 +199,9 @@ class POSService extends ChangeNotifier {
             item.product!.productType == ProductType.product &&
                 item.product!.trackStock;
         if (requiresStock && item.product!.stockQuantity < newQuantity) {
-          if (kDebugMode)
+          if (kDebugMode) {
             print('POSService: Insufficient stock for quantity $newQuantity');
+          }
           return false;
         }
       }
@@ -320,8 +321,9 @@ class POSService extends ChangeNotifier {
     try {
       // CRITICAL: Ensure payment methods are loaded from database
       if (_paymentMethodService.paymentMethods.isEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('POSService: Loading payment methods before checkout...');
+        }
         await _paymentMethodService.loadPaymentMethods(forceRefresh: true);
       }
 
@@ -412,27 +414,31 @@ class POSService extends ChangeNotifier {
           case PaymentType.cash:
             dbPaymentMethod =
                 _paymentMethodService.getPaymentMethodByCode('cash');
-            if (kDebugMode)
+            if (kDebugMode) {
               print('POSService: Cash payment method: $dbPaymentMethod');
+            }
             break;
           case PaymentType.card:
             dbPaymentMethod =
                 _paymentMethodService.getPaymentMethodByCode('card');
-            if (kDebugMode)
+            if (kDebugMode) {
               print('POSService: Card payment method: $dbPaymentMethod');
+            }
             break;
           case PaymentType.transfer:
             dbPaymentMethod =
                 _paymentMethodService.getPaymentMethodByCode('transfer');
-            if (kDebugMode)
+            if (kDebugMode) {
               print('POSService: Transfer payment method: $dbPaymentMethod');
+            }
             break;
           case PaymentType.voucher:
             dbPaymentMethod = _paymentMethodService
                 .getPaymentMethodByCode('cash'); // fallback
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                   'POSService: Voucher (cash fallback) payment method: $dbPaymentMethod');
+            }
             break;
         }
 
@@ -504,8 +510,9 @@ class POSService extends ChangeNotifier {
 
   // Receipt operations
   Future<bool> printReceipt(POSTransaction transaction) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('POSService: Printing receipt for transaction ${transaction.id}');
+    }
 
     // TODO: Implement actual receipt printing
     // This could integrate with thermal printers, PDF generation, etc.

@@ -39,8 +39,8 @@ class AIAssistantButton extends StatelessWidget {
       onPressed: () {
         context.read<WorkspaceManager>().toggleAIPanel();
       },
-      child: const Icon(Icons.smart_toy),
       tooltip: 'Asistente IA',
+      child: const Icon(Icons.smart_toy),
     );
   }
 }

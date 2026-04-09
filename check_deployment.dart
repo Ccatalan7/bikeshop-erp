@@ -32,7 +32,9 @@ void main() async {
     
     if (columns != null) {
       print('\n📋 journal_entries columns:');
-      columns.keys.forEach((key) => print('  - $key'));
+      for (var key in columns.keys) {
+        print('  - $key');
+      }
       
       if (columns.containsKey('entry_date')) {
         print('\n✅ Column "entry_date" exists');

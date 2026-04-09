@@ -191,8 +191,9 @@ class InventoryService extends ChangeNotifier {
         while (_isLoadingProducts) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
-        if (_cachedProducts != null && !isFilteredQuery)
+        if (_cachedProducts != null && !isFilteredQuery) {
           return _cachedProducts!;
+        }
       }
 
       if (!isFilteredQuery) _isLoadingProducts = true;
@@ -1106,7 +1107,9 @@ class InventoryService extends ChangeNotifier {
           term == 'mas' ||
           term == 'las' ||
           term == 'los' ||
-          term == 'sus') return term;
+          term == 'sus') {
+        return term;
+      }
       return term.substring(0, term.length - 1);
     }
 

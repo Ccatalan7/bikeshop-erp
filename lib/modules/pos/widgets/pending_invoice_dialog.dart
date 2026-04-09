@@ -25,7 +25,7 @@ class PendingInvoiceDialog extends StatelessWidget {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Facturas Pendientes'),
+          const Text('Facturas Pendientes'),
           const SizedBox(height: 4),
           Text(
             customerName,

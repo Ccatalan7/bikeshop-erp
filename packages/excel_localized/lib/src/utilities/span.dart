@@ -7,7 +7,7 @@ class _Span extends Equatable {
   final int rowSpanEnd;
   final int columnSpanEnd;
 
-  _Span({
+  const _Span({
     required this.rowSpanStart,
     required this.columnSpanStart,
     required this.rowSpanEnd,

@@ -40,7 +40,7 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -56,7 +56,7 @@ class _DateRangeSelectorWidgetState extends State<DateRangeSelectorWidget> {
 
             // Period preset dropdown
             DropdownButtonFormField<ReportPeriod>(
-              value: _selectedPeriod,
+              initialValue: _selectedPeriod,
               decoration: const InputDecoration(
                 labelText: 'Preset',
                 border: OutlineInputBorder(),

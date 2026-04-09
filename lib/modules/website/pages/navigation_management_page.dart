@@ -87,7 +87,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                 ),
                 const SizedBox(width: 16),
               ],
-              Icon(
+              const Icon(
                 Icons.menu_book,
                 color: Colors.teal,
                 size: 32,
@@ -590,7 +590,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   bool _isLoadingSubcategories = false;
 
   // Bulk Add State
-  bool _isBulkAddMode = false;
+  final bool _isBulkAddMode = false;
   List<cat_models.Category> _bulkAvailableSubcategories = [];
 
   @override
@@ -781,7 +781,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                 ] else ...[
                   // Parent ID Selection (Recursive)
                   DropdownButtonFormField<String?>(
-                    value: _selectedParentId,
+                    initialValue: _selectedParentId,
                     isExpanded: true,
                     decoration: const InputDecoration(
                         labelText: 'Elemento Padre',
@@ -934,7 +934,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                     else ...[
                       // Root category dropdown
                       DropdownButtonFormField<String>(
-                        value: _selectedRootCategoryId,
+                        initialValue: _selectedRootCategoryId,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Categoría Principal *',
@@ -979,7 +979,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                     ),
                   ] else if (_linkType == NavLinkType.action) ...[
                     DropdownButtonFormField<String>(
-                      value: _linkValueController.text.isNotEmpty
+                      initialValue: _linkValueController.text.isNotEmpty
                           ? _linkValueController.text
                           : null,
                       decoration: const InputDecoration(
@@ -1264,7 +1264,6 @@ class _NavigationTreeItem extends StatefulWidget {
   final WebsiteNavigation item;
   final MenuLocation location;
   final int depth;
-  final bool isLast;
 
   // Callbacks
   final Function(MenuLocation, {String? parentId}) onAddSubItem;
@@ -1283,7 +1282,6 @@ class _NavigationTreeItem extends StatefulWidget {
     required this.item,
     required this.location,
     required this.depth,
-    this.isLast = false,
     required this.onAddSubItem,
     required this.onEdit,
     required this.onDelete,
@@ -1406,8 +1404,8 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
 
                 // Actions
                 if (!link.isVisible)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
                       'Oculto',
                       style: TextStyle(

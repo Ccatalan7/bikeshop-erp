@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -6738,11 +6737,11 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.white10),
           ),
-          child: Row(
+          child: const Row(
             children: [
-              const Icon(Icons.info_outline,
+              Icon(Icons.info_outline,
                   color: Color(0xFF00A09D), size: 18),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Selecciona qué categorías aparecen en la barra de navegación de la tienda.',
@@ -6784,7 +6783,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
         // Category list
         ..._rootCategories
             .map((category) => _buildCategoryTile(category))
-            .toList(),
+            ,
       ],
     );
   }
@@ -6831,7 +6830,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
         trailing: Switch(
           value: category.showOnWebsite,
           onChanged: (_) => _toggleCategory(category),
-          activeColor: const Color(0xFF00A09D),
+          activeThumbColor: const Color(0xFF00A09D),
           activeTrackColor: const Color(0xFF00A09D).withValues(alpha: 0.3),
           inactiveThumbColor: Colors.white38,
           inactiveTrackColor: Colors.white12,
@@ -7774,7 +7773,7 @@ class _EditorToggle extends StatelessWidget {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeColor: Colors.white,
+          activeThumbColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -9046,7 +9045,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
               value: widget.data['showCta'] != false,
               onChanged: (v) => _updateField('showCta', v),
               // ON state: bright teal color (highlighted)
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               // OFF state: dim/dark (muted)
               inactiveThumbColor: Colors.grey.shade400,
@@ -10571,7 +10570,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           value: value,
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
-          activeColor: Colors.white,
+          activeThumbColor: Colors.white,
           activeTrackColor: const Color(0xFF00A09D),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
@@ -11879,10 +11878,10 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
+                              const Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
+                                  children: [
                                     Text(
                                       'Es sección (título)',
                                       style: TextStyle(
@@ -11912,7 +11911,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                     linkValueController.text = '';
                                   }
                                 }),
-                                activeColor: Colors.white,
+                                activeThumbColor: Colors.white,
                                 activeTrackColor: const Color(0xFF00A09D),
                                 inactiveThumbColor: Colors.grey.shade400,
                                 inactiveTrackColor: Colors.grey.shade700,
@@ -13402,7 +13401,7 @@ class _FullPaddingControl extends StatelessWidget {
             Switch(
               value: linked,
               onChanged: onLinkedChanged,
-              activeColor: Colors.white,
+              activeThumbColor: Colors.white,
               activeTrackColor: const Color(0xFF00A09D),
               inactiveThumbColor: Colors.grey.shade400,
               inactiveTrackColor: Colors.grey.shade700,

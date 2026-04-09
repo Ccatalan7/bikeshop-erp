@@ -2051,7 +2051,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 isMe
                     ? 'Esperando confirmación del cliente.'
                     : 'Por favor revisa y confirma para proceder.',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   color: Colors.black54, // Always dark grey
                 ),

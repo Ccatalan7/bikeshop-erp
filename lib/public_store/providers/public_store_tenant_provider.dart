@@ -83,8 +83,4 @@ class PublicStoreTenantProvider extends ChangeNotifier {
     await detectTenant();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 }

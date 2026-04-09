@@ -84,19 +84,25 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   List<Product> get _filteredProducts {
     return _allFetchedProducts.where((p) {
-      if (!_filterShowProducts && p.productType == ProductType.product)
+      if (!_filterShowProducts && p.productType == ProductType.product) {
         return false;
-      if (!_filterShowServices && p.productType == ProductType.service)
+      }
+      if (!_filterShowServices && p.productType == ProductType.service) {
         return false;
+      }
       if (_filterInStockOnly &&
           p.productType != ProductType.service &&
-          p.stockQuantity <= 0) return false;
+          p.stockQuantity <= 0) {
+        return false;
+      }
 
-      if (_selectedCategory != null && p.categoryName != _selectedCategory)
+      if (_selectedCategory != null && p.categoryName != _selectedCategory) {
         return false;
+      }
       if (_selectedBrand != null && p.brand != _selectedBrand) return false;
-      if (_selectedSupplier != null && p.supplierName != _selectedSupplier)
+      if (_selectedSupplier != null && p.supplierName != _selectedSupplier) {
         return false;
+      }
 
       return true;
     }).toList();
@@ -193,7 +199,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
     if (_filteredProducts.isEmpty &&
         _allFetchedProducts.isEmpty &&
-        !widget.allowCustomItems) return;
+        !widget.allowCustomItems) {
+      return;
+    }
 
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
@@ -431,8 +439,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       onPopoverClose: () {
                         setState(() => _isSearchDialogOpen = false);
                         Future.delayed(const Duration(milliseconds: 80), () {
-                          if (mounted && _overlayEntry != null)
+                          if (mounted && _overlayEntry != null) {
                             _focusNode.requestFocus();
+                          }
                         });
                       },
                       onMouseEnterPanel: () =>
@@ -459,8 +468,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       onPopoverClose: () {
                         setState(() => _isSearchDialogOpen = false);
                         Future.delayed(const Duration(milliseconds: 80), () {
-                          if (mounted && _overlayEntry != null)
+                          if (mounted && _overlayEntry != null) {
                             _focusNode.requestFocus();
+                          }
                         });
                       },
                       onMouseEnterPanel: () =>
@@ -487,8 +497,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       onPopoverClose: () {
                         setState(() => _isSearchDialogOpen = false);
                         Future.delayed(const Duration(milliseconds: 80), () {
-                          if (mounted && _overlayEntry != null)
+                          if (mounted && _overlayEntry != null) {
                             _focusNode.requestFocus();
+                          }
                         });
                       },
                       onMouseEnterPanel: () =>

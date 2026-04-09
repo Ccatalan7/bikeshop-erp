@@ -39,7 +39,7 @@ class SmartPurchaseListService extends ChangeNotifier {
   Timer? _debounceTimer;
 
   // Pause realtime updates during bulk operations
-  bool _pauseRealtime = false;
+  final bool _pauseRealtime = false;
 
   // Cache for enriched product data (product_id → product details)
   final Map<String, Map<String, dynamic>> _productCache = {};
@@ -124,7 +124,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       debugPrint('   ├─ Tenant ID fetch: ${tenantDuration}ms');
       debugPrint('   ├─ Database query: ${dataDuration}ms');
       debugPrint('   ├─ Realtime setup: ${listenerDuration}ms');
-      debugPrint('   └─ Last sync: ${_lastFullSync}');
+      debugPrint('   └─ Last sync: $_lastFullSync');
     } catch (e) {
       _error = 'Error initializing service: $e';
       debugPrint('❌ $_error');
@@ -175,8 +175,9 @@ class SmartPurchaseListService extends ChangeNotifier {
     _items = items
         .where((json) {
           final products = json['products'];
-          if (products == null)
+          if (products == null) {
             return true; // Keep if no product info (shouldn't happen)
+          }
           final trackStock = products['track_stock'] as bool? ?? true;
           final productType = products['product_type'] as String? ?? 'product';
           return trackStock && productType != 'service';

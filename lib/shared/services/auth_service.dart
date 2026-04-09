@@ -87,7 +87,7 @@ class AuthService extends ChangeNotifier {
 
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
-      throw AuthException(
+      throw const AuthException(
           'No se pudo obtener el usuario después del inicio de sesión.');
     }
     return user;
@@ -103,7 +103,7 @@ class AuthService extends ChangeNotifier {
     _syncAuth(response.session);
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
-      throw AuthException(
+      throw const AuthException(
           'Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
     }
     return user;
@@ -242,7 +242,7 @@ class AuthService extends ChangeNotifier {
     );
 
     if (response.user == null) {
-      throw AuthException('Error al actualizar la contraseña.');
+      throw const AuthException('Error al actualizar la contraseña.');
     }
 
     _syncAuth(_client.auth.currentSession);

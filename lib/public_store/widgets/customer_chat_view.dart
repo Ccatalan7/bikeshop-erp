@@ -414,7 +414,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(
+        constraints: const BoxConstraints(
           maxWidth: 400, // Fixed reasonable width, not percentage based
         ),
         decoration: BoxDecoration(
@@ -558,8 +558,9 @@ class _CustomerChatViewState extends State<CustomerChatView> {
           return; // Stop here, don't execute below logic
         } else if (response == 'accepted' && actionType == 'pay_now') {
           // Navigate to payment page
-          if (mounted)
+          if (mounted) {
             context.push('/tienda/cuenta/facturas/$targetId?action=pay');
+          }
         }
       }
 

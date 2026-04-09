@@ -215,11 +215,13 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                         if (d == today) return 1; // Hoy
                         if (d == tomorrow) return 2; // Mañana
                         if (d.isBefore(endOfWeek)) return 3; // Esta semana
-                        if (d.isBefore(endOf2Weeks))
+                        if (d.isBefore(endOf2Weeks)) {
                           return 4; // Próximas 2 semanas
+                        }
                         if (d.isBefore(endOfMonth)) return 5; // Este mes
-                        if (d.isBefore(endOf3Months))
+                        if (d.isBefore(endOf3Months)) {
                           return 7; // Próximos 3 meses
+                        }
                         return 8; // Más adelante
                       }
 
@@ -618,7 +620,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
       letterSpacing: 0.6,
     );
 
-    InputDecoration _fieldDecoration({String? hint}) => InputDecoration(
+    InputDecoration fieldDecoration({String? hint}) => InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(
               fontSize: 12,
@@ -731,7 +733,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                   controller: _editTitleCtrl,
                   style: TextStyle(
                       fontSize: 13, color: theme.colorScheme.onSurface),
-                  decoration: _fieldDecoration(),
+                  decoration: fieldDecoration(),
                 ),
                 const SizedBox(height: 12),
                 Text('DESCRIPCIÓN', style: labelStyle),
@@ -741,7 +743,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                   maxLines: 3,
                   style: TextStyle(
                       fontSize: 13, color: theme.colorScheme.onSurface),
-                  decoration: _fieldDecoration(hint: 'Agregar descripción...'),
+                  decoration: fieldDecoration(hint: 'Agregar descripción...'),
                 ),
                 const SizedBox(height: 12),
                 // Priority + Status
@@ -754,12 +756,12 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           Text('PRIORIDAD', style: labelStyle),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<TaskPriority>(
-                            value: _editPriority,
+                            initialValue: _editPriority,
                             isDense: true,
                             style: TextStyle(
                                 fontSize: 12,
                                 color: theme.colorScheme.onSurface),
-                            decoration: _fieldDecoration(),
+                            decoration: fieldDecoration(),
                             items: TaskPriority.values
                                 .map((p) => DropdownMenuItem(
                                       value: p,
@@ -794,12 +796,12 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           Text('ESTADO', style: labelStyle),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<TaskStatus>(
-                            value: _editStatus,
+                            initialValue: _editStatus,
                             isDense: true,
                             style: TextStyle(
                                 fontSize: 12,
                                 color: theme.colorScheme.onSurface),
-                            decoration: _fieldDecoration(),
+                            decoration: fieldDecoration(),
                             items: TaskStatus.values
                                 .map((s) => DropdownMenuItem(
                                       value: s,
@@ -825,8 +827,9 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2030),
                     );
-                    if (picked != null && mounted)
+                    if (picked != null && mounted) {
                       setState(() => _editDueDate = picked);
+                    }
                   },
                   child: Container(
                     padding:

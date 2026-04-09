@@ -217,7 +217,7 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                           labelText: 'Length',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterLength,
+                        initialValue: _filterLength,
                         items: [
                           const DropdownMenuItem(value: null, child: Text('All')),
                           ...List.generate(20, (i) => 284 + i * 2).map(
@@ -242,7 +242,7 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                           labelText: 'Gauge',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterGauge,
+                        initialValue: _filterGauge,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 2.0, child: Text('2.0mm')),
@@ -265,7 +265,7 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                           labelText: 'Butted',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterButted,
+                        initialValue: _filterButted,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: true, child: Text('Butted')),
@@ -506,7 +506,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 labelText: 'Gauge *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _gauge,
+                              initialValue: _gauge,
                               items: const [
                                 DropdownMenuItem(value: 2.0, child: Text('2.0mm (15g)')),
                                 DropdownMenuItem(value: 1.8, child: Text('1.8mm (16g)')),
@@ -543,7 +543,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 labelText: 'Material *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _material,
+                              initialValue: _material,
                               items: const [
                                 DropdownMenuItem(value: 'stainless_steel', child: Text('Stainless Steel')),
                                 DropdownMenuItem(value: 'brass', child: Text('Brass')),
@@ -562,7 +562,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 labelText: 'Head Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _headType,
+                              initialValue: _headType,
                               items: const [
                                 DropdownMenuItem(value: 'j_bend', child: Text('J-Bend')),
                                 DropdownMenuItem(value: 'straight_pull', child: Text('Straight Pull')),
@@ -585,7 +585,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 labelText: 'Finish',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _finish,
+                              initialValue: _finish,
                               items: const [
                                 DropdownMenuItem(value: 'plain', child: Text('Plain')),
                                 DropdownMenuItem(value: 'black', child: Text('Black')),

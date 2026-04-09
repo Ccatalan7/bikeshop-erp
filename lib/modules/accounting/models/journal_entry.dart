@@ -119,7 +119,7 @@ class JournalEntry {
 
   @override
   String toString() {
-    return 'JournalEntry(${entryNumber}: ${description})';
+    return 'JournalEntry($entryNumber: $description)';
   }
 }
 
@@ -207,7 +207,7 @@ class JournalLine {
 
   @override
   String toString() {
-    return 'JournalLine(${accountCode}: ${isDebit ? 'Dr' : 'Cr'} \$${amount.toStringAsFixed(2)})';
+    return 'JournalLine($accountCode: ${isDebit ? 'Dr' : 'Cr'} \$${amount.toStringAsFixed(2)})';
   }
 }
 

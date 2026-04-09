@@ -164,7 +164,7 @@ class ScannerService extends ChangeNotifier {
       debugPrint('📤 Sending scan to $channelName: $barcode');
 
       final channel = _supabase!.channel(channelName);
-      await channel.subscribe();
+      channel.subscribe();
 
       await channel.sendBroadcastMessage(
         event: 'scan',

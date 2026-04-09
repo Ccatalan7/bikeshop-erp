@@ -185,8 +185,9 @@ class DatabaseService extends ChangeNotifier {
 
       final data = await query;
       if (data == null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('⚠️ DB returned null during pagination for $table');
+        }
         break;
       }
 

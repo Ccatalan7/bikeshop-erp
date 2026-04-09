@@ -245,7 +245,7 @@ class _AccountingDashboardSectionState
           .toList();
     }
 
-    final topCount = _maxBreakdownSlices - 1;
+    const topCount = _maxBreakdownSlices - 1;
     final topItems = sorted.take(topCount).toList();
     final otherAmount = sorted
         .skip(topCount)
@@ -525,7 +525,7 @@ class _DashboardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.surfaceVariant;
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 1000;
@@ -700,7 +700,7 @@ class _DashboardContent extends StatelessWidget {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1080;
         // Same fixed height for both cards to keep them aligned
-        final chartHeight = 400.0;
+        const chartHeight = 400.0;
 
         final charts = isWide
             ? IntrinsicHeight(
@@ -2292,7 +2292,7 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
   }
 
   Widget _buildDetailView(BuildContext context) {
-    final color = const Color(0xFFFF5252); // Expense color
+    const color = Color(0xFFFF5252); // Expense color
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

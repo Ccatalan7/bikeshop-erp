@@ -31,13 +31,13 @@ class _WorkspaceDemoContent extends StatelessWidget {
         title: const Text('Workspace Demo'),
         backgroundColor: theme.colorScheme.surface,
       ),
-      body: Column(
+      body: const Column(
         children: [
           // Tab bar at the top (includes dropdown menu)
-          const WorkspaceTabBar(),
+          WorkspaceTabBar(),
           
           // Workspace container (IndexedStack with all workspaces)
-          const Expanded(
+          Expanded(
             child: WorkspaceContainer(),
           ),
         ],

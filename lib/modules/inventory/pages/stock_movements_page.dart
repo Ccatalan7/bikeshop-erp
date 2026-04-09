@@ -50,7 +50,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   double _colRefWidth = 140.0;
   double _colIniWidth = 50.0;
   double _colMovWidth = 50.0;
-  double _colFinWidth = 50.0;
+  final double _colFinWidth = 50.0;
 
   static const double _minColWidth = 40.0;
 
@@ -114,7 +114,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: Colors.blue,
               onPrimary: Colors.white,
               surface: Colors.white,
@@ -1558,11 +1558,11 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               );
-            }).toList(),
+            }),
 
           // TOTALS
           const SizedBox(height: 16),
@@ -2155,7 +2155,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           // Type filter
           Expanded(
             child: DropdownButtonFormField<String>(
-              value: _movementTypeFilter,
+              initialValue: _movementTypeFilter,
               decoration: const InputDecoration(
                 labelText: 'Tipo de movimiento',
                 isDense: true,

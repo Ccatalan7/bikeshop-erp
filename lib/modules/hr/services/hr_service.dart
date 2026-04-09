@@ -187,8 +187,9 @@ class HRService extends ChangeNotifier {
       while (_isLoadingEmployees) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
-      if (_employeesCache.isNotEmpty && !isFilteredQuery)
+      if (_employeesCache.isNotEmpty && !isFilteredQuery) {
         return _employeesCache;
+      }
     }
 
     try {

@@ -21,10 +21,10 @@ class IntegrationsPage extends StatefulWidget {
 }
 
 class _IntegrationsPageState extends State<IntegrationsPage> {
-  bool _isLoading = false;
+  final bool _isLoading = false;
   final String _subdomain = 'vinabike';
   final String _gaTrackingId = 'G-FR5Q37BW43';
-  int _gmcProductCount = 0;
+  final int _gmcProductCount = 0;
 
   bool _attemptedProviderTokenEnsure = false;
 

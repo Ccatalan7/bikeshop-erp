@@ -12,8 +12,8 @@ void main(List<String> args) {
   var sheet = excel['Sheet1'];
 
   sheet.appendRow([
-    IntCellValue(8),
-    DoubleCellValue(999.62221),
+    const IntCellValue(8),
+    const DoubleCellValue(999.62221),
     DateCellValue(
       year: DateTime.now().year,
       month: DateTime.now().month,

@@ -418,7 +418,7 @@ class _ProductImportPageState extends State<ProductImportPage> {
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String?>(
-                            value: selection,
+                            initialValue: selection,
                             items: _buildDropdownItems(header),
                             onChanged: (value) => _updateMapping(header, value),
                             decoration: const InputDecoration(
@@ -459,7 +459,7 @@ class _ProductImportPageState extends State<ProductImportPage> {
                         Expanded(
                           flex: 3,
                           child: DropdownButtonFormField<String?>(
-                            value: selection,
+                            initialValue: selection,
                             items: _buildDropdownItems(header),
                             onChanged: (value) => _updateMapping(header, value),
                             decoration: const InputDecoration(
@@ -882,10 +882,10 @@ class _ProductImportPageState extends State<ProductImportPage> {
     // 1. Show import options dialog
     final options = await showDialog<ImportOptions>(
       context: context,
-      builder: (context) => SmartImportOptionsDialog(
-        availableMatchFields: const ['sku', 'name', 'barcode'],
+      builder: (context) => const SmartImportOptionsDialog(
+        availableMatchFields: ['sku', 'name', 'barcode'],
         defaultMatchField: 'sku',
-        availableUpdateFields: const [
+        availableUpdateFields: [
           'name',
           'description',
           'price',

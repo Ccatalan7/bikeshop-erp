@@ -118,16 +118,16 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
                 SizedBox(
                   width: 200,
                   child: DropdownButtonFormField<ReportPeriod>(
-                    value: _selectedPeriod,
+                    initialValue: _selectedPeriod,
                     isDense: true,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Período',
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
-                      prefixIcon: const Icon(Icons.calendar_today, size: 18),
+                      prefixIcon: Icon(Icons.calendar_today, size: 18),
                     ),
                     items: ReportPeriod.values.map((period) {
                       return DropdownMenuItem(

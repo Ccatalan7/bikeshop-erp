@@ -29,7 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
                       // Darker blue gradient for better white text contrast
                       Color(0xFF1565C0), // Blue 800
@@ -53,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Sistema completo de gestión para tu tienda de bicicletas',
                           style: TextStyle(

@@ -126,10 +126,12 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         () => _ExpensePaymentSummary(),
       );
       summary.totalPaid += amount;
-      if (methodId != null && methodId.isNotEmpty)
+      if (methodId != null && methodId.isNotEmpty) {
         summary.methodIds.add(methodId);
-      if (accountId != null && accountId.isNotEmpty)
+      }
+      if (accountId != null && accountId.isNotEmpty) {
         summary.accountIds.add(accountId);
+      }
     }
 
     return summaries;
@@ -741,7 +743,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     required ValueChanged<T?> onChanged,
   }) {
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       items: items,
       onChanged: onChanged,
       isExpanded: true,

@@ -181,7 +181,7 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        Icon(Icons.star, color: Colors.amber),
+                        const Icon(Icons.star, color: Colors.amber),
                         const SizedBox(width: 8),
                         Text(
                           'Destacados Actuales',
@@ -517,10 +517,10 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
           ],
         ),
         trailing: isFeatured
-            ? Chip(
-                label: const Text('Destacado'),
+            ? const Chip(
+                label: Text('Destacado'),
                 backgroundColor: Colors.amber,
-                avatar: const Icon(Icons.star, size: 16),
+                avatar: Icon(Icons.star, size: 16),
               )
             : maxReached
                 ? Chip(

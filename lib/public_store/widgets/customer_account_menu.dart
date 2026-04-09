@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 import 'public_store_layout.dart';
@@ -125,10 +124,10 @@ class CustomerAccountMenu extends StatelessWidget {
         ],
       ),
       itemBuilder: (context) => [
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'account',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.dashboard_outlined, size: 18),
               SizedBox(width: 12),
               Text('Panel de cuenta'),
@@ -136,40 +135,40 @@ class CustomerAccountMenu extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'orders',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.shopping_bag_outlined, size: 18),
               SizedBox(width: 12),
               Text('Mis pedidos'),
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'addresses',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.location_on_outlined, size: 18),
               SizedBox(width: 12),
               Text('Mis direcciones'),
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'profile',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.person_outline, size: 18),
               SizedBox(width: 12),
               Text('Mi perfil'),
             ],
           ),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'chat',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.chat_bubble_outline, size: 18),
               SizedBox(width: 12),
               Text('Ayuda y Soporte'),
@@ -177,10 +176,10 @@ class CustomerAccountMenu extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'logout',
           child: Row(
-            children: const [
+            children: [
               Icon(Icons.logout, size: 18, color: Colors.red),
               SizedBox(width: 12),
               Text('Cerrar sesión', style: TextStyle(color: Colors.red)),

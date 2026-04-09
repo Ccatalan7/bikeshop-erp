@@ -84,7 +84,7 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _matchField,
+                initialValue: _matchField,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Campo',
@@ -260,7 +260,7 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ExpansionTile(
-                        title: Text('${conflict.matchValue}'),
+                        title: Text(conflict.matchValue),
                         subtitle: Text(
                           '${conflict.changedFields.length} campo(s) modificado(s)',
                           style: const TextStyle(fontSize: 12),

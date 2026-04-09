@@ -386,8 +386,8 @@ class _PayrollListPageState extends State<PayrollListPage> {
                   ],
                   // PAID: Cancel Payment button
                   if (isPaid) ...[
-                    Chip(
-                      label: const Text('Pagado',
+                    const Chip(
+                      label: Text('Pagado',
                           style: TextStyle(color: Colors.white, fontSize: 12)),
                       backgroundColor: Colors.green,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -422,26 +422,26 @@ class _PayrollListPageState extends State<PayrollListPage> {
         children: [
           const Divider(height: 1),
           // Table header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                     flex: 3,
                     child: Text('Empleado',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12))),
-                const Expanded(
+                Expanded(
                     child: Text('Horas',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.right)),
-                const Expanded(
+                Expanded(
                     child: Text('Tarifa',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.right)),
-                const Expanded(
+                Expanded(
                     child: Text('Total',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12),

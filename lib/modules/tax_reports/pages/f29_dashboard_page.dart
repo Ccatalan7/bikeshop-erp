@@ -255,7 +255,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       DropdownButtonFormField<int>(
-                        value: _selectedMonth,
+                        initialValue: _selectedMonth,
                         decoration: const InputDecoration(
                           labelText: 'Mes',
                           border: OutlineInputBorder(),
@@ -275,7 +275,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
-                        value: _selectedYear,
+                        initialValue: _selectedYear,
                         decoration: const InputDecoration(
                           labelText: 'Año',
                           border: OutlineInputBorder(),
@@ -312,7 +312,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<int>(
-                        value: _selectedMonth,
+                        initialValue: _selectedMonth,
                         decoration: const InputDecoration(
                           labelText: 'Mes',
                           border: OutlineInputBorder(),
@@ -334,7 +334,7 @@ class _F29DashboardPageState extends State<F29DashboardPage> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: DropdownButtonFormField<int>(
-                        value: _selectedYear,
+                        initialValue: _selectedYear,
                         decoration: const InputDecoration(
                           labelText: 'Año',
                           border: OutlineInputBorder(),

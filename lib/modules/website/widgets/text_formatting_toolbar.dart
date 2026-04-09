@@ -927,18 +927,18 @@ class _HexColorInputState extends State<_HexColorInput> {
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         hintText: '#FFFFFF',
-        hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide(color: Colors.white24),
+          borderSide: const BorderSide(color: Colors.white24),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide(color: Colors.white24),
+          borderSide: const BorderSide(color: Colors.white24),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide(color: Colors.blue),
+          borderSide: const BorderSide(color: Colors.blue),
         ),
       ),
       onSubmitted: (value) {

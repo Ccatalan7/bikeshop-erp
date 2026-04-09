@@ -269,7 +269,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<EmployeeStatus?>(
-                              value: _selectedStatus,
+                              initialValue: _selectedStatus,
                               decoration: const InputDecoration(
                                 labelText: 'Estado',
                                 isDense: true,
@@ -309,7 +309,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String?>(
-                              value: _selectedDepartmentId,
+                              initialValue: _selectedDepartmentId,
                               decoration: const InputDecoration(
                                 labelText: 'Depto',
                                 isDense: true,
@@ -360,7 +360,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                     // Status filter
                     Flexible(
                       child: DropdownButtonFormField<EmployeeStatus?>(
-                        value: _selectedStatus,
+                        initialValue: _selectedStatus,
                         decoration: const InputDecoration(
                           labelText: 'Estado',
                           isDense: true,
@@ -401,7 +401,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                     // Department filter
                     Flexible(
                       child: DropdownButtonFormField<String?>(
-                        value: _selectedDepartmentId,
+                        initialValue: _selectedDepartmentId,
                         decoration: const InputDecoration(
                           labelText: 'Departamento',
                           isDense: true,
@@ -1065,7 +1065,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                           final roleOptions = snapshot.data!;
 
                           return DropdownButtonFormField<String?>(
-                            value: _selectedSystemRole,
+                            initialValue: _selectedSystemRole,
                             decoration: const InputDecoration(
                               labelText: 'Rol del Sistema',
                               helperText:
@@ -1110,7 +1110,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                         : null,
                                   )
                                 : DropdownButtonFormField<String>(
-                                    value: _suggestedTitles
+                                    initialValue: _suggestedTitles
                                             .contains(_jobTitleController.text)
                                         ? _jobTitleController.text
                                         : null,
@@ -1153,7 +1153,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: DropdownButtonFormField<String?>(
-                              value: _departmentId,
+                              initialValue: _departmentId,
                               decoration: const InputDecoration(
                                 labelText: 'Departamento',
                                 border: OutlineInputBorder(),
@@ -1180,7 +1180,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<EmploymentType>(
-                              value: _employmentType,
+                              initialValue: _employmentType,
                               decoration: const InputDecoration(
                                 labelText: 'Tipo de Empleo',
                                 border: OutlineInputBorder(),
@@ -1211,7 +1211,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: DropdownButtonFormField<EmployeeStatus>(
-                              value: _status,
+                              initialValue: _status,
                               decoration: const InputDecoration(
                                 labelText: 'Estado',
                                 border: OutlineInputBorder(),

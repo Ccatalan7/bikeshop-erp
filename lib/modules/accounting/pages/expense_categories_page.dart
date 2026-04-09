@@ -139,7 +139,7 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
-                      value: selectedAccountId,
+                      initialValue: selectedAccountId,
                       decoration: const InputDecoration(
                         labelText: 'Cuenta por defecto (opcional)',
                         border: OutlineInputBorder(),

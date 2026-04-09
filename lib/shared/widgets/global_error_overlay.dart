@@ -5,15 +5,14 @@ import '../services/error_reporting_service.dart';
 /// A widget that overlays any uncaught error at the top of the app.
 class GlobalErrorOverlay extends StatelessWidget {
   final GlobalErrorNotifier notifier;
-  const GlobalErrorOverlay({Key? key, required this.notifier})
-      : super(key: key);
+  const GlobalErrorOverlay({super.key, required this.notifier});
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: notifier,
       builder: (context, _) {
-        if (notifier.error == null) return SizedBox.shrink();
+        if (notifier.error == null) return const SizedBox.shrink();
         return Material(
           color: Colors.transparent,
           child: Container(
@@ -24,21 +23,21 @@ class GlobalErrorOverlay extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('GLOBAL ERROR',
+                  const Text('GLOBAL ERROR',
                       style: TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text(notifier.error!, style: TextStyle(color: Colors.white)),
+                  Text(notifier.error!, style: const TextStyle(color: Colors.white)),
                   if (notifier.stackTrace != null) ...[
                     const SizedBox(height: 8),
                     Text(notifier.stackTrace!,
-                        style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        style: const TextStyle(color: Colors.white70, fontSize: 12)),
                   ],
                   Align(
                     alignment: Alignment.topRight,
                     child: TextButton(
                       onPressed: notifier.clear,
-                      child: Text('Dismiss',
+                      child: const Text('Dismiss',
                           style: TextStyle(color: Colors.white)),
                     ),
                   ),

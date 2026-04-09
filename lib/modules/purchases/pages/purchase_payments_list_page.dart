@@ -151,7 +151,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.background,
+                    fillColor: Theme.of(context).colorScheme.surface,
                   ),
                 ),
                 const SizedBox(height: 12),

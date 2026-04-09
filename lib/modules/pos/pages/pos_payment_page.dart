@@ -277,7 +277,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                       )
                     else
                       DropdownButtonFormField<shared_customer.Customer?>(
-                        value: _selectedCustomer,
+                        initialValue: _selectedCustomer,
                         decoration: const InputDecoration(
                           labelText: 'Seleccionar Cliente (Opcional)',
                           border: OutlineInputBorder(),
@@ -298,7 +298,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
                               value: customer,
                               child: Text('${customer.name} - $identifier'),
                             );
-                          }).toList(),
+                          }),
                         ],
                         onChanged: (customer) {
                           setState(() {

@@ -1492,8 +1492,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   // Placeholder for Tasks Tab - we need to import TasksTabView
   Widget _buildTasksTab(MechanicJob job) {
-    if (job.id == null)
+    if (job.id == null) {
       return const Center(child: Text('Error: Job ID is null'));
+    }
 
     // If we are viewing the selected job, pass the already loaded items to avoid re-fetching
     // This also ensures that when an invoice is saved (and _selectedJobItems refreshed), the tasks tab updates immediately.

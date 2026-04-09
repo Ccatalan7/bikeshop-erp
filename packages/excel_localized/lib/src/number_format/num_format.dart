@@ -127,7 +127,7 @@ sealed class NumFormat {
     required String formatCode,
   }) {
     if (formatCode == 'General') {
-      return CustomNumericNumFormat(formatCode: 'General');
+      return const CustomNumericNumFormat(formatCode: 'General');
     }
 
     //const dateParts = ['m', 'mm', 'mmm', 'mmmm', 'mmmmm', 'd', 'dd', 'ddd', 'yy', 'yyyy'];
@@ -250,6 +250,7 @@ sealed class StandardNumFormat implements NumFormat {
 }
 
 sealed class CustomNumFormat implements NumFormat {
+  @override
   String get formatCode;
 }
 
@@ -406,6 +407,7 @@ sealed class DateTimeNumFormat extends NumFormat {
 
 class StandardDateTimeNumFormat extends DateTimeNumFormat
     implements StandardNumFormat {
+  @override
   final int numFmtId;
 
   const StandardDateTimeNumFormat._({
@@ -504,6 +506,7 @@ sealed class TimeNumFormat extends NumFormat {
 }
 
 class StandardTimeNumFormat extends TimeNumFormat implements StandardNumFormat {
+  @override
   final int numFmtId;
 
   const StandardTimeNumFormat._({

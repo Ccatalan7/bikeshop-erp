@@ -219,7 +219,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                           labelText: 'Hub Type',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterHubType,
+                        initialValue: _filterHubType,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 'front', child: Text('Front')),
@@ -240,7 +240,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                           labelText: 'Brake Type',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterBrakeType,
+                        initialValue: _filterBrakeType,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 'rim', child: Text('Rim')),
@@ -262,7 +262,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                           labelText: 'Spoke Holes',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterSpokeHoles,
+                        initialValue: _filterSpokeHoles,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 24, child: Text('24H')),
@@ -492,7 +492,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Hub Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _hubType,
+                              initialValue: _hubType,
                               items: const [
                                 DropdownMenuItem(value: 'front', child: Text('Front')),
                                 DropdownMenuItem(value: 'rear', child: Text('Rear')),
@@ -535,7 +535,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Spoke Holes *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _spokeHoles,
+                              initialValue: _spokeHoles,
                               items: const [
                                 DropdownMenuItem(value: 24, child: Text('24H')),
                                 DropdownMenuItem(value: 28, child: Text('28H')),
@@ -624,7 +624,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Brake Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _brakeType,
+                              initialValue: _brakeType,
                               items: const [
                                 DropdownMenuItem(value: 'rim', child: Text('Rim')),
                                 DropdownMenuItem(value: 'disc_6bolt', child: Text('Disc 6-bolt')),
@@ -642,7 +642,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Driver Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _driverType,
+                              initialValue: _driverType,
                               items: [
                                 const DropdownMenuItem(value: 'none', child: Text('None (Front)')),
                                 if (_hubType == 'rear') ...[
@@ -665,7 +665,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                           labelText: 'Axle Type *',
                           border: OutlineInputBorder(),
                         ),
-                        value: _axleType,
+                        initialValue: _axleType,
                         items: const [
                           DropdownMenuItem(value: 'quick_release', child: Text('Quick Release')),
                           DropdownMenuItem(value: 'thru_axle_12mm', child: Text('Thru-axle 12mm')),

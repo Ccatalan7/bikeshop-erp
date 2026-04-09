@@ -41,7 +41,7 @@ class ProductTile extends StatelessWidget {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      color: theme.colorScheme.surfaceVariant,
+                      color: theme.colorScheme.surfaceContainerHighest,
                     ),
                     child: product.imageUrl != null
                         ? ClipRRect(
@@ -52,13 +52,13 @@ class ProductTile extends StatelessWidget {
                               memCacheWidth: 200,
                               memCacheHeight: 200,
                               placeholder: (context, url) => Container(
-                                color: theme.colorScheme.surfaceVariant,
+                                color: theme.colorScheme.surfaceContainerHighest,
                                 child: const Center(
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
                               errorWidget: (context, url, error) => Container(
-                                color: theme.colorScheme.surfaceVariant,
+                                color: theme.colorScheme.surfaceContainerHighest,
                                 child: Icon(
                                   isService
                                       ? Icons.design_services

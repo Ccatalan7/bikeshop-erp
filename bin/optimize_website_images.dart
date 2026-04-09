@@ -4,10 +4,10 @@
 /// and updates the block_data with the new URLs.
 ///
 /// Usage: dart run bin/optimize_website_images.dart [--dry-run] [--limit N]
+library;
 
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:supabase/supabase.dart';

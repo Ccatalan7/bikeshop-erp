@@ -391,7 +391,7 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
     if (hasHtmlTag && hasViewport) {
       // Email has its own HTML structure with viewport - use as-is
       // Inject CSS to fix common issues
-      final injectedCss = '''<style>
+      const injectedCss = '''<style>
 html{margin:0!important;min-height:0!important;height:auto!important}
 body{margin:0!important;padding:16px!important;min-height:0!important;height:auto!important}
 img{max-width:100%!important;height:auto!important}

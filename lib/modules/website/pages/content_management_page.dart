@@ -397,9 +397,9 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                         color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.check_circle,
                             size: 14,
@@ -427,9 +427,9 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                         color: Colors.orange.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.edit_outlined,
                             size: 14,
@@ -652,7 +652,7 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
                 // Toolbar
                 Container(
                   padding: const EdgeInsets.all(8),
-                  color: theme.colorScheme.surfaceVariant,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   child: Row(
                     children: [
                       const Icon(Icons.edit, size: 20),
@@ -713,9 +713,9 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  color: theme.colorScheme.surfaceVariant,
-                  child: Row(
-                    children: const [
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: const Row(
+                    children: [
                       Icon(Icons.visibility, size: 20),
                       SizedBox(width: 8),
                       Text('Vista Previa'),

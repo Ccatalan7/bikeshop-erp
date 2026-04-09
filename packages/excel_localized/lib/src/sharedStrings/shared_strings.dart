@@ -60,7 +60,7 @@ class _IndexingHolder {
   _IndexingHolder(this.index, [int _count = 1]) : count = _count;
 
   void increaseCount() {
-    this.count += 1;
+    count += 1;
   }
 }
 
@@ -145,7 +145,7 @@ class SharedString {
 
               /// Text
               case 't': //18.4.12 t (Text)
-                if (children == null) children = [];
+                children ??= [];
                 children.add(TextSpan(text: runChild.innerText, style: style));
                 break;
             }
@@ -210,7 +210,7 @@ class TextSpan {
     return other is TextSpan &&
         other.text == text &&
         other.style == style &&
-        ListEquality().equals(other.children, children);
+        const ListEquality().equals(other.children, children);
   }
 
   @override

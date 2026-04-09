@@ -209,7 +209,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<LeaveStatus>(
-              value: _filterStatus,
+              initialValue: _filterStatus,
               decoration: const InputDecoration(labelText: 'Estado'),
               items: [
                 const DropdownMenuItem(value: null, child: Text('Todos')),
@@ -303,7 +303,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                         return const CircularProgressIndicator();
                       }
                       return DropdownButtonFormField<String>(
-                        value: employeeController.text.isEmpty ? null : employeeController.text,
+                        initialValue: employeeController.text.isEmpty ? null : employeeController.text,
                         decoration: const InputDecoration(labelText: 'Empleado *'),
                         items: snapshot.data!.map((employee) {
                           return DropdownMenuItem(
@@ -321,7 +321,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                   
                   // Leave type
                   DropdownButtonFormField<LeaveType>(
-                    value: selectedType,
+                    initialValue: selectedType,
                     decoration: const InputDecoration(labelText: 'Tipo de Licencia *'),
                     items: LeaveType.values.map((type) {
                       return DropdownMenuItem(
@@ -411,7 +411,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                   
                   // Status
                   DropdownButtonFormField<LeaveStatus>(
-                    value: selectedStatus,
+                    initialValue: selectedStatus,
                     decoration: const InputDecoration(labelText: 'Estado'),
                     items: LeaveStatus.values.map((status) {
                       return DropdownMenuItem(

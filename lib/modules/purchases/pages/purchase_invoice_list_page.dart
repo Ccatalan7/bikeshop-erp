@@ -2018,13 +2018,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty)
+                    if (value == null || value.trim().isEmpty) {
                       return 'Ingresa el monto del pago';
+                    }
                     final parsed = double.tryParse(
                         value.trim().replaceAll('.', '').replaceAll(',', '.'));
                     if (parsed == null || parsed <= 0) return 'Monto inválido';
-                    if (parsed.round() - balance.round() > 1)
+                    if (parsed.round() - balance.round() > 1) {
                       return 'No puede superar el saldo';
+                    }
                     return null;
                   },
                 ),
@@ -2038,7 +2040,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       style: TextStyle(color: Colors.red))
                 else
                   DropdownButtonFormField<PaymentMethod>(
-                    value: _selectedPaymentMethod,
+                    initialValue: _selectedPaymentMethod,
                     decoration:
                         const InputDecoration(labelText: 'Medio de pago'),
                     items: _paymentMethods
@@ -2520,7 +2522,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             border: TableBorder.all(color: Colors.grey[300]!),
             columnWidths: {
               0: FixedColumnWidth(50 * scale),
-              1: FlexColumnWidth(3),
+              1: const FlexColumnWidth(3),
               2: FixedColumnWidth(80 * scale),
               3: FixedColumnWidth(90 * scale),
               4: FixedColumnWidth(100 * scale),
@@ -2558,10 +2560,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       subtitle: item.description != null &&
                               item.description!.isNotEmpty
                           ? item.description
-                          : (displaySku != null ? 'SKU: $displaySku' : null),
+                          : ('SKU: $displaySku'),
                       scale: scale,
                     ),
-                    _buildTableCell('${item.quantity.toStringAsFixed(2)}',
+                    _buildTableCell(item.quantity.toStringAsFixed(2),
                         scale: scale),
                     _buildTableCell(ChileanUtils.formatCurrency(item.unitCost),
                         scale: scale),
@@ -2940,7 +2942,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
                   final hasDescription =
                       item.description != null && item.description!.isNotEmpty;
-                  final hasSku = displaySku != null && displaySku.isNotEmpty;
+                  final hasSku = displaySku.isNotEmpty;
 
                   return pw.TableRow(
                     children: [
@@ -2979,7 +2981,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                           ],
                         ),
                       ),
-                      _buildPdfTableCell('${item.quantity.toStringAsFixed(2)}'),
+                      _buildPdfTableCell(item.quantity.toStringAsFixed(2)),
                       _buildPdfTableCell(
                           ChileanUtils.formatCurrency(item.unitCost)),
                       _buildPdfTableCell(

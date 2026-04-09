@@ -116,16 +116,16 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                 SizedBox(
                   width: 160, // Reduced from 200
                   child: DropdownButtonFormField<ReportPeriod>(
-                    value: _selectedPeriod,
+                    initialValue: _selectedPeriod,
                     isDense: true,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Período',
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
-                      prefixIcon: const Icon(Icons.calendar_today, size: 18),
+                      prefixIcon: Icon(Icons.calendar_today, size: 18),
                     ),
                     items: ReportPeriod.values.map((period) {
                       return DropdownMenuItem(
@@ -171,7 +171,7 @@ class _IncomeStatementPageState extends State<IncomeStatementPage> {
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    side: MaterialStateProperty.all(
+                    side: WidgetStateProperty.all(
                       BorderSide(
                         color: Theme.of(context).colorScheme.outlineVariant,
                       ),

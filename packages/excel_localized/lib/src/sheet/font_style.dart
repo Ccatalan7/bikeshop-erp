@@ -79,8 +79,8 @@ class _FontStyle extends Equatable {
   }
 
   /// Set Font Size
-  set fontSize(int? _fs) {
-    _fontSize = _fs;
+  set fontSize(int? fs) {
+    _fontSize = fs;
   }
 
   /// Get `Underline`

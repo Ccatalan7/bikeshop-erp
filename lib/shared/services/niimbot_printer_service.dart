@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ChangeNotifier;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -743,7 +741,9 @@ class NiimbotPrinterService extends ChangeNotifier {
   }) async {
     final len = data.length;
     int cs = cmd ^ len;
-    for (final b in data) cs ^= b;
+    for (final b in data) {
+      cs ^= b;
+    }
     final pkt = [0x55, 0x55, cmd, len, ...data, cs & 0xFF, 0xAA, 0xAA];
     try {
       final withoutResponse = forceWithResponse == true

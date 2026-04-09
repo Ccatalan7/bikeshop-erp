@@ -304,7 +304,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       ? editProvider.blocks
       : _blocks;
 
-    String _eff(String key, String fallback) {
+    String eff(String key, String fallback) {
       if (editProvider.isInEditorContext) {
       return editProvider.getEffectiveThemeSetting(key, fallback);
       }
@@ -313,33 +313,33 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
 
     // Get theme from WebsiteService (already cached), with live-preview overrides
     final primaryColor =
-      _parseColor(_eff('theme_primary_color', websiteService.getSetting('theme_primary_color', ''))) ??
+      _parseColor(eff('theme_primary_color', websiteService.getSetting('theme_primary_color', ''))) ??
         const Color(0xFF2E7D32);
     final accentColor =
-      _parseColor(_eff('theme_accent_color', websiteService.getSetting('theme_accent_color', ''))) ??
+      _parseColor(eff('theme_accent_color', websiteService.getSetting('theme_accent_color', ''))) ??
         const Color(0xFFFF6F00);
-    final headingFont = _eff(
+    final headingFont = eff(
       'theme_heading_font',
       websiteService.getSetting('theme_heading_font', 'Roboto'),
     );
-    final bodyFont = _eff(
+    final bodyFont = eff(
       'theme_body_font',
       websiteService.getSetting('theme_body_font', 'Roboto'),
     );
     final headingSize = double.tryParse(
-        _eff('theme_heading_size', websiteService.getSetting('theme_heading_size', '48')),
+        eff('theme_heading_size', websiteService.getSetting('theme_heading_size', '48')),
       ) ??
       48.0;
     final bodySize = double.tryParse(
-        _eff('theme_body_size', websiteService.getSetting('theme_body_size', '16')),
+        eff('theme_body_size', websiteService.getSetting('theme_body_size', '16')),
       ) ??
       16.0;
     final sectionSpacing = double.tryParse(
-        _eff('theme_section_spacing', websiteService.getSetting('theme_section_spacing', '64')),
+        eff('theme_section_spacing', websiteService.getSetting('theme_section_spacing', '64')),
       ) ??
       64.0;
     final textColor =
-      _parseColor(_eff('theme_text_color', websiteService.getSetting('theme_text_color', ''))) ??
+      _parseColor(eff('theme_text_color', websiteService.getSetting('theme_text_color', ''))) ??
         Colors.black87;
 
     if (_loading && _blocks.isEmpty) {

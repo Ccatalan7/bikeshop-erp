@@ -1680,8 +1680,8 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: const [
+            content: const Row(
+              children: [
                 Icon(Icons.check_circle, color: Colors.white, size: 18),
                 SizedBox(width: 8),
                 Expanded(child: Text('Archivo Word guardado en Descargas')),

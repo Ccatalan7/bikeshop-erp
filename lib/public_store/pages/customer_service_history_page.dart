@@ -166,7 +166,7 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
           // Bike filter
           Expanded(
             child: DropdownButtonFormField<String>(
-              value: _selectedBikeId,
+              initialValue: _selectedBikeId,
               decoration: const InputDecoration(
                 labelText: 'Bicicleta',
                 contentPadding:
@@ -200,7 +200,7 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
           // Status filter
           Expanded(
             child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
+              initialValue: _selectedStatus,
               decoration: const InputDecoration(
                 labelText: 'Estado',
                 contentPadding:
@@ -601,7 +601,7 @@ class _ServiceCard extends StatelessWidget {
           ),
           if (isOverdue) ...[
             const SizedBox(width: 4),
-            Icon(Icons.warning_amber, size: 14, color: Colors.red),
+            const Icon(Icons.warning_amber, size: 14, color: Colors.red),
           ],
         ],
       ),

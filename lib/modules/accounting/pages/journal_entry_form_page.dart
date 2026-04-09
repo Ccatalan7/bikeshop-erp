@@ -31,7 +31,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
   // State
   DateTime _selectedDate = DateTime.now();
   JournalEntryType _selectedType = JournalEntryType.manual;
-  List<JournalLineForm> _lines = [];
+  final List<JournalLineForm> _lines = [];
   bool _isLoading = false;
   bool _isSaving = false;
   String? _error;
@@ -274,7 +274,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                       labelText: 'Tipo *',
                                       border: OutlineInputBorder(),
                                     ),
-                                    value: _selectedType,
+                                    initialValue: _selectedType,
                                     items: JournalEntryType.values
                                         .map(
                                           (type) => DropdownMenuItem<
@@ -322,7 +322,7 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                         labelText: 'Tipo *',
                                         border: OutlineInputBorder(),
                                       ),
-                                      value: _selectedType,
+                                      initialValue: _selectedType,
                                       items: JournalEntryType.values
                                           .map(
                                             (type) => DropdownMenuItem<
@@ -374,36 +374,36 @@ class _JournalEntryFormPageState extends State<JournalEntryFormPage> {
                                         color: Theme.of(context).dividerColor),
                                   ),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   children: [
-                                    const Expanded(
+                                    Expanded(
                                       flex: 3,
                                       child: Text('Cuenta',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold)),
                                     ),
-                                    const Expanded(
+                                    Expanded(
                                       flex: 3,
                                       child: Text('Descripción',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold)),
                                     ),
-                                    const Expanded(
+                                    Expanded(
                                       flex: 2,
                                       child: Text('Debe',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold),
                                           textAlign: TextAlign.right),
                                     ),
-                                    const SizedBox(width: 16),
-                                    const Expanded(
+                                    SizedBox(width: 16),
+                                    Expanded(
                                       flex: 2,
                                       child: Text('Haber',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold),
                                           textAlign: TextAlign.right),
                                     ),
-                                    const SizedBox(
+                                    SizedBox(
                                         width: 48), // Space for delete button
                                   ],
                                 ),

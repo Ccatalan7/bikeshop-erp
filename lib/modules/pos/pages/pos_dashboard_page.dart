@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -504,7 +503,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                           Expanded(
                                             child: DropdownButtonFormField<
                                                 ProductType?>(
-                                              value: _selectedProductType,
+                                              initialValue: _selectedProductType,
                                               decoration: const InputDecoration(
                                                 labelText: 'Tipo',
                                                 border: OutlineInputBorder(),
@@ -535,7 +534,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                           Expanded(
                                             child: DropdownButtonFormField<
                                                 String?>(
-                                              value: _selectedCategoryKey,
+                                              initialValue: _selectedCategoryKey,
                                               decoration: InputDecoration(
                                                 labelText: 'Categorías',
                                                 border:
@@ -691,7 +690,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                       Container(
                         width: 380,
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant,
+                          color: theme.colorScheme.surfaceContainerHighest,
                           border: Border(
                             left: BorderSide(
                               color: theme.colorScheme.outline,
@@ -749,7 +748,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                       Expanded(
                                         child: DropdownButtonFormField<
                                             ProductType?>(
-                                          value: _selectedProductType,
+                                          initialValue: _selectedProductType,
                                           decoration: const InputDecoration(
                                             labelText: 'Tipo',
                                             border: OutlineInputBorder(),
@@ -778,7 +777,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: DropdownButtonFormField<String?>(
-                                          value: _selectedCategoryKey,
+                                          initialValue: _selectedCategoryKey,
                                           decoration: InputDecoration(
                                             labelText: 'Categorías',
                                             border: const OutlineInputBorder(),
@@ -1053,7 +1052,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                 // Header
                 Container(
                   padding: const EdgeInsets.all(12),
-                  color: theme.colorScheme.surfaceVariant,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   child: Row(
                     children: [
                       Expanded(
@@ -1154,7 +1153,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -1164,7 +1163,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
+              color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -1248,7 +1247,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Expanded(child: const _CashierPanel()),
+            const Expanded(child: _CashierPanel()),
           ],
         ),
       ),
@@ -1902,7 +1901,7 @@ class _CashierPanelState extends State<_CashierPanel> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
+              color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -2235,7 +2234,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ),
               ),
             );
-          }).toList(),
+          }),
 
           const SizedBox(height: 20),
 
@@ -2287,7 +2286,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: theme.colorScheme.primary.withOpacity(0.3),
@@ -2617,10 +2616,10 @@ class _CashierPanelState extends State<_CashierPanel> {
                     .toList();
 
                 return DropdownButtonFormField<String>(
-                  value: posService.selectedPaymentMethod?.id,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.payment),
+                  initialValue: posService.selectedPaymentMethod?.id,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.payment),
                     helperText:
                         'El IVA se aplica automáticamente según el método',
                   ),
@@ -2756,7 +2755,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ),
               ),
             DropdownButtonFormField<Customer>(
-              value: _selectedCustomer,
+              initialValue: _selectedCustomer,
               decoration: const InputDecoration(
                 labelText: 'Seleccionar Cliente (Opcional)',
                 border: OutlineInputBorder(),

@@ -399,7 +399,7 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
 
                 // Icon selector
                 DropdownButtonFormField<String>(
-                  value: _selectedIcon,
+                  initialValue: _selectedIcon,
                   decoration: const InputDecoration(
                     labelText: 'Icono',
                     border: OutlineInputBorder(),
@@ -437,7 +437,7 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
                         .toList();
 
                     return DropdownButtonFormField<String>(
-                      value: _selectedAccountId,
+                      initialValue: _selectedAccountId,
                       decoration: const InputDecoration(
                         labelText: 'Cuenta Contable *',
                         border: OutlineInputBorder(),
@@ -465,7 +465,7 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
 
                 // Tax treatment dropdown
                 DropdownButtonFormField<TaxTreatment>(
-                  value: _defaultTaxTreatment,
+                  initialValue: _defaultTaxTreatment,
                   decoration: const InputDecoration(
                     labelText: 'Tratamiento de IVA por Defecto',
                     border: OutlineInputBorder(),

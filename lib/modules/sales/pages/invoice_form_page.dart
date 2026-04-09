@@ -31,7 +31,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
-import 'dart:typed_data' show Uint8List;
 import 'package:file_picker/file_picker.dart';
 import 'dart:io' show Platform, File;
 
@@ -2021,7 +2020,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   Widget _buildReadOnlyNotice(ThemeData theme) {
     return Card(
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
       child: ListTile(
         leading:
             Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
@@ -2218,7 +2217,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   // Table header
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
@@ -2332,7 +2331,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         ),
 
                         // Actions column
-                        SizedBox(width: _colActionsWidth),
+                        const SizedBox(width: _colActionsWidth),
                       ],
                     ),
                   ),
@@ -2443,8 +2442,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: _colTotalWidth),
-                                SizedBox(width: _colActionsWidth),
+                                const SizedBox(width: _colTotalWidth),
+                                const SizedBox(width: _colActionsWidth),
                               ],
                             ),
                           ),
@@ -3066,7 +3065,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.warning_amber, size: 12, color: Colors.red),
+                      const Icon(Icons.warning_amber, size: 12, color: Colors.red),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
@@ -3455,8 +3454,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   bikeMap['model'] as String,
                 if (bikeMap['year'] != null) bikeMap['year'].toString(),
               ];
-              if (parts.isNotEmpty)
+              if (parts.isNotEmpty) {
                 resolvedBikeNames[jobBikeId] = parts.join(' ');
+              }
             }
           }
         }
@@ -3738,8 +3738,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       final jbId = item.jobBikeId;
       if (jbId != null && jbId.isNotEmpty) {
         final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
-        if (name.isNotEmpty && !multiBikeNames.contains(name))
+        if (name.isNotEmpty && !multiBikeNames.contains(name)) {
           multiBikeNames.add(name);
+        }
       }
     }
     final singleBikeName = resolvedBikeNames['single'];
@@ -4118,7 +4119,7 @@ class _InvoiceLineEntry {
 
     _cachedCanEdit = canEdit;
     _cachedSmartProductField = SmartProductField(
-      key: ValueKey('product_${hashCode}'),
+      key: ValueKey('product_$hashCode'),
       initialData: ProductFieldData(
         product: product,
         productName: line.name.isEmpty ? null : line.name,

@@ -531,8 +531,8 @@ class _ConversationTile extends StatelessWidget {
           backgroundColor: Colors.blue.withOpacity(0.1),
           child: const Icon(Icons.chat_bubble, color: Colors.blue),
         ),
-        title: Text('Consulta',
-            style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Consulta',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -6,7 +6,6 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/inventory_models.dart';
@@ -164,7 +163,7 @@ class _InventoryListPageState extends State<InventoryListPage> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String?>(
-                    value: _selectedCategoryId,
+                    initialValue: _selectedCategoryId,
                     decoration: const InputDecoration(
                       labelText: 'Categoría',
                       border: OutlineInputBorder(),

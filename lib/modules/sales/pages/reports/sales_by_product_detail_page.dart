@@ -39,7 +39,9 @@ class SalesByProductDetailPage extends StatelessWidget {
 
       if (startDate != null && invoice.date.isBefore(startDate!)) continue;
       if (endDate != null &&
-          invoice.date.isAfter(endDate!.add(const Duration(days: 1)))) continue;
+          invoice.date.isAfter(endDate!.add(const Duration(days: 1)))) {
+        continue;
+      }
 
       for (final item in invoice.items) {
         if (item.productId == productId) {

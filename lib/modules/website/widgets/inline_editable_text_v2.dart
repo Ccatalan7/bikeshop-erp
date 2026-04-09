@@ -603,12 +603,12 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
             right: -4,
             top: -4,
             child: Container(
-              padding: EdgeInsets.all(4),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
                 color: Color(0xFF00A09D),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.edit, size: 10, color: Colors.white),
+              child: const Icon(Icons.edit, size: 10, color: Colors.white),
             ),
           ),
       ],

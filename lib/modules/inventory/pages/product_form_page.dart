@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1164,7 +1163,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: reasonType,
+                        initialValue: reasonType,
                         decoration: const InputDecoration(
                           labelText: 'Motivo del ajuste',
                         ),
@@ -1509,7 +1508,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Se usará el snapshot guardado en la última conversión para devolver este producto a su estado original.',
                   ),
                   const SizedBox(height: 12),
@@ -1519,7 +1518,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     decoration: BoxDecoration(
                       color: Theme.of(context)
                           .colorScheme
-                          .surfaceVariant
+                          .surfaceContainerHighest
                           .withOpacity(0.45),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1701,7 +1700,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _canRestoreOriginalState
@@ -1891,7 +1890,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.45),
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -1906,7 +1905,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.45),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -2006,7 +2005,7 @@ class _ProductFormPageState extends State<ProductFormPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Este producto tiene ${_existingTrackedStockQuantity} unidades en stock. Al guardarlo como $targetLabel se hará la conversión interna automáticamente.',
+                  'Este producto tiene $_existingTrackedStockQuantity unidades en stock. Al guardarlo como $targetLabel se hará la conversión interna automáticamente.',
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -2015,7 +2014,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
-                        .surfaceVariant
+                        .surfaceContainerHighest
                         .withOpacity(0.45),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -2023,7 +2022,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                          'Unidades a descargar: ${_existingTrackedStockQuantity}'),
+                          'Unidades a descargar: $_existingTrackedStockQuantity'),
                       const SizedBox(height: 4),
                       Text(
                         'Valor a reclasificar: ${ChileanUtils.formatCurrency(_existingTrackedInventoryValue)}',
@@ -3156,7 +3155,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       case 'single_select':
         return DropdownButtonFormField<String>(
-          value: currentValue?.toString(),
+          initialValue: currentValue?.toString(),
           decoration: InputDecoration(
             labelText: label,
             suffixText: def.unit,
@@ -3398,7 +3397,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       const SizedBox(height: 16),
       // Product Type Selector
       DropdownButtonFormField<ProductType>(
-        value: _selectedProductType,
+        initialValue: _selectedProductType,
         decoration: const InputDecoration(
           labelText: 'Tipo de producto',
           helperText:
@@ -3466,7 +3465,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 decoration: BoxDecoration(
                   color: Theme.of(context)
                       .colorScheme
-                      .surfaceVariant
+                      .surfaceContainerHighest
                       .withOpacity(0.25),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
@@ -3552,7 +3551,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color:
-                Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -3577,7 +3576,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       ],
       const SizedBox(height: 16),
       DropdownButtonFormField<String?>(
-        value: _selectedSupplierId,
+        initialValue: _selectedSupplierId,
         decoration: const InputDecoration(
           labelText: 'Proveedor',
           helperText: 'Proveedor principal de este producto (opcional)',

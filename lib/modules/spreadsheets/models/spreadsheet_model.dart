@@ -1,4 +1,5 @@
 /// Represents a saved spreadsheet's metadata.
+library;
 
 /// Represents a saved spreadsheet's metadata.
 class SpreadsheetModel {

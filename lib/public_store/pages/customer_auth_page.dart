@@ -205,7 +205,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                             const SizedBox(height: 8),
                             Text(
                               'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: PublicStoreTheme.textSecondary,
                               ),
                             ),
@@ -373,18 +373,18 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                     const SizedBox(height: 16),
 
                     // Divider
-                    Row(
+                    const Row(
                       children: [
-                        const Expanded(child: Divider()),
+                        Expanded(child: Divider()),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             'O',
                             style: TextStyle(
                                 color: PublicStoreTheme.textSecondary),
                           ),
                         ),
-                        const Expanded(child: Divider()),
+                        Expanded(child: Divider()),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -414,7 +414,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                               ? '¿No tienes cuenta?'
                               : '¿Ya tienes cuenta?',
                           style:
-                              TextStyle(color: PublicStoreTheme.textSecondary),
+                              const TextStyle(color: PublicStoreTheme.textSecondary),
                         ),
                         TextButton(
                           onPressed: () {

@@ -250,7 +250,7 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<int>(
-                        value: _crossPattern,
+                        initialValue: _crossPattern,
                         decoration: const InputDecoration(
                           labelText: 'Cross Pattern',
                           border: OutlineInputBorder(),

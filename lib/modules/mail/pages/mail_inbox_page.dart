@@ -100,7 +100,7 @@ class _MailInboxPageState extends State<MailInboxPage> {
         : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth';
 
     // On mobile, pass state=mobile so edge function redirects to deep link
-    final state = kIsWeb ? null : 'mobile';
+    const state = kIsWeb ? null : 'mobile';
     final authUrl = _manager.getAuthorizationUrl(
       providerId,
       redirectUri: redirectUri,

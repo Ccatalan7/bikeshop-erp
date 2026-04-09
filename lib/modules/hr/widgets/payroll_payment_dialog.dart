@@ -211,10 +211,12 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                   final match = methods.firstWhere((m) {
                     final dbName = m['name'].toString().toLowerCase();
                     if (dbName.contains(lineMethod)) return true;
-                    if (lineMethod == 'cash' && dbName.contains('efectivo'))
+                    if (lineMethod == 'cash' && dbName.contains('efectivo')) {
                       return true;
-                    if (lineMethod == 'check' && dbName.contains('cheque'))
+                    }
+                    if (lineMethod == 'check' && dbName.contains('cheque')) {
                       return true;
+                    }
                     return false;
                   }, orElse: () => methods.first);
 
@@ -466,7 +468,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                     children: [
                                       Expanded(
                                         child: DropdownButtonFormField<String>(
-                                          value: split.methodId,
+                                          initialValue: split.methodId,
                                           isExpanded: true,
                                           decoration: InputDecoration(
                                             labelText:

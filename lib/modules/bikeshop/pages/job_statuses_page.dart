@@ -478,7 +478,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                           value: triggersStart,
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          activeColor: Colors.blue,
+                          activeThumbColor: Colors.blue,
                           onChanged: (val) =>
                               setDialogState(() => triggersStart = val),
                         ),
@@ -489,7 +489,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                           value: triggersCompletion,
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          activeColor: Colors.purple,
+                          activeThumbColor: Colors.purple,
                           onChanged: (val) =>
                               setDialogState(() => triggersCompletion = val),
                         ),
@@ -500,7 +500,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                           value: triggersDelivery,
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          activeColor: Colors.green,
+                          activeThumbColor: Colors.green,
                           onChanged: (val) =>
                               setDialogState(() => triggersDelivery = val),
                         ),
@@ -611,7 +611,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                   return;
                 }
 
-                if (isEditing && status != null) {
+                if (isEditing) {
                   final updated = status.copyWith(
                     name: name,
                     code: code,

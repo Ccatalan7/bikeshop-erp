@@ -480,11 +480,11 @@ class _PageManagementPageState extends State<PageManagementPage> {
           tooltip: 'Más opciones',
           onSelected: (value) => _handleMenuAction(value, page),
           itemBuilder: (context) => [
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'settings',
               child: ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('Configuración'),
+                leading: Icon(Icons.settings_outlined),
+                title: Text('Configuración'),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
               ),
@@ -501,20 +501,20 @@ class _PageManagementPageState extends State<PageManagementPage> {
               ),
             ),
             if (!page.isHome)
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'set_home',
                 child: ListTile(
-                  leading: const Icon(Icons.home_outlined),
-                  title: const Text('Hacer Inicio'),
+                  leading: Icon(Icons.home_outlined),
+                  title: Text('Hacer Inicio'),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'copy_url',
               child: ListTile(
-                leading: const Icon(Icons.copy),
-                title: const Text('Copiar URL'),
+                leading: Icon(Icons.copy),
+                title: Text('Copiar URL'),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
               ),
@@ -886,7 +886,7 @@ class _PageFormDialogState extends State<_PageFormDialog> {
 
                         // Template dropdown
                         DropdownButtonFormField<PageTemplate>(
-                          value: _selectedTemplate,
+                          initialValue: _selectedTemplate,
                           decoration: const InputDecoration(
                             labelText: 'Plantilla',
                             prefixIcon: Icon(Icons.layers_outlined),

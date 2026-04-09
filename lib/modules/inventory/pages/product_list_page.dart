@@ -158,7 +158,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   // Pagination
   int _currentPage = 1;
-  int _itemsPerPage = 100; // Reduced for better performance
+  final int _itemsPerPage = 100; // Reduced for better performance
   double? _savedScrollOffset; // Preserve scroll position when navigating
   int get _totalPages => (_filteredProducts.length / _itemsPerPage).ceil();
   List<Product> get _paginatedProducts {
@@ -520,8 +520,9 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> _handleBarcodeScan(String barcode) async {
     // Only handle scans if scanner is enabled and page is visible
-    if (!_isScannerEnabled || !mounted || !ModalRoute.of(context)!.isCurrent)
+    if (!_isScannerEnabled || !mounted || !ModalRoute.of(context)!.isCurrent) {
       return;
+    }
 
     // Search for product by SKU or barcode field
     final product = _products.cast<Product?>().firstWhere(
@@ -735,7 +736,9 @@ class _ProductListPageState extends State<ProductListPage> {
           term == 'mas' ||
           term == 'las' ||
           term == 'los' ||
-          term == 'sus') return term;
+          term == 'sus') {
+        return term;
+      }
       return term.substring(0, term.length - 1);
     }
     return term;
@@ -1288,7 +1291,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     style: IconButton.styleFrom(
                       backgroundColor: _isScannerEnabled
                           ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceVariant,
+                          : theme.colorScheme.surfaceContainerHighest,
                     ),
                     visualDensity: VisualDensity.compact,
                   ),
@@ -1329,7 +1332,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
               ),
             ),
           ),
@@ -2409,7 +2412,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     ),
                     filled: true,
                     fillColor:
-                        theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                        theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                   ),
                 ),
               ),
@@ -2424,7 +2427,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 decoration: BoxDecoration(
                   color: _hasActiveFilters
                       ? theme.colorScheme.primaryContainer
-                      : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _hasActiveFilters
@@ -2477,7 +2480,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       ),
                       filled: true,
                       fillColor:
-                          theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                          theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                     ),
                   ),
                 ),
@@ -2617,7 +2620,7 @@ class _ProductListPageState extends State<ProductListPage> {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
@@ -2639,11 +2642,12 @@ class _ProductListPageState extends State<ProductListPage> {
                   ))
               .toList(),
           onChanged: (val) {
-            if (val != null)
+            if (val != null) {
               setState(() {
                 _sortOption = val;
                 _applyFilters();
               });
+            }
           },
         ),
       ),
@@ -2946,10 +2950,11 @@ class _ProductListPageState extends State<ProductListPage> {
 
               // Simplification: Standard builder.
               ...[null, ...items].map((item) {
-                if (item == null)
+                if (item == null) {
                   return Text(hint,
                       style:
                           TextStyle(color: theme.colorScheme.onSurfaceVariant));
+                }
                 return Align(
                   alignment: Alignment.centerLeft,
                   child: Text(labelBuilder(item as T),
@@ -3061,9 +3066,9 @@ class _ProductListPageState extends State<ProductListPage> {
           dropdownMenuEntries: [
             DropdownMenuEntry<T?>(
               value: null,
-              label: '$allLabel',
+              label: allLabel,
               style: ButtonStyle(
-                textStyle: MaterialStateProperty.all(theme.textTheme.bodySmall
+                textStyle: WidgetStateProperty.all(theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.primary)),
               ),
             ),
@@ -3072,7 +3077,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   label: labelBuilder(item),
                   style: ButtonStyle(
                     textStyle:
-                        MaterialStateProperty.all(theme.textTheme.bodySmall),
+                        WidgetStateProperty.all(theme.textTheme.bodySmall),
                   ),
                 )),
           ],
@@ -3261,8 +3266,9 @@ class _ProductListPageState extends State<ProductListPage> {
                             _detailPaneWidth -= details.delta.dx;
                             // Clamp width between reasonable limits
                             if (_detailPaneWidth < 300) _detailPaneWidth = 300;
-                            if (_detailPaneWidth > constraints.maxWidth * 0.6)
+                            if (_detailPaneWidth > constraints.maxWidth * 0.6) {
                               _detailPaneWidth = constraints.maxWidth * 0.6;
+                            }
                           });
                         },
                         child: Container(
@@ -3337,7 +3343,7 @@ class _ProductListPageState extends State<ProductListPage> {
                           errorBuilder: (_, __, ___) => Container(
                             width: 250,
                             height: 250,
-                            color: theme.colorScheme.surfaceVariant,
+                            color: theme.colorScheme.surfaceContainerHighest,
                             child: const Icon(Icons.broken_image, size: 48),
                           ),
                         ),
@@ -3348,7 +3354,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant,
+                  color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -3723,7 +3729,7 @@ class _ProductListPageState extends State<ProductListPage> {
                                     errorBuilder: (_, __, ___) => Container(
                                       width: 250,
                                       height: 250,
-                                      color: theme.colorScheme.surfaceVariant,
+                                      color: theme.colorScheme.surfaceContainerHighest,
                                       child: const Icon(Icons.broken_image,
                                           size: 48),
                                     ),
@@ -3735,7 +3741,7 @@ class _ProductListPageState extends State<ProductListPage> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant,
+                            color: theme.colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(4),
                             image: product.imageUrl != null
                                 ? DecorationImage(
@@ -4722,7 +4728,7 @@ class _ProductListPageState extends State<ProductListPage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceVariant,
+                              color: theme.colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -5057,12 +5063,11 @@ class _ModernFilterChip extends StatefulWidget {
   final void Function(BuildContext context, LayerLink link) onTap;
 
   const _ModernFilterChip({
-    Key? key,
     required this.theme,
     required this.label,
     required this.isActive,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<_ModernFilterChip> createState() => _ModernFilterChipState();

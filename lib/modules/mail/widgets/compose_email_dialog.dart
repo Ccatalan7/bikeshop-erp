@@ -179,7 +179,7 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                           ),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _selectedProviderId,
+                              initialValue: _selectedProviderId,
                               decoration: const InputDecoration(
                                 isDense: true,
                                 border: OutlineInputBorder(),

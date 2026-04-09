@@ -2512,9 +2512,9 @@ class AppRouter {
             return widgetBuilder();
           }
           // Use MainLayout as skeleton to preserve sidebar during load
-          return MainLayout(
+          return const MainLayout(
             title: '...',
-            body: const Center(
+            body: Center(
               child: SizedBox(
                 width: 40,
                 height: 40,

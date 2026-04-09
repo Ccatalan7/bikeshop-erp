@@ -356,7 +356,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               activeConversation?.contextType != null)
             ChatContextPanel(
               contextType: activeConversation!.contextType!,
-              contextId: activeConversation!.contextId!,
+              contextId: activeConversation.contextId!,
             ),
         ],
       ),

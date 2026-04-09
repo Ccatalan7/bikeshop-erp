@@ -1554,15 +1554,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         final tableInnerWidth = math.max(minTableInnerWidth, availableWidth);
         final extraWidth = tableInnerWidth - minTableInnerWidth;
 
-        final wChk = baseWChk;
-        final wImg = baseWImg;
+        const wChk = baseWChk;
+        const wImg = baseWImg;
         final wSku = baseWSku + (extraWidth * 0.14);
         final wName = baseWName + (extraWidth * 0.42);
-        final wCost = baseWCost;
-        final wPrice = baseWPrice;
+        const wCost = baseWCost;
+        const wPrice = baseWPrice;
         final wCat = baseWCat + (extraWidth * 0.22);
         final wBrand = baseWBrand + (extraWidth * 0.22);
-        final wTaller = baseWTaller;
+        const wTaller = baseWTaller;
 
         Widget headerCell(String label, double width,
                 {TextAlign align = TextAlign.left}) =>
@@ -1669,7 +1669,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              SizedBox(width: wChk), // checkbox placeholder
+                              const SizedBox(width: wChk), // checkbox placeholder
                               headerCell('Img', wImg),
                               const SizedBox(width: gap),
                               headerCell('SKU', wSku),
@@ -1741,9 +1741,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                           onTap: () async {
                                             final r =
                                                 await ImageService.pickImage();
-                                            if (r != null)
+                                            if (r != null) {
                                               _uploadImage(
                                                   entry, r.bytes, r.name);
+                                            }
                                           },
                                           child: Container(
                                             width: 46,
@@ -1931,9 +1932,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                             value: c, label: c.name))
                                         .toList(),
                                     onSelected: (v) {
-                                      if (v != null)
+                                      if (v != null) {
                                         setState(
                                             () => entry.selectedCategory = v);
+                                      }
                                     },
                                   ),
                                 ),
@@ -1963,8 +1965,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                                 value: b, label: b.name))
                                         .toList(),
                                     onSelected: (v) {
-                                      if (v != null)
+                                      if (v != null) {
                                         setState(() => entry.selectedBrand = v);
+                                      }
                                     },
                                   ),
                                 ),
@@ -2316,7 +2319,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<SupplierOcrDiscountParser>(
-                value: parser,
+                initialValue: parser,
                 decoration: const InputDecoration(
                   labelText: 'Regla de descuento',
                   border: OutlineInputBorder(),

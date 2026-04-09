@@ -191,8 +191,8 @@ class Save {
       });
     });
 
-    _innerCellStyle.forEach((cellStyle) {
-      _FontStyle _fs = _FontStyle(
+    for (var cellStyle in _innerCellStyle) {
+      _FontStyle fs = _FontStyle(
           bold: cellStyle.isBold,
           italic: cellStyle.isItalic,
           fontColorHex: cellStyle.fontColor,
@@ -202,9 +202,9 @@ class Save {
           fontScheme: cellStyle.fontScheme);
 
       /// If `-1` is returned then it indicates that `_fontStyle` is not present in the `_fs`
-      if (_fontStyleIndex(_excel._fontStyleList, _fs) == -1 &&
-          _fontStyleIndex(innerFontStyle, _fs) == -1) {
-        innerFontStyle.add(_fs);
+      if (_fontStyleIndex(_excel._fontStyleList, fs) == -1 &&
+          _fontStyleIndex(innerFontStyle, fs) == -1) {
+        innerFontStyle.add(fs);
       }
 
       /// Filling the inner usable extra list of background color
@@ -214,12 +214,12 @@ class Save {
         innerPatternFill.add(backgroundColor);
       }
 
-      final _bs = _createBorderSetFromCellStyle(cellStyle);
-      if (!_excel._borderSetList.contains(_bs) &&
-          !innerBorderSet.contains(_bs)) {
-        innerBorderSet.add(_bs);
+      final bs = _createBorderSetFromCellStyle(cellStyle);
+      if (!_excel._borderSetList.contains(bs) &&
+          !innerBorderSet.contains(bs)) {
+        innerBorderSet.add(bs);
       }
-    });
+    }
 
     XmlElement fonts =
         _excel._xmlFiles['xl/styles.xml']!.findAllElements('fonts').first;
@@ -233,7 +233,7 @@ class Save {
           '${_excel._fontStyleList.length + innerFontStyle.length}'));
     }
 
-    innerFontStyle.forEach((fontStyleElement) {
+    for (var fontStyleElement in innerFontStyle) {
       fonts.children.add(XmlElement(XmlName('font'), [], [
         /// putting color
         if (fontStyleElement._fontColorHex != null &&
@@ -288,7 +288,7 @@ class Save {
             XmlAttribute(XmlName('val'), fontStyleElement.fontSize.toString())
           ], []),
       ]));
-    });
+    }
 
     XmlElement fills =
         _excel._xmlFiles['xl/styles.xml']!.findAllElements('fills').first;
@@ -303,7 +303,7 @@ class Save {
           '${_excel._patternFill.length + innerPatternFill.length}'));
     }
 
-    innerPatternFill.forEach((color) {
+    for (var color in innerPatternFill) {
       if (color.length >= 2) {
         if (color.substring(0, 2).toUpperCase() == 'FF') {
           fills.children.add(XmlElement(XmlName('fill'), [], [
@@ -329,7 +329,7 @@ class Save {
             text:
                 "Corrupted Styles Found. Can't process further, Open up issue in github.");
       }
-    });
+    }
 
     XmlElement borders =
         _excel._xmlFiles['xl/styles.xml']!.findAllElements('borders').first;
@@ -343,7 +343,7 @@ class Save {
           '${_excel._borderSetList.length + innerBorderSet.length}'));
     }
 
-    innerBorderSet.forEach((border) {
+    for (var border in innerBorderSet) {
       var borderElement = XmlElement(XmlName('border'));
       if (border.diagonalBorderDown) {
         borderElement.attributes
@@ -376,7 +376,7 @@ class Save {
       }
 
       borders.children.add(borderElement);
-    });
+    }
 
     final styleSheet = _excel._xmlFiles['xl/styles.xml']!;
 
@@ -391,10 +391,10 @@ class Save {
           '${_excel._cellStyleList.length + _innerCellStyle.length}'));
     }
 
-    _innerCellStyle.forEach((cellStyle) {
+    for (var cellStyle in _innerCellStyle) {
       String backgroundColor = cellStyle.backgroundColor.colorHex;
 
-      _FontStyle _fs = _FontStyle(
+      _FontStyle fs = _FontStyle(
           bold: cellStyle.isBold,
           italic: cellStyle.isItalic,
           fontColorHex: cellStyle.fontColor,
@@ -407,9 +407,9 @@ class Save {
       int rotation = cellStyle.rotation;
       TextWrapping? textWrapping = cellStyle.wrap;
       int backgroundIndex = innerPatternFill.indexOf(backgroundColor),
-          fontIndex = _fontStyleIndex(innerFontStyle, _fs);
-      _BorderSet _bs = _createBorderSetFromCellStyle(cellStyle);
-      int borderIndex = innerBorderSet.indexOf(_bs);
+          fontIndex = _fontStyleIndex(innerFontStyle, fs);
+      _BorderSet bs = _createBorderSetFromCellStyle(cellStyle);
+      int borderIndex = innerBorderSet.indexOf(bs);
 
       final numberFormat = cellStyle.numberFormat;
       final int numFmtId = switch (numberFormat) {
@@ -436,8 +436,8 @@ class Save {
         attributes.add(XmlAttribute(XmlName('applyFill'), '1'));
       }
 
-      if (_fontStyleIndex(_excel._fontStyleList, _fs) != -1 &&
-          _fontStyleIndex(innerFontStyle, _fs) != -1) {
+      if (_fontStyleIndex(_excel._fontStyleList, fs) != -1 &&
+          _fontStyleIndex(innerFontStyle, fs) != -1) {
         attributes.add(XmlAttribute(XmlName('applyFont'), '1'));
       }
 
@@ -460,13 +460,13 @@ class Save {
 
         if (verticalAlign != VerticalAlign.Bottom) {
           String ver = verticalAlign == VerticalAlign.Top ? 'top' : 'center';
-          childAttributes.add(XmlAttribute(XmlName('vertical'), '$ver'));
+          childAttributes.add(XmlAttribute(XmlName('vertical'), ver));
         }
 
         if (horizontalAlign != HorizontalAlign.Left) {
           String hor =
               horizontalAlign == HorizontalAlign.Right ? 'right' : 'center';
-          childAttributes.add(XmlAttribute(XmlName('horizontal'), '$hor'));
+          childAttributes.add(XmlAttribute(XmlName('horizontal'), hor));
         }
         if (rotation != 0) {
           childAttributes
@@ -477,7 +477,7 @@ class Save {
       }
 
       celx.children.add(XmlElement(XmlName('xf'), attributes, children));
-    });
+    }
 
     final customNumberFormats = _excel._numFormats._map.entries
         .map<MapEntry<int, CustomNumFormat>?>((e) {
@@ -660,8 +660,8 @@ class Save {
 
     int position = -1;
     for (int i = 0; i < sheetList.length; i++) {
-      var _sheetName = sheetList[i].getAttribute('name');
-      if (_sheetName != null && _sheetName.toString() == sheetName) {
+      var sheetName0 = sheetList[i].getAttribute('name');
+      if (sheetName0 != null && sheetName0.toString() == sheetName) {
         elementFound = sheetList[i];
         position = i;
         break;
@@ -709,7 +709,7 @@ class Save {
   /// Writing the merged cells information into the excel properties files.
   void _setMerge() {
     _selfCorrectSpanMap(_excel);
-    _excel._mergeChangeLook.forEach((s) {
+    for (var s in _excel._mergeChangeLook) {
       if (_excel._sheetMap[s] != null &&
           _excel._sheetMap[s]!._spanList.isNotEmpty &&
           _excel._xmlSheetId.containsKey(s) &&
@@ -753,28 +753,28 @@ class Save {
           }
         }
 
-        List<String> _spannedItems =
+        List<String> spannedItems =
             List<String>.from(_excel._sheetMap[s]!.spannedItems);
 
-        [
-          ['count', _spannedItems.length.toString()],
-        ].forEach((value) {
+        for (var value in [
+          ['count', spannedItems.length.toString()],
+        ]) {
           if (mergeElement.getAttributeNode(value[0]) == null) {
             mergeElement.attributes
                 .add(XmlAttribute(XmlName(value[0]), value[1]));
           } else {
             mergeElement.getAttributeNode(value[0])!.value = value[1];
           }
-        });
+        }
 
         mergeElement.children.clear();
 
-        _spannedItems.forEach((value) {
+        for (var value in spannedItems) {
           mergeElement.children.add(XmlElement(XmlName('mergeCell'),
-              [XmlAttribute(XmlName('ref'), '$value')], []));
-        });
+              [XmlAttribute(XmlName('ref'), value)], []));
+        }
       }
-    });
+    }
   }
 
   // slow implementation
@@ -816,7 +816,7 @@ class Save {
   }*/
 
   void _setRTL() {
-    _excel._rtlChangeLook.forEach((s) {
+    for (var s in _excel._rtlChangeLook) {
       var sheetObject = _excel._sheetMap[s];
       if (sheetObject != null &&
           _excel._xmlSheetId.containsKey(s) &&
@@ -867,7 +867,7 @@ class Save {
               ]));
         }
       }
-    });
+    }
   }
 
   /// Writing the value of excel cells into the separate
@@ -890,16 +890,16 @@ class Save {
       shareString.children.add(string.node);
     });
 
-    [
+    for (var value in [
       ['count', '$count'],
       ['uniqueCount', '$uniqueCount']
-    ].forEach((value) {
+    ]) {
       if (shareString.getAttributeNode(value[0]) == null) {
         shareString.attributes.add(XmlAttribute(XmlName(value[0]), value[1]));
       } else {
         shareString.getAttributeNode(value[0])!.value = value[1];
       }
-    });
+    }
   }
 
   /// Writing cell contained text into the excel sheet files.

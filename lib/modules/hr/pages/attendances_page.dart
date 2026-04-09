@@ -244,7 +244,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
       setState(() => _isLoading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error: \$e'),
           backgroundColor: Colors.red,
         ),

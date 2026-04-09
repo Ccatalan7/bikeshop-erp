@@ -29,12 +29,10 @@ class AppTheme {
       primary: primaryBlue,
       secondary: accentGreen,
       surface: primaryWhite,
-      background: backgroundLight,
       error: primaryRed,
       onPrimary: primaryWhite,
       onSecondary: primaryWhite,
       onSurface: Colors.black87,
-      onBackground: Colors.black87,
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: primaryBlue,
@@ -103,9 +101,9 @@ class AppTheme {
       thickness: 1,
     ),
     dataTableTheme: DataTableThemeData(
-      headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
-      dataRowColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) {
+      headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+      dataRowColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
           return primaryBlue.withOpacity(0.1);
         }
         return null;
@@ -124,12 +122,10 @@ class AppTheme {
       primary: primaryBlue,
       secondary: accentGreen,
       surface: surfaceDark,
-      background: backgroundDark,
       error: primaryRed,
       onPrimary: primaryWhite,
       onSecondary: primaryWhite,
       onSurface: textPrimaryDark,
-      onBackground: textPrimaryDark,
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: surfaceDark,
@@ -205,8 +201,8 @@ class AppTheme {
       iconColor: textSecondaryDark,
     ),
     dataTableTheme: const DataTableThemeData(
-      headingRowColor: MaterialStatePropertyAll(cardDark),
-      dataRowColor: MaterialStatePropertyAll(surfaceDark),
+      headingRowColor: WidgetStatePropertyAll(cardDark),
+      dataRowColor: WidgetStatePropertyAll(surfaceDark),
       dividerThickness: 1,
     ),
     textTheme: const TextTheme(

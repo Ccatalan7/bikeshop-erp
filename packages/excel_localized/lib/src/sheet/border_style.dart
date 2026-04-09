@@ -31,7 +31,7 @@ class _BorderSet extends Equatable {
   final bool diagonalBorderUp;
   final bool diagonalBorderDown;
 
-  _BorderSet({
+  const _BorderSet({
     required this.leftBorder,
     required this.rightBorder,
     required this.topBorder,
@@ -95,4 +95,4 @@ enum BorderStyle {
 
 BorderStyle? getBorderStyleByName(String name) =>
     BorderStyle.values.firstWhereOrNull((e) =>
-        e.toString().toLowerCase() == 'borderstyle.' + name.toLowerCase());
+        e.toString().toLowerCase() == 'borderstyle.${name.toLowerCase()}');

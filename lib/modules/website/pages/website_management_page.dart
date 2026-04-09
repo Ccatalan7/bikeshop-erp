@@ -49,7 +49,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     final theme = Theme.of(context);
 
     if (_isInitializing) {
-      final loading = const Center(child: BrandedLoading());
+      const loading = Center(child: BrandedLoading());
       if (widget.embedded) return loading;
       return const MainLayout(child: Center(child: BrandedLoading()));
     }
@@ -473,7 +473,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -533,7 +533,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     if (!context.mounted) return;
 
     // Build the feed URL
-    final supabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1';
+    const supabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1';
     String feedUrl;
 
     if (customDomain != null && customDomain.isNotEmpty) {
@@ -584,7 +584,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: theme.colorScheme.outlineVariant,

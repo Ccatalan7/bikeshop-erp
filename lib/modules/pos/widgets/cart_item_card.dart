@@ -35,7 +35,7 @@ class CartItemCard extends StatelessWidget {
               height: 60,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: theme.colorScheme.surfaceVariant,
+                color: theme.colorScheme.surfaceContainerHighest,
               ),
               child: item.product?.imageUrl != null
                   ? ClipRRect(
@@ -48,13 +48,13 @@ class CartItemCard extends StatelessWidget {
                         memCacheWidth: 120,
                         memCacheHeight: 120,
                         placeholder: (context, url) => Container(
-                          color: theme.colorScheme.surfaceVariant,
+                          color: theme.colorScheme.surfaceContainerHighest,
                           child: const Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         ),
                         errorWidget: (context, url, error) => Container(
-                          color: theme.colorScheme.surfaceVariant,
+                          color: theme.colorScheme.surfaceContainerHighest,
                           child: Icon(
                             Icons.pedal_bike,
                             size: 24,
@@ -128,7 +128,7 @@ class CartItemCard extends StatelessWidget {
                           size: 20,
                         ),
                         style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.surfaceVariant,
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           minimumSize: const Size(32, 32),
                           padding: EdgeInsets.zero,
                         ),
@@ -149,7 +149,7 @@ class CartItemCard extends StatelessWidget {
                             : null,
                         icon: const Icon(Icons.add, size: 20),
                         style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.surfaceVariant,
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           minimumSize: const Size(32, 32),
                           padding: EdgeInsets.zero,
                         ),

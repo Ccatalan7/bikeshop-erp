@@ -60,8 +60,7 @@ void main(List<String> args) {
   cell2.cellStyle = cellStyle;
 
   /// printing cell-type
-  print("CellType: " +
-      switch (cell.value) {
+  print("CellType: ${switch (cell.value) {
         null => 'empty',
         TextCellValue() => 'text',
         FormulaCellValue() => 'Formula',
@@ -71,7 +70,7 @@ void main(List<String> args) {
         DateTimeCellValue() => 'date+time',
         TimeCellValue() => 'time',
         BoolCellValue() => 'bool',
-      });
+      }}");
 
   ///
   ///
@@ -118,14 +117,14 @@ void main(List<String> args) {
 
   print('list creation executed in ${stopwatch.elapsed}');
   stopwatch.reset();
-  list.forEach((row) {
+  for (var row in list) {
     sheet.appendRow(row);
-  });
+  }
   print('appending executed in ${stopwatch.elapsed}');
 
   sheet.appendRow([
-    IntCellValue(8),
-    DoubleCellValue(999.62221),
+    const IntCellValue(8),
+    const DoubleCellValue(999.62221),
     DateCellValue(
       year: DateTime.now().year,
       month: DateTime.now().month,
@@ -147,13 +146,13 @@ void main(List<String> args) {
   var columnIterables = ['A', 'B', 'C', 'D', 'E'];
   int columnIndex = 0;
 
-  columnIterables.forEach((columnValue) {
+  for (var columnValue in columnIterables) {
     columnIterableSheet.cell(CellIndex.indexByColumnRow(
       rowIndex: columnIterableSheet.maxRows,
       columnIndex: columnIndex,
     ))
-      ..value = TextCellValue(columnValue);
-  });
+      .value = TextCellValue(columnValue);
+  }
 
   // Saving the file
 

@@ -80,7 +80,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           // Filters
           Container(
             padding: const EdgeInsets.all(16),
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
             child: ConstraintLayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 600) {
@@ -89,7 +89,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: _selectedStatus,
+                        initialValue: _selectedStatus,
                         decoration: const InputDecoration(
                           labelText: 'Estado del Pedido',
                           isDense: true,
@@ -116,7 +116,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: _selectedPaymentStatus,
+                        initialValue: _selectedPaymentStatus,
                         decoration: const InputDecoration(
                           labelText: 'Estado de Pago',
                           isDense: true,

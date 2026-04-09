@@ -843,7 +843,7 @@ class WebsiteBlockRenderer {
         ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
 
     // Use style background if no image
-    final defaultBgColor = const Color(0xFF1a1a1a);
+    const defaultBgColor = Color(0xFF1a1a1a);
 
     // New Props for Alignment and Full Screen
     final isFullScreen = data['isFullScreen'] == true;
@@ -1727,7 +1727,7 @@ class WebsiteBlockRenderer {
 
     return Container(
       padding: padding,
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
+      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -1844,7 +1844,7 @@ class WebsiteBlockRenderer {
         defaultVertical: 64,
         defaultHorizontal: 24,
       ),
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.15),
+      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.15),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -2227,7 +2227,7 @@ class WebsiteBlockRenderer {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(20),
                                 child: Container(
-                                  color: theme.colorScheme.surfaceVariant,
+                                  color: theme.colorScheme.surfaceContainerHighest,
                                   child: imageUrl.isEmpty
                                       ? Center(
                                           child: Icon(
@@ -2705,7 +2705,7 @@ class WebsiteBlockRenderer {
                                 height: 200,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
-                                  color: theme.colorScheme.surfaceVariant,
+                                  color: theme.colorScheme.surfaceContainerHighest,
                                 ),
                                 child: Center(
                                   child: Icon(
@@ -3199,8 +3199,9 @@ class WebsiteBlockRenderer {
 
     double overlayOpacity = 0.5;
     final rawOpacity = data['overlayOpacity'];
-    if (rawOpacity is num)
+    if (rawOpacity is num) {
       overlayOpacity = rawOpacity.toDouble().clamp(0.0, 1.0);
+    }
 
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     final hasVideoUrl = videoUrl != null && videoUrl.isNotEmpty;
@@ -3569,7 +3570,7 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
 
         // Items per page = total brands (show all on one page, like reference site)
         // Only paginate if we truly can't fit them all
-        final minLogoWidth = 100.0; // Minimum width per logo
+        const minLogoWidth = 100.0; // Minimum width per logo
         final maxItemsPerPage =
             ((availableWidth) / (minLogoWidth + widget.gap)).floor();
 
@@ -4170,13 +4171,13 @@ class _CategoryCard extends StatelessWidget {
           // Placeholder gradient for cards without images
           if (!hasImage)
             Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF3a3a3a),
-                    const Color(0xFF1a1a1a),
+                    Color(0xFF3a3a3a),
+                    Color(0xFF1a1a1a),
                   ],
                 ),
               ),
@@ -5548,12 +5549,11 @@ class _MobileProductAutoCarousel extends StatefulWidget {
   final Function(String)? onNavigate;
 
   const _MobileProductAutoCarousel({
-    Key? key,
     required this.products,
     this.bodyFont,
     this.previewMode = false,
     this.onNavigate,
-  }) : super(key: key);
+  });
 
   @override
   State<_MobileProductAutoCarousel> createState() =>

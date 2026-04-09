@@ -14,7 +14,7 @@ class ChatProvider extends ChangeNotifier {
   // State
   List<Conversation> _conversations = [];
   List<Message> _activeMessages = [];
-  Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
+  final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   bool _isLoading = false;
   String? _activeConversationId;
 

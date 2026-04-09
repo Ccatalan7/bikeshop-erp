@@ -608,7 +608,7 @@ class _SubjectDialogState extends State<_SubjectDialog> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: widget.availableCategories.contains(_category)
+                        initialValue: widget.availableCategories.contains(_category)
                             ? _category
                             : null,
                         decoration: const InputDecoration(
@@ -643,7 +643,7 @@ class _SubjectDialogState extends State<_SubjectDialog> {
 
                 // Icon picker
                 DropdownButtonFormField<String>(
-                  value: _icon,
+                  initialValue: _icon,
                   decoration: const InputDecoration(
                     labelText: 'Ícono',
                     border: OutlineInputBorder(),

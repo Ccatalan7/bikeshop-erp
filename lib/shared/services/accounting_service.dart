@@ -57,9 +57,10 @@ class AccountingService extends ChangeNotifier {
     required String paymentAccountCode,
     required String paymentAccountName,
   }) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
           'AccountingService: Creating POS journal entry for transaction $transactionId');
+    }
 
     final entryId = 'JE-POS-${DateTime.now().millisecondsSinceEpoch}';
 

@@ -276,19 +276,19 @@ class PublicStoreTheme {
 
   // Shadow for Cards
   static List<BoxShadow> get cardShadow => [
-        BoxShadow(
+        const BoxShadow(
           color: shadow,
           blurRadius: 8,
-          offset: const Offset(0, 2),
+          offset: Offset(0, 2),
         ),
       ];
 
   // Shadow for Floating Elements
   static List<BoxShadow> get floatingShadow => [
-        BoxShadow(
+        const BoxShadow(
           color: shadow,
           blurRadius: 16,
-          offset: const Offset(0, 4),
+          offset: Offset(0, 4),
         ),
       ];
 }

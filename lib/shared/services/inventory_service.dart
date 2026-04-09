@@ -35,10 +35,11 @@ class InventoryService extends ChangeNotifier {
   Future<List<Product>> getProductsByType(ProductType type,
       {int limit = 100}) async {
     try {
-      if (_db == null)
+      if (_db == null) {
         return _products.where((p) => p.productType == type).toList();
+      }
 
-      final data = await _db!.select('products',
+      final data = await _db.select('products',
           where: "product_type=${type.name.toLowerCase()}", limit: limit);
 
       final results = data.map(_productFromMap).toList();
@@ -66,7 +67,7 @@ class InventoryService extends ChangeNotifier {
     } catch (_) {
       if (_db == null) return null;
       try {
-        final data = await _db!.selectById('products', id);
+        final data = await _db.selectById('products', id);
         if (data == null) return null;
         final product = _productFromMap(data);
         _upsertLocalProduct(product);
@@ -90,7 +91,7 @@ class InventoryService extends ChangeNotifier {
     } catch (_) {
       if (_db == null) return null;
       try {
-        final records = await _db!.select('products', where: 'sku=$sku');
+        final records = await _db.select('products', where: 'sku=$sku');
         if (records.isEmpty) return null;
         final product = _productFromMap(records.first);
         _upsertLocalProduct(product);
@@ -135,7 +136,7 @@ class InventoryService extends ChangeNotifier {
       try {
         debugPrint('🔌 Executing DB Select: supplier_code=$cleanCode');
         final records =
-            await _db!.select('products', where: "supplier_code=$cleanCode");
+            await _db.select('products', where: "supplier_code=$cleanCode");
         debugPrint('🔌 DB returned ${records.length} records');
 
         if (records.isEmpty) {
@@ -208,7 +209,7 @@ class InventoryService extends ChangeNotifier {
     // 1. Try DB search first if available for efficiency on large datasets
     if (_db != null) {
       try {
-        final rawResults = await _db!.searchRecordsMultiToken(
+        final rawResults = await _db.searchRecordsMultiToken(
           'products',
           [
             'name',
@@ -274,7 +275,7 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db!.adjustStock(productId, quantity, type, reference);
+        await _db.adjustStock(productId, quantity, type, reference);
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
@@ -313,7 +314,7 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db!.adjustStock(productId, quantity, 'OUT', reference);
+        await _db.adjustStock(productId, quantity, 'OUT', reference);
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
@@ -343,7 +344,7 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db!.adjustStock(productId, quantity, 'IN', reference);
+        await _db.adjustStock(productId, quantity, 'IN', reference);
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
@@ -390,7 +391,7 @@ class InventoryService extends ChangeNotifier {
 
     try {
       // Fetch ALL products (uses pagination internally to bypass 1000 row limit)
-      final rawProducts = await _db!.select('products', fetchAll: true);
+      final rawProducts = await _db.select('products', fetchAll: true);
       final products = rawProducts.map(_productFromMap).toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
@@ -610,13 +611,12 @@ extension _InventoryServiceRealtime on InventoryService {
               debugPrint(
                   '🔔 [InventoryService] Product changed: ${payload.eventType}');
 
-              if (payload.newRecord != null && payload.newRecord!.isNotEmpty) {
-                final updatedProduct = _productFromMap(payload.newRecord!);
+              if (payload.newRecord.isNotEmpty) {
+                final updatedProduct = _productFromMap(payload.newRecord);
                 _upsertLocalProduct(updatedProduct);
                 notifyListeners();
-              } else if (payload.eventType == PostgresChangeEvent.delete &&
-                  payload.oldRecord != null) {
-                final id = payload.oldRecord!['id']?.toString();
+              } else if (payload.eventType == PostgresChangeEvent.delete) {
+                final id = payload.oldRecord['id']?.toString();
                 if (id != null) {
                   _products.removeWhere((p) => p.id == id);
                   notifyListeners();

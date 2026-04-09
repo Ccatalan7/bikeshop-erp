@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/public_store_theme.dart';
 import 'customer_chat_panel.dart';
 
 class CustomerChatWidget extends StatefulWidget {

@@ -158,8 +158,9 @@ class BulkProductEditService {
         final def = row['spec_definitions'] as Map<String, dynamic>?;
         final key = def?['key']?.toString();
         final value = row['display_value']?.toString();
-        if ((key ?? '').trim().isEmpty && (value ?? '').trim().isEmpty)
+        if ((key ?? '').trim().isEmpty && (value ?? '').trim().isEmpty) {
           continue;
+        }
         final parts = <String>[];
         if ((key ?? '').trim().isNotEmpty) parts.add(_normalizeText(key!));
         if ((value ?? '').trim().isNotEmpty) parts.add(_normalizeText(value!));

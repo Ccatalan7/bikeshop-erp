@@ -92,7 +92,7 @@ class RemoteScannerService {
         },
       );
 
-      await _channel!.subscribe();
+      _channel!.subscribe();
       _isListening = true;
       debugPrint('✅ RemoteScannerService: Listening on $channelName');
     } catch (e) {
@@ -122,7 +122,7 @@ class RemoteScannerService {
       debugPrint('📤 RemoteScannerService: Sending scan to $channelName');
 
       final channel = _supabase.channel(channelName);
-      await channel.subscribe();
+      channel.subscribe();
 
       await channel.sendBroadcastMessage(
         event: 'scan',

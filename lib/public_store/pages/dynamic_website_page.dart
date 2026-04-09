@@ -483,13 +483,16 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     final parsedSectionSpacing = double.tryParse(sectionSpacing);
     final parsedContainerPadding = double.tryParse(containerPadding);
 
-    if (parsedHeadingSize != null)
+    if (parsedHeadingSize != null) {
       _headingSize = parsedHeadingSize.clamp(24.0, 72.0);
+    }
     if (parsedBodySize != null) _bodySize = parsedBodySize.clamp(12.0, 24.0);
-    if (parsedSectionSpacing != null)
+    if (parsedSectionSpacing != null) {
       _sectionSpacing = parsedSectionSpacing.clamp(32.0, 128.0);
-    if (parsedContainerPadding != null)
+    }
+    if (parsedContainerPadding != null) {
       _containerPadding = parsedContainerPadding.clamp(16.0, 64.0);
+    }
   }
 
   @override

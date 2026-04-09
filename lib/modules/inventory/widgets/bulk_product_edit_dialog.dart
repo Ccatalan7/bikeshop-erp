@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -120,8 +122,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   List<String> _reasonOptionsForDirection(String type) {
-    return [..._outboundReasonTypes, ..._inboundReasonTypes]
-        .toSet()
+    return <String>{..._outboundReasonTypes, ..._inboundReasonTypes}
         .where((reasonType) =>
             _allowedDirectionsForReason(reasonType).contains(type))
         .toList(growable: false);
@@ -643,7 +644,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     });
   }
 
-  void _copySharedStockDetailsToRows({required bool includeQuantity}) {
+  void _copySharedStockDetailsToRows(
+      {required bool includeQuantity, required bool includeDetails}) {
     setState(() {
       for (final entry in _stockDrafts.entries) {
         final current = entry.value;
@@ -651,8 +653,11 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           quantity: includeQuantity
               ? (_stockSharedConfig.defaultQuantity ?? current.quantity)
               : current.quantity,
-          reasonType: _stockSharedConfig.reasonType,
-          note: _sharedNoteController.text.trim(),
+          reasonType: includeDetails
+              ? _stockSharedConfig.reasonType
+              : current.reasonType,
+          note:
+              includeDetails ? _sharedNoteController.text.trim() : current.note,
         );
       }
     });
@@ -774,19 +779,15 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mediaQuery = MediaQuery.of(context);
-    final horizontalInset = mediaQuery.size.width >= 1800
-        ? 16.0
-        : mediaQuery.size.width >= 1400
-            ? 20.0
-            : 24.0;
-    final verticalInset = mediaQuery.size.height >= 1100 ? 16.0 : 24.0;
+    const horizontalInset = 16.0;
+    const verticalInset = 16.0;
     final dialogWidth =
         math.min(mediaQuery.size.width - (horizontalInset * 2), 1680.0);
     final dialogHeight =
         math.min(mediaQuery.size.height - (verticalInset * 2), 980.0);
 
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(
+      insetPadding: const EdgeInsets.symmetric(
         horizontal: horizontalInset,
         vertical: verticalInset,
       ),
@@ -794,137 +795,212 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       child: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
-        child: Column(
+        child: Row(
           children: [
-            _buildHeader(theme),
-            _buildStepper(theme),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: KeyedSubtree(
-                  key: ValueKey<int>(_stepIndex),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                    child: _buildStepContent(theme),
+            // Left Pane: Navigation Sidebar
+            Container(
+              width: 250,
+              decoration: BoxDecoration(
+                color:
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                border: Border(
+                  right: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5),
                   ),
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSidebarHeader(theme),
+                  const SizedBox(height: 24),
+                  Expanded(child: _buildVerticalStepper(theme)),
+                ],
+              ),
             ),
-            _buildFooter(theme),
+            // Right Pane: Active Content & Footer
+            Expanded(
+              child: Container(
+                color: theme.colorScheme.surface,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: KeyedSubtree(
+                          key: ValueKey<int>(_stepIndex),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                            child: _buildStepContent(theme),
+                          ),
+                        ),
+                      ),
+                    ),
+                    _buildFooter(theme),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 18, 16, 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.35),
-          ),
-        ),
-      ),
-      child: Row(
+  Widget _buildSidebarHeader(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 4,
-            height: 30,
-            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: BorderRadius.circular(999),
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.auto_fix_high_rounded,
+              color: theme.colorScheme.onPrimaryContainer,
+              size: 28,
             ),
           ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Edición masiva inteligente',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Define el alcance, elige la operación y revisa solo los campos que importan para ese lote.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 24),
+          Text(
+            'Edición Masiva',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
             ),
           ),
-          IconButton(
-            onPressed: _isApplying ? null : () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded),
-            tooltip: 'Cerrar',
+          const SizedBox(height: 8),
+          Text(
+            'Sistematiza el control de inventario.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStepper(ThemeData theme) {
-    const labels = ['Alcance', 'Operación', 'Revisión'];
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.25),
-          ),
-        ),
-      ),
-      child: Row(
-        children: List.generate(labels.length, (index) {
-          final isActive = index == _stepIndex;
-          final isDone = index < _stepIndex;
-          return Expanded(
-            child: Row(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: isActive || isDone
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${index + 1}',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: isActive || isDone
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    labels[index],
-                    style: theme.textTheme.labelLarge?.copyWith(
+  Widget _buildVerticalStepper(ThemeData theme) {
+    const steps = [
+      ('Alcance', 'Selecciona y filtra los productos'),
+      ('Operación', 'Elige la acción a ejecutar'),
+      ('Revisión', 'Ajusta parámetros e impacta'),
+    ];
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      itemCount: steps.length,
+      itemBuilder: (context, index) {
+        final isActive = index == _stepIndex;
+        final isDone = index < _stepIndex;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
                       color: isActive
-                          ? theme.colorScheme.onSurface
-                          : theme.colorScheme.onSurfaceVariant,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                          ? theme.colorScheme.primary
+                          : isDone
+                              ? theme.colorScheme.primary.withOpacity(0.1)
+                              : Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isActive || isDone
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outlineVariant,
+                        width: isActive ? 0 : 2,
+                      ),
+                      boxShadow: isActive
+                          ? [
+                              BoxShadow(
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              )
+                            ]
+                          : null,
                     ),
+                    alignment: Alignment.center,
+                    child: isDone
+                        ? Icon(Icons.check_rounded,
+                            size: 18, color: theme.colorScheme.primary)
+                        : Text(
+                            '${index + 1}',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: isActive
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                  if (index < steps.length - 1) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 2,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: isDone
+                            ? theme.colorScheme.primary.withOpacity(0.3)
+                            : theme.colorScheme.outlineVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        steps[index].$1,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: isActive || isDone
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              isActive ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        steps[index].$2,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isActive
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.onSurfaceVariant
+                                  .withOpacity(0.7),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          );
-        }),
-      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -964,19 +1040,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                flex: 6,
-                child: Column(
-                  children: [
-                    _buildSmartFilterPanel(theme),
-                    const SizedBox(height: 16),
-                    _buildScopeSummary(theme),
-                  ],
-                ),
+              SizedBox(
+                width: 320,
+                child: _buildSmartFilterPanel(theme),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 24),
               Expanded(
-                flex: 5,
                 child: _buildScopePreview(theme),
               ),
             ],
@@ -988,16 +1057,30 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
   Widget _buildScopeSourceSelector(ThemeData theme) {
     final options = [
-      BulkProductScopeSource.selected,
-      BulkProductScopeSource.filtered,
-      BulkProductScopeSource.all,
+      (
+        BulkProductScopeSource.selected,
+        'Selección manual',
+        Icons.check_box_outlined
+      ),
+      (
+        BulkProductScopeSource.filtered,
+        'Lista actual filtrada',
+        Icons.filter_alt_outlined
+      ),
+      (
+        BulkProductScopeSource.all,
+        'Todo el inventario',
+        Icons.inventory_2_outlined
+      ),
     ];
 
     return Row(
-      children: options.map((source) {
+      children: options.map((option) {
+        final source = option.$1;
         final isSelected = source == _scopeSource;
         final isDisabled = source == BulkProductScopeSource.selected &&
             widget.selectedProductIds.isEmpty;
+
         final count = switch (source) {
           BulkProductScopeSource.selected => widget.selectedProductIds.length,
           BulkProductScopeSource.filtered => widget.filteredProducts.length,
@@ -1016,48 +1099,63 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       setState(() => _scopeSource = source);
                       _refreshScopePreview();
                     },
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.all(16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? theme.colorScheme.primary.withOpacity(0.08)
-                      : theme.colorScheme.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outlineVariant.withOpacity(0.5),
-                  ),
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      isSelected ? null : Border.all(color: Colors.transparent),
                 ),
                 child: Opacity(
                   opacity: isDisabled ? 0.45 : 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        source.label,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      Icon(
+                        option.$3,
+                        color: isSelected
+                            ? theme.colorScheme.onPrimaryContainer
+                            : theme.colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              option.$2,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: isSelected
+                                    ? theme.colorScheme.onPrimaryContainer
+                                    : theme.colorScheme.onSurface,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$count base',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: isSelected
+                                    ? theme.colorScheme.onPrimaryContainer
+                                        .withOpacity(0.8)
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '$count productos base',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (source == BulkProductScopeSource.filtered) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Respeta los filtros y búsqueda ya aplicados en la lista.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                      if (isSelected)
+                        Icon(Icons.check_circle_rounded,
+                            size: 20, color: theme.colorScheme.primary),
                     ],
                   ),
                 ),
@@ -1071,7 +1169,6 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
   Widget _buildSmartFilterPanel(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
@@ -1079,300 +1176,283 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           color: theme.colorScheme.outlineVariant.withOpacity(0.5),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
           Row(
             children: [
-              Text(
-                'Filtros inteligentes del lote',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
+              const Icon(Icons.filter_list_rounded, size: 20),
               const SizedBox(width: 8),
-              Tooltip(
-                message:
-                    'Úsalos para acotar este lote sin tocar la configuración global de la lista. Ejemplo: keyword + sin categoría + sin marca + sin imagen.',
-                child: Icon(
-                  Icons.info_outline_rounded,
-                  size: 16,
-                  color: theme.colorScheme.onSurfaceVariant,
+              Text(
+                'Filtros',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _keywordController,
-                  onChanged: (value) {
-                    _filters = _filters.copyWith(keyword: value);
-                    _scheduleScopeRefresh();
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Keyword / texto libre',
-                    hintText: 'Ej: maza, cadena 7v, shimano',
-                    prefixIcon: Icon(Icons.search_rounded),
-                  ),
-                ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _keywordController,
+            onChanged: (value) {
+              _filters = _filters.copyWith(keyword: value);
+              _scheduleScopeRefresh();
+            },
+            decoration: InputDecoration(
+              labelText: 'Búsqueda por texto',
+              hintText: 'Ej: maza, shimano, cuadro',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              filled: true,
+              fillColor: theme.colorScheme.surface,
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _specQueryController,
-                  onChanged: (value) {
-                    _filters = _filters.copyWith(specQuery: value);
-                    _scheduleScopeRefresh();
-                  },
-                  decoration: InputDecoration(
-                    labelText: 'Filtro por especificación',
-                    hintText: 'Ej: 7v, aluminio, 29',
-                    prefixIcon: _isRefreshingScope && _filters.hasSpecQuery
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : const Icon(Icons.tune_rounded),
-                  ),
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownField<String?>(
-                  theme: theme,
-                  label: 'Categoría',
-                  value: _filters.categoryId,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Todas')),
-                    ...widget.categories.map(
-                      (category) => DropdownMenuItem<String?>(
-                        value: category.id,
-                        child: Text(category.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _filters = _filters.copyWith(
-                        categoryId: value, clearCategoryId: value == null));
-                    _scheduleScopeRefresh();
-                  },
-                ),
+          TextField(
+            controller: _specQueryController,
+            onChanged: (value) {
+              _filters = _filters.copyWith(specQuery: value);
+              _scheduleScopeRefresh();
+            },
+            decoration: InputDecoration(
+              labelText: 'Especificaciones',
+              hintText: 'Ej: 7v, aluminio, 29',
+              prefixIcon: _isRefreshingScope && _filters.hasSpecQuery
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : const Icon(Icons.tune_rounded, size: 20),
+              filled: true,
+              fillColor: theme.colorScheme.surface,
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdownField<String?>(
-                  theme: theme,
-                  label: 'Marca',
-                  value: _filters.brandId,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Todas')),
-                    ...widget.brands.map(
-                      (brand) => DropdownMenuItem<String?>(
-                        value: brand.id,
-                        child: Text(brand.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _filters = _filters.copyWith(
-                        brandId: value, clearBrandId: value == null));
-                    _scheduleScopeRefresh();
-                  },
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdownField<String?>(
-                  theme: theme,
-                  label: 'Proveedor',
-                  value: _filters.supplierId,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Todos')),
-                    ...widget.suppliers.map(
-                      (supplier) => DropdownMenuItem<String?>(
-                        value: supplier.id,
-                        child: Text(supplier.name),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _filters = _filters.copyWith(
-                        supplierId: value, clearSupplierId: value == null));
-                    _scheduleScopeRefresh();
-                  },
-                ),
-              ),
-            ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Categorización',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownField<ProductType?>(
-                  theme: theme,
-                  label: 'Tipo de producto',
-                  value: _filters.productType,
-                  items: [
-                    const DropdownMenuItem<ProductType?>(
-                        value: null, child: Text('Todos')),
-                    ...ProductType.values.map(
-                      (type) => DropdownMenuItem<ProductType?>(
-                        value: type,
-                        child: Text(type.displayName),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() => _filters = _filters.copyWith(
-                        productType: value, clearProductType: value == null));
-                    _scheduleScopeRefresh();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdownField<BulkFilterStockState>(
-                  theme: theme,
-                  label: 'Inventario',
-                  value: _filters.stockState,
-                  items: BulkFilterStockState.values
-                      .map(
-                        (state) => DropdownMenuItem<BulkFilterStockState>(
-                          value: state,
-                          child: Text(state.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(
-                        () => _filters = _filters.copyWith(stockState: value));
-                    _scheduleScopeRefresh();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdownField<BulkToggleState>(
-                  theme: theme,
-                  label: 'Website',
-                  value: _filters.websiteState,
-                  items: BulkToggleState.values
-                      .map(
-                        (state) => DropdownMenuItem<BulkToggleState>(
-                          value: state,
-                          child: Text(state.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() =>
-                        _filters = _filters.copyWith(websiteState: value));
-                    _scheduleScopeRefresh();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdownField<BulkToggleState>(
-                  theme: theme,
-                  label: 'Google Merchant',
-                  value: _filters.googleMerchantState,
-                  items: BulkToggleState.values
-                      .map(
-                        (state) => DropdownMenuItem<BulkToggleState>(
-                          value: state,
-                          child: Text(state.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _filters =
-                        _filters.copyWith(googleMerchantState: value));
-                    _scheduleScopeRefresh();
-                  },
-                ),
-              ),
+          _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Categoría',
+            value: _filters.categoryId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('Todas')),
+              ...widget.categories.map(
+                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
             ],
+            onChanged: (value) {
+              setState(() => _filters = _filters.copyWith(
+                  categoryId: value, clearCategoryId: value == null));
+              _scheduleScopeRefresh();
+            },
           ),
           const SizedBox(height: 12),
-          Row(
+          _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Marca',
+            value: _filters.brandId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('Todas')),
+              ...widget.brands.map(
+                  (b) => DropdownMenuItem(value: b.id, child: Text(b.name))),
+            ],
+            onChanged: (value) {
+              setState(() => _filters = _filters.copyWith(
+                  brandId: value, clearBrandId: value == null));
+              _scheduleScopeRefresh();
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Proveedor',
+            value: _filters.supplierId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('Todos')),
+              ...widget.suppliers.map(
+                  (s) => DropdownMenuItem(value: s.id, child: Text(s.name))),
+            ],
+            onChanged: (value) {
+              setState(() => _filters = _filters.copyWith(
+                  supplierId: value, clearSupplierId: value == null));
+              _scheduleScopeRefresh();
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Estado e Inventario',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<ProductType?>(
+            theme: theme,
+            label: 'Tipo',
+            value: _filters.productType,
+            items: [
+              const DropdownMenuItem<ProductType?>(
+                  value: null, child: Text('Todos')),
+              ...ProductType.values.map((t) =>
+                  DropdownMenuItem(value: t, child: Text(t.displayName))),
+            ],
+            onChanged: (value) {
+              setState(() => _filters = _filters.copyWith(
+                  productType: value, clearProductType: value == null));
+              _scheduleScopeRefresh();
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<BulkFilterStockState>(
+            theme: theme,
+            label: 'Inventario',
+            value: _filters.stockState,
+            items: BulkFilterStockState.values
+                .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _filters = _filters.copyWith(stockState: value));
+                _scheduleScopeRefresh();
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<BulkToggleState>(
+            theme: theme,
+            label: 'Estado Activo',
+            value: _filters.activeState,
+            items: BulkToggleState.values
+                .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(
+                    () => _filters = _filters.copyWith(activeState: value));
+                _scheduleScopeRefresh();
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Integraciones',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<BulkToggleState>(
+            theme: theme,
+            label: 'Portal Web',
+            value: _filters.websiteState,
+            items: BulkToggleState.values
+                .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(
+                    () => _filters = _filters.copyWith(websiteState: value));
+                _scheduleScopeRefresh();
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField<BulkToggleState>(
+            theme: theme,
+            label: 'Merchant',
+            value: _filters.googleMerchantState,
+            items: BulkToggleState.values
+                .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() =>
+                    _filters = _filters.copyWith(googleMerchantState: value));
+                _scheduleScopeRefresh();
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Avisos (Requiere Atención)',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: _buildDropdownField<BulkToggleState>(
-                  theme: theme,
-                  label: 'Estado activo',
-                  value: _filters.activeState,
-                  items: BulkToggleState.values
-                      .map(
-                        (state) => DropdownMenuItem<BulkToggleState>(
-                          value: state,
-                          child: Text(state.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(
-                        () => _filters = _filters.copyWith(activeState: value));
-                    _scheduleScopeRefresh();
-                  },
-                ),
+              _buildFilterToggle(
+                theme,
+                label: 'Solo sin categoría',
+                value: _filters.onlyMissingCategory,
+                onChanged: (value) {
+                  setState(() =>
+                      _filters = _filters.copyWith(onlyMissingCategory: value));
+                  _scheduleScopeRefresh();
+                },
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildFilterToggle(
-                      theme,
-                      label: 'Sin categoría',
-                      value: _filters.onlyMissingCategory,
-                      onChanged: (value) {
-                        setState(() => _filters =
-                            _filters.copyWith(onlyMissingCategory: value));
-                        _scheduleScopeRefresh();
-                      },
-                    ),
-                    _buildFilterToggle(
-                      theme,
-                      label: 'Sin marca',
-                      value: _filters.onlyMissingBrand,
-                      onChanged: (value) {
-                        setState(() => _filters =
-                            _filters.copyWith(onlyMissingBrand: value));
-                        _scheduleScopeRefresh();
-                      },
-                    ),
-                    _buildFilterToggle(
-                      theme,
-                      label: 'Sin imagen',
-                      value: _filters.onlyMissingImage,
-                      onChanged: (value) {
-                        setState(() => _filters =
-                            _filters.copyWith(onlyMissingImage: value));
-                        _scheduleScopeRefresh();
-                      },
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 8),
+              _buildFilterToggle(
+                theme,
+                label: 'Solo sin marca',
+                value: _filters.onlyMissingBrand,
+                onChanged: (value) {
+                  setState(() =>
+                      _filters = _filters.copyWith(onlyMissingBrand: value));
+                  _scheduleScopeRefresh();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildFilterToggle(
+                theme,
+                label: 'Solo sin imagen',
+                value: _filters.onlyMissingImage,
+                onChanged: (value) {
+                  setState(() =>
+                      _filters = _filters.copyWith(onlyMissingImage: value));
+                  _scheduleScopeRefresh();
+                },
               ),
             ],
           ),
@@ -1381,27 +1461,94 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     );
   }
 
-  Widget _buildScopeSummary(ThemeData theme) {
-    return Row(
-      children: [
-        _buildSummaryCard(theme, 'Coincidencias', '${_matchedProducts.length}',
-            Icons.dataset_rounded),
-        const SizedBox(width: 12),
-        _buildSummaryCard(theme, 'Sin categoría', '$_missingCategoryCount',
-            Icons.category_outlined),
-        const SizedBox(width: 12),
-        _buildSummaryCard(
-            theme, 'Sin marca', '$_missingBrandCount', Icons.sell_outlined),
-        const SizedBox(width: 12),
-        _buildSummaryCard(theme, 'Sin imagen', '$_missingImageCount',
-            Icons.image_not_supported_outlined),
-      ],
+  Widget _buildCleanStatRow(ThemeData theme) {
+    if (_matchedProducts.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _buildStatMetric(
+                  theme,
+                  '${_matchedProducts.length}',
+                  'Coincidencias',
+                  Icons.dataset_rounded,
+                  theme.colorScheme.primary),
+              if (_missingCategoryCount > 0) ...[
+                const SizedBox(width: 16),
+                _buildStatMetric(
+                    theme,
+                    '$_missingCategoryCount',
+                    'Sin Categoría',
+                    Icons.warning_rounded,
+                    Colors.orange[700]!),
+              ],
+              if (_missingBrandCount > 0) ...[
+                const SizedBox(width: 16),
+                _buildStatMetric(theme, '$_missingBrandCount', 'Sin Marca',
+                    Icons.warning_rounded, Colors.orange[700]!),
+              ],
+              if (_missingImageCount > 0) ...[
+                const SizedBox(width: 16),
+                _buildStatMetric(theme, '$_missingImageCount', 'Sin Imagen',
+                    Icons.warning_rounded, Colors.orange[700]!),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatMetric(
+      ThemeData theme, String value, String label, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.1,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildScopePreview(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
@@ -1415,9 +1562,11 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           Row(
             children: [
               Text(
-                'Vista previa del lote',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                'Vista Previa del Lote',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
               const Spacer(),
               if (_isRefreshingScope)
@@ -1425,27 +1574,37 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Text(
+                  '${_matchedProducts.length} productos',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            _matchedProducts.isEmpty
-                ? 'No hay productos que cumplan con este alcance.'
-                : 'Primeros ${math.min(_matchedProducts.length, 10)} productos del lote.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 14),
+          if (!_isRefreshingScope) _buildCleanStatRow(theme),
+          const SizedBox(height: 16),
+          Divider(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          const SizedBox(height: 16),
           Expanded(
             child: _matchedProducts.isEmpty
                 ? Center(
-                    child: Text(
-                      'Ajusta los filtros para encontrar productos.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined,
+                            size: 48, color: theme.colorScheme.outlineVariant),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Ajusta los filtros para encontrar productos.',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 : ListView.separated(
@@ -1457,29 +1616,56 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     itemBuilder: (context, index) {
                       final product = _matchedProducts[index];
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Row(
                           children: [
                             ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 44,
-                                height: 44,
-                                child: product.imageUrl != null
-                                    ? ImageService.buildProductImage(
-                                        imageUrl: product.imageUrl,
-                                        size: 44,
-                                      )
-                                    : Container(
-                                        color: theme.colorScheme.surfaceVariant,
+                              borderRadius: BorderRadius.circular(6),
+                              child: product.imageUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: product.imageUrl!,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                        color: theme.colorScheme
+                                            .surfaceContainerHighest,
+                                        child: Center(
+                                          child: SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: theme.colorScheme.primary
+                                                  .withOpacity(0.5),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                        color: theme.colorScheme
+                                            .surfaceContainerHighest,
                                         child: Icon(
-                                          Icons.inventory_2_outlined,
+                                          Icons.broken_image_outlined,
                                           size: 18,
                                           color: theme
                                               .colorScheme.onSurfaceVariant,
                                         ),
                                       ),
-                              ),
+                                    )
+                                  : Container(
+                                      width: 44,
+                                      height: 44,
+                                      color: theme
+                                          .colorScheme.surfaceContainerHighest,
+                                      child: Icon(
+                                        Icons.inventory_2_outlined,
+                                        size: 18,
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1488,27 +1674,38 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                                 children: [
                                   Text(
                                     product.name,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    '${product.sku} · ${product.categoryName ?? 'Sin categoría'}',
+                                    [
+                                      if (product.sku != null) product.sku,
+                                      if (product.categoryName != null)
+                                        product.categoryName,
+                                      if (product.brand != null) product.brand,
+                                    ].join(' • '),
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
                             ),
-                            if (product.tracksInventory)
-                              Text(
-                                '${product.inventoryQty}',
-                                style: theme.textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                            const SizedBox(width: 16),
+                            Text(
+                              '${product.inventoryQty ?? 0}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurface,
                               ),
+                            ),
                           ],
                         ),
                       );
@@ -1568,25 +1765,27 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '2. Elige qué vas a editar',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w700),
+          'Selecciona la operación',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
-          'El flujo y la tabla final cambian según la operación elegida. Así se evita mostrar campos irrelevantes.',
+          'La configuración de este lote se adaptará a los datos que necesites modificar.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 24),
         Wrap(
           spacing: 16,
           runSpacing: 16,
           children: cards.map((card) {
             final isSelected = _operation == card.operation;
             return SizedBox(
-              width: 286,
+              width: 290,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
@@ -1596,33 +1795,45 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? theme.colorScheme.primary.withOpacity(0.08)
-                        : theme.colorScheme.surfaceContainerLowest,
+                    color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected
                           ? theme.colorScheme.primary
-                          : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                          : theme.colorScheme.outlineVariant.withOpacity(0.3),
+                      width: isSelected ? 2 : 1,
                     ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            )
+                          ]
+                        : [],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         card.icon,
-                        size: 24,
+                        size: 32,
                         color: isSelected
                             ? theme.colorScheme.primary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       Text(
                         card.title,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -1644,66 +1855,131 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   Widget _buildReviewStep(ThemeData theme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 1280;
-        final shouldStack = constraints.maxWidth < 980;
-        final (configFlex, reviewFlex) = switch (_operation) {
-          BulkProductEditOperation.stock => isWide ? (3, 8) : (4, 7),
-          BulkProductEditOperation.images => isWide ? (3, 8) : (4, 7),
-          BulkProductEditOperation.classification => isWide ? (3, 9) : (4, 7),
-          BulkProductEditOperation.channels => isWide ? (3, 9) : (4, 7),
-          BulkProductEditOperation.pricing => isWide ? (3, 9) : (4, 7),
-          null => (4, 7),
-        };
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '3. Revisa y aplica',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Parámetros y revisión',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _reviewDescription,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: true,
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            backgroundColor: theme.colorScheme.surfaceContainerLowest,
+            collapsedBackgroundColor: theme.colorScheme.surfaceContainerLowest,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
             ),
-            const SizedBox(height: 6),
-            Text(
-              _reviewDescription,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            collapsedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.tune_rounded,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reglas y valores base',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_operationSummary != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _operationSummary!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            children: [
+              _buildOperationConfigPanel(theme),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Theme(
+            data: theme.copyWith(
+              inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                labelStyle: theme.textTheme.bodySmall,
               ),
             ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: shouldStack
-                  ? Column(
-                      children: [
-                        _buildOperationConfigPanel(theme),
-                        const SizedBox(height: 16),
-                        Expanded(child: _buildOperationReviewTable(theme)),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(
-                          flex: configFlex,
-                          child: _buildOperationConfigPanel(theme),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          flex: reviewFlex,
-                          child: _buildOperationReviewTable(theme),
-                        ),
-                      ],
-                    ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: _buildOperationReviewTable(theme),
+              ),
             ),
-            if (_applySummary != null) ...[
-              const SizedBox(height: 12),
-              _buildApplySummary(theme),
-            ],
-          ],
-        );
-      },
+          ),
+        ),
+        if (_applySummary != null) ...[
+          const SizedBox(height: 16),
+          _buildApplySummary(theme),
+        ],
+      ],
     );
+  }
+
+  String? get _operationSummary {
+    switch (_operation) {
+      case BulkProductEditOperation.classification:
+        return 'Modificando: Categoría, Marca, Proveedor';
+      case BulkProductEditOperation.channels:
+        return 'Modificando: Visibilidad y estado comercial';
+      case BulkProductEditOperation.pricing:
+        return 'Modificando: Precios, Costos y Márgenes';
+      case BulkProductEditOperation.stock:
+        final date =
+            '${_stockSharedConfig.effectiveAt.day.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.month.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.year}';
+        final reason = _reasonLabels[_stockSharedConfig.reasonType] ??
+            _stockSharedConfig.reasonType;
+        return '${_stockSharedConfig.mode.label} · $reason · Fecha efectiva: $date';
+      case BulkProductEditOperation.images:
+        final files = _imagePool.length;
+        if (files == 0) return 'Sin archivos asignados al lote';
+        return '$files archivo(s) en memoria de asociación';
+      case null:
+        return null;
+    }
   }
 
   String get _reviewDescription {
@@ -1723,15 +1999,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   Widget _buildOperationConfigPanel(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-        ),
-      ),
+    return SizedBox(
+      width: double.infinity,
       child: switch (_operation) {
         BulkProductEditOperation.classification =>
           _buildClassificationConfig(theme),
@@ -1756,9 +2025,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Column(
         children: [
@@ -1801,106 +2074,116 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   Widget _buildClassificationConfig(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Campos compartidos',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        _buildDropdownField<String?>(
-          theme: theme,
-          label: 'Nueva categoría',
-          value: _classificationConfig.categoryId,
-          items: [
-            const DropdownMenuItem<String?>(
-                value: null, child: Text('No cambiar')),
-            ...widget.categories.map(
-              (category) => DropdownMenuItem<String?>(
-                  value: category.id, child: Text(category.name)),
-            ),
-          ],
-          onChanged: (value) {
-            final category =
-                widget.categories.where((item) => item.id == value).firstOrNull;
-            setState(() {
-              _classificationConfig = _classificationConfig.copyWith(
-                categoryId: value,
-                categoryName: category?.name,
-                clearCategory: value == null,
-              );
-            });
-          },
+        Expanded(
+          flex: 4,
+          child: _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Categoría',
+            value: _classificationConfig.categoryId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('No cambiar')),
+              ...widget.categories.map(
+                (category) => DropdownMenuItem<String?>(
+                    value: category.id, child: Text(category.name)),
+              ),
+            ],
+            onChanged: (value) {
+              final category = widget.categories
+                  .where((item) => item.id == value)
+                  .firstOrNull;
+              setState(() {
+                _classificationConfig = _classificationConfig.copyWith(
+                  categoryId: value,
+                  categoryName: category?.name,
+                  clearCategory: value == null,
+                );
+              });
+            },
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildDropdownField<String?>(
-          theme: theme,
-          label: 'Nueva marca',
-          value: _classificationConfig.brandId,
-          items: [
-            const DropdownMenuItem<String?>(
-                value: null, child: Text('No cambiar')),
-            ...widget.brands.map(
-              (brand) => DropdownMenuItem<String?>(
-                  value: brand.id, child: Text(brand.name)),
-            ),
-          ],
-          onChanged: (value) {
-            final brand =
-                widget.brands.where((item) => item.id == value).firstOrNull;
-            setState(() {
-              _classificationConfig = _classificationConfig.copyWith(
-                brandId: value,
-                brandName: brand?.name,
-                clearBrand: value == null,
-              );
-            });
-          },
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Marca',
+            value: _classificationConfig.brandId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('No cambiar')),
+              ...widget.brands.map(
+                (brand) => DropdownMenuItem<String?>(
+                    value: brand.id, child: Text(brand.name)),
+              ),
+            ],
+            onChanged: (value) {
+              final brand =
+                  widget.brands.where((item) => item.id == value).firstOrNull;
+              setState(() {
+                _classificationConfig = _classificationConfig.copyWith(
+                  brandId: value,
+                  brandName: brand?.name,
+                  clearBrand: value == null,
+                );
+              });
+            },
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildDropdownField<String?>(
-          theme: theme,
-          label: 'Nuevo proveedor',
-          value: _classificationConfig.supplierId,
-          items: [
-            const DropdownMenuItem<String?>(
-                value: null, child: Text('No cambiar')),
-            ...widget.suppliers.map(
-              (supplier) => DropdownMenuItem<String?>(
-                  value: supplier.id, child: Text(supplier.name)),
-            ),
-          ],
-          onChanged: (value) {
-            final supplier =
-                widget.suppliers.where((item) => item.id == value).firstOrNull;
-            setState(() {
-              _classificationConfig = _classificationConfig.copyWith(
-                supplierId: value,
-                supplierName: supplier?.name,
-                clearSupplier: value == null,
-              );
-            });
-          },
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: _buildDropdownField<String?>(
+            theme: theme,
+            label: 'Proveedor',
+            value: _classificationConfig.supplierId,
+            items: [
+              const DropdownMenuItem<String?>(
+                  value: null, child: Text('No cambiar')),
+              ...widget.suppliers.map(
+                (supplier) => DropdownMenuItem<String?>(
+                    value: supplier.id, child: Text(supplier.name)),
+              ),
+            ],
+            onChanged: (value) {
+              final supplier = widget.suppliers
+                  .where((item) => item.id == value)
+                  .firstOrNull;
+              setState(() {
+                _classificationConfig = _classificationConfig.copyWith(
+                  supplierId: value,
+                  supplierName: supplier?.name,
+                  clearSupplier: value == null,
+                );
+              });
+            },
+          ),
         ),
-        const SizedBox(height: 12),
-        SwitchListTile(
-          value: _classificationConfig.onlyFillMissing,
-          onChanged: (value) {
-            setState(() {
-              _classificationConfig =
-                  _classificationConfig.copyWith(onlyFillMissing: value);
-            });
-          },
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Solo rellenar vacíos'),
-          subtitle:
-              const Text('Evita sobrescribir campos que ya estaban definidos.'),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 5,
+          child: SwitchListTile(
+            value: _classificationConfig.onlyFillMissing,
+            onChanged: (value) {
+              setState(() {
+                _classificationConfig =
+                    _classificationConfig.copyWith(onlyFillMissing: value);
+              });
+            },
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Solo rellenar vacíos'),
+            subtitle: const Text('Evita sobrescribir datos.'),
+          ),
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
+        const SizedBox(width: 16),
+        FilledButton.tonalIcon(
           onPressed: _applyClassificationPresetToRows,
-          icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
-          label: const Text('Aplicar preset a filas'),
+          icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+          label: const Text('Aplicar ahora a las filas'),
         ),
       ],
     );
@@ -1910,115 +2193,130 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Canales del lote',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        _buildDropdownField<BulkToggleState>(
-          theme: theme,
-          label: 'Website',
-          value: _channelsConfig.website,
-          items: BulkToggleState.values
-              .map((state) => DropdownMenuItem<BulkToggleState>(
-                  value: state, child: Text(state.label)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() =>
-                _channelsConfig = _channelsConfig.copyWith(website: value));
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildDropdownField<BulkToggleState>(
-          theme: theme,
-          label: 'Google Merchant',
-          value: _channelsConfig.googleMerchant,
-          items: BulkToggleState.values
-              .map((state) => DropdownMenuItem<BulkToggleState>(
-                  value: state, child: Text(state.label)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _channelsConfig =
-                _channelsConfig.copyWith(googleMerchant: value));
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildDropdownField<BulkToggleState>(
-          theme: theme,
-          label: 'Activo',
-          value: _channelsConfig.active,
-          items: BulkToggleState.values
-              .map((state) => DropdownMenuItem<BulkToggleState>(
-                  value: state, child: Text(state.label)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() =>
-                _channelsConfig = _channelsConfig.copyWith(active: value));
-          },
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              flex: 4,
+              child: _buildDropdownField<BulkToggleState>(
+                theme: theme,
+                label: 'Visibilidad Web',
+                value: _channelsConfig.website,
+                items: BulkToggleState.values
+                    .map((state) => DropdownMenuItem<BulkToggleState>(
+                        value: state, child: Text(state.label)))
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _channelsConfig =
+                      _channelsConfig.copyWith(website: value));
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 4,
+              child: _buildDropdownField<BulkToggleState>(
+                theme: theme,
+                label: 'Google Merchant',
+                value: _channelsConfig.googleMerchant,
+                items: BulkToggleState.values
+                    .map((state) => DropdownMenuItem<BulkToggleState>(
+                        value: state, child: Text(state.label)))
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _channelsConfig =
+                      _channelsConfig.copyWith(googleMerchant: value));
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 4,
+              child: _buildDropdownField<BulkToggleState>(
+                theme: theme,
+                label: 'Estado (Activo)',
+                value: _channelsConfig.active,
+                items: BulkToggleState.values
+                    .map((state) => DropdownMenuItem<BulkToggleState>(
+                        value: state, child: Text(state.label)))
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _channelsConfig =
+                      _channelsConfig.copyWith(active: value));
+                },
+              ),
+            ),
+            const SizedBox(width: 24),
+            FilledButton.tonalIcon(
+              onPressed: _applyChannelsPresetToRows,
+              icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+              label: const Text('Aplicar a las filas'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Text(
-          'Si activas Google Merchant, el producto quedará publicado automáticamente. Si despublicas del website, Merchant se desactiva.',
+          'Si activas Google Merchant, el producto quedará publicado automáticamente en toda la red. Si despublicas del website, Merchant se desactivará por seguridad automáticamente.',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _applyChannelsPresetToRows,
-          icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
-          label: const Text('Aplicar preset a filas'),
         ),
       ],
     );
   }
 
   Widget _buildPricingConfig(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Reglas de precio',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        _buildNumericChangeEditor(
-          theme: theme,
-          label: 'Precio de venta',
-          current: _pricingConfig.price,
-          controller: _priceValueController,
-          onChanged: (value) => setState(
-              () => _pricingConfig = _pricingConfig.copyWith(price: value)),
+        Expanded(
+          flex: 6,
+          child: _buildNumericChangeEditor(
+            theme: theme,
+            label: 'Precio Venta',
+            current: _pricingConfig.price,
+            controller: _priceValueController,
+            onChanged: (value) => setState(
+                () => _pricingConfig = _pricingConfig.copyWith(price: value)),
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildNumericChangeEditor(
-          theme: theme,
-          label: 'Costo',
-          current: _pricingConfig.cost,
-          controller: _costValueController,
-          onChanged: (value) => setState(
-              () => _pricingConfig = _pricingConfig.copyWith(cost: value)),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 6,
+          child: _buildNumericChangeEditor(
+            theme: theme,
+            label: 'Costo',
+            current: _pricingConfig.cost,
+            controller: _costValueController,
+            onChanged: (value) => setState(
+                () => _pricingConfig = _pricingConfig.copyWith(cost: value)),
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildDropdownField<BulkPriceRounding>(
-          theme: theme,
-          label: 'Redondeo final',
-          value: _pricingConfig.rounding,
-          items: BulkPriceRounding.values
-              .map((rounding) => DropdownMenuItem<BulkPriceRounding>(
-                  value: rounding, child: Text(rounding.label)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() =>
-                _pricingConfig = _pricingConfig.copyWith(rounding: value));
-          },
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 4,
+          child: _buildDropdownField<BulkPriceRounding>(
+            theme: theme,
+            label: 'Redondeo',
+            value: _pricingConfig.rounding,
+            items: BulkPriceRounding.values
+                .map((rounding) => DropdownMenuItem<BulkPriceRounding>(
+                    value: rounding, child: Text(rounding.label)))
+                .toList(growable: false),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() =>
+                  _pricingConfig = _pricingConfig.copyWith(rounding: value));
+            },
+          ),
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
+        const SizedBox(width: 24),
+        FilledButton.tonalIcon(
           onPressed: _applyPricingPresetToRows,
-          icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
-          label: const Text('Aplicar preset a filas'),
+          icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
+          label: const Text('Aplicar a las filas'),
         ),
       ],
     );
@@ -2030,152 +2328,230 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Política del ajuste',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        _buildDropdownField<BulkStockEditMode>(
-          theme: theme,
-          label: 'Modo',
-          value: _stockSharedConfig.mode,
-          items: BulkStockEditMode.values
-              .map((mode) => DropdownMenuItem<BulkStockEditMode>(
-                  value: mode, child: Text(mode.label)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() {
-              final nextSharedReasons = value == BulkStockEditMode.target
-                  ? const ['count', 'manual']
-                  : (_stockSharedConfig.direction == BulkStockDirection.inwards
-                      ? _inboundReasonTypes
-                      : _outboundReasonTypes);
-              _stockSharedConfig = _stockSharedConfig.copyWith(
-                mode: value,
-                reasonType:
-                    nextSharedReasons.contains(_stockSharedConfig.reasonType)
-                        ? _stockSharedConfig.reasonType
-                        : nextSharedReasons.first,
-              );
-              _syncStockDrafts();
-            });
-          },
-        ),
-        if (_stockSharedConfig.mode == BulkStockEditMode.delta) ...[
-          const SizedBox(height: 12),
-          _buildDropdownField<BulkStockDirection>(
-            theme: theme,
-            label: 'Dirección compartida',
-            value: _stockSharedConfig.direction,
-            items: BulkStockDirection.values
-                .map((direction) => DropdownMenuItem<BulkStockDirection>(
-                    value: direction, child: Text(direction.label)))
-                .toList(growable: false),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() {
-                final nextReasons = value == BulkStockDirection.inwards
-                    ? _inboundReasonTypes
-                    : _outboundReasonTypes;
-                _stockSharedConfig = _stockSharedConfig.copyWith(
-                  direction: value,
-                  reasonType:
-                      nextReasons.contains(_stockSharedConfig.reasonType)
-                          ? _stockSharedConfig.reasonType
-                          : nextReasons.first,
-                );
-                _normalizeStockDraftReasons();
-              });
-            },
-          ),
-        ],
-        const SizedBox(height: 12),
-        _buildDropdownField<String>(
-          theme: theme,
-          label: 'Motivo compartido',
-          value: _stockSharedConfig.reasonType,
-          items: availableReasons
-              .map((type) => DropdownMenuItem<String>(
-                  value: type, child: Text(_reasonLabels[type] ?? type)))
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _stockSharedConfig =
-                _stockSharedConfig.copyWith(reasonType: value));
-          },
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _sharedNoteController,
-          onChanged: (value) => _stockSharedConfig =
-              _stockSharedConfig.copyWith(sharedNote: value),
-          minLines: 2,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Detalle / observación compartida',
-            hintText:
-                'Se copiará a todas las filas si lo deseas, y luego podrás retocar algunas.',
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          _stockSharedConfig.mode == BulkStockEditMode.target
-              ? 'Cuando fijas stock objetivo, un mismo lote puede mezclar subidas y bajas. Por eso el motivo compartido se limita a razones neutrales; luego puedes afinar fila por fila.'
-              : 'En modo por diferencia, las razones siguen la misma lógica de entrada y salida del ajuste individual.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
-              child: TextFormField(
-                controller: _sharedStockValueController,
-                keyboardType: TextInputType.number,
+              flex: 4,
+              child: _buildDropdownField<BulkStockEditMode>(
+                theme: theme,
+                label: 'Modo',
+                value: _stockSharedConfig.mode,
+                items: BulkStockEditMode.values
+                    .map((mode) => DropdownMenuItem<BulkStockEditMode>(
+                        value: mode, child: Text(mode.label)))
+                    .toList(growable: false),
                 onChanged: (value) {
-                  _stockSharedConfig = _stockSharedConfig.copyWith(
-                    defaultQuantity: int.tryParse(value),
-                    clearDefaultQuantity: value.trim().isEmpty,
-                  );
+                  if (value == null) return;
+                  setState(() {
+                    final nextSharedReasons = value == BulkStockEditMode.target
+                        ? const ['count', 'manual']
+                        : (_stockSharedConfig.direction ==
+                                BulkStockDirection.inwards
+                            ? _inboundReasonTypes
+                            : _outboundReasonTypes);
+                    _stockSharedConfig = _stockSharedConfig.copyWith(
+                      mode: value,
+                      reasonType: nextSharedReasons
+                              .contains(_stockSharedConfig.reasonType)
+                          ? _stockSharedConfig.reasonType
+                          : nextSharedReasons.first,
+                    );
+                    _syncStockDrafts();
+                  });
                 },
-                decoration: InputDecoration(
-                  labelText: _stockSharedConfig.mode == BulkStockEditMode.target
-                      ? 'Stock objetivo base'
-                      : 'Cantidad base',
+              ),
+            ),
+            if (_stockSharedConfig.mode == BulkStockEditMode.delta) ...[
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 4,
+                child: _buildDropdownField<BulkStockDirection>(
+                  theme: theme,
+                  label: 'Dirección',
+                  value: _stockSharedConfig.direction,
+                  items: BulkStockDirection.values
+                      .map((direction) => DropdownMenuItem<BulkStockDirection>(
+                          value: direction, child: Text(direction.label)))
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      final nextReasons = value == BulkStockDirection.inwards
+                          ? _inboundReasonTypes
+                          : _outboundReasonTypes;
+                      _stockSharedConfig = _stockSharedConfig.copyWith(
+                        direction: value,
+                        reasonType:
+                            nextReasons.contains(_stockSharedConfig.reasonType)
+                                ? _stockSharedConfig.reasonType
+                                : nextReasons.first,
+                      );
+                      _normalizeStockDraftReasons();
+                    });
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 5,
+              child: _buildDropdownField<String>(
+                theme: theme,
+                label: 'Motivo',
+                value: _stockSharedConfig.reasonType,
+                items: availableReasons
+                    .map((type) => DropdownMenuItem<String>(
+                        value: type, child: Text(_reasonLabels[type] ?? type)))
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _stockSharedConfig =
+                      _stockSharedConfig.copyWith(reasonType: value));
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 4,
+              child: InkWell(
+                onTap: _pickEffectiveDate,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.event_outlined,
+                          size: 24, color: theme.colorScheme.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Fecha efectiva',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant),
+                                overflow: TextOverflow.ellipsis),
+                            Text(
+                                '${_stockSharedConfig.effectiveAt.day.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.month.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.year}',
+                                style: theme.textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: () =>
-                  _copySharedStockDetailsToRows(includeQuantity: false),
-              icon: const Icon(Icons.assignment_turned_in_outlined, size: 18),
-              label: const Text('Copiar detalle'),
-            ),
           ],
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => _copySharedStockDetailsToRows(includeQuantity: true),
-          icon: const Icon(Icons.copy_all_rounded, size: 18),
-          label: Text(
-            _stockSharedConfig.mode == BulkStockEditMode.target
-                ? 'Copiar stock objetivo a todas'
-                : 'Copiar cantidad a todas',
-          ),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.event_outlined),
-          title: const Text('Fecha efectiva'),
-          subtitle: Text(
-            '${_stockSharedConfig.effectiveAt.day.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.month.toString().padLeft(2, '0')}/${_stockSharedConfig.effectiveAt.year}',
-          ),
-          trailing: TextButton(
-            onPressed: _pickEffectiveDate,
-            child: const Text('Cambiar'),
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 12),
+            title: Text(
+              'Opciones de llenado masivo',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            subtitle: Text(
+              'Aplica un valor inicial o un detalle a todas las filas',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            children: [
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _stockSharedConfig.mode == BulkStockEditMode.target
+                              ? 'Stock objetivo base'
+                              : 'Valor a sumar/restar base',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _sharedStockValueController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) {
+                            _stockSharedConfig = _stockSharedConfig.copyWith(
+                              defaultQuantity: int.tryParse(value),
+                              clearDefaultQuantity: value.trim().isEmpty,
+                            );
+                          },
+                          decoration: const InputDecoration(isDense: true),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _copySharedStockDetailsToRows(
+                        includeQuantity: true, includeDetails: false),
+                    icon:
+                        const Icon(Icons.playlist_add_check_rounded, size: 18),
+                    label: const Text('Aplicar cantidad a las filas'),
+                  ),
+                  const Spacer(flex: 3),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Detalle / Observación general',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _sharedNoteController,
+                          maxLines: 1,
+                          onChanged: (value) => _stockSharedConfig =
+                              _stockSharedConfig.copyWith(sharedNote: value),
+                          decoration: const InputDecoration(isDense: true),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _copySharedStockDetailsToRows(
+                        includeQuantity: false, includeDetails: true),
+                    icon: const Icon(Icons.short_text_rounded, size: 18),
+                    label: const Text('Aplicar detalle a las filas'),
+                  ),
+                  const Spacer(flex: 3),
+                ],
+              ),
+            ],
           ),
         ),
       ],
@@ -2186,79 +2562,88 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     final assignedCount = _imageAssignments.values
         .where((assignment) => assignment.file != null)
         .length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Cargar y mapear imágenes',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        DropTarget(
-          onDragDone: (details) => _handleDroppedFiles(details.files),
-          onDragEntered: (_) => setState(() => _isDraggingImages = true),
-          onDragExited: (_) => setState(() => _isDraggingImages = false),
-          child: GestureDetector(
-            onTap: _pickImageFiles,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: _isDraggingImages
-                    ? theme.colorScheme.primary.withOpacity(0.08)
-                    : theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
+        Expanded(
+          flex: 3,
+          child: DropTarget(
+            onDragDone: (details) => _handleDroppedFiles(details.files),
+            onDragEntered: (_) => setState(() => _isDraggingImages = true),
+            onDragExited: (_) => setState(() => _isDraggingImages = false),
+            child: GestureDetector(
+              onTap: _pickImageFiles,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
                   color: _isDraggingImages
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                      ? theme.colorScheme.primary.withOpacity(0.08)
+                      : theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _isDraggingImages
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                  ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.cloud_upload_outlined,
-                    size: 26,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Arrastra imágenes o haz clic para elegir archivos',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Se intentará asociar cada archivo usando SKU, códigos y coincidencias fuertes de marca/nombre. Nombres genéricos como test, img o photo ya no se autoasignan.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                      ],
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 26,
+                      color: theme.colorScheme.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Arrastra imágenes o haz clic para elegir archivos',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Se intentará asociar cada archivo usando SKU, códigos y coincidencias fuertes de marca/nombre. Nombres genéricos como test, img o photo ya no se autoasignan.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _onlyAssignWhenMissingImage,
-          onChanged: (value) =>
-              setState(() => _onlyAssignWhenMissingImage = value),
-          title: const Text('Solo cuando falta imagen'),
-          subtitle: const Text(
-              'Evita reemplazar imágenes ya cargadas salvo que lo desactives.'),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Archivos cargados: ${_imagePool.length} · asignados automáticamente: $assignedCount',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _onlyAssignWhenMissingImage,
+                onChanged: (value) =>
+                    setState(() => _onlyAssignWhenMissingImage = value),
+                dense: true,
+                title: const Text('Solo cuando falta imagen'),
+                subtitle: const Text(
+                  'No sobreescribir previas si la fila ya tiene una.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Archivos en pila: ${_imagePool.length} · Auto-asignados: $assignedCount',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -2592,30 +2977,36 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 onChanged: (value) => _toggleRow(productId, value ?? false),
               ),
               Expanded(
-                flex: 4,
+                flex: 12,
                 child: _buildProductIdentity(theme, product),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Actual', style: theme.textTheme.labelSmall),
-                    const SizedBox(height: 4),
-                    Text('$currentStock',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                  ],
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 60,
+                child: TextFormField(
+                  initialValue: '$currentStock',
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Actual',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 72,
                 child: TextFormField(
                   initialValue: normalizedDraft.quantity.toString(),
                   enabled: _enabledRowIds.contains(productId),
                   keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
                   onChanged: (value) {
                     final parsed = int.tryParse(value) ?? 0;
                     final updatedDraft =
@@ -2635,38 +3026,50 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                         _stockSharedConfig.mode == BulkStockEditMode.target
                             ? 'Objetivo'
                             : 'Cantidad',
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Resultado', style: theme.textTheme.labelSmall),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$nextStock',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: nextStock < 0 ? theme.colorScheme.error : null,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 72,
+                child: TextFormField(
+                  initialValue: '$nextStock',
+                  readOnly: true,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: nextStock < 0
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurface,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Resultado',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 3,
-                child: _buildDropdownField<String>(
-                  theme: theme,
-                  label: 'Motivo',
-                  value: normalizedDraft.reasonType,
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  initialValue: normalizedDraft.reasonType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
                   items: rowReasons
                       .map((type) => DropdownMenuItem<String>(
                           value: type,
-                          child: Text(_reasonLabels[type] ?? type)))
+                          child: Text(_reasonLabels[type] ?? type,
+                              overflow: TextOverflow.ellipsis)))
                       .toList(growable: false),
                   onChanged: !_enabledRowIds.contains(productId)
                       ? null
@@ -2679,9 +3082,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                         },
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 4,
+                flex: 2,
                 child: TextFormField(
                   initialValue: normalizedDraft.note,
                   enabled: _enabledRowIds.contains(productId),
@@ -2689,7 +3092,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     _stockDrafts[productId] =
                         normalizedDraft.copyWith(note: value);
                   },
-                  decoration: const InputDecoration(labelText: 'Detalle'),
+                  decoration: const InputDecoration(
+                    labelText: 'Detalle',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
                 ),
               ),
             ],
@@ -2724,7 +3132,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 onChanged: (value) => _toggleRow(productId, value ?? false),
               ),
               Expanded(
-                flex: 5,
+                flex: 14,
                 child: _buildImageRowIdentity(
                   theme: theme,
                   product: product,
@@ -2733,9 +3141,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                   isRowDropTarget: isRowDropTarget,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
-                flex: 4,
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -2786,7 +3194,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String?>(
                       isExpanded: true,
-                      value: assignment.file?.name,
+                      initialValue: assignment.file?.name,
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -2883,7 +3291,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 decoration: BoxDecoration(
                   color: isRowDropTarget
                       ? theme.colorScheme.primary.withOpacity(0.08)
-                      : theme.colorScheme.surfaceVariant.withOpacity(0.35),
+                      : theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.35),
                   border: Border.all(
                     color: isRowDropTarget
                         ? theme.colorScheme.primary
@@ -3056,12 +3465,95 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?>? onChanged,
   }) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: label),
-      items: items,
-      onChanged: onChanged,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        DropdownButtonFormField<T>(
+          initialValue: value,
+          isExpanded: true,
+          isDense: true,
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNumericChangeEditor({
+    required ThemeData theme,
+    required String label,
+    required BulkNumericChange current,
+    required TextEditingController controller,
+    required ValueChanged<BulkNumericChange> onChanged,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          flex: 4,
+          child: _buildDropdownField<BulkNumericChangeMode>(
+            theme: theme,
+            label: label,
+            value: current.mode,
+            items: BulkNumericChangeMode.values
+                .map((mode) => DropdownMenuItem<BulkNumericChangeMode>(
+                      value: mode,
+                      child: Text(mode.label),
+                    ))
+                .toList(growable: false),
+            onChanged: (value) {
+              if (value == null) return;
+              onChanged(current.copyWith(mode: value));
+            },
+          ),
+        ),
+        if (current.mode != BulkNumericChangeMode.keep) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  current.mode == BulkNumericChangeMode.increasePercent ||
+                          current.mode == BulkNumericChangeMode.decreasePercent
+                      ? '%'
+                      : 'Valor',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => onChanged(
+                      current.copyWith(value: double.tryParse(value) ?? 0)),
+                  decoration: const InputDecoration(isDense: true),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -3082,79 +3574,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     );
   }
 
-  Widget _buildSummaryCard(
-      ThemeData theme, String label, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 2),
-                Text(value,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNumericChangeEditor({
-    required ThemeData theme,
-    required String label,
-    required BulkNumericChange current,
-    required TextEditingController controller,
-    required ValueChanged<BulkNumericChange> onChanged,
-  }) {
-    controller.text = current.value?.toString() ?? '';
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: _buildDropdownField<BulkNumericChangeMode>(
-            theme: theme,
-            label: label,
-            value: current.mode,
-            items: BulkNumericChangeMode.values
-                .map((mode) => DropdownMenuItem<BulkNumericChangeMode>(
-                    value: mode, child: Text(mode.label)))
-                .toList(growable: false),
-            onChanged: (value) {
-              if (value == null) return;
-              onChanged(current.copyWith(mode: value));
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (value) => onChanged(current.copyWith(
-                value: double.tryParse(value.replaceAll(',', '.')))),
-            decoration: const InputDecoration(labelText: 'Valor'),
-          ),
-        ),
-      ],
-    );
-  }
+  // Replaced summary card with inline stat badges for density
 
   Widget _buildRowList({
     required ThemeData theme,
@@ -3186,9 +3606,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         Checkbox(
             value: enabled,
             onChanged: (value) => onEnabledChanged(value ?? false)),
-        Expanded(flex: 4, child: _buildProductIdentity(theme, product)),
+        Expanded(flex: 14, child: _buildProductIdentity(theme, product)),
         const SizedBox(width: 12),
-        Expanded(flex: 6, child: trailing),
+        Expanded(flex: 4, child: trailing),
       ],
     );
   }
@@ -3207,7 +3627,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     size: 48,
                   )
                 : Container(
-                    color: theme.colorScheme.surfaceVariant,
+                    color: theme.colorScheme.surfaceContainerHighest,
                     child: Icon(Icons.inventory_2_outlined,
                         color: theme.colorScheme.onSurfaceVariant),
                   ),

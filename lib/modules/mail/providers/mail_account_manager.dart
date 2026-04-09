@@ -469,8 +469,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
                     .then((_) {});
 
                 // Debounce refresh to handle bursts (wait 2s before fetching)
-                if (_refreshDebounceTimer?.isActive ?? false)
+                if (_refreshDebounceTimer?.isActive ?? false) {
                   _refreshDebounceTimer!.cancel();
+                }
                 _refreshDebounceTimer = Timer(const Duration(seconds: 2), () {
                   debugPrint(
                       '📧 [MailManager] Debounce complete. Refreshing inbox...');

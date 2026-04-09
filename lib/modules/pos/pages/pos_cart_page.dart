@@ -185,7 +185,7 @@ class _POSCartPageState extends State<POSCartPage> {
                                 ),
                                 const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
-                                  value: posService.selectedPaymentMethod?.id,
+                                  initialValue: posService.selectedPaymentMethod?.id,
                                   decoration: InputDecoration(
                                     prefixIcon: const Icon(Icons.payment),
                                     hintText: 'Seleccionar método',

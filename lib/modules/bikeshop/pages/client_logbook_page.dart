@@ -1588,7 +1588,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
   Widget _buildTimelineTab() {
     final filteredTimeline = _getFilteredTimeline();
-    final allTypes = TimelineEventType.values;
+    const allTypes = TimelineEventType.values;
     final allSelected = _timelineTypeFilters.length == allTypes.length;
     final filterSummary = allSelected
         ? 'Todos los tipos'
@@ -2543,7 +2543,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   }
 
   Future<void> _showTimelineFilterSheet() async {
-    final allTypes = TimelineEventType.values;
+    const allTypes = TimelineEventType.values;
     final selected = Set<TimelineEventType>.from(_timelineTypeFilters);
 
     final result = await showModalBottomSheet<Set<TimelineEventType>>(

@@ -113,7 +113,7 @@ class CategoryService extends ChangeNotifier {
 
   Future<models.Category?> getCategoryByName(String name) async {
     try {
-      final data = await _db.select('product_categories', where: 'name=${name}');
+      final data = await _db.select('product_categories', where: 'name=$name');
       return data.isNotEmpty ? models.Category.fromJson(data.first) : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching category by name: $e');
@@ -240,8 +240,9 @@ class CategoryService extends ChangeNotifier {
     try {
       final existingCategories = await getCategories();
       if (existingCategories.isNotEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('Categories already exist, skipping initialization');
+        }
         return;
       }
 

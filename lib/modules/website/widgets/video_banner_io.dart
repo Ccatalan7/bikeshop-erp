@@ -175,8 +175,9 @@ class _YouTubeNativePlayerState extends State<_YouTubeNativePlayer> {
   void _connect() {
     _VideoControllerManager().getController(widget.videoId).then((shared) {
       if (!mounted) {
-        if (shared != null)
+        if (shared != null) {
           _VideoControllerManager().releaseController(widget.videoId);
+        }
         return;
       }
       setState(() {

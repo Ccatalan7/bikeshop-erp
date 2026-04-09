@@ -987,7 +987,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Widget _buildDepartmentDropdown() {
     return DropdownButtonFormField<String?>(
-      value: _departmentId,
+      initialValue: _departmentId,
       decoration: InputDecoration(
         labelText: 'Departamento',
         prefixIcon: const Icon(Icons.business, size: 20),
@@ -1008,7 +1008,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Widget _buildEmploymentTypeDropdown() {
     return DropdownButtonFormField<EmploymentType>(
-      value: _employmentType,
+      initialValue: _employmentType,
       decoration: InputDecoration(
         labelText: 'Tipo de Contrato',
         prefixIcon: const Icon(Icons.assignment_ind, size: 20),
@@ -1034,7 +1034,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Widget _buildStatusDropdown() {
     return DropdownButtonFormField<EmployeeStatus>(
-      value: _status,
+      initialValue: _status,
       decoration: InputDecoration(
         labelText: 'Estado',
         prefixIcon: const Icon(Icons.flag, size: 20),
@@ -1308,7 +1308,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               child: _buildKpiCard(
                 theme,
                 label: 'HORAS TOTALES',
-                value: '${summary.totalHours.toStringAsFixed(1)}',
+                value: summary.totalHours.toStringAsFixed(1),
                 sublabel: 'hrs',
               ),
             ),
@@ -1317,7 +1317,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               child: _buildKpiCard(
                 theme,
                 label: 'HORAS EXTRA',
-                value: '${summary.totalOvertime.toStringAsFixed(1)}',
+                value: summary.totalOvertime.toStringAsFixed(1),
                 sublabel: 'hrs',
                 isHighlight: summary.totalOvertime > 0,
               ),
@@ -1394,7 +1394,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                     Text(
                         'Base (${summary.totalHours.toStringAsFixed(1)}h × ${currencyFormat.format(hourlyRate)}/h)'),
                     Text(currencyFormat.format(baseEarnings),
-                        style: TextStyle(fontWeight: FontWeight.w500)),
+                        style: const TextStyle(fontWeight: FontWeight.w500)),
                   ],
                 ),
                 if (overtimeBonus > 0) ...[
@@ -1518,7 +1518,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             : null;
 
     return DropdownButtonFormField<String?>(
-      value: validValue,
+      initialValue: validValue,
       decoration: InputDecoration(
         labelText: 'Método de Pago',
         prefixIcon: const Icon(Icons.payment, size: 20),
@@ -1545,9 +1545,9 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 .firstWhere((m) => m['id'] == value)['name']
                 .toString()
                 .toLowerCase();
-            if (name.contains('efectivo'))
+            if (name.contains('efectivo')) {
               _paymentMethod = PaymentMethod.cash;
-            else if (name.contains('cheque'))
+            } else if (name.contains('cheque'))
               _paymentMethod = PaymentMethod.check;
             else
               _paymentMethod = PaymentMethod.transfer;
@@ -1559,7 +1559,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Widget _buildBankAccountTypeDropdown() {
     return DropdownButtonFormField<BankAccountType?>(
-      value: _bankAccountType,
+      initialValue: _bankAccountType,
       decoration: InputDecoration(
         labelText: 'Tipo de Cuenta',
         prefixIcon: const Icon(Icons.account_balance_wallet, size: 20),
@@ -1590,7 +1590,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             : null;
 
     return DropdownButtonFormField<String?>(
-      value: validValue,
+      initialValue: validValue,
       decoration: InputDecoration(
         labelText: 'Cuenta de Gasto Salario',
         prefixIcon: const Icon(Icons.receipt_long, size: 20),

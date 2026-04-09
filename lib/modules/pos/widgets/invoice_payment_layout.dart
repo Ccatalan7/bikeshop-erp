@@ -213,7 +213,7 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                             leading: CircleAvatar(
                               backgroundColor: theme.colorScheme.primaryContainer,
                               child: Text(
-                                '${item.quantity.toStringAsFixed(0)}',
+                                item.quantity.toStringAsFixed(0),
                                 style: TextStyle(
                                   color: theme.colorScheme.primary,
                                   fontWeight: FontWeight.bold,
@@ -301,7 +301,7 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                             }
 
                             return DropdownButtonFormField<pm.PaymentMethod>(
-                              value: _selectedPaymentMethod,
+                              initialValue: _selectedPaymentMethod,
                               decoration: const InputDecoration(
                                 labelText: 'Método de Pago',
                                 border: OutlineInputBorder(),

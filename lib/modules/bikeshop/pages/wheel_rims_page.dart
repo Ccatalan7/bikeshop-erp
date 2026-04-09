@@ -217,7 +217,7 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                           labelText: 'Wheel Size',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterWheelSize,
+                        initialValue: _filterWheelSize,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: '26"', child: Text('26"')),
@@ -241,7 +241,7 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                           labelText: 'Brake Type',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterBrakeType,
+                        initialValue: _filterBrakeType,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 'rim', child: Text('Rim')),
@@ -262,7 +262,7 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                           labelText: 'Spoke Holes',
                           border: OutlineInputBorder(),
                         ),
-                        value: _filterSpokeHoles,
+                        initialValue: _filterSpokeHoles,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 24, child: Text('24H')),
@@ -486,7 +486,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Wheel Size *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _wheelSize,
+                              initialValue: _wheelSize,
                               items: const [
                                 DropdownMenuItem(value: '26"', child: Text('26"')),
                                 DropdownMenuItem(value: '27.5"', child: Text('27.5" (650b)')),
@@ -540,7 +540,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Spoke Holes *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _spokeHoles,
+                              initialValue: _spokeHoles,
                               items: const [
                                 DropdownMenuItem(value: 24, child: Text('24H')),
                                 DropdownMenuItem(value: 28, child: Text('28H')),
@@ -609,7 +609,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Brake Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _brakeType,
+                              initialValue: _brakeType,
                               items: const [
                                 DropdownMenuItem(value: 'rim', child: Text('Rim')),
                                 DropdownMenuItem(value: 'disc', child: Text('Disc')),
@@ -626,7 +626,7 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Rim Type *',
                                 border: OutlineInputBorder(),
                               ),
-                              value: _rimType,
+                              initialValue: _rimType,
                               items: const [
                                 DropdownMenuItem(value: 'clincher', child: Text('Clincher')),
                                 DropdownMenuItem(value: 'tubular', child: Text('Tubular')),

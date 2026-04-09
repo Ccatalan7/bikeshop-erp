@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -144,6 +143,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Form state
   Customer? _selectedCustomer;
   Bike? _selectedBike; // Legacy - now use _bikeTabs
+  BikeProfile? _selectedBikeProfile;
   JobPriority _selectedPriority = JobPriority.normal;
   JobStatus _selectedStatus = JobStatus.pendiente;
   JobStatusCustom?
@@ -186,10 +186,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Loading states
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isLoadingSelectedBikeProfile = false;
 
   // Image handling
   List<String> _imageUrls = [];
-  List<({Uint8List bytes, String name})> _newImages = [];
+  final List<({Uint8List bytes, String name})> _newImages = [];
   bool _isUploadingImage = false;
   String? _linkedInvoiceNumber;
 
@@ -476,7 +477,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         // Multi-bike job: create tab for each job bike
         for (final jobBike in jobBikes) {
           // Use bike from local cache, or from the joined data loaded by getJobBikes()
-          Bike? bike = _bikes.firstWhereOrNull((b) => b.id == jobBike.bikeId);
+          Bike? bike = _findBikeById(jobBike.bikeId);
           bike ??= jobBike.bike; // Fall back to bike loaded from join
 
           if (bike == null) {
@@ -547,7 +548,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         loadedBikeTabs.add(generalTab);
       } else {
         // Legacy single-bike job: create one tab from job data
-        final bike = _bikes.firstWhereOrNull((b) => b.id == job.bikeId);
+        final bike = _findBikeById(job.bikeId);
         if (bike != null) {
           final tab = _BikeTabData(bike: bike);
 
@@ -666,6 +667,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Image URLs
           _imageUrls = List.from(job.imageUrls);
         });
+
+        unawaited(_loadSelectedBikeProfile(loadedBikeTabs.firstOrNull?.bike));
       }
     } catch (e) {
       debugPrint('❌ Error loading job: $e');
@@ -688,6 +691,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       _selectedCustomer = customer;
       _bikes = bikes;
       _selectedBike = null; // Reset bike selection
+      _selectedBikeProfile = null;
     });
   }
 
@@ -786,12 +790,98 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Also set legacy single bike (for backward compat)
       _selectedBike = bike;
     });
+
+    unawaited(_loadSelectedBikeProfile(bike));
+  }
+
+  Bike? _findBikeById(String? bikeId) {
+    if (bikeId == null) return null;
+
+    for (final bike in _bikes) {
+      if (bike.id == bikeId) {
+        return bike;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _refreshCustomerBikes({String? selectedBikeId}) async {
+    final customerId = _selectedCustomer?.id;
+    if (customerId == null) return;
+
+    final bikeshopService =
+        Provider.of<BikeshopService>(context, listen: false);
+    final bikes = await bikeshopService.getBikes(customerId: customerId);
+
+    if (!mounted) return;
+
+    final bikesById = <String, Bike>{
+      for (final bike in bikes)
+        if (bike.id != null) bike.id!: bike,
+    };
+    final resolvedSelectedBikeId = selectedBikeId ?? _selectedBike?.id;
+
+    setState(() {
+      _bikes = bikes;
+
+      for (final tab in _bikeTabs) {
+        final tabBikeId = tab.bike?.id;
+        if (tabBikeId != null && bikesById.containsKey(tabBikeId)) {
+          tab.bike = bikesById[tabBikeId];
+        }
+      }
+
+      _selectedBike = resolvedSelectedBikeId != null
+          ? bikesById[resolvedSelectedBikeId]
+          : null;
+
+      if (_selectedBike == null) {
+        _selectedBikeProfile = null;
+      }
+    });
+
+    if (_selectedBike != null) {
+      unawaited(_loadSelectedBikeProfile(_selectedBike));
+    }
+  }
+
+  Future<Bike?> _openBikeDialog({
+    Bike? bike,
+    bool selectSavedBike = false,
+  }) async {
+    final customerId = _selectedCustomer?.id;
+    if (customerId == null) return null;
+
+    final result = await showDialog<Bike?>(
+      context: context,
+      builder: (dialogContext) => BikeFormDialog(
+        customerId: customerId,
+        bike: bike,
+      ),
+    );
+
+    if (!mounted) return result;
+
+    if (bike != null || result != null) {
+      await _refreshCustomerBikes(
+        selectedBikeId:
+            selectSavedBike ? (result?.id ?? bike?.id) : _selectedBike?.id,
+      );
+    }
+
+    if (result?.id == null) {
+      return null;
+    }
+
+    return _findBikeById(result!.id) ?? result;
   }
 
   /// Remove a bike tab
   void _removeBikeTab(int index) {
-    if (_bikeTabs[index].isGeneralTab)
+    if (_bikeTabs[index].isGeneralTab) {
       return; // Prevent removing the General tab
+    }
 
     final regularTabsCount = _bikeTabs.where((t) => !t.isGeneralTab).length;
     if (regularTabsCount <= 1) {
@@ -810,6 +900,173 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Update legacy single bike
       _selectedBike = _bikeTabs[_selectedBikeTabIndex].bike;
     });
+
+    unawaited(_loadSelectedBikeProfile(_selectedBike));
+  }
+
+  Future<void> _loadSelectedBikeProfile(Bike? bike) async {
+    if (!mounted) return;
+
+    if (bike?.id == null) {
+      setState(() {
+        _selectedBikeProfile = null;
+        _isLoadingSelectedBikeProfile = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingSelectedBikeProfile = true);
+
+    try {
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+      final profile = await bikeshopService.getBikeProfile(bike!.id!);
+
+      if (!mounted || _selectedBike?.id != bike.id) {
+        return;
+      }
+
+      setState(() {
+        _selectedBikeProfile = profile;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Error loading selected bike profile: $e');
+    } finally {
+      if (mounted && _selectedBike?.id == bike?.id) {
+        setState(() => _isLoadingSelectedBikeProfile = false);
+      }
+    }
+  }
+
+  Widget _buildBikeProfileSummaryCard() {
+    if (_selectedBike == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final profile = _selectedBikeProfile;
+    final actionLabel = profile == null ? 'Completar ficha' : 'Editar ficha';
+    final highlights = [
+      ...?profile?.intakeHighlights,
+      ...?profile?.technicalHighlights,
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.summarize_outlined,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Contexto de la bicicleta',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  await _openBikeDialog(
+                    bike: _selectedBike,
+                    selectSavedBike: true,
+                  );
+                },
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(actionLabel),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            profile?.identityLine ??
+                '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_isLoadingSelectedBikeProfile)
+            const LinearProgressIndicator()
+          else if (highlights.isEmpty)
+            Text(
+              'Aun no hay perfil estructurado guardado para esta bicicleta.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: highlights
+                  .map(
+                    (line) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: theme.dividerColor.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: Text(line, style: theme.textTheme.bodySmall),
+                    ),
+                  )
+                  .toList(),
+            ),
+          if (profile?.warnings.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            ...profile!.warnings.map(
+              (warning) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16, color: theme.colorScheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        warning,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (profile?.lastConfirmedAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(profile!.lastConfirmedAt!)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   /// Show bike selector to add a bike
@@ -828,24 +1085,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     if (availableBikes.isEmpty) {
       // Show option to create new bike
-      final newBike = await showDialog<Bike?>(
-        context: context,
-        builder: (context) => BikeFormDialog(
-          customerId: _selectedCustomer!.id!,
-        ),
-      );
+      final newBike = await _openBikeDialog(selectSavedBike: true);
 
       if (newBike != null && mounted) {
-        // Reload bikes and add the new one
-        final bikeshopService =
-            Provider.of<BikeshopService>(context, listen: false);
-        final bikes =
-            await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-        setState(() {
-          _bikes = bikes;
-        });
-        _addBikeTab(
-            bikes.firstWhere((b) => b.id == newBike.id, orElse: () => newBike));
+        _addBikeTab(newBike);
       }
       return;
     }
@@ -874,23 +1117,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 title: const Text('Nueva bicicleta'),
                 onTap: () async {
                   Navigator.pop(context); // Close selector
-                  final newBike = await showDialog<Bike?>(
-                    context: this.context,
-                    builder: (ctx) => BikeFormDialog(
-                      customerId: _selectedCustomer!.id!,
-                    ),
-                  );
+                  final newBike = await _openBikeDialog(selectSavedBike: true);
                   if (newBike != null && mounted) {
-                    final bikeshopService = Provider.of<BikeshopService>(
-                        this.context,
-                        listen: false);
-                    final bikes = await bikeshopService.getBikes(
-                        customerId: _selectedCustomer!.id);
-                    setState(() {
-                      _bikes = bikes;
-                    });
-                    _addBikeTab(bikes.firstWhere((b) => b.id == newBike.id,
-                        orElse: () => newBike));
+                    _addBikeTab(newBike);
                   }
                 },
               ),
@@ -1929,22 +2158,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
+
       try {
         final bikeshopService =
             Provider.of<BikeshopService>(context, listen: false);
         await bikeshopService.deleteBike(bike.id!);
 
-        // Reload bikes
-        final bikes =
-            await bikeshopService.getBikes(customerId: _selectedCustomer!.id);
-
-        setState(() {
-          _bikes = bikes;
-          if (_selectedBike?.id == bike.id) {
-            _selectedBike =
-                null; // Clear selection if deleted bike was selected
-          }
-        });
+        await _refreshCustomerBikes();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1995,28 +2216,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         onPressed: () async {
                           Navigator.pop(context); // Close management dialog
 
-                          await showDialog<Bike?>(
-                            context: context,
-                            builder: (context) => BikeFormDialog(
-                              customerId: _selectedCustomer!.id!,
-                              bike: bike,
-                            ),
+                          await _openBikeDialog(
+                            bike: bike,
+                            selectSavedBike: _selectedBike?.id == bike.id,
                           );
-
-                          // Refresh bike list after edit or delete
-                          final bikeshopService = Provider.of<BikeshopService>(
-                              context,
-                              listen: false);
-                          final bikes = await bikeshopService.getBikes(
-                              customerId: _selectedCustomer!.id);
-                          setState(() {
-                            _bikes = bikes;
-                            // Clear selection if deleted bike was selected
-                            if (_selectedBike?.id == bike.id &&
-                                !bikes.any((b) => b.id == bike.id)) {
-                              _selectedBike = null;
-                            }
-                          });
                         },
                         tooltip: 'Editar',
                       ),
@@ -2806,8 +3009,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       icon: icon,
                       isSelected: isSelected,
                       canClose: canClose,
-                      onTap: () =>
-                          setState(() => _selectedBikeTabIndex = index),
+                      onTap: () {
+                        setState(() {
+                          _selectedBikeTabIndex = index;
+                          _selectedBike = _bikeTabs[index].bike;
+                        });
+                        unawaited(_loadSelectedBikeProfile(_selectedBike));
+                      },
                       onClose: () => _confirmRemoveBike(index, label),
                       primaryColor: primary,
                       inactiveColor: onSurface,
@@ -2900,7 +3108,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               return _BrowserStyleBikeTab(
                 label: tab.displayName,
                 isSelected: isSelected,
-                onTap: () => setState(() => _selectedBikeTabIndex = index),
+                onTap: () {
+                  setState(() {
+                    _selectedBikeTabIndex = index;
+                    _selectedBike = _bikeTabs[index].bike;
+                  });
+                  unawaited(_loadSelectedBikeProfile(_selectedBike));
+                },
                 onClose: _bikeTabs.length > 1
                     ? () => _confirmRemoveBike(index, tab.displayName)
                     : null,
@@ -3011,8 +3225,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 // Nueva Bici button
                 PopupMenuItem<String>(
                   value: 'new_bike',
-                  child: Row(
-                    children: const [
+                  child: const Row(
+                    children: [
                       Icon(Icons.add, size: 18),
                       SizedBox(width: 8),
                       Text('Nueva bicicleta'),
@@ -3020,37 +3234,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ),
                   onTap: () async {
                     // Delay to let menu close
+                    final messenger = ScaffoldMessenger.of(context);
                     await Future.delayed(const Duration(milliseconds: 100));
                     if (!mounted) return;
 
-                    final newBike = await showDialog<Bike?>(
-                      context: context,
-                      builder: (context) => BikeFormDialog(
-                        customerId: _selectedCustomer!.id!,
-                      ),
-                    );
+                    final newBike =
+                        await _openBikeDialog(selectSavedBike: true);
 
                     if (!mounted) return;
 
-                    // Reload bikes for this customer
-                    final bikeshopService =
-                        Provider.of<BikeshopService>(context, listen: false);
-                    final bikes = await bikeshopService.getBikes(
-                        customerId: _selectedCustomer!.id);
-
-                    setState(() {
-                      _bikes = bikes;
-                    });
-
                     // Add to multi-bike tabs
                     if (newBike != null && mounted) {
-                      final addedBike = _bikes.firstWhere(
-                        (bike) => bike.id == newBike.id,
-                        orElse: () => newBike,
-                      );
-                      _addBikeTab(addedBike);
+                      _addBikeTab(newBike);
 
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(
                           content: Text(
                               'Bicicleta "${newBike.displayName}" creada y agregada'),
@@ -3064,8 +3261,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 if (_bikes.isNotEmpty)
                   PopupMenuItem<String>(
                     value: 'manage_bikes',
-                    child: Row(
-                      children: const [
+                    child: const Row(
+                      children: [
                         Icon(Icons.settings, size: 18),
                         SizedBox(width: 8),
                         Text('Gestionar bicicletas'),
@@ -3117,6 +3314,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
           ],
+          if (_selectedBike != null) _buildBikeProfileSummaryCard(),
         ] else if (_jobType == JobType.itemService) ...[
           _buildSubjectPicker(),
           const SizedBox(height: 12),
@@ -3214,7 +3412,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           children: [
             Expanded(
               child: DropdownButtonFormField<JobPriority>(
-                value: _selectedPriority,
+                initialValue: _selectedPriority,
                 decoration: const InputDecoration(
                   labelText: 'Prioridad',
                   border: OutlineInputBorder(),
@@ -3240,7 +3438,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               child: _customStatuses.isEmpty
                   // Fallback to enum dropdown if no custom statuses
                   ? DropdownButtonFormField<JobStatus>(
-                      value: _selectedStatus,
+                      initialValue: _selectedStatus,
                       decoration: const InputDecoration(
                         labelText: 'Estado',
                         border: OutlineInputBorder(),
@@ -3262,7 +3460,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     )
                   // Use custom statuses dropdown
                   : DropdownButtonFormField<JobStatusCustom>(
-                      value: _selectedCustomStatus,
+                      initialValue: _selectedCustomStatus,
                       decoration: const InputDecoration(
                         labelText: 'Estado',
                         border: OutlineInputBorder(),
@@ -3908,7 +4106,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<WarrantyOutcome>(
-          value: _warrantyOutcome,
+          initialValue: _warrantyOutcome,
           decoration: const InputDecoration(
             labelText: 'Estado de garantía',
             border: OutlineInputBorder(),
@@ -3947,7 +4145,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           children: [
             Expanded(
               child: DropdownButtonFormField<QuotationStatus>(
-                value: _quotationStatus,
+                initialValue: _quotationStatus,
                 decoration: const InputDecoration(
                   labelText: 'Estado',
                   border: OutlineInputBorder(),
@@ -4125,7 +4323,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         ),
 
                         // Actions column
-                        SizedBox(width: _colActionsWidth),
+                        const SizedBox(width: _colActionsWidth),
                       ],
                     ),
                   ),
@@ -4234,8 +4432,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                   ),
                                 ),
                               ),
-                              SizedBox(width: _colTotalWidth),
-                              SizedBox(width: _colActionsWidth),
+                              const SizedBox(width: _colTotalWidth),
+                              const SizedBox(width: _colActionsWidth),
                             ],
                           ),
                         ),
@@ -4355,7 +4553,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 _buildMobileServiceRow(
                     theme, entry.key + 1, entry.value, entry.key)),
           const SizedBox(height: 8),
-          Container(
+          SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _addServiceItem,
@@ -4532,7 +4730,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                 ),
 
                                 // Actions column
-                                SizedBox(width: _colActionsWidth),
+                                const SizedBox(width: _colActionsWidth),
                               ],
                             ),
                           ),
@@ -4678,13 +4876,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       ? Image.network(
                           item.serviceProduct!.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
+                          errorBuilder: (_, __, ___) => const Icon(
                             Icons.work_outline,
                             color: Colors.blue,
                             size: 24,
                           ),
                         )
-                      : Icon(
+                      : const Icon(
                           Icons.work_outline,
                           color: Colors.blue,
                           size: 24,
@@ -4834,7 +5032,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             const Text('Tratamiento de IVA:', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 8),
             DropdownButtonFormField<TaxTreatment>(
-              value: _taxTreatment,
+              initialValue: _taxTreatment,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 contentPadding:
@@ -4899,7 +5097,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   _JobPartItem? get _selectedServiceItem {
     if (_selectedServiceIndex == null) return null;
     if (_selectedServiceIndex! < 0 ||
-        _selectedServiceIndex! >= _currentPartItems.length) return null;
+        _selectedServiceIndex! >= _currentPartItems.length) {
+      return null;
+    }
     final item = _currentPartItems[_selectedServiceIndex!];
     return item.hasWizardAnswers ? item : null;
   }
@@ -5137,7 +5337,7 @@ class _PartItemRow extends StatefulWidget {
   final double actionsWidth;
 
   const _PartItemRow({
-    Key? key,
+    super.key,
     required this.item,
     required this.index,
     required this.itemIndex,
@@ -5154,7 +5354,7 @@ class _PartItemRow extends StatefulWidget {
     required this.priceWidth,
     required this.totalWidth,
     required this.actionsWidth,
-  }) : super(key: key);
+  });
 
   @override
   State<_PartItemRow> createState() => _PartItemRowState();
@@ -5541,10 +5741,10 @@ class _PartItemDialogState extends State<_PartItemDialog> {
             // Notes field
             TextField(
               controller: _notesController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Notas (opcional)',
                 hintText: 'Ej: Cliente pidió color específico...',
-                border: const OutlineInputBorder(),
+                border: OutlineInputBorder(),
                 helperText: 'Información adicional sobre esta parte',
               ),
               maxLines: 2,
@@ -5756,7 +5956,7 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<Product>(
-              value: _selectedProduct,
+              initialValue: _selectedProduct,
               decoration: const InputDecoration(
                 labelText: 'Producto',
                 border: OutlineInputBorder(),

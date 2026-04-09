@@ -32,40 +32,40 @@ void main() {
     );
     expect(
       excel.tables['Tabelle1']?.rows[3][1]?.value,
-      equals(IntCellValue(42)),
+      equals(const IntCellValue(42)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[4][1]?.value,
-      equals(DoubleCellValue(12.3)),
+      equals(const DoubleCellValue(12.3)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[5][1]?.value,
-      equals(DateCellValue(year: 2023, month: 4, day: 20)),
+      equals(const DateCellValue(year: 2023, month: 4, day: 20)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[6][1]?.value,
-      equals(DateTimeCellValue(
+      equals(const DateTimeCellValue(
           year: 2023, month: 4, day: 20, hour: 15, minute: 44, second: 13)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[7][1]?.value,
-      equals(BoolCellValue(true)),
+      equals(const BoolCellValue(true)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[8][1]?.value,
-      equals(BoolCellValue(false)),
+      equals(const BoolCellValue(false)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[9][1]?.value,
-      equals(DoubleCellValue(15.99)),
+      equals(const DoubleCellValue(15.99)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[10][1]?.value,
-      equals(DoubleCellValue(0.05)),
+      equals(const DoubleCellValue(0.05)),
     );
     expect(
       excel.tables['Tabelle1']?.rows[11][1]?.value,
-      equals(TimeCellValue(hour: 2, minute: 20, second: 10)),
+      equals(const TimeCellValue(hour: 2, minute: 20, second: 10)),
     );
   });
 
@@ -79,20 +79,20 @@ void main() {
     );
     expect(
       excel.tables['Sheet1']?.rows[3][1]?.value,
-      equals(IntCellValue(42)),
+      equals(const IntCellValue(42)),
     );
     expect(
       excel.tables['Sheet1']?.rows[4][1]?.value,
-      equals(DoubleCellValue(12.3)),
+      equals(const DoubleCellValue(12.3)),
     );
     expect(
       excel.tables['Sheet1']?.rows[5][1]?.value,
-      equals(DateCellValue(year: 2023, month: 4, day: 20)),
+      equals(const DateCellValue(year: 2023, month: 4, day: 20)),
     );
     expect(
       excel.tables['Sheet1']?.rows[6][1]?.value,
       equals(
-        DateTimeCellValue(
+        const DateTimeCellValue(
           year: 2023,
           month: 4,
           day: 20,
@@ -104,19 +104,19 @@ void main() {
     );
     expect(
       excel.tables['Sheet1']?.rows[7][1]?.value,
-      equals(BoolCellValue(true)),
+      equals(const BoolCellValue(true)),
     );
     expect(
       excel.tables['Sheet1']?.rows[8][1]?.value,
-      equals(BoolCellValue(false)),
+      equals(const BoolCellValue(false)),
     );
     expect(
       excel.tables['Sheet1']?.rows[9][1]?.value,
-      equals(DoubleCellValue(15.99)),
+      equals(const DoubleCellValue(15.99)),
     );
     expect(
       excel.tables['Sheet1']?.rows[10][1]?.value,
-      equals(DoubleCellValue(0.05)),
+      equals(const DoubleCellValue(0.05)),
     );
   });
 
@@ -130,19 +130,19 @@ void main() {
     );
     expect(
       excel.tables['Sheet1']?.rows[3][1]?.value,
-      equals(IntCellValue(42)),
+      equals(const IntCellValue(42)),
     );
     expect(
       excel.tables['Sheet1']?.rows[4][1]?.value,
-      equals(DoubleCellValue(12.3)),
+      equals(const DoubleCellValue(12.3)),
     );
     expect(
       excel.tables['Sheet1']?.rows[5][1]?.value,
-      equals(DateCellValue(year: 2023, month: 4, day: 20)),
+      equals(const DateCellValue(year: 2023, month: 4, day: 20)),
     );
     expect(
       excel.tables['Sheet1']?.rows[6][1]?.value,
-      equals(DateTimeCellValue(
+      equals(const DateTimeCellValue(
         year: 2023,
         month: 4,
         day: 20,
@@ -153,19 +153,19 @@ void main() {
     );
     expect(
       excel.tables['Sheet1']?.rows[7][1]?.value,
-      equals(BoolCellValue(true)),
+      equals(const BoolCellValue(true)),
     );
     expect(
       excel.tables['Sheet1']?.rows[8][1]?.value,
-      equals(BoolCellValue(false)),
+      equals(const BoolCellValue(false)),
     );
     expect(
       excel.tables['Sheet1']?.rows[9][1]?.value,
-      equals(DoubleCellValue(15.99)),
+      equals(const DoubleCellValue(15.99)),
     );
     expect(
       excel.tables['Sheet1']?.rows[10][1]?.value,
-      equals(DoubleCellValue(0.05)),
+      equals(const DoubleCellValue(0.05)),
     );
   });
 
@@ -177,11 +177,11 @@ void main() {
       final sheet = excel.tables['Tabelle1']!;
       sheet.updateCell(
         CellIndex.indexByString('B4'),
-        DoubleCellValue(13.37),
+        const DoubleCellValue(13.37),
       );
       sheet.updateCell(
         CellIndex.indexByString('B5'),
-        DateCellValue(year: 2025, month: 11, day: 28),
+        const DateCellValue(year: 2025, month: 11, day: 28),
       );
       sheet.updateCell(
         CellIndex.indexByString('B6'),
@@ -189,17 +189,17 @@ void main() {
       );
       sheet.updateCell(
         CellIndex.indexByString('B7'),
-        TimeCellValue(hour: 20, minute: 15),
+        const TimeCellValue(hour: 20, minute: 15),
       );
       sheet.updateCell(
         CellIndex.indexByString('B8'),
-        DoubleCellValue(42),
+        const DoubleCellValue(42),
         cellStyle: CellStyle(numberFormat: NumFormat.standard_11),
       );
 
       final b10 = sheet.cell(CellIndex.indexByString('B10'));
       b10.cellStyle = (b10.cellStyle ?? CellStyle()).copyWith(
-        numberFormat: CustomNumericNumFormat(formatCode: r'0\m\²'),
+        numberFormat: const CustomNumericNumFormat(formatCode: r'0\m\²'),
       );
     }
 
@@ -215,14 +215,14 @@ void main() {
       );
 
       final b4 = sheet.cell(CellIndex.indexByString('B4'));
-      expect(b4.value, equals(DoubleCellValue(13.37)));
+      expect(b4.value, equals(const DoubleCellValue(13.37)));
       expect(
         b4.cellStyle?.numberFormat ?? NumFormat.defaultFloat,
         equals(NumFormat.defaultFloat),
       );
 
       final b5 = sheet.cell(CellIndex.indexByString('B5'));
-      expect(b5.value, equals(DateCellValue(year: 2025, month: 11, day: 28)));
+      expect(b5.value, equals(const DateCellValue(year: 2025, month: 11, day: 28)));
       expect(
         b5.cellStyle?.numberFormat,
         equals(NumFormat.defaultDate),
@@ -236,24 +236,24 @@ void main() {
       );
 
       final b7 = sheet.cell(CellIndex.indexByString('B7'));
-      expect(b7.value, equals(TimeCellValue(hour: 20, minute: 15)));
+      expect(b7.value, equals(const TimeCellValue(hour: 20, minute: 15)));
       expect(
         b7.cellStyle?.numberFormat,
         equals(NumFormat.defaultTime),
       );
 
       final b8 = sheet.cell(CellIndex.indexByString('B8'));
-      expect(b8.value, equals(IntCellValue(42)));
+      expect(b8.value, equals(const IntCellValue(42)));
       expect(
         b8.cellStyle?.numberFormat,
         equals(NumFormat.standard_11),
       );
 
       final b10 = sheet.cell(CellIndex.indexByString('B10'));
-      expect(b10.value, equals(DoubleCellValue(15.99)));
+      expect(b10.value, equals(const DoubleCellValue(15.99)));
       expect(
         b10.cellStyle?.numberFormat,
-        equals(CustomNumericNumFormat(formatCode: r'0\m\²')),
+        equals(const CustomNumericNumFormat(formatCode: r'0\m\²')),
       );
     }
   });
@@ -261,8 +261,8 @@ void main() {
   test('Testing customNumFormats', () {
     var excel = Excel.createExcel();
     var sheet = excel['Sheet1'];
-    final format1 = CustomNumericNumFormat(formatCode: r'0.00%');
-    final format2 = CustomNumericNumFormat(formatCode: r'#,##0.00');
+    const format1 = CustomNumericNumFormat(formatCode: r'0.00%');
+    const format2 = CustomNumericNumFormat(formatCode: r'#,##0.00');
     final styleA1 = CellStyle(
       numberFormat: format1,
     );
@@ -270,9 +270,9 @@ void main() {
       numberFormat: format2,
     );
 
-    sheet.updateCell(CellIndex.indexByString('A1'), DoubleCellValue(0.15),
+    sheet.updateCell(CellIndex.indexByString('A1'), const DoubleCellValue(0.15),
         cellStyle: styleA1);
-    sheet.updateCell(CellIndex.indexByString('B1'), DoubleCellValue(123456.789),
+    sheet.updateCell(CellIndex.indexByString('B1'), const DoubleCellValue(123456.789),
         cellStyle: styleB1);
     final bytes = excel.encode();
     final excel2 = Excel.decodeBytes(bytes!);
@@ -280,9 +280,9 @@ void main() {
     final a1_2 = sheet2.cell(CellIndex.indexByString('A1'));
     final b1_2 = sheet2.cell(CellIndex.indexByString('B1'));
     expect(a1_2.cellStyle?.numberFormat, equals(format1));
-    expect(a1_2.value, equals(DoubleCellValue(0.15)));
+    expect(a1_2.value, equals(const DoubleCellValue(0.15)));
     expect(b1_2.cellStyle?.numberFormat, equals(format2));
-    expect(b1_2.value, equals(DoubleCellValue(123456.789)));
+    expect(b1_2.value, equals(const DoubleCellValue(123456.789)));
   });
 
   group('Sheet Operations', () {
@@ -355,7 +355,7 @@ void main() {
     ], 4);
     var fileBytes = excel.encode();
     if (fileBytes != null) {
-      File(Directory.current.path + '/tmp/exampleOut.xlsx')
+      File('${Directory.current.path}/tmp/exampleOut.xlsx')
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes);
     }
@@ -363,7 +363,7 @@ void main() {
     var newFileBytes = File(newFile).readAsBytesSync();
     var newExcel = Excel.decodeBytes(newFileBytes);
     // delete tmp folder
-    new Directory('./tmp').delete(recursive: true);
+    Directory('./tmp').delete(recursive: true);
     expect(newExcel.sheets.entries.length, equals(1));
     expect(newExcel.tables['Sheet1']!.rows[1][1]!.value.toString(),
         equals('Washington'));
@@ -377,10 +377,10 @@ void main() {
     var sheet = excel['Sheet1'];
 
     sheet.appendRow([
-      IntCellValue(8),
-      DoubleCellValue(999.62221),
-      DateCellValue(year: 2023, month: 4, day: 20),
-      DateTimeCellValue(
+      const IntCellValue(8),
+      const DoubleCellValue(999.62221),
+      const DateCellValue(year: 2023, month: 4, day: 20),
+      const DateTimeCellValue(
         year: 2023,
         month: 4,
         day: 20,
@@ -395,7 +395,7 @@ void main() {
     List<int>? fileBytes = excel.save();
     //print('saving executed in ${stopwatch.elapsed}');
     if (fileBytes != null) {
-      File(Directory.current.path + '/tmp/exampleOut.xlsx')
+      File('${Directory.current.path}/tmp/exampleOut.xlsx')
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes);
     }
@@ -405,30 +405,30 @@ void main() {
     var newExcel = Excel.decodeBytes(newFileBytes);
 
     // delete tmp folder
-    new Directory('./tmp').delete(recursive: true);
+    Directory('./tmp').delete(recursive: true);
     expect(newExcel.sheets.entries.length, equals(1));
     expect(newExcel.tables['Sheet1']!.maxColumns, equals(5));
     expect(
-        newExcel.tables['Sheet1']!.rows[0][0]!.value, equals(IntCellValue(8)));
+        newExcel.tables['Sheet1']!.rows[0][0]!.value, equals(const IntCellValue(8)));
     expect(
         newExcel.tables['Sheet1']!.rows[0][0]!.cellStyle?.numberFormat
             .toString(),
         equals(NumFormat.defaultNumeric.toString()));
     expect(newExcel.tables['Sheet1']!.rows[0][1]!.value,
-        DoubleCellValue(999.62221));
+        const DoubleCellValue(999.62221));
     expect(
         newExcel.tables['Sheet1']!.rows[0][1]!.cellStyle?.numberFormat
             .toString(),
         equals(NumFormat.defaultFloat.toString()));
     expect(newExcel.tables['Sheet1']!.rows[0][2]!.value,
-        DateCellValue(year: 2023, month: 4, day: 20));
+        const DateCellValue(year: 2023, month: 4, day: 20));
     expect(
         newExcel.tables['Sheet1']!.rows[0][2]!.cellStyle?.numberFormat
             .toString(),
         equals(NumFormat.defaultDate.toString()));
     expect(
         newExcel.tables['Sheet1']!.rows[0][3]!.value,
-        DateTimeCellValue(
+        const DateTimeCellValue(
           year: 2023,
           month: 4,
           day: 20,
@@ -455,7 +455,7 @@ void main() {
 
     var fileBytes = excel.encode();
     if (fileBytes != null) {
-      File(Directory.current.path + '/tmp/superscriptExampleOut.xlsx')
+      File('${Directory.current.path}/tmp/superscriptExampleOut.xlsx')
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes);
     }
@@ -463,7 +463,7 @@ void main() {
     var newFileBytes = File(newFile).readAsBytesSync();
     var newExcel = Excel.decodeBytes(newFileBytes);
     // delete tmp folder
-    new Directory('./tmp').delete(recursive: true);
+    Directory('./tmp').delete(recursive: true);
     expect(newExcel.sheets.entries.length, equals(1));
 
     expect(newExcel.tables['Sheet1']!.rows[0][0]!.value.toString(),
@@ -503,7 +503,7 @@ void main() {
     ], 4);
     var fileBytes = excel.encode();
     if (fileBytes != null) {
-      File(Directory.current.path + '/tmp/exampleOut.xlsx')
+      File('${Directory.current.path}/tmp/exampleOut.xlsx')
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes);
     }
@@ -526,7 +526,7 @@ void main() {
         .getAttributeNode("uniqueCount");
 
     // delete tmp folder
-    new Directory('./tmp').delete(recursive: true);
+    Directory('./tmp').delete(recursive: true);
 
     expect(oldUniqueCount!.value, equals(newUniqueCount!.value));
     expect(oldCount!.value, "12");
@@ -540,7 +540,7 @@ void main() {
 
     var fileBytes = excel.encode();
     if (fileBytes != null) {
-      File(Directory.current.path + '/tmp/superscriptExampleOut.xlsx')
+      File('${Directory.current.path}/tmp/superscriptExampleOut.xlsx')
         ..createSync(recursive: true)
         ..writeAsBytesSync(fileBytes);
     }
@@ -548,7 +548,7 @@ void main() {
     var newFileBytes = File(newFile).readAsBytesSync();
     var newExcel = Excel.decodeBytes(newFileBytes);
     // delete tmp folder
-    new Directory('./tmp').delete(recursive: true);
+    Directory('./tmp').delete(recursive: true);
     expect(newExcel.sheets.entries.length, equals(1));
 
     expect(newExcel.tables['Sheet1']!.rows[0][0]!.value.toString(),
@@ -571,7 +571,7 @@ void main() {
 
       var fileBytes = excel.encode();
       if (fileBytes != null) {
-        File(Directory.current.path + '/tmp/exampleOut.xlsx')
+        File('${Directory.current.path}/tmp/exampleOut.xlsx')
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
       }
@@ -584,7 +584,7 @@ void main() {
           newExcel.tables['Sheet1']!.headerFooter!.oddFooter!, equals('Bar'));
 
       // delete tmp folder only when test is successful (diagnosis)
-      new Directory('./tmp').delete(recursive: true);
+      Directory('./tmp').delete(recursive: true);
     });
 
     test("Save empty Workbook", () {
@@ -628,7 +628,7 @@ void main() {
 
   group('Borders', () {
     test('read file with borders', () {
-      final file = './test/test_resources/borders.xlsx';
+      const file = './test/test_resources/borders.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
       final Sheet sheetObject = excel.tables['Sheet1']!;
@@ -672,7 +672,7 @@ void main() {
     });
 
     test('test support all border styles', () {
-      final file = './test/test_resources/borders2.xlsx';
+      const file = './test/test_resources/borders2.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
       final Sheet sheetObject = excel.tables['Sheet1']!;
@@ -710,7 +710,7 @@ void main() {
     });
 
     test('test support for merged cells with borders', () {
-      final file = './test/test_resources/mergedBorders.xlsx';
+      const file = './test/test_resources/mergedBorders.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
       final Sheet sheetObject = excel.tables['Sheet1']!;
@@ -794,11 +794,11 @@ void main() {
     });
 
     test('saving XLSX File with borders', () {
-      final file = './test/test_resources/borders.xlsx';
+      const file = './test/test_resources/borders.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
 
-      final outFilePath = Directory.current.path + '/tmp/bordersOut.xlsx';
+      final outFilePath = '${Directory.current.path}/tmp/bordersOut.xlsx';
       final fileBytes = excel.encode();
       if (fileBytes != null) {
         File(outFilePath)
@@ -825,18 +825,18 @@ void main() {
       expect(cellStyleB1?.bottomBorder, equals(borderMediumRed));
 
       // delete tmp folder only when test is successful (diagnosis)
-      new Directory('./tmp').delete(recursive: true);
+      Directory('./tmp').delete(recursive: true);
     });
   });
 
   group('Cell Style', () {
     test('read file with rich text', () {
-      final file = './test/test_resources/richText.xlsx';
+      const file = './test/test_resources/richText.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
       final Sheet sheetObject = excel.tables['Sheet1']!;
-      final redHex = 'FFFF0000';
-      final blueHex = 'FF2A6099';
+      const redHex = 'FFFF0000';
+      const blueHex = 'FF2A6099';
 
       final cellA1 = sheetObject.cell(CellIndex.indexByString('A1')).value
           as TextCellValue;
@@ -879,12 +879,12 @@ void main() {
     });
 
     test('saving XLSX File without rPh elements', () {
-      final file = './test/test_resources/rphSample.xlsx';
+      const file = './test/test_resources/rphSample.xlsx';
       final bytes = File(file).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
       excel.tables['Sheet1']!.rows[3][2]!.value = TextCellValue('ロケール選択');
 
-      final outFilePath = Directory.current.path + '/tmp/rphSampleOut.xlsx';
+      final outFilePath = '${Directory.current.path}/tmp/rphSampleOut.xlsx';
       final fileBytes = excel.encode();
       if (fileBytes != null) {
         File(outFilePath)
@@ -898,13 +898,13 @@ void main() {
           equals('ロケール選択'));
 
       // delete tmp folder only when test is successful (diagnosis)
-      new Directory('./tmp').delete(recursive: true);
+      Directory('./tmp').delete(recursive: true);
     });
   });
 
   group(".xls file handling", () {
     test("Exception when opening old .xls file", () {
-      final file = './test/test_resources/oldXLSFile.xls';
+      const file = './test/test_resources/oldXLSFile.xls';
       final bytes = File(file).readAsBytesSync();
       try {
         Excel.decodeBytes(bytes);
@@ -918,7 +918,7 @@ void main() {
     });
 
     test("Exception when opening new .xls file", () {
-      final file = './test/test_resources/newXLSFile.xls';
+      const file = './test/test_resources/newXLSFile.xls';
       final bytes = File(file).readAsBytesSync();
       try {
         Excel.decodeBytes(bytes);
@@ -950,7 +950,7 @@ void main() {
           .where((e) => e.type == ColorType.materialAccent)
           .toList();
 
-      excelFiles.forEach((element) {
+      for (var element in excelFiles) {
         expect(element.getDefaultSheet()!, defaultSheetName);
         for (var row = 0; row < data.length; row++) {
           for (var column = 0; column < data[row].length; column++) {
@@ -1005,7 +1005,7 @@ void main() {
             ], everyElement(borderColor[column].colorHex));
           }
         }
-      });
+      }
     });
   });
 
@@ -1048,7 +1048,7 @@ void main() {
 
       var fileBytes = excel.encode();
       if (fileBytes != null) {
-        File(Directory.current.path + '/tmp/spannedItemExampleOut.xlsx')
+        File('${Directory.current.path}/tmp/spannedItemExampleOut.xlsx')
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
       }
@@ -1056,7 +1056,7 @@ void main() {
       var newFileBytes = File(newFile).readAsBytesSync();
       var newExcel = Excel.decodeBytes(newFileBytes);
       // delete tmp folder
-      new Directory('./tmp').delete(recursive: true);
+      Directory('./tmp').delete(recursive: true);
 
       Sheet? newSheet = newExcel.tables["Spanned Items"]!;
 

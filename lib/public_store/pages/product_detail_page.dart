@@ -286,7 +286,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       SeoHelper.updateSeo(
-        title: resolvedTitle.isNotEmpty ? resolvedTitle : '$storeName',
+        title: resolvedTitle.isNotEmpty ? resolvedTitle : storeName,
         description: cleanResolvedDescription.isNotEmpty
             ? cleanResolvedDescription
             : null,

@@ -209,7 +209,7 @@ class ZohoImageImportService {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      onProgress('\n' + '=' * 60);
+      onProgress('\n${'=' * 60}');
       onProgress('📊 IMPORT SUMMARY');
       onProgress('=' * 60);
       onProgress('Total local products:    ${localProducts.length}');

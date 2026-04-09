@@ -127,34 +127,43 @@ String getRouteTitle(String path) {
   if (cleanPath.contains('/editar') || cleanPath.contains('/edit')) {
     if (cleanPath.startsWith('/clientes/')) return 'Editar Cliente';
     if (cleanPath.startsWith('/inventory/products/')) return 'Editar Producto';
-    if (cleanPath.startsWith('/inventory/categories/'))
+    if (cleanPath.startsWith('/inventory/categories/')) {
       return 'Editar Categoría';
+    }
     if (cleanPath.startsWith('/inventory/brands/')) return 'Editar Marca';
     if (cleanPath.startsWith('/sales/invoices/')) return 'Editar Factura';
     if (cleanPath.startsWith('/purchases/invoices/')) return 'Editar Compra';
-    if (cleanPath.startsWith('/purchases/suppliers/'))
+    if (cleanPath.startsWith('/purchases/suppliers/')) {
       return 'Editar Proveedor';
+    }
     if (cleanPath.startsWith('/accounting/accounts/')) return 'Editar Cuenta';
-    if (cleanPath.startsWith('/accounting/journal-entries/'))
+    if (cleanPath.startsWith('/accounting/journal-entries/')) {
       return 'Editar Asiento';
+    }
     if (cleanPath.startsWith('/accounting/expenses/')) return 'Editar Gasto';
     if (cleanPath.startsWith('/hr/employees/')) return 'Editar Empleado';
     if (cleanPath.startsWith('/taller/pega/')) return 'Editar Pega';
   }
 
   // Handle detail views /clientes/:id → "Cliente"
-  if (RegExp(r'^/clientes/[^/]+$').hasMatch(cleanPath))
+  if (RegExp(r'^/clientes/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Cliente';
-  if (RegExp(r'^/taller/pega/[^/]+$').hasMatch(cleanPath))
+  }
+  if (RegExp(r'^/taller/pega/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Pega';
-  if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath))
+  }
+  if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Factura';
-  if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath))
+  }
+  if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Compra';
-  if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath))
+  }
+  if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Producto';
-  if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(cleanPath))
+  }
+  if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Gasto';
+  }
 
   // Fallback: Extract last segment and capitalize
   final segments = cleanPath.split('/').where((s) => s.isNotEmpty).toList();

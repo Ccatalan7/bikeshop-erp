@@ -261,7 +261,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('¿Estás seguro de que deseas eliminar a este cliente?'),
+            const Text('¿Estás seguro de que deseas eliminar a este cliente?'),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),

@@ -581,7 +581,7 @@ class InvoiceParserService {
               descLine.toUpperCase() != 'IVA 19%' &&
               descLine.toUpperCase() != 'VTA' &&
               descLine != '\$') {
-            description += ' ' + descLine;
+            description += ' $descLine';
           }
 
           i++;

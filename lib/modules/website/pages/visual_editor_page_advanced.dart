@@ -2183,7 +2183,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
     required Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

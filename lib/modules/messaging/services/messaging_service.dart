@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
-import 'dart:ui'; // For VoidCallback
+// For VoidCallback
 
 class MessagingService {
   final SupabaseClient _client = Supabase.instance.client;

@@ -287,6 +287,136 @@ class Bike {
   }
 }
 
+class BikeProfile {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? catalogBikeId;
+  final Map<String, dynamic> intakeProfile;
+  final Map<String, dynamic> technicalProfile;
+  final Map<String, dynamic> summarySnapshot;
+  final DateTime? lastConfirmedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeProfile({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.catalogBikeId,
+    this.intakeProfile = const {},
+    this.technicalProfile = const {},
+    this.summarySnapshot = const {},
+    this.lastConfirmedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeProfile.fromJson(Map<String, dynamic> json) {
+    return BikeProfile(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      catalogBikeId: json['catalog_bike_id']?.toString(),
+      intakeProfile: json['intake_profile'] is Map
+          ? Map<String, dynamic>.from(json['intake_profile'] as Map)
+          : const {},
+      technicalProfile: json['technical_profile'] is Map
+          ? Map<String, dynamic>.from(json['technical_profile'] as Map)
+          : const {},
+      summarySnapshot: json['summary_snapshot'] is Map
+          ? Map<String, dynamic>.from(json['summary_snapshot'] as Map)
+          : const {},
+      lastConfirmedAt: _parseDateNullable(json['last_confirmed_at']),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'catalog_bike_id': catalogBikeId,
+      'intake_profile': intakeProfile,
+      'technical_profile': technicalProfile,
+      'summary_snapshot': summarySnapshot,
+      'last_confirmed_at': lastConfirmedAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  BikeProfile copyWith({
+    String? id,
+    String? tenantId,
+    String? bikeId,
+    String? catalogBikeId,
+    Map<String, dynamic>? intakeProfile,
+    Map<String, dynamic>? technicalProfile,
+    Map<String, dynamic>? summarySnapshot,
+    DateTime? lastConfirmedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return BikeProfile(
+      id: id ?? this.id,
+      tenantId: tenantId ?? this.tenantId,
+      bikeId: bikeId ?? this.bikeId,
+      catalogBikeId: catalogBikeId ?? this.catalogBikeId,
+      intakeProfile: intakeProfile ?? this.intakeProfile,
+      technicalProfile: technicalProfile ?? this.technicalProfile,
+      summarySnapshot: summarySnapshot ?? this.summarySnapshot,
+      lastConfirmedAt: lastConfirmedAt ?? this.lastConfirmedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> get technicalValues {
+    if (technicalProfile['values'] is Map) {
+      return Map<String, dynamic>.from(technicalProfile['values'] as Map);
+    }
+    return Map<String, dynamic>.from(technicalProfile);
+  }
+
+  Map<String, dynamic> get technicalSources {
+    if (technicalProfile['sources'] is Map) {
+      return Map<String, dynamic>.from(technicalProfile['sources'] as Map);
+    }
+    return const {};
+  }
+
+  Map<String, dynamic> get technicalConfirmed {
+    if (technicalProfile['confirmed'] is Map) {
+      return Map<String, dynamic>.from(technicalProfile['confirmed'] as Map);
+    }
+    return const {};
+  }
+
+  String? get identityLine => summarySnapshot['identityLine']?.toString();
+
+  List<String> get intakeHighlights =>
+      (summarySnapshot['intakeHighlights'] as List?)
+          ?.map((item) => item.toString())
+          .toList() ??
+      const [];
+
+  List<String> get technicalHighlights =>
+      (summarySnapshot['technicalHighlights'] as List?)
+          ?.map((item) => item.toString())
+          .toList() ??
+      const [];
+
+  List<String> get warnings =>
+      (summarySnapshot['warnings'] as List?)
+          ?.map((item) => item.toString())
+          .toList() ??
+      const [];
+}
+
 // ============================================================
 // BIKE BRAND MODEL
 // ============================================================
@@ -1393,10 +1523,12 @@ class MechanicJob {
     final baseName = customStatus?.name ?? status.displayName;
 
     if (jobType == JobType.warranty && warrantyOutcome != null) {
-      if (warrantyOutcome == WarrantyOutcome.covered)
+      if (warrantyOutcome == WarrantyOutcome.covered) {
         return '$baseName (Cubierto)';
-      if (warrantyOutcome == WarrantyOutcome.notCovered)
+      }
+      if (warrantyOutcome == WarrantyOutcome.notCovered) {
         return '$baseName (Rechazado)';
+      }
       // If it's explicitly null or pending, we don't necessarily append, or we could append (Eval).
       // Let's just return baseName since they are evaluating it normally in the workflow.
     }
@@ -1422,8 +1554,9 @@ class MechanicJob {
 
     if (jobType == JobType.warranty && warrantyOutcome != null) {
       if (warrantyOutcome == WarrantyOutcome.covered) return '#10B981'; // Green
-      if (warrantyOutcome == WarrantyOutcome.notCovered)
+      if (warrantyOutcome == WarrantyOutcome.notCovered) {
         return '#EF4444'; // Red
+      }
       // Pending warranties use the normal workflow color
     }
 

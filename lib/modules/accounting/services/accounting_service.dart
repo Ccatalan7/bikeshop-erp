@@ -1,4 +1,3 @@
-import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import '../../../shared/services/database_service.dart';
@@ -45,7 +44,7 @@ class AccountingService extends ChangeNotifier {
     await initialize();
 
     final grouped = _chartOfAccountsService.getAccountsGroupedByType();
-    final ordered = LinkedHashMap<AccountType, List<Account>>();
+    final ordered = <AccountType, List<Account>>{};
 
     for (final type in AccountType.values) {
       final accountsForType = grouped[type];

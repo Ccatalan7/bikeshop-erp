@@ -172,7 +172,7 @@ class _AccountListPageState extends State<AccountListPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           border: Border(
                             bottom: BorderSide(
                                 color: Theme.of(context).dividerColor),
@@ -270,7 +270,7 @@ class _AccountListPageState extends State<AccountListPage> {
                       vertical: 8,
                     ),
                   ),
-                  value: _selectedType,
+                  initialValue: _selectedType,
                   items: [
                     const DropdownMenuItem<AccountType?>(
                       value: null,
@@ -315,7 +315,7 @@ class _AccountListPageState extends State<AccountListPage> {
                         vertical: 8,
                       ),
                     ),
-                    value: _selectedType,
+                    initialValue: _selectedType,
                     items: [
                       const DropdownMenuItem<AccountType?>(
                         value: null,
@@ -417,7 +417,7 @@ class _AccountListPageState extends State<AccountListPage> {
                 child: Text(
                   account.code.substring(
                       0,
-                      account.code.indexOf('.') != -1
+                      account.code.contains('.')
                           ? account.code.indexOf('.')
                           : 1),
                   style: TextStyle(

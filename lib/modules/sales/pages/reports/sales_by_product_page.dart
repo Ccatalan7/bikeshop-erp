@@ -262,7 +262,7 @@ class _SalesByProductPageState extends State<SalesByProductPage> {
                                                       vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: theme.colorScheme
-                                                        .surfaceVariant,
+                                                        .surfaceContainerHighest,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             4),
@@ -446,8 +446,8 @@ class _ProductSalesData {
     required this.sku,
     required this.name,
     required this.isService,
-    this.quantity = 0,
-    this.totalAmount = 0,
+    this.quantity = 0.0,
+    this.totalAmount = 0.0,
   });
 
   double get averagePrice => quantity == 0 ? 0 : totalAmount / quantity;

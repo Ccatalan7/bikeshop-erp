@@ -163,7 +163,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                             const SizedBox(height: 4),
                             Text(
                               email,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: PublicStoreTheme.textSecondary,
                               ),
                             ),
@@ -558,7 +558,7 @@ class _QuickActionCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             color: PublicStoreTheme.textSecondary,
                           ),

@@ -331,6 +331,6 @@ class _CustomerSalesData {
     required this.customerId,
     required this.customerName,
     this.invoiceCount = 0,
-    this.totalSales = 0,
+    this.totalSales = 0.0,
   });
 }

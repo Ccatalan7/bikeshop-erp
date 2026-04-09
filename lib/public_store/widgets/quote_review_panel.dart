@@ -28,7 +28,7 @@ class _QuoteReviewPanelState extends State<QuoteReviewPanel> {
   bool _isLoading = true;
   Invoice? _invoice;
   String? _error;
-  bool _isProcessingAction = false;
+  final bool _isProcessingAction = false;
 
   @override
   void initState() {

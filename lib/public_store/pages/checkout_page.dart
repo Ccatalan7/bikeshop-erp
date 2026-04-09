@@ -725,7 +725,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   if ((_accountService?.isAuthenticated ?? false) &&
                       _savedAddresses.isNotEmpty) ...[
                     DropdownButtonFormField<CustomerAddress>(
-                      value: _selectedAddress,
+                      initialValue: _selectedAddress,
                       decoration: const InputDecoration(
                         labelText: 'Usar dirección guardada',
                         prefixIcon: Icon(Icons.bookmark_outline),
@@ -1061,7 +1061,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   ],
                 ),
               );
-            }).toList(),
+            }),
 
             const SizedBox(height: 16),
             const Divider(),

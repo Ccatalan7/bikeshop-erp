@@ -25,7 +25,7 @@ class BluetoothScannerService extends ChangeNotifier {
   List<BluetoothDevice> _availableDevices = [];
   List<BluetoothDevice> get availableDevices => _availableDevices;
   
-  StringBuffer _dataBuffer = StringBuffer();
+  final StringBuffer _dataBuffer = StringBuffer();
 
   /// Check if permissions are granted
   Future<bool> hasPermissions() async {

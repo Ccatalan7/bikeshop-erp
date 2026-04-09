@@ -152,8 +152,9 @@ class CategoryMigration {
         }
       }
 
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Migrated $migratedCount products to new category system.');
+      }
     } catch (e) {
       if (kDebugMode) print('Error migrating product categories: $e');
     }

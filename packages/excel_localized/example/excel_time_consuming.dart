@@ -3,7 +3,7 @@ import 'package:path/path.dart';
 import 'package:excel/excel.dart';
 
 void main(List<String> args) {
-  Stopwatch stopwatch = new Stopwatch()..start();
+  Stopwatch stopwatch = Stopwatch()..start();
 
   Excel excel = Excel.createExcel();
   Sheet sh = excel['Sheet1'];

@@ -40,7 +40,7 @@ Future<Map<String, dynamic>?> getPreloadedStoreDataImpl() async {
       // Since we know it came from res.json() in JS, it's a JS Object.
       // We can use a helper to stringify and parse back to be 100% safe about types
       // or manually convert. Stringify is safest for complex nested maps.
-      final jsonString = _stringify(result as JSAny);
+      final jsonString = _stringify(result);
       return json.decode(jsonString) as Map<String, dynamic>;
     }
 

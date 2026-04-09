@@ -486,9 +486,9 @@ class _RecentActivityState extends State<RecentActivity> {
     return Column(
         children: widget.orders
             .take(3)
-            .where((order) => order is Map<String, dynamic>)
+            .whereType<Map<String, dynamic>>()
             .map((order) {
-      final orderMap = order as Map<String, dynamic>;
+      final orderMap = order;
       return _buildActivityItem(
           icon: Icons.receipt_long,
           title: 'Pedido #${orderMap['order_number'] ?? 'N/A'}',
@@ -497,14 +497,15 @@ class _RecentActivityState extends State<RecentActivity> {
   }
 
   Widget _buildServicesList() {
-    if (widget.services.isEmpty)
+    if (widget.services.isEmpty) {
       return _buildEmptyList('Sin historial de servicios');
+    }
     return Column(
         children: widget.services
             .take(3)
-            .where((service) => service is Map<String, dynamic>)
+            .whereType<Map<String, dynamic>>()
             .map((service) {
-      final serviceMap = service as Map<String, dynamic>;
+      final serviceMap = service;
       return _buildActivityItem(
           icon: Icons.build_circle_outlined,
           title:

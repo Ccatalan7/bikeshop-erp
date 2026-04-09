@@ -2532,8 +2532,7 @@ class AIAssistantService extends ChangeNotifier {
         }
 
         return {
-          'result': 'Internet search results for "$query":\n\n' +
-              snippets.join('\n\n')
+          'result': 'Internet search results for "$query":\n\n${snippets.join('\n\n')}'
         };
       } else {
         return {

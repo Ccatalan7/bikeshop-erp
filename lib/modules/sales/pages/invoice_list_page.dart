@@ -11,7 +11,6 @@ import 'package:printing/printing.dart';
 // import 'package:flutter/foundation.dart' show kIsWeb; // Unused
 import 'package:http/http.dart' as http;
 // Conditional import for web-only features
-import 'dart:typed_data' show Uint8List;
 // import 'dart:html' as html; // Removed - causes issues on native platforms
 import 'package:file_picker/file_picker.dart';
 
@@ -2527,7 +2526,7 @@ pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
             border: TableBorder.all(color: Colors.grey[300]!),
             columnWidths: {
               0: FixedColumnWidth(50 * scale),
-              1: FlexColumnWidth(3),
+              1: const FlexColumnWidth(3),
               2: FixedColumnWidth(80 * scale),
               3: FixedColumnWidth(90 * scale),
               4: FixedColumnWidth(100 * scale),
@@ -2556,7 +2555,7 @@ pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
                       subtitle: item.description,
                       scale: scale,
                     ),
-                    _buildTableCell('${item.quantity.toStringAsFixed(2)}',
+                    _buildTableCell(item.quantity.toStringAsFixed(2),
                         scale: scale),
                     _buildTableCell(ChileanUtils.formatCurrency(item.unitPrice),
                         scale: scale),
@@ -2795,11 +2794,10 @@ pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      if (subLabel != null)
-                        Text(
-                          subLabel,
-                          style: const TextStyle(fontSize: 13, color: Colors.black87),
-                        ),
+                      Text(
+                        subLabel,
+                        style: const TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
                     ],
                   ),
                 ),

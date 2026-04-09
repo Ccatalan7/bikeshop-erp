@@ -10,6 +10,7 @@
 ///   --limit N   Only process N products (for testing)
 ///
 /// IMPORTANT: Requires SUPABASE_SERVICE_ROLE_KEY environment variable to bypass RLS
+library;
 
 import 'dart:io';
 import 'dart:typed_data';

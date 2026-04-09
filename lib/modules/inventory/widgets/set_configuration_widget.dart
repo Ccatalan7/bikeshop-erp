@@ -695,7 +695,7 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
   void _updateCostRatioWithAutoBalance(int changedIndex, double newRatio) {
     // Clamp ratio to valid range (0-100%)
     // For 2 components: max is 100%, for 3+: max leaves at least 0% for others
-    final maxRatio = 1.0; // 100%
+    const maxRatio = 1.0; // 100%
     final clampedRatio = newRatio.clamp(0.0, maxRatio);
 
     if (widget.components.length < 2) {
@@ -737,7 +737,7 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
 
   void _updatePriceRatioWithAutoBalance(int changedIndex, double newRatio) {
     // Clamp ratio to valid range (0-100%)
-    final maxRatio = 1.0; // 100%
+    const maxRatio = 1.0; // 100%
     final clampedRatio = newRatio.clamp(0.0, maxRatio);
 
     if (widget.components.length < 2) {

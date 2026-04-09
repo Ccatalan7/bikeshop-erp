@@ -66,12 +66,12 @@ void main() {
           Provider<RemoteScannerService>(
               create: (_) => MockRemoteScannerService()),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           home: ScannerBridgeScope(
             child: Scaffold(
               body: Column(children: [
-                const TextField(key: Key('input')),
-                const Text('Outside'),
+                TextField(key: Key('input')),
+                Text('Outside'),
               ]),
             ),
           ),

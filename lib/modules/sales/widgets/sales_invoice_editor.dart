@@ -1245,8 +1245,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                   bikeMap['model'] as String,
                 if (bikeMap['year'] != null) bikeMap['year'].toString(),
               ];
-              if (parts.isNotEmpty)
+              if (parts.isNotEmpty) {
                 resolvedBikeNames[jobBikeId] = parts.join(' ');
+              }
             }
           }
         }
@@ -2407,28 +2408,28 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
                         SizedBox(
                             width: _colIndexWidth,
-                            child: const Center(child: Text('#'))),
-                        const Expanded(
+                            child: Center(child: Text('#'))),
+                        Expanded(
                             child: Padding(
                                 padding: EdgeInsets.all(12),
                                 child: Text('DETALLES'))),
-                        const SizedBox(
+                        SizedBox(
                             width: _colQuantityWidth,
                             child: Center(child: Text('CANT'))),
-                        const SizedBox(
+                        SizedBox(
                             width: _colPriceWidth,
                             child: Center(child: Text('PRECIO'))),
-                        const SizedBox(
+                        SizedBox(
                             width: _colDiscountWidth,
                             child: Center(child: Text('DESC'))),
-                        const SizedBox(
+                        SizedBox(
                             width: _colTotalWidth,
                             child: Center(child: Text('TOTAL'))),
-                        const SizedBox(width: _colActionsWidth),
+                        SizedBox(width: _colActionsWidth),
                       ],
                     ),
                   ),
