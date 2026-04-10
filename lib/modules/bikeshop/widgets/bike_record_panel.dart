@@ -308,15 +308,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                              widget.snapshot.isProfileComplete
-                                  ? Icons.check_circle
-                                  : Icons.pending_actions,
-                              size: 14,
-                              color: statusColor,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.snapshot.isProfileComplete
+                            widget.snapshot.isProfileComplete
+                                ? Icons.check_circle
+                                : Icons.pending_actions,
+                            size: 14,
+                            color: statusColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.snapshot.isProfileComplete
                                 ? 'Perfil Completo'
                                 : 'Perfil Incompleto',
                             style: TextStyle(
@@ -393,16 +393,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   Widget _buildGeneralTab(ThemeData theme) {
     final bike = widget.snapshot.bike;
-    
+
     final baseData = [
-      if (bike.bikeType != null) 'Tipo de Bicicleta: ${bike.bikeType!.displayName}',
+      if (bike.bikeType != null)
+        'Tipo de Bicicleta: ${bike.bikeType!.displayName}',
       if (bike.year != null) 'Año: ${bike.year}',
-      if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty) 'Número de Serie: ${bike.serialNumber}',
+      if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty)
+        'Número de Serie: ${bike.serialNumber}',
       if (bike.color != null && bike.color!.isNotEmpty) 'Color: ${bike.color}',
-      if (bike.frameSize != null && bike.frameSize!.isNotEmpty) 'Talla de Cuadro: ${bike.frameSize}',
-      if (bike.wheelSize != null && bike.wheelSize!.isNotEmpty) 'Tamaño de Rueda: ${bike.wheelSize}',
-      if (bike.purchaseDate != null) 'Fecha de Compra: ${DateFormat('dd/MM/yyyy').format(bike.purchaseDate!)}',
-      if (bike.warrantyUntil != null) 'Garantía Hasta: ${DateFormat('dd/MM/yyyy').format(bike.warrantyUntil!)}',
+      if (bike.frameSize != null && bike.frameSize!.isNotEmpty)
+        'Talla de Cuadro: ${bike.frameSize}',
+      if (bike.wheelSize != null && bike.wheelSize!.isNotEmpty)
+        'Tamaño de Rueda: ${bike.wheelSize}',
+      if (bike.purchaseDate != null)
+        'Fecha de Compra: ${DateFormat('dd/MM/yyyy').format(bike.purchaseDate!)}',
+      if (bike.warrantyUntil != null)
+        'Garantía Hasta: ${DateFormat('dd/MM/yyyy').format(bike.warrantyUntil!)}',
     ];
 
     return SingleChildScrollView(
@@ -587,7 +593,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             children: [
               Expanded(
                 flex: 5,
-                child: _buildSystemExplorerCard(theme, history, activeSystemKey),
+                child:
+                    _buildSystemExplorerCard(theme, history, activeSystemKey),
               ),
               const SizedBox(width: 18),
               Expanded(
@@ -612,10 +619,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   ) {
     final latestDate = history.latestDiagnosisDate;
     final criticalCount = history.diagnosisSystems
-        .where((system) => system.overallStatus == BikeSystemOverallStatus.critical)
+        .where((system) =>
+            system.overallStatus == BikeSystemOverallStatus.critical)
         .length;
     final attentionCount = history.diagnosisSystems
-        .where((system) => system.overallStatus == BikeSystemOverallStatus.attention)
+        .where((system) =>
+            system.overallStatus == BikeSystemOverallStatus.attention)
         .length;
 
     return Container(
@@ -683,7 +692,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ),
               if (criticalCount > 0)
                 _buildReferencePill(
-                  label: '$criticalCount crítico${criticalCount == 1 ? '' : 's'}',
+                  label:
+                      '$criticalCount crítico${criticalCount == 1 ? '' : 's'}',
                   backgroundColor: const Color(0xFFFFF0F0),
                   borderColor: const Color(0xFFFFD2D2),
                   foregroundColor: Colors.red.shade700,
@@ -700,7 +710,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           const SizedBox(height: 18),
           _buildBikeSchemaNavigator(theme, history, activeSystemKey),
           if (history.overviewNarrativeObservation?.summary != null &&
-              history.overviewNarrativeObservation!.summary!.trim().isNotEmpty) ...[
+              history.overviewNarrativeObservation!.summary!
+                  .trim()
+                  .isNotEmpty) ...[
             const SizedBox(height: 18),
             Text(
               'Narrativa original de la orden',
@@ -1023,7 +1035,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           ],
           if (system.contextEntries.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Diagnósticos y trabajos relacionados'),
+            _buildMiniSectionLabel(
+                theme, 'Diagnósticos y trabajos relacionados'),
             const SizedBox(height: 10),
             ...system.contextEntries
                 .map((entry) => _buildRelatedDiagnosisCard(theme, entry)),
@@ -1379,8 +1392,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(4),
-                                border:
-                                    Border.all(color: Colors.grey.shade300),
+                                border: Border.all(color: Colors.grey.shade300),
                               ),
                               child: Text(
                                 event.referenceNumber!,
@@ -1403,7 +1415,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           color: Colors.black87,
                         ),
                       ),
-                      if (event.summary != null && event.summary!.isNotEmpty) ...[
+                      if (event.summary != null &&
+                          event.summary!.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
                           event.summary!,
@@ -1686,14 +1699,17 @@ class _BikeRecordHistoryData {
       ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
 
     final filteredStates = systemStates
-        .where((state) => state.payload['source']?.toString() == 'diagnosis_sheet')
+        .where(
+            (state) => state.payload['source']?.toString() == 'diagnosis_sheet')
         .toList()
       ..sort((a, b) {
         final severityCompare = _statusRank(b.overallStatus)
             .compareTo(_statusRank(a.overallStatus));
         if (severityCompare != 0) return severityCompare;
-        final aTime = a.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime = b.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aTime =
+            a.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            b.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
@@ -1719,23 +1735,21 @@ class _BikeRecordHistoryData {
         if (observation.systemKey != 'general') observation.systemKey,
     };
 
-    final diagnosisSystems = systemKeys
-        .map((systemKey) {
-          final matchingState = filteredStates
-              .where((state) => state.systemKey == systemKey)
-              .toList();
-          final matchingObservations = filteredObservations
-              .where((observation) => observation.systemKey == systemKey)
-              .toList()
-            ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
+    final diagnosisSystems = systemKeys.map((systemKey) {
+      final matchingState = filteredStates
+          .where((state) => state.systemKey == systemKey)
+          .toList();
+      final matchingObservations = filteredObservations
+          .where((observation) => observation.systemKey == systemKey)
+          .toList()
+        ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
 
-          return _BikeDiagnosisSystemView(
-            systemKey: systemKey,
-            state: matchingState.isNotEmpty ? matchingState.first : null,
-            observations: matchingObservations,
-          );
-        })
-        .toList()
+      return _BikeDiagnosisSystemView(
+        systemKey: systemKey,
+        state: matchingState.isNotEmpty ? matchingState.first : null,
+        observations: matchingObservations,
+      );
+    }).toList()
       ..sort((a, b) {
         final severityCompare = _statusRank(b.overallStatus)
             .compareTo(_statusRank(a.overallStatus));
@@ -1755,7 +1769,9 @@ class _BikeRecordHistoryData {
   }
 
   bool get isEmpty =>
-      events.isEmpty && diagnosisObservations.isEmpty && diagnosisStates.isEmpty;
+      events.isEmpty &&
+      diagnosisObservations.isEmpty &&
+      diagnosisStates.isEmpty;
 
   bool get hasDiagnosisMemory =>
       diagnosisSystems.isNotEmpty || overviewNarrativeObservation != null;
@@ -1810,7 +1826,9 @@ class _BikeRecordHistoryData {
         diagnosisSystems.any((system) => system.systemKey == preferred)) {
       return preferred;
     }
-    return diagnosisSystems.isNotEmpty ? diagnosisSystems.first.systemKey : null;
+    return diagnosisSystems.isNotEmpty
+        ? diagnosisSystems.first.systemKey
+        : null;
   }
 
   _BikeDiagnosisSystemView? systemFor(String? systemKey) {
@@ -1863,7 +1881,8 @@ class _BikeDiagnosisSystemView {
       state?.overallStatus ?? BikeSystemOverallStatus.unknown;
 
   DateTime? get latestDate {
-    final observationDate = observations.isNotEmpty ? observations.first.observedAt : null;
+    final observationDate =
+        observations.isNotEmpty ? observations.first.observedAt : null;
     final stateDate = state?.lastReviewedAt;
     if (observationDate == null) return stateDate;
     if (stateDate == null) return observationDate;
@@ -1913,19 +1932,23 @@ class _BikeDiagnosisSystemView {
         (observation) =>
             observation.observationKind ==
                 BikeObservationKind.conditionAssessment ||
-            observation.observationKind == BikeObservationKind.diagnosisSnapshot,
+            observation.observationKind ==
+                BikeObservationKind.diagnosisSnapshot,
       )
       .toList()
     ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
 
-  List<BikeObservation> get contextEntries => assessmentObservations.take(4).toList();
+  List<BikeObservation> get contextEntries =>
+      assessmentObservations.take(4).toList();
 
   List<_BikeMeasurementSeries> get measurementSeries {
     final grouped = <String, List<BikeObservation>>{};
 
     for (final observation in observations) {
       if (observation.valueNumeric == null) continue;
-      grouped.putIfAbsent(observation.observationKey, () => []).add(observation);
+      grouped
+          .putIfAbsent(observation.observationKey, () => [])
+          .add(observation);
     }
 
     final series = grouped.entries.map((entry) {
@@ -1939,7 +1962,8 @@ class _BikeDiagnosisSystemView {
         subtitle: displayName,
       );
     }).toList()
-      ..sort((a, b) => b.points.last.observedAt.compareTo(a.points.last.observedAt));
+      ..sort((a, b) =>
+          b.points.last.observedAt.compareTo(a.points.last.observedAt));
 
     return series;
   }
@@ -1968,14 +1992,18 @@ class _BikeMeasurementSeries {
     if (value == null) return 'Sin dato';
     final formatted = value == value.roundToDouble()
         ? value.toStringAsFixed(0)
-        : (value.abs() >= 10 ? value.toStringAsFixed(1) : value.toStringAsFixed(2));
+        : (value.abs() >= 10
+            ? value.toStringAsFixed(1)
+            : value.toStringAsFixed(2));
     if (unit == null || unit!.isEmpty) return formatted;
     return '$formatted $unit';
   }
 
-  String get firstDateLabel => DateFormat('dd/MM').format(points.first.observedAt);
+  String get firstDateLabel =>
+      DateFormat('dd/MM').format(points.first.observedAt);
 
-  String get lastDateLabel => DateFormat('dd/MM').format(points.last.observedAt);
+  String get lastDateLabel =>
+      DateFormat('dd/MM').format(points.last.observedAt);
 }
 
 class _SchemaPlacement {
@@ -2057,23 +2085,31 @@ class _BikeSchemaPainter extends CustomPainter {
     canvas.drawLine(seat, head, linePaint);
     canvas.drawLine(crank, head, linePaint);
     canvas.drawLine(head, frontWheel, linePaint);
-    canvas.drawLine(seat, Offset(seat.dx, seat.dy - size.height * 0.07), linePaint);
-    canvas.drawLine(head, Offset(head.dx + size.width * 0.05, head.dy - size.height * 0.04), linePaint);
+    canvas.drawLine(
+        seat, Offset(seat.dx, seat.dy - size.height * 0.07), linePaint);
+    canvas.drawLine(
+        head,
+        Offset(head.dx + size.width * 0.05, head.dy - size.height * 0.04),
+        linePaint);
 
     if (highlightSystemKey == 'drivetrain') {
       canvas.drawCircle(crank, size.width * 0.045, accentPaint);
     }
     if (highlightSystemKey == 'front_brake') {
       canvas.drawLine(
-        Offset(frontWheel.dx - size.width * 0.02, frontWheel.dy - size.height * 0.11),
-        Offset(frontWheel.dx + size.width * 0.03, frontWheel.dy - size.height * 0.02),
+        Offset(frontWheel.dx - size.width * 0.02,
+            frontWheel.dy - size.height * 0.11),
+        Offset(frontWheel.dx + size.width * 0.03,
+            frontWheel.dy - size.height * 0.02),
         accentPaint,
       );
     }
     if (highlightSystemKey == 'rear_brake') {
       canvas.drawLine(
-        Offset(rearWheel.dx + size.width * 0.02, rearWheel.dy - size.height * 0.11),
-        Offset(rearWheel.dx - size.width * 0.03, rearWheel.dy - size.height * 0.02),
+        Offset(rearWheel.dx + size.width * 0.02,
+            rearWheel.dy - size.height * 0.11),
+        Offset(rearWheel.dx - size.width * 0.03,
+            rearWheel.dy - size.height * 0.02),
         accentPaint,
       );
     }

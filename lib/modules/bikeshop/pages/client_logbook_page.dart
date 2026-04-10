@@ -2945,7 +2945,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         _selectedBikeRecordSnapshot = snapshot;
         _isLoadingSelectedBikeRecordSnapshot = false;
         if (snapshot == null) {
-          _bikeRecordLoadError = 'La bicicleta no fue encontrada en la base de datos.';
+          _bikeRecordLoadError =
+              'La bicicleta no fue encontrada en la base de datos.';
         }
       });
     } catch (e) {
@@ -2999,7 +3000,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 const Icon(Icons.error_outline, size: 48, color: Colors.grey),
                 const SizedBox(height: 16),
                 Text(
-                  _bikeRecordLoadError ?? 'No se pudo cargar la vista de la bicicleta.',
+                  _bikeRecordLoadError ??
+                      'No se pudo cargar la vista de la bicicleta.',
                   style: const TextStyle(color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
