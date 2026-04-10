@@ -20,10 +20,10 @@ class InvoicePdfGenerator {
     Invoice invoice,
   ) async {
     final Map<String, String> resolvedBikeNames = {};
+
     try {
       final db = context.read<DatabaseService>();
 
-      // 1. Single-bike invoice: fetch via invoice.bikeId
       final bikeId = invoice.bikeId;
       if (bikeId != null && bikeId.isNotEmpty) {
         final bikeData = await db.supabase
@@ -31,6 +31,7 @@ class InvoicePdfGenerator {
             .select('brand, model, year')
             .eq('id', bikeId as Object)
             .maybeSingle();
+
         if (bikeData != null) {
           final parts = <String>[
             if ((bikeData['brand'] as String?)?.isNotEmpty == true)
@@ -39,28 +40,33 @@ class InvoicePdfGenerator {
               bikeData['model'] as String,
             if (bikeData['year'] != null) bikeData['year'].toString(),
           ];
-          if (parts.isNotEmpty) resolvedBikeNames['single'] = parts.join(' ');
+
+          if (parts.isNotEmpty) {
+            resolvedBikeNames['single'] = parts.join(' ');
+          }
         }
       }
 
-      // 2. Multi-bike items via jobBikeId
       final jobBikeIds = invoice.items
-          .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
-          .map((i) => i.jobBikeId!)
+          .where((item) => item.jobBikeId != null && item.jobBikeId!.isNotEmpty)
+          .map((item) => item.jobBikeId!)
           .toSet();
 
       for (final jobBikeId in jobBikeIds) {
-        final existingName =
-            invoice.items.firstWhere((i) => i.jobBikeId == jobBikeId).bikeName;
+        final existingName = invoice.items
+            .firstWhere((item) => item.jobBikeId == jobBikeId)
+            .bikeName;
         if (existingName != null && existingName.isNotEmpty) {
           resolvedBikeNames[jobBikeId] = existingName;
           continue;
         }
+
         final jobBikeData = await db.supabase
             .from('mechanic_job_bikes')
             .select('bikes(brand, model, year)')
             .eq('id', jobBikeId as Object)
             .maybeSingle();
+
         if (jobBikeData != null) {
           final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
           if (bikeMap != null) {
@@ -71,6 +77,7 @@ class InvoicePdfGenerator {
                 bikeMap['model'] as String,
               if (bikeMap['year'] != null) bikeMap['year'].toString(),
             ];
+
             if (parts.isNotEmpty) {
               resolvedBikeNames[jobBikeId] = parts.join(' ');
             }
@@ -78,9 +85,9 @@ class InvoicePdfGenerator {
         }
       }
     } catch (e) {
-      debugPrint(
-          'Could not resolve bike names for PDF: $e'); // ignore: avoid_print
+      debugPrint('Could not resolve bike names for PDF: $e');
     }
+
     return resolvedBikeNames;
   }
 
@@ -96,6 +103,7 @@ class InvoicePdfGenerator {
       pw.MultiPage(
         pageFormat: PdfPageFormat.letter,
         margin: const pw.EdgeInsets.fromLTRB(34, 32, 34, 28),
+        maxPages: 200,
         footer: (pageContext) => _buildFooter(pageContext),
         build: (pageContext) => [
           _buildHeader(invoice, logoImage),
@@ -256,7 +264,9 @@ class InvoicePdfGenerator {
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             _buildMetaLine(
-                'Fecha de la factura', ChileanUtils.formatDate(invoice.date)),
+              'Fecha de la factura',
+              ChileanUtils.formatDate(invoice.date),
+            ),
             if (invoice.dueDate != null)
               _buildMetaLine(
                 'Vencimiento',
@@ -370,15 +380,27 @@ class InvoicePdfGenerator {
         repeat: true,
         decoration: const pw.BoxDecoration(color: PdfColors.grey800),
         children: [
-          _buildPdfTableCell('#',
-              isHeader: true, alignment: pw.TextAlign.center),
+          _buildPdfTableCell(
+            '#',
+            isHeader: true,
+            alignment: pw.TextAlign.center,
+          ),
           _buildPdfTableCell('Artículo & Descripción', isHeader: true),
-          _buildPdfTableCell('Cant.',
-              isHeader: true, alignment: pw.TextAlign.center),
-          _buildPdfTableCell('Tarifa',
-              isHeader: true, alignment: pw.TextAlign.right),
-          _buildPdfTableCell('Total',
-              isHeader: true, alignment: pw.TextAlign.right),
+          _buildPdfTableCell(
+            'Cant.',
+            isHeader: true,
+            alignment: pw.TextAlign.center,
+          ),
+          _buildPdfTableCell(
+            'Tarifa',
+            isHeader: true,
+            alignment: pw.TextAlign.right,
+          ),
+          _buildPdfTableCell(
+            'Total',
+            isHeader: true,
+            alignment: pw.TextAlign.right,
+          ),
         ],
       ),
     ];
@@ -452,6 +474,7 @@ class InvoicePdfGenerator {
   static pw.Widget _buildDescriptionCell(InvoiceItem item) {
     final hasDescription =
         item.description != null && item.description!.trim().isNotEmpty;
+
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: pw.Column(
@@ -501,8 +524,11 @@ class InvoicePdfGenerator {
                 _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
               ],
               pw.Divider(thickness: 1, color: PdfColors.grey800),
-              _buildPdfTotalRow('Saldo adeudado', invoice.balance,
-                  isTotal: true),
+              _buildPdfTotalRow(
+                'Saldo adeudado',
+                invoice.balance,
+                isTotal: true,
+              ),
             ],
           ),
         ),
@@ -548,6 +574,7 @@ class InvoicePdfGenerator {
       if (bikeName == null || bikeName.isEmpty || seen.contains(bikeName)) {
         continue;
       }
+
       seen.add(bikeName);
       bikeNames.add(bikeName);
     }
@@ -623,6 +650,7 @@ class InvoicePdfGenerator {
     if (text.isEmpty) {
       return text;
     }
+
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
@@ -630,6 +658,7 @@ class InvoicePdfGenerator {
     if (quantity.truncateToDouble() == quantity) {
       return quantity.toStringAsFixed(0);
     }
+
     return quantity.toStringAsFixed(2);
   }
 
@@ -662,8 +691,11 @@ class InvoicePdfGenerator {
     );
   }
 
-  static pw.Widget _buildPdfTotalRow(String label, double amount,
-      {bool isTotal = false}) {
+  static pw.Widget _buildPdfTotalRow(
+    String label,
+    double amount, {
+    bool isTotal = false,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 5),
       child: pw.Row(

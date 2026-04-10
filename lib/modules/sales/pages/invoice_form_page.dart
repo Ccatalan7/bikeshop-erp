@@ -3441,6 +3441,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
+  // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,

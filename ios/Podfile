@@ -27,6 +27,20 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
+def apply_flutterfire_warning_suppression(target, config)
+  return unless ['firebase_core', 'firebase_messaging'].include?(target.name)
+
+  warning_flags = config.build_settings['WARNING_CFLAGS']
+  warning_flags = [warning_flags].flatten.compact
+  warning_flags = ['$(inherited)'] if warning_flags.empty?
+
+  ['-Wno-deprecated-declarations', '-Wno-incompatible-pointer-types'].each do |flag|
+    warning_flags << flag unless warning_flags.include?(flag)
+  end
+
+  config.build_settings['WARNING_CFLAGS'] = warning_flags
+end
+
 target 'Runner' do
   use_frameworks!
 
@@ -42,6 +56,7 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      apply_flutterfire_warning_suppression(target, config)
     end
   end
   installer.pods_project.build_configurations.each do |config|
