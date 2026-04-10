@@ -417,6 +417,1072 @@ class BikeProfile {
       const [];
 }
 
+const Map<String, String> _bikeProfileBrakeTypeLabels = {
+  'rim': 'Llanta',
+  'mechanical_disc': 'Disco mecanico',
+  'hydraulic_disc': 'Disco hidraulico',
+};
+
+const Map<String, String> _bikeProfileFreehubTypeLabels = {
+  'shimano_hg': 'Shimano HG',
+  'microspline': 'Micro Spline',
+  'sram_xd': 'SRAM XD',
+  'campagnolo': 'Campagnolo',
+};
+
+const Map<String, String> _bikeProfileMaintenanceLabels = {
+  'regular': 'Regular',
+  'occasional': 'Ocasional',
+  'poor': 'Deficiente',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bikeProfilePrimaryUseLabels = {
+  'urban': 'Urbano',
+  'commute': 'Traslado',
+  'sport': 'Deportivo',
+  'trail': 'Trail',
+  'downhill': 'Downhill',
+  'gravel': 'Gravel',
+  'delivery': 'Delivery',
+  'mixed': 'Mixto',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bikeProfileYesNoUnknownLabels = {
+  'yes': 'Si',
+  'no': 'No',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bikeProfileStorageLabels = {
+  'indoor': 'Interior',
+  'covered_outdoor': 'Exterior cubierto',
+  'outdoor': 'Exterior',
+  'unknown': 'Desconocido',
+};
+
+String? _bikeProfileLabelFor(Map<String, String> options, dynamic value) {
+  final rawValue = value?.toString();
+  if (rawValue == null || rawValue.isEmpty) return null;
+  return options[rawValue] ?? rawValue;
+}
+
+String _formatBikeSpacing(num spacing) {
+  final asDouble = spacing.toDouble();
+  if (asDouble == asDouble.roundToDouble()) {
+    return asDouble.toStringAsFixed(0);
+  }
+  return asDouble.toStringAsFixed(1);
+}
+
+class BikeProfileSummaryBuilder {
+  static String buildIdentityLine(Bike bike) {
+    final serialNumber = bike.serialNumber?.trim();
+    if (serialNumber != null && serialNumber.isNotEmpty) {
+      return '${bike.displayName} (S/N: $serialNumber)';
+    }
+    return bike.displayName;
+  }
+
+  static List<String> buildIntakeHighlights(
+      Map<String, dynamic> intakeProfile) {
+    final highlights = <String>[];
+    final primaryUse = _bikeProfileLabelFor(
+        _bikeProfilePrimaryUseLabels, intakeProfile['primaryUse']);
+    final maintenance = _bikeProfileLabelFor(
+      _bikeProfileMaintenanceLabels,
+      intakeProfile['declaredMaintenanceHistory'],
+    );
+    final accident = _bikeProfileLabelFor(
+      _bikeProfileYesNoUnknownLabels,
+      intakeProfile['accidentHistory'],
+    );
+    final storage = _bikeProfileLabelFor(
+      _bikeProfileStorageLabels,
+      intakeProfile['storageCondition'],
+    );
+
+    if (primaryUse != null) {
+      highlights.add('Uso principal: $primaryUse');
+    }
+    if (maintenance != null) {
+      highlights.add('Historial declarado: $maintenance');
+    }
+    if (accident != null) {
+      highlights.add('Accidentes: $accident');
+    }
+    if (storage != null) {
+      highlights.add('Guardado: $storage');
+    }
+
+    return highlights;
+  }
+
+  static List<String> buildTechnicalHighlights({
+    required Bike bike,
+    required Map<String, dynamic> technicalValues,
+  }) {
+    final highlights = <String>[];
+    final brake = _bikeProfileLabelFor(
+      _bikeProfileBrakeTypeLabels,
+      technicalValues['brakeType'],
+    );
+    final freehub = _bikeProfileLabelFor(
+      _bikeProfileFreehubTypeLabels,
+      technicalValues['freehubType'],
+    );
+    final drivetrainSpeeds = technicalValues['drivetrainSpeeds']?.toString();
+    final drivetrainConfig =
+        technicalValues['drivetrainConfig']?.toString().trim();
+
+    if (brake != null) {
+      highlights.add('Frenos: $brake');
+    }
+    if (drivetrainSpeeds != null && drivetrainSpeeds.isNotEmpty) {
+      highlights.add(
+        drivetrainConfig != null && drivetrainConfig.isNotEmpty
+            ? 'Transmision: $drivetrainConfig'
+            : 'Transmision: ${drivetrainSpeeds}v',
+      );
+    }
+    if (bike.rearHubSpacingMm != null) {
+      highlights.add(
+        'Eje trasero: ${_formatBikeSpacing(bike.rearHubSpacingMm!)} mm',
+      );
+    }
+    if (freehub != null) {
+      highlights.add('Freehub: $freehub');
+    }
+    if (bike.spokeCount != null) {
+      highlights.add('Rayos: ${bike.spokeCount}');
+    }
+
+    return highlights;
+  }
+
+  static List<String> buildWarnings(Map<String, dynamic> technicalValues) {
+    final warnings = <String>[];
+
+    final brakeType = technicalValues['brakeType']?.toString();
+    if (brakeType == null || brakeType.isEmpty) {
+      warnings.add('Falta confirmar tipo de freno');
+    }
+
+    final drivetrainSpeeds = technicalValues['drivetrainSpeeds']?.toString();
+    if (drivetrainSpeeds == null || drivetrainSpeeds.isEmpty) {
+      warnings.add('Falta confirmar velocidad de transmision');
+    }
+
+    return warnings;
+  }
+
+  static Map<String, dynamic> buildSummarySnapshot({
+    required Bike bike,
+    required Map<String, dynamic> intakeProfile,
+    required Map<String, dynamic> technicalValues,
+    DateTime? lastConfirmedAt,
+  }) {
+    final confirmedAt = lastConfirmedAt ?? DateTime.now();
+
+    return {
+      'identityLine': buildIdentityLine(bike),
+      'intakeHighlights': buildIntakeHighlights(intakeProfile),
+      'technicalHighlights': buildTechnicalHighlights(
+        bike: bike,
+        technicalValues: technicalValues,
+      ),
+      'warnings': buildWarnings(technicalValues),
+      'lastConfirmedAt': confirmedAt.toIso8601String(),
+    };
+  }
+}
+
+class BikeRecordSnapshot {
+  final Bike bike;
+  final BikeProfile? profile;
+  final String identityTitle;
+  final String? identitySubtitle;
+  final List<String> intakeLines;
+  final List<String> technicalLines;
+  final List<String> notesLines;
+  final List<String> warnings;
+  final DateTime? lastConfirmedAt;
+  final bool hasStructuredProfile;
+  final bool isProfileComplete;
+
+  const BikeRecordSnapshot({
+    required this.bike,
+    required this.profile,
+    required this.identityTitle,
+    required this.identitySubtitle,
+    required this.intakeLines,
+    required this.technicalLines,
+    required this.notesLines,
+    required this.warnings,
+    required this.lastConfirmedAt,
+    required this.hasStructuredProfile,
+    required this.isProfileComplete,
+  });
+
+  factory BikeRecordSnapshot.fromBikeAndProfile({
+    required Bike bike,
+    BikeProfile? profile,
+  }) {
+    final intakeProfile = profile?.intakeProfile ?? const <String, dynamic>{};
+    final technicalValues =
+        profile?.technicalValues ?? const <String, dynamic>{};
+    final fallbackSnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
+      bike: bike,
+      intakeProfile: intakeProfile,
+      technicalValues: technicalValues,
+      lastConfirmedAt: profile?.lastConfirmedAt,
+    );
+    final summarySnapshot = profile?.summarySnapshot.isNotEmpty == true
+        ? profile!.summarySnapshot
+        : fallbackSnapshot;
+
+    final identityTitle = bike.displayName;
+    final identitySubtitleParts = <String>[];
+    if (bike.serialNumber != null && bike.serialNumber!.trim().isNotEmpty) {
+      identitySubtitleParts.add('S/N: ${bike.serialNumber!.trim()}');
+    }
+    if (bike.color != null && bike.color!.trim().isNotEmpty) {
+      identitySubtitleParts.add(bike.color!.trim());
+    }
+    if (bike.frameSize != null && bike.frameSize!.trim().isNotEmpty) {
+      identitySubtitleParts.add('Talla ${bike.frameSize!.trim()}');
+    }
+    if (bike.wheelSize != null && bike.wheelSize!.trim().isNotEmpty) {
+      identitySubtitleParts.add('Aro ${bike.wheelSize!.trim()}');
+    }
+
+    final notesLines = <String>[];
+    if (bike.notes != null && bike.notes!.trim().isNotEmpty) {
+      notesLines.add(bike.notes!.trim());
+    }
+
+    final intakeLines = (summarySnapshot['intakeHighlights'] as List?)
+            ?.map((item) => item.toString())
+            .toList() ??
+        const <String>[];
+    final technicalLines = (summarySnapshot['technicalHighlights'] as List?)
+            ?.map((item) => item.toString())
+            .toList() ??
+        const <String>[];
+    final warnings = (summarySnapshot['warnings'] as List?)
+            ?.map((item) => item.toString())
+            .toList() ??
+        const <String>[];
+
+    return BikeRecordSnapshot(
+      bike: bike,
+      profile: profile,
+      identityTitle: identityTitle,
+      identitySubtitle: identitySubtitleParts.isEmpty
+          ? null
+          : identitySubtitleParts.join(' • '),
+      intakeLines: intakeLines,
+      technicalLines: technicalLines,
+      notesLines: notesLines,
+      warnings: warnings,
+      lastConfirmedAt: profile?.lastConfirmedAt ??
+          _parseDateNullable(summarySnapshot['lastConfirmedAt']),
+      hasStructuredProfile: profile != null,
+      isProfileComplete: intakeLines.isNotEmpty &&
+          technicalLines.isNotEmpty &&
+          warnings.isEmpty,
+    );
+  }
+
+  List<String> get highlights => [...intakeLines, ...technicalLines];
+
+  List<String> get baseHighlights {
+    final base = <String>[];
+
+    if (bike.bikeType != null) {
+      base.add('Tipo: ${bike.bikeType!.displayName}');
+    }
+    if (bike.frameSize != null && bike.frameSize!.trim().isNotEmpty) {
+      base.add('Talla: ${bike.frameSize!.trim()}');
+    }
+    if (bike.wheelSize != null && bike.wheelSize!.trim().isNotEmpty) {
+      base.add('Aro: ${bike.wheelSize!.trim()}');
+    }
+    if (bike.color != null && bike.color!.trim().isNotEmpty) {
+      base.add('Color: ${bike.color!.trim()}');
+    }
+    if (bike.isUnderWarranty) {
+      base.add('Garantia activa');
+    }
+
+    return base;
+  }
+
+  List<String> get summaryHighlights {
+    final combined = <String>[];
+
+    for (final line in [...baseHighlights, ...highlights]) {
+      final normalized = line.trim();
+      if (normalized.isEmpty || combined.contains(normalized)) continue;
+      combined.add(normalized);
+    }
+
+    return combined;
+  }
+}
+
+// ============================================================
+// BIKE TIMELINE EVENT MODEL
+// ============================================================
+
+enum BikeEventCategory {
+  state,
+  visit,
+  evidence,
+  incident,
+  component;
+
+  String get displayName {
+    switch (this) {
+      case BikeEventCategory.state:
+        return 'Estado';
+      case BikeEventCategory.visit:
+        return 'Visita';
+      case BikeEventCategory.evidence:
+        return 'Evidencia';
+      case BikeEventCategory.incident:
+        return 'Incidente';
+      case BikeEventCategory.component:
+        return 'Componente';
+    }
+  }
+
+  String get dbValue => toString().split('.').last;
+
+  static BikeEventCategory fromDbValue(String? value) {
+    if (value == null) return BikeEventCategory.state;
+    return BikeEventCategory.values.firstWhere(
+      (category) => category.dbValue == value,
+      orElse: () => BikeEventCategory.state,
+    );
+  }
+}
+
+enum BikeEventType {
+  bikeRegistered,
+  profileCreated,
+  profileUpdated,
+  jobCreated,
+  jobCompleted,
+  incidentReported,
+  componentReplaced,
+  measurementRecorded;
+
+  String get displayName {
+    switch (this) {
+      case BikeEventType.bikeRegistered:
+        return 'Bicicleta registrada';
+      case BikeEventType.profileCreated:
+        return 'Ficha creada';
+      case BikeEventType.profileUpdated:
+        return 'Ficha actualizada';
+      case BikeEventType.jobCreated:
+        return 'Trabajo creado';
+      case BikeEventType.jobCompleted:
+        return 'Trabajo completado';
+      case BikeEventType.incidentReported:
+        return 'Incidente reportado';
+      case BikeEventType.componentReplaced:
+        return 'Componente reemplazado';
+      case BikeEventType.measurementRecorded:
+        return 'Medición registrada';
+    }
+  }
+
+  String get dbValue {
+    return toString().split('.').last.replaceAllMapped(
+        RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}');
+  }
+
+  static BikeEventType fromDbValue(String? value) {
+    if (value == null) return BikeEventType.profileUpdated;
+    return BikeEventType.values.firstWhere(
+      (type) => type.dbValue == value,
+      orElse: () => BikeEventType.profileUpdated,
+    );
+  }
+}
+
+enum BikeEventSeverity {
+  info,
+  warning,
+  critical;
+
+  String get dbValue => toString().split('.').last;
+
+  static BikeEventSeverity? fromDbValue(String? value) {
+    if (value == null || value.isEmpty) return null;
+    for (final severity in BikeEventSeverity.values) {
+      if (severity.dbValue == value) return severity;
+    }
+    return null;
+  }
+}
+
+class BikeEvent {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? jobId;
+  final BikeEventType eventType;
+  final BikeEventCategory eventCategory;
+  final DateTime eventDate;
+  final String title;
+  final String? summary;
+  final String source;
+  final String? referenceNumber;
+  final BikeEventSeverity? severity;
+  final Map<String, dynamic> payload;
+  final String? createdBy;
+  final String? createdByName;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeEvent({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.jobId,
+    required this.eventType,
+    required this.eventCategory,
+    DateTime? eventDate,
+    required this.title,
+    this.summary,
+    this.source = 'manual',
+    this.referenceNumber,
+    this.severity,
+    this.payload = const {},
+    this.createdBy,
+    this.createdByName,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : eventDate = eventDate ?? DateTime.now(),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeEvent.fromJson(Map<String, dynamic> json) {
+    return BikeEvent(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString(),
+      eventType: BikeEventType.fromDbValue(json['event_type'] as String?),
+      eventCategory:
+          BikeEventCategory.fromDbValue(json['event_category'] as String?),
+      eventDate: _parseDate(json['event_date']),
+      title: json['title']?.toString() ?? '',
+      summary: json['summary'] as String?,
+      source: json['source']?.toString() ?? 'manual',
+      referenceNumber: json['reference_number'] as String?,
+      severity: BikeEventSeverity.fromDbValue(json['severity'] as String?),
+      payload: json['payload'] is Map
+          ? Map<String, dynamic>.from(json['payload'] as Map)
+          : const {},
+      createdBy: json['created_by']?.toString(),
+      createdByName: json['created_by_name'] as String?,
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'job_id': jobId,
+      'event_type': eventType.dbValue,
+      'event_category': eventCategory.dbValue,
+      'event_date': eventDate.toIso8601String(),
+      'title': title,
+      'summary': summary,
+      'source': source,
+      'reference_number': referenceNumber,
+      'severity': severity?.dbValue,
+      'payload': payload,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+}
+
+enum BikeMemoryLocation {
+  none,
+  front,
+  rear,
+  left,
+  right,
+  center;
+
+  String get dbValue => toString().split('.').last;
+
+  String get displayName {
+    switch (this) {
+      case BikeMemoryLocation.none:
+        return 'Sin ubicación';
+      case BikeMemoryLocation.front:
+        return 'Delantero';
+      case BikeMemoryLocation.rear:
+        return 'Trasero';
+      case BikeMemoryLocation.left:
+        return 'Izquierdo';
+      case BikeMemoryLocation.right:
+        return 'Derecho';
+      case BikeMemoryLocation.center:
+        return 'Centro';
+    }
+  }
+
+  static BikeMemoryLocation fromDbValue(String? value) {
+    if (value == null) return BikeMemoryLocation.none;
+    return BikeMemoryLocation.values.firstWhere(
+      (location) => location.dbValue == value,
+      orElse: () => BikeMemoryLocation.none,
+    );
+  }
+}
+
+enum BikeSystemOverallStatus {
+  ok,
+  attention,
+  critical,
+  unknown;
+
+  String get dbValue => toString().split('.').last;
+
+  String get displayName {
+    switch (this) {
+      case BikeSystemOverallStatus.ok:
+        return 'OK';
+      case BikeSystemOverallStatus.attention:
+        return 'Atención';
+      case BikeSystemOverallStatus.critical:
+        return 'Crítico';
+      case BikeSystemOverallStatus.unknown:
+        return 'Desconocido';
+    }
+  }
+
+  static BikeSystemOverallStatus fromDbValue(String? value) {
+    if (value == null) return BikeSystemOverallStatus.unknown;
+    return BikeSystemOverallStatus.values.firstWhere(
+      (status) => status.dbValue == value,
+      orElse: () => BikeSystemOverallStatus.unknown,
+    );
+  }
+}
+
+enum BikeComponentLifecycleStatus {
+  installed,
+  removed,
+  superseded;
+
+  String get dbValue => toString().split('.').last;
+
+  static BikeComponentLifecycleStatus fromDbValue(String? value) {
+    if (value == null) return BikeComponentLifecycleStatus.installed;
+    return BikeComponentLifecycleStatus.values.firstWhere(
+      (status) => status.dbValue == value,
+      orElse: () => BikeComponentLifecycleStatus.installed,
+    );
+  }
+}
+
+enum BikeObservationKind {
+  measurement,
+  conditionAssessment,
+  diagnosisSnapshot,
+  incident,
+  confirmation;
+
+  String get dbValue {
+    return toString().split('.').last.replaceAllMapped(
+        RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}');
+  }
+
+  static BikeObservationKind fromDbValue(String? value) {
+    if (value == null) return BikeObservationKind.measurement;
+    return BikeObservationKind.values.firstWhere(
+      (kind) => kind.dbValue == value,
+      orElse: () => BikeObservationKind.measurement,
+    );
+  }
+}
+
+enum BikeMemorySeverity {
+  info,
+  warning,
+  critical;
+
+  String get dbValue => toString().split('.').last;
+
+  static BikeMemorySeverity? fromDbValue(String? value) {
+    if (value == null || value.isEmpty) return null;
+    for (final severity in BikeMemorySeverity.values) {
+      if (severity.dbValue == value) return severity;
+    }
+    return null;
+  }
+}
+
+enum BikeInterventionType {
+  replacement,
+  service,
+  adjustment,
+  installation,
+  removal,
+  inspection;
+
+  String get dbValue => toString().split('.').last;
+
+  static BikeInterventionType fromDbValue(String? value) {
+    if (value == null) return BikeInterventionType.service;
+    return BikeInterventionType.values.firstWhere(
+      (type) => type.dbValue == value,
+      orElse: () => BikeInterventionType.service,
+    );
+  }
+}
+
+class BikeSystemState {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? jobId;
+  final String? jobBikeId;
+  final String systemKey;
+  final BikeMemoryLocation location;
+  final BikeSystemOverallStatus overallStatus;
+  final String? statusNote;
+  final DateTime? lastReviewedAt;
+  final Map<String, dynamic> payload;
+  final String? createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeSystemState({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.jobId,
+    this.jobBikeId,
+    required this.systemKey,
+    this.location = BikeMemoryLocation.none,
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.statusNote,
+    this.lastReviewedAt,
+    this.payload = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeSystemState.fromJson(Map<String, dynamic> json) {
+    return BikeSystemState(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString(),
+      jobBikeId: json['job_bike_id']?.toString(),
+      systemKey: json['system_key']?.toString() ?? '',
+      location: BikeMemoryLocation.fromDbValue(json['location_key'] as String?),
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+          json['overall_status'] as String?),
+      statusNote: json['status_note'] as String?,
+      lastReviewedAt: _parseDateNullable(json['last_reviewed_at']),
+      payload: json['payload'] is Map
+          ? Map<String, dynamic>.from(json['payload'] as Map)
+          : const {},
+      createdBy: json['created_by']?.toString(),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'job_id': jobId,
+      'job_bike_id': jobBikeId,
+      'system_key': systemKey,
+      'location_key': location.dbValue,
+      'overall_status': overallStatus.dbValue,
+      'status_note': statusNote,
+      'last_reviewed_at': lastReviewedAt?.toIso8601String(),
+      'payload': payload,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+}
+
+class BikeComponentLifecycle {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? jobId;
+  final String? jobBikeId;
+  final String? mechanicJobItemId;
+  final String? productId;
+  final String? serviceProductId;
+  final String systemKey;
+  final String componentSlotKey;
+  final BikeMemoryLocation location;
+  final String componentLabel;
+  final BikeComponentLifecycleStatus status;
+  final DateTime installedAt;
+  final DateTime? removedAt;
+  final String? removalReason;
+  final String source;
+  final String? notes;
+  final Map<String, dynamic> payload;
+  final String? createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeComponentLifecycle({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.jobId,
+    this.jobBikeId,
+    this.mechanicJobItemId,
+    this.productId,
+    this.serviceProductId,
+    required this.systemKey,
+    required this.componentSlotKey,
+    this.location = BikeMemoryLocation.none,
+    required this.componentLabel,
+    this.status = BikeComponentLifecycleStatus.installed,
+    DateTime? installedAt,
+    this.removedAt,
+    this.removalReason,
+    this.source = 'manual',
+    this.notes,
+    this.payload = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : installedAt = installedAt ?? DateTime.now(),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeComponentLifecycle.fromJson(Map<String, dynamic> json) {
+    return BikeComponentLifecycle(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString(),
+      jobBikeId: json['job_bike_id']?.toString(),
+      mechanicJobItemId: json['mechanic_job_item_id']?.toString(),
+      productId: json['product_id']?.toString(),
+      serviceProductId: json['service_product_id']?.toString(),
+      systemKey: json['system_key']?.toString() ?? '',
+      componentSlotKey: json['component_slot_key']?.toString() ?? '',
+      location: BikeMemoryLocation.fromDbValue(json['location_key'] as String?),
+      componentLabel: json['component_label']?.toString() ?? '',
+      status:
+          BikeComponentLifecycleStatus.fromDbValue(json['status'] as String?),
+      installedAt: _parseDate(json['installed_at']),
+      removedAt: _parseDateNullable(json['removed_at']),
+      removalReason: json['removal_reason'] as String?,
+      source: json['source']?.toString() ?? 'manual',
+      notes: json['notes'] as String?,
+      payload: json['payload'] is Map
+          ? Map<String, dynamic>.from(json['payload'] as Map)
+          : const {},
+      createdBy: json['created_by']?.toString(),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'job_id': jobId,
+      'job_bike_id': jobBikeId,
+      'mechanic_job_item_id': mechanicJobItemId,
+      'product_id': productId,
+      'service_product_id': serviceProductId,
+      'system_key': systemKey,
+      'component_slot_key': componentSlotKey,
+      'location_key': location.dbValue,
+      'component_label': componentLabel,
+      'status': status.dbValue,
+      'installed_at': installedAt.toIso8601String(),
+      'removed_at': removedAt?.toIso8601String(),
+      'removal_reason': removalReason,
+      'source': source,
+      'notes': notes,
+      'payload': payload,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+}
+
+class BikeObservation {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? jobId;
+  final String? jobBikeId;
+  final String? mechanicJobItemId;
+  final String? lifecycleId;
+  final String? productId;
+  final String? serviceProductId;
+  final String systemKey;
+  final String? componentSlotKey;
+  final BikeMemoryLocation location;
+  final BikeObservationKind observationKind;
+  final String observationKey;
+  final String title;
+  final String? summary;
+  final String? statusValue;
+  final double? valueNumeric;
+  final String? valueText;
+  final String? unit;
+  final BikeMemorySeverity? severity;
+  final DateTime observedAt;
+  final String source;
+  final String? sourceField;
+  final Map<String, dynamic> payload;
+  final String? createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeObservation({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.jobId,
+    this.jobBikeId,
+    this.mechanicJobItemId,
+    this.lifecycleId,
+    this.productId,
+    this.serviceProductId,
+    required this.systemKey,
+    this.componentSlotKey,
+    this.location = BikeMemoryLocation.none,
+    required this.observationKind,
+    required this.observationKey,
+    required this.title,
+    this.summary,
+    this.statusValue,
+    this.valueNumeric,
+    this.valueText,
+    this.unit,
+    this.severity,
+    DateTime? observedAt,
+    this.source = 'manual',
+    this.sourceField,
+    this.payload = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : observedAt = observedAt ?? DateTime.now(),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeObservation.fromJson(Map<String, dynamic> json) {
+    return BikeObservation(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString(),
+      jobBikeId: json['job_bike_id']?.toString(),
+      mechanicJobItemId: json['mechanic_job_item_id']?.toString(),
+      lifecycleId: json['lifecycle_id']?.toString(),
+      productId: json['product_id']?.toString(),
+      serviceProductId: json['service_product_id']?.toString(),
+      systemKey: json['system_key']?.toString() ?? '',
+      componentSlotKey: json['component_slot_key']?.toString(),
+      location: BikeMemoryLocation.fromDbValue(json['location_key'] as String?),
+      observationKind:
+          BikeObservationKind.fromDbValue(json['observation_kind'] as String?),
+      observationKey: json['observation_key']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      summary: json['summary'] as String?,
+      statusValue: json['status_value'] as String?,
+      valueNumeric: double.tryParse(json['value_numeric']?.toString() ?? ''),
+      valueText: json['value_text'] as String?,
+      unit: json['unit'] as String?,
+      severity: BikeMemorySeverity.fromDbValue(json['severity'] as String?),
+      observedAt: _parseDate(json['observed_at']),
+      source: json['source']?.toString() ?? 'manual',
+      sourceField: json['source_field'] as String?,
+      payload: json['payload'] is Map
+          ? Map<String, dynamic>.from(json['payload'] as Map)
+          : const {},
+      createdBy: json['created_by']?.toString(),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'job_id': jobId,
+      'job_bike_id': jobBikeId,
+      'mechanic_job_item_id': mechanicJobItemId,
+      'lifecycle_id': lifecycleId,
+      'product_id': productId,
+      'service_product_id': serviceProductId,
+      'system_key': systemKey,
+      'component_slot_key': componentSlotKey,
+      'location_key': location.dbValue,
+      'observation_kind': observationKind.dbValue,
+      'observation_key': observationKey,
+      'title': title,
+      'summary': summary,
+      'status_value': statusValue,
+      'value_numeric': valueNumeric,
+      'value_text': valueText,
+      'unit': unit,
+      'severity': severity?.dbValue,
+      'observed_at': observedAt.toIso8601String(),
+      'source': source,
+      'source_field': sourceField,
+      'payload': payload,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+}
+
+class BikeIntervention {
+  final String? id;
+  final String tenantId;
+  final String bikeId;
+  final String? jobId;
+  final String? jobBikeId;
+  final String? mechanicJobItemId;
+  final String? productId;
+  final String? serviceProductId;
+  final String? fromLifecycleId;
+  final String? toLifecycleId;
+  final String systemKey;
+  final String? componentSlotKey;
+  final BikeMemoryLocation location;
+  final BikeInterventionType interventionType;
+  final String title;
+  final String? summary;
+  final DateTime performedAt;
+  final String source;
+  final Map<String, dynamic> payload;
+  final String? createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BikeIntervention({
+    this.id,
+    required this.tenantId,
+    required this.bikeId,
+    this.jobId,
+    this.jobBikeId,
+    this.mechanicJobItemId,
+    this.productId,
+    this.serviceProductId,
+    this.fromLifecycleId,
+    this.toLifecycleId,
+    required this.systemKey,
+    this.componentSlotKey,
+    this.location = BikeMemoryLocation.none,
+    required this.interventionType,
+    required this.title,
+    this.summary,
+    DateTime? performedAt,
+    this.source = 'manual',
+    this.payload = const {},
+    this.createdBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : performedAt = performedAt ?? DateTime.now(),
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  factory BikeIntervention.fromJson(Map<String, dynamic> json) {
+    return BikeIntervention(
+      id: json['id']?.toString(),
+      tenantId: json['tenant_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString() ?? '',
+      jobId: json['job_id']?.toString(),
+      jobBikeId: json['job_bike_id']?.toString(),
+      mechanicJobItemId: json['mechanic_job_item_id']?.toString(),
+      productId: json['product_id']?.toString(),
+      serviceProductId: json['service_product_id']?.toString(),
+      fromLifecycleId: json['from_lifecycle_id']?.toString(),
+      toLifecycleId: json['to_lifecycle_id']?.toString(),
+      systemKey: json['system_key']?.toString() ?? '',
+      componentSlotKey: json['component_slot_key']?.toString(),
+      location: BikeMemoryLocation.fromDbValue(json['location_key'] as String?),
+      interventionType: BikeInterventionType.fromDbValue(
+          json['intervention_type'] as String?),
+      title: json['title']?.toString() ?? '',
+      summary: json['summary'] as String?,
+      performedAt: _parseDate(json['performed_at']),
+      source: json['source']?.toString() ?? 'manual',
+      payload: json['payload'] is Map
+          ? Map<String, dynamic>.from(json['payload'] as Map)
+          : const {},
+      createdBy: json['created_by']?.toString(),
+      createdAt: _parseDate(json['created_at']),
+      updatedAt: _parseDate(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'tenant_id': tenantId,
+      'bike_id': bikeId,
+      'job_id': jobId,
+      'job_bike_id': jobBikeId,
+      'mechanic_job_item_id': mechanicJobItemId,
+      'product_id': productId,
+      'service_product_id': serviceProductId,
+      'from_lifecycle_id': fromLifecycleId,
+      'to_lifecycle_id': toLifecycleId,
+      'system_key': systemKey,
+      'component_slot_key': componentSlotKey,
+      'location_key': location.dbValue,
+      'intervention_type': interventionType.dbValue,
+      'title': title,
+      'summary': summary,
+      'performed_at': performedAt.toIso8601String(),
+      'source': source,
+      'payload': payload,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+}
+
 // ============================================================
 // BIKE BRAND MODEL
 // ============================================================
@@ -1662,6 +2728,9 @@ class MechanicJobBike {
   final String? workRequested; // Solicitud del cliente
   final String? workPerformed; // Lo que se hizo
   final String? technicianNotes; // Notas del técnico
+  final String? diagnosisSheetKey;
+  final MechanicJobDiagnosisSheet diagnosisSheet;
+  final DateTime? diagnosisSheetUpdatedAt;
 
   // Per-bike costs (calculated from items)
   final double partsCost;
@@ -1695,6 +2764,9 @@ class MechanicJobBike {
     this.workRequested,
     this.workPerformed,
     this.technicianNotes,
+    this.diagnosisSheetKey,
+    this.diagnosisSheet = const MechanicJobDiagnosisSheet(),
+    this.diagnosisSheetUpdatedAt,
     this.partsCost = 0,
     this.laborCost = 0,
     this.subtotal = 0,
@@ -1735,6 +2807,14 @@ class MechanicJobBike {
       workRequested: json['work_requested'] as String?,
       workPerformed: json['work_performed'] as String?,
       technicianNotes: json['technician_notes'] as String?,
+      diagnosisSheetKey: json['diagnosis_sheet_key']?.toString(),
+      diagnosisSheet: MechanicJobDiagnosisSheet.fromJson(
+        json['diagnosis_sheet_data'] is Map
+            ? Map<String, dynamic>.from(json['diagnosis_sheet_data'] as Map)
+            : const {},
+      ),
+      diagnosisSheetUpdatedAt:
+          _parseDateNullable(json['diagnosis_sheet_updated_at']),
       partsCost: double.tryParse(json['parts_cost']?.toString() ?? '0') ?? 0,
       laborCost: double.tryParse(json['labor_cost']?.toString() ?? '0') ?? 0,
       subtotal: double.tryParse(json['subtotal']?.toString() ?? '0') ?? 0,
@@ -1763,6 +2843,15 @@ class MechanicJobBike {
       'work_requested': workRequested,
       'work_performed': workPerformed,
       'technician_notes': technicianNotes,
+      'diagnosis_sheet_key': diagnosisSheet.hasMeaningfulData
+          ? (diagnosisSheetKey ?? diagnosisSheet.templateKey)
+          : null,
+      'diagnosis_sheet_data': diagnosisSheet.hasMeaningfulData
+          ? diagnosisSheet.toJson()
+          : const <String, dynamic>{},
+      'diagnosis_sheet_updated_at': diagnosisSheet.hasMeaningfulData
+          ? (diagnosisSheetUpdatedAt ?? DateTime.now()).toIso8601String()
+          : null,
       // Note: parts_cost, labor_cost, subtotal are calculated by trigger
       'is_warranty_work': isWarrantyWork,
       'requires_approval': requiresApproval,
@@ -1784,6 +2873,9 @@ class MechanicJobBike {
     String? workRequested,
     String? workPerformed,
     String? technicianNotes,
+    String? diagnosisSheetKey,
+    MechanicJobDiagnosisSheet? diagnosisSheet,
+    DateTime? diagnosisSheetUpdatedAt,
     double? partsCost,
     double? laborCost,
     double? subtotal,
@@ -1806,6 +2898,10 @@ class MechanicJobBike {
       workRequested: workRequested ?? this.workRequested,
       workPerformed: workPerformed ?? this.workPerformed,
       technicianNotes: technicianNotes ?? this.technicianNotes,
+      diagnosisSheetKey: diagnosisSheetKey ?? this.diagnosisSheetKey,
+      diagnosisSheet: diagnosisSheet ?? this.diagnosisSheet,
+      diagnosisSheetUpdatedAt:
+          diagnosisSheetUpdatedAt ?? this.diagnosisSheetUpdatedAt,
       partsCost: partsCost ?? this.partsCost,
       laborCost: laborCost ?? this.laborCost,
       subtotal: subtotal ?? this.subtotal,
@@ -1820,6 +2916,193 @@ class MechanicJobBike {
 
   /// Display name for this bike entry
   String get displayName => bike?.displayName ?? 'Bicicleta';
+}
+
+class MechanicJobDiagnosisSheet {
+  final String templateKey;
+  final DrivetrainDiagnosisSheet drivetrain;
+  final BrakeDiagnosisSheet frontBrake;
+  final BrakeDiagnosisSheet rearBrake;
+
+  const MechanicJobDiagnosisSheet({
+    this.templateKey = 'basic_workshop_v1',
+    this.drivetrain = const DrivetrainDiagnosisSheet(),
+    this.frontBrake = const BrakeDiagnosisSheet(),
+    this.rearBrake = const BrakeDiagnosisSheet(),
+  });
+
+  bool get hasMeaningfulData =>
+      drivetrain.hasMeaningfulData ||
+      frontBrake.hasMeaningfulData ||
+      rearBrake.hasMeaningfulData;
+
+  factory MechanicJobDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return MechanicJobDiagnosisSheet(
+      templateKey: json['template_key']?.toString() ?? 'basic_workshop_v1',
+      drivetrain: DrivetrainDiagnosisSheet.fromJson(
+        json['drivetrain'] is Map
+            ? Map<String, dynamic>.from(json['drivetrain'] as Map)
+            : const {},
+      ),
+      frontBrake: BrakeDiagnosisSheet.fromJson(
+        json['front_brake'] is Map
+            ? Map<String, dynamic>.from(json['front_brake'] as Map)
+            : const {},
+      ),
+      rearBrake: BrakeDiagnosisSheet.fromJson(
+        json['rear_brake'] is Map
+            ? Map<String, dynamic>.from(json['rear_brake'] as Map)
+            : const {},
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'template_key': templateKey,
+      'drivetrain': drivetrain.toJson(),
+      'front_brake': frontBrake.toJson(),
+      'rear_brake': rearBrake.toJson(),
+    };
+  }
+
+  MechanicJobDiagnosisSheet copyWith({
+    String? templateKey,
+    DrivetrainDiagnosisSheet? drivetrain,
+    BrakeDiagnosisSheet? frontBrake,
+    BrakeDiagnosisSheet? rearBrake,
+  }) {
+    return MechanicJobDiagnosisSheet(
+      templateKey: templateKey ?? this.templateKey,
+      drivetrain: drivetrain ?? this.drivetrain,
+      frontBrake: frontBrake ?? this.frontBrake,
+      rearBrake: rearBrake ?? this.rearBrake,
+    );
+  }
+}
+
+class DrivetrainDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final double? chainWearPercent;
+  final String? cassetteCondition;
+  final String? notes;
+
+  const DrivetrainDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.chainWearPercent,
+    this.cassetteCondition,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      chainWearPercent != null ||
+      (cassetteCondition != null && cassetteCondition!.isNotEmpty) ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory DrivetrainDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return DrivetrainDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      chainWearPercent:
+          double.tryParse(json['chain_wear_percent']?.toString() ?? ''),
+      cassetteCondition: json['cassette_condition']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'chain_wear_percent': chainWearPercent,
+      'cassette_condition': cassetteCondition,
+      'notes': notes,
+    };
+  }
+
+  DrivetrainDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    double? chainWearPercent,
+    bool clearChainWearPercent = false,
+    String? cassetteCondition,
+    bool clearCassetteCondition = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return DrivetrainDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      chainWearPercent: clearChainWearPercent
+          ? null
+          : (chainWearPercent ?? this.chainWearPercent),
+      cassetteCondition: clearCassetteCondition
+          ? null
+          : (cassetteCondition ?? this.cassetteCondition),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
+}
+
+class BrakeDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final double? padWearPercent;
+  final double? rotorThicknessMm;
+  final String? notes;
+
+  const BrakeDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.padWearPercent,
+    this.rotorThicknessMm,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      padWearPercent != null ||
+      rotorThicknessMm != null ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory BrakeDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return BrakeDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      padWearPercent:
+          double.tryParse(json['pad_wear_percent']?.toString() ?? ''),
+      rotorThicknessMm:
+          double.tryParse(json['rotor_thickness_mm']?.toString() ?? ''),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'pad_wear_percent': padWearPercent,
+      'rotor_thickness_mm': rotorThicknessMm,
+      'notes': notes,
+    };
+  }
+
+  BrakeDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    double? padWearPercent,
+    bool clearPadWearPercent = false,
+    double? rotorThicknessMm,
+    bool clearRotorThicknessMm = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return BrakeDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      padWearPercent:
+          clearPadWearPercent ? null : (padWearPercent ?? this.padWearPercent),
+      rotorThicknessMm: clearRotorThicknessMm
+          ? null
+          : (rotorThicknessMm ?? this.rotorThicknessMm),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
 }
 
 // ============================================================

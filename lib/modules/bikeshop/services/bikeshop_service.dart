@@ -1,24 +1,28 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
-import '../../sales/models/sales_models.dart'; // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025)
 
-// Helper to parse dates from JSON
-DateTime _parseDateTime(dynamic value) {
-  if (value is DateTime) return value;
-  if (value is String) {
-    return DateTime.tryParse(value) ?? DateTime.now();
-  }
-  if (value is int) {
-    return DateTime.fromMillisecondsSinceEpoch(value);
-  }
-  if (value is double) {
-    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
-  }
-  return DateTime.now();
+class _BikeMemoryTarget {
+  final String systemKey;
+  final String? componentSlotKey;
+  final BikeMemoryLocation location;
+  final BikeInterventionType interventionType;
+  final bool createsLifecycle;
+
+  const _BikeMemoryTarget({
+    required this.systemKey,
+    required this.componentSlotKey,
+    required this.location,
+    required this.interventionType,
+    required this.createsLifecycle,
+  });
+
+  String get key =>
+      '$systemKey|${componentSlotKey ?? '-'}|${location.dbValue}|${interventionType.dbValue}|$createsLifecycle';
 }
 
 class BikeshopService extends ChangeNotifier {
@@ -184,9 +188,11 @@ class BikeshopService extends ChangeNotifier {
   Future<Bike> createBike(Bike bike) async {
     try {
       final data = await _db.insert('bikes', bike.toJson());
+      final createdBike = Bike.fromJson(data);
+      await _logBikeRegisteredEvent(createdBike);
       invalidateBikesCache();
       notifyListeners();
-      return Bike.fromJson(data);
+      return createdBike;
     } catch (e) {
       if (kDebugMode) print('Error creating bike: $e');
       rethrow;
@@ -256,15 +262,1270 @@ class BikeshopService extends ChangeNotifier {
               .copyWith(id: existing.id, createdAt: existing.createdAt)
               .toJson(),
         );
-        return BikeProfile.fromJson(data);
+        final savedProfile = BikeProfile.fromJson(data);
+        await _logBikeProfileEvent(savedProfile, isCreate: false);
+        return savedProfile;
       }
 
       final data = await _db.insert('bike_profiles', profile.toJson());
-      return BikeProfile.fromJson(data);
+      final savedProfile = BikeProfile.fromJson(data);
+      await _logBikeProfileEvent(savedProfile, isCreate: true);
+      return savedProfile;
     } catch (e) {
       if (kDebugMode) print('Error upserting bike profile: $e');
       rethrow;
     }
+  }
+
+  Future<BikeRecordSnapshot?> getBikeRecordSnapshot(String bikeId) async {
+    try {
+      if (bikeId.isEmpty) return null;
+
+      final bike = await getBikeById(bikeId);
+      if (bike == null) return null;
+
+      final profile = await getBikeProfile(bikeId);
+      return BikeRecordSnapshot.fromBikeAndProfile(
+        bike: bike,
+        profile: profile,
+      );
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike record snapshot: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<BikeEvent>> getBikeEvents(String bikeId) async {
+    try {
+      if (bikeId.isEmpty) return const [];
+
+      final response = await Supabase.instance.client
+          .from('bike_events')
+          .select()
+          .eq('bike_id', bikeId)
+          .order('event_date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) => BikeEvent.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike events: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeEvent> createBikeEvent(BikeEvent event) async {
+    try {
+      final data = await _db.insert('bike_events', event.toJson());
+      notifyListeners();
+      return BikeEvent.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike event: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<BikeSystemState>> getBikeSystemStates(String bikeId) async {
+    try {
+      if (bikeId.isEmpty) return const [];
+
+      final response = await Supabase.instance.client
+          .from('bike_system_states')
+          .select()
+          .eq('bike_id', bikeId)
+          .order('system_key')
+          .order('location_key');
+
+      return (response as List)
+          .map((json) => BikeSystemState.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike system states: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeSystemState> upsertBikeSystemState(BikeSystemState state) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('bike_system_states')
+          .upsert(
+            state.toJson(),
+            onConflict: 'tenant_id,bike_id,system_key,location_key',
+          )
+          .select()
+          .single();
+
+      notifyListeners();
+      return BikeSystemState.fromJson(response);
+    } catch (e) {
+      if (kDebugMode) print('Error upserting bike system state: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<BikeComponentLifecycle>> getBikeComponentLifecycles(
+    String bikeId, {
+    bool activeOnly = false,
+  }) async {
+    try {
+      if (bikeId.isEmpty) return const [];
+
+      var query = Supabase.instance.client
+          .from('bike_component_lifecycles')
+          .select()
+          .eq('bike_id', bikeId);
+
+      if (activeOnly) {
+        query = query.eq('status', 'installed');
+      }
+
+      final response = await query
+          .order('installed_at', ascending: false)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) =>
+              BikeComponentLifecycle.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike component lifecycles: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeComponentLifecycle> createBikeComponentLifecycle(
+    BikeComponentLifecycle lifecycle,
+  ) async {
+    try {
+      final data =
+          await _db.insert('bike_component_lifecycles', lifecycle.toJson());
+      notifyListeners();
+      return BikeComponentLifecycle.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike component lifecycle: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<BikeObservation>> getBikeObservations(
+    String bikeId, {
+    String? systemKey,
+    String? componentSlotKey,
+  }) async {
+    try {
+      if (bikeId.isEmpty) return const [];
+
+      var query = Supabase.instance.client
+          .from('bike_observations')
+          .select()
+          .eq('bike_id', bikeId);
+
+      if (systemKey != null && systemKey.isNotEmpty) {
+        query = query.eq('system_key', systemKey);
+      }
+
+      if (componentSlotKey != null && componentSlotKey.isNotEmpty) {
+        query = query.eq('component_slot_key', componentSlotKey);
+      }
+
+      final response = await query
+          .order('observed_at', ascending: false)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) => BikeObservation.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike observations: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeObservation> createBikeObservation(
+      BikeObservation observation) async {
+    try {
+      final data = await _db.insert('bike_observations', observation.toJson());
+      notifyListeners();
+      return BikeObservation.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike observation: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<BikeIntervention>> getBikeInterventions(
+    String bikeId, {
+    String? systemKey,
+    String? componentSlotKey,
+  }) async {
+    try {
+      if (bikeId.isEmpty) return const [];
+
+      var query = Supabase.instance.client
+          .from('bike_interventions')
+          .select()
+          .eq('bike_id', bikeId);
+
+      if (systemKey != null && systemKey.isNotEmpty) {
+        query = query.eq('system_key', systemKey);
+      }
+
+      if (componentSlotKey != null && componentSlotKey.isNotEmpty) {
+        query = query.eq('component_slot_key', componentSlotKey);
+      }
+
+      final response = await query
+          .order('performed_at', ascending: false)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map(
+              (json) => BikeIntervention.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike interventions: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeIntervention> createBikeIntervention(
+    BikeIntervention intervention,
+  ) async {
+    try {
+      final data =
+          await _db.insert('bike_interventions', intervention.toJson());
+      notifyListeners();
+      return BikeIntervention.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error creating bike intervention: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> syncBikeMemoryFromJob(String jobId) async {
+    try {
+      if (jobId.isEmpty) return;
+
+      final job = await getJobById(jobId);
+      if (job == null || job.id == null) return;
+
+      final jobBikes = await getJobBikes(jobId);
+      if (jobBikes.isEmpty) return;
+
+      final jobItems = await getJobItems(jobId);
+      final itemsByJobBikeId = <String?, List<MechanicJobItem>>{};
+      for (final item in jobItems) {
+        itemsByJobBikeId.putIfAbsent(item.jobBikeId, () => []).add(item);
+      }
+
+      await Supabase.instance.client
+          .from('bike_observations')
+          .delete()
+          .eq('job_id', jobId)
+          .eq('source', 'job_diagnosis_sync');
+
+      final isCompleted = {
+        JobStatus.finalizado,
+        JobStatus.entregado,
+      }.contains(job.status);
+
+      for (final jobBike in jobBikes) {
+        final bikeItems =
+            itemsByJobBikeId[jobBike.id] ?? const <MechanicJobItem>[];
+        await _syncJobBikeDiagnosisMemory(
+            job: job, jobBike: jobBike, items: bikeItems);
+
+        if (isCompleted) {
+          await _syncCompletedJobBikeItems(
+            job: job,
+            jobBike: jobBike,
+            items: bikeItems,
+          );
+        }
+      }
+
+      if (isCompleted && jobBikes.length == 1) {
+        final orphanItems = itemsByJobBikeId[null] ?? const <MechanicJobItem>[];
+        if (orphanItems.isNotEmpty) {
+          await _syncCompletedJobBikeItems(
+            job: job,
+            jobBike: jobBikes.first,
+            items: orphanItems,
+            sourceOverride: 'job_general_item_sync',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+            '⚠️ [BikeshopService] Could not sync bike memory from job $jobId: $e');
+      }
+    }
+  }
+
+  Future<void> _syncJobBikeDiagnosisMemory({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required List<MechanicJobItem> items,
+  }) async {
+    final diagnosisSheet = jobBike.diagnosisSheet;
+    final combinedText = [
+      jobBike.workRequested,
+      jobBike.diagnosis,
+      jobBike.workPerformed,
+      jobBike.technicianNotes,
+    ]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .join(' | ');
+
+    if (diagnosisSheet.hasMeaningfulData) {
+      await _syncDiagnosisSheetMemory(
+        job: job,
+        jobBike: jobBike,
+        diagnosisSheet: diagnosisSheet,
+      );
+
+      if (combinedText.isNotEmpty) {
+        await createBikeObservation(
+          BikeObservation(
+            tenantId: job.tenantId,
+            bikeId: jobBike.bikeId,
+            jobId: job.id,
+            jobBikeId: jobBike.id,
+            systemKey: 'general',
+            location: BikeMemoryLocation.none,
+            observationKind: BikeObservationKind.diagnosisSnapshot,
+            observationKey: 'job_diagnosis_note',
+            title: 'Notas del diagnóstico',
+            summary: combinedText,
+            severity: _inferSeverityFromText(combinedText),
+            observedAt: job.updatedAt,
+            source: 'job_diagnosis_sync',
+            sourceField: 'diagnosis',
+            payload: {
+              'job_number': job.jobNumber,
+              'status': job.status.name,
+              'template_key': diagnosisSheet.templateKey,
+            },
+          ),
+        );
+      }
+
+      return;
+    }
+
+    if (combinedText.isEmpty) return;
+
+    final inferredTargets = {
+      for (final target in [
+        ..._inferTargetsFromText(combinedText),
+        ...items.expand(_inferTargetsFromItem),
+      ])
+        target.key: target,
+    }.values.toList();
+
+    final targets = inferredTargets.isEmpty
+        ? <_BikeMemoryTarget>[
+            const _BikeMemoryTarget(
+              systemKey: 'general',
+              componentSlotKey: null,
+              location: BikeMemoryLocation.none,
+              interventionType: BikeInterventionType.inspection,
+              createsLifecycle: false,
+            ),
+          ]
+        : inferredTargets;
+
+    final severity = _inferSeverityFromText(combinedText);
+
+    for (final target in targets) {
+      final observation = BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: target.systemKey,
+        componentSlotKey: target.componentSlotKey,
+        location: target.location,
+        observationKind: BikeObservationKind.diagnosisSnapshot,
+        observationKey: 'job_diagnosis',
+        title: 'Diagnóstico registrado',
+        summary: combinedText,
+        severity: severity,
+        observedAt: job.updatedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis',
+        payload: {
+          'job_number': job.jobNumber,
+          'status': job.status.name,
+          'client_request': jobBike.workRequested,
+          'diagnosis': jobBike.diagnosis,
+          'work_performed': jobBike.workPerformed,
+          'technician_notes': jobBike.technicianNotes,
+        },
+      );
+      await createBikeObservation(observation);
+
+      if (target.systemKey != 'general') {
+        await upsertBikeSystemState(
+          BikeSystemState(
+            tenantId: job.tenantId,
+            bikeId: jobBike.bikeId,
+            jobId: job.id,
+            jobBikeId: jobBike.id,
+            systemKey: target.systemKey,
+            location: target.location,
+            overallStatus: severity == BikeMemorySeverity.critical
+                ? BikeSystemOverallStatus.critical
+                : BikeSystemOverallStatus.attention,
+            statusNote: _truncateForStateNote(combinedText),
+            lastReviewedAt: job.updatedAt,
+            payload: {
+              'source': 'job_diagnosis_sync',
+              'job_number': job.jobNumber,
+            },
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncDiagnosisSheetMemory({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+  }) async {
+    await _syncDrivetrainDiagnosisSection(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      section: diagnosisSheet.drivetrain,
+    );
+    await _syncBrakeDiagnosisSection(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      systemKey: 'front_brake',
+      title: 'Diagnóstico freno delantero',
+      location: BikeMemoryLocation.front,
+      section: diagnosisSheet.frontBrake,
+    );
+    await _syncBrakeDiagnosisSection(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      systemKey: 'rear_brake',
+      title: 'Diagnóstico freno trasero',
+      location: BikeMemoryLocation.rear,
+      section: diagnosisSheet.rearBrake,
+    );
+  }
+
+  Future<void> _syncDrivetrainDiagnosisSection({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DrivetrainDiagnosisSheet section,
+  }) async {
+    if (!section.hasMeaningfulData) return;
+
+    final noteParts = <String>[];
+    if (section.chainWearPercent != null) {
+      noteParts.add(
+        'Desgaste cadena ${section.chainWearPercent!.toStringAsFixed(1)}%',
+      );
+    }
+    if (section.cassetteCondition != null &&
+        section.cassetteCondition!.isNotEmpty) {
+      noteParts.add('Cassette ${section.cassetteCondition}');
+    }
+    if (section.notes != null && section.notes!.trim().isNotEmpty) {
+      noteParts.add(section.notes!.trim());
+    }
+    final summary = noteParts.join(' | ');
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: 'drivetrain',
+        location: BikeMemoryLocation.center,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: 'diagnosis_sheet_drivetrain',
+        title: 'Diagnóstico tren motriz',
+        summary: summary.isEmpty ? null : summary,
+        statusValue: section.overallStatus.dbValue,
+        severity: _severityFromSystemStatus(section.overallStatus),
+        observedAt: job.updatedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+          'section': 'drivetrain',
+          ...section.toJson(),
+        },
+      ),
+    );
+
+    await upsertBikeSystemState(
+      BikeSystemState(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: 'drivetrain',
+        location: BikeMemoryLocation.center,
+        overallStatus: section.overallStatus,
+        statusNote: summary.isEmpty ? null : _truncateForStateNote(summary),
+        lastReviewedAt: job.updatedAt,
+        payload: {
+          'source': 'diagnosis_sheet',
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
+
+    if (section.chainWearPercent != null) {
+      await createBikeObservation(
+        BikeObservation(
+          tenantId: job.tenantId,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          jobBikeId: jobBike.id,
+          systemKey: 'drivetrain',
+          componentSlotKey: 'chain',
+          location: BikeMemoryLocation.center,
+          observationKind: BikeObservationKind.measurement,
+          observationKey: 'chain_wear_percent',
+          title: 'Medición desgaste de cadena',
+          valueNumeric: section.chainWearPercent,
+          unit: '%',
+          severity: _severityFromWearPercent(section.chainWearPercent),
+          observedAt: job.updatedAt,
+          source: 'job_diagnosis_sync',
+          sourceField: 'diagnosis_sheet',
+          payload: {
+            'job_number': job.jobNumber,
+            'template_key': diagnosisSheet.templateKey,
+          },
+        ),
+      );
+    }
+
+    if (section.cassetteCondition != null &&
+        section.cassetteCondition!.isNotEmpty) {
+      await createBikeObservation(
+        BikeObservation(
+          tenantId: job.tenantId,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          jobBikeId: jobBike.id,
+          systemKey: 'drivetrain',
+          componentSlotKey: 'cassette',
+          location: BikeMemoryLocation.center,
+          observationKind: BikeObservationKind.conditionAssessment,
+          observationKey: 'cassette_condition',
+          title: 'Estado del cassette',
+          statusValue: section.cassetteCondition,
+          summary: section.notes,
+          severity: section.cassetteCondition == 'replace'
+              ? BikeMemorySeverity.critical
+              : (section.cassetteCondition == 'attention'
+                  ? BikeMemorySeverity.warning
+                  : null),
+          observedAt: job.updatedAt,
+          source: 'job_diagnosis_sync',
+          sourceField: 'diagnosis_sheet',
+          payload: {
+            'job_number': job.jobNumber,
+            'template_key': diagnosisSheet.templateKey,
+          },
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncBrakeDiagnosisSection({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required String systemKey,
+    required String title,
+    required BikeMemoryLocation location,
+    required BrakeDiagnosisSheet section,
+  }) async {
+    if (!section.hasMeaningfulData) return;
+
+    final noteParts = <String>[];
+    if (section.padWearPercent != null) {
+      noteParts.add(
+        'Desgaste pastillas ${section.padWearPercent!.toStringAsFixed(1)}%',
+      );
+    }
+    if (section.rotorThicknessMm != null) {
+      noteParts.add(
+        'Rotor ${section.rotorThicknessMm!.toStringAsFixed(2)} mm',
+      );
+    }
+    if (section.notes != null && section.notes!.trim().isNotEmpty) {
+      noteParts.add(section.notes!.trim());
+    }
+    final summary = noteParts.join(' | ');
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        location: location,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: 'diagnosis_sheet_$systemKey',
+        title: title,
+        summary: summary.isEmpty ? null : summary,
+        statusValue: section.overallStatus.dbValue,
+        severity: _severityFromSystemStatus(section.overallStatus),
+        observedAt: job.updatedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+          'section': systemKey,
+          ...section.toJson(),
+        },
+      ),
+    );
+
+    await upsertBikeSystemState(
+      BikeSystemState(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        location: location,
+        overallStatus: section.overallStatus,
+        statusNote: summary.isEmpty ? null : _truncateForStateNote(summary),
+        lastReviewedAt: job.updatedAt,
+        payload: {
+          'source': 'diagnosis_sheet',
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
+
+    if (section.padWearPercent != null) {
+      await createBikeObservation(
+        BikeObservation(
+          tenantId: job.tenantId,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          jobBikeId: jobBike.id,
+          systemKey: systemKey,
+          componentSlotKey: 'brake_pad',
+          location: location,
+          observationKind: BikeObservationKind.measurement,
+          observationKey: 'pad_wear_percent',
+          title: 'Medición desgaste de pastillas',
+          valueNumeric: section.padWearPercent,
+          unit: '%',
+          severity: _severityFromWearPercent(section.padWearPercent),
+          observedAt: job.updatedAt,
+          source: 'job_diagnosis_sync',
+          sourceField: 'diagnosis_sheet',
+          payload: {
+            'job_number': job.jobNumber,
+            'template_key': diagnosisSheet.templateKey,
+          },
+        ),
+      );
+    }
+
+    if (section.rotorThicknessMm != null) {
+      await createBikeObservation(
+        BikeObservation(
+          tenantId: job.tenantId,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          jobBikeId: jobBike.id,
+          systemKey: systemKey,
+          componentSlotKey: 'rotor',
+          location: location,
+          observationKind: BikeObservationKind.measurement,
+          observationKey: 'rotor_thickness_mm',
+          title: 'Medición espesor de rotor',
+          valueNumeric: section.rotorThicknessMm,
+          unit: 'mm',
+          severity: _severityFromRotorThickness(section.rotorThicknessMm),
+          observedAt: job.updatedAt,
+          source: 'job_diagnosis_sync',
+          sourceField: 'diagnosis_sheet',
+          payload: {
+            'job_number': job.jobNumber,
+            'template_key': diagnosisSheet.templateKey,
+          },
+        ),
+      );
+    }
+  }
+
+  BikeMemorySeverity? _severityFromSystemStatus(
+    BikeSystemOverallStatus status,
+  ) {
+    switch (status) {
+      case BikeSystemOverallStatus.ok:
+      case BikeSystemOverallStatus.unknown:
+        return null;
+      case BikeSystemOverallStatus.attention:
+        return BikeMemorySeverity.warning;
+      case BikeSystemOverallStatus.critical:
+        return BikeMemorySeverity.critical;
+    }
+  }
+
+  BikeMemorySeverity? _severityFromWearPercent(double? value) {
+    if (value == null) return null;
+    if (value >= 75) return BikeMemorySeverity.critical;
+    if (value >= 50) return BikeMemorySeverity.warning;
+    return null;
+  }
+
+  BikeMemorySeverity? _severityFromRotorThickness(double? value) {
+    if (value == null) return null;
+    if (value <= 1.5) return BikeMemorySeverity.critical;
+    if (value <= 1.7) return BikeMemorySeverity.warning;
+    return null;
+  }
+
+  Future<void> _syncCompletedJobBikeItems({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required List<MechanicJobItem> items,
+    String sourceOverride = 'job_item_sync',
+  }) async {
+    for (final item in items) {
+      final targets = _inferTargetsFromItem(item);
+      if (targets.isEmpty) continue;
+
+      for (final target in targets) {
+        final existingIntervention = await _findExistingDerivedIntervention(
+          jobId: job.id!,
+          bikeId: jobBike.bikeId,
+          target: target,
+          item: item,
+          source: sourceOverride,
+        );
+
+        String? fromLifecycleId;
+        String? toLifecycleId;
+
+        if (target.createsLifecycle && target.componentSlotKey != null) {
+          final currentLifecycle = await _findCurrentLifecycle(
+            bikeId: jobBike.bikeId,
+            componentSlotKey: target.componentSlotKey!,
+            location: target.location,
+          );
+
+          final currentMatchesThisJob = currentLifecycle != null &&
+              currentLifecycle.jobId == job.id &&
+              currentLifecycle.productId == item.productId &&
+              currentLifecycle.serviceProductId == item.serviceProductId &&
+              currentLifecycle.componentLabel == item.productName;
+
+          if (currentLifecycle != null) {
+            fromLifecycleId = currentLifecycle.id;
+          }
+
+          if (!currentMatchesThisJob) {
+            if (currentLifecycle != null && currentLifecycle.id != null) {
+              await Supabase.instance.client
+                  .from('bike_component_lifecycles')
+                  .update({
+                'status': BikeComponentLifecycleStatus.superseded.dbValue,
+                'removed_at': job.updatedAt.toIso8601String(),
+                'removal_reason': 'replaced',
+                'updated_at': DateTime.now().toIso8601String(),
+              }).eq('id', currentLifecycle.id!);
+            }
+
+            final newLifecycle = await createBikeComponentLifecycle(
+              BikeComponentLifecycle(
+                tenantId: job.tenantId,
+                bikeId: jobBike.bikeId,
+                jobId: job.id,
+                jobBikeId: jobBike.id,
+                mechanicJobItemId: item.id,
+                productId: item.productId,
+                serviceProductId: item.serviceProductId,
+                systemKey: target.systemKey,
+                componentSlotKey: target.componentSlotKey!,
+                location: target.location,
+                componentLabel: item.productName,
+                status: BikeComponentLifecycleStatus.installed,
+                installedAt: job.updatedAt,
+                source: sourceOverride,
+                notes: item.notes,
+                payload: {
+                  'job_number': job.jobNumber,
+                  'item_type': item.itemType,
+                },
+              ),
+            );
+            toLifecycleId = newLifecycle.id;
+          } else {
+            toLifecycleId = currentLifecycle.id;
+          }
+        }
+
+        final interventionPayload = {
+          'job_number': job.jobNumber,
+          'item_type': item.itemType,
+          'product_name': item.productName,
+          'quantity': item.quantity,
+          'unit_price': item.unitPrice,
+          'total_price': item.totalPrice,
+          'notes': item.notes,
+        };
+
+        if (existingIntervention == null) {
+          await createBikeIntervention(
+            BikeIntervention(
+              tenantId: job.tenantId,
+              bikeId: jobBike.bikeId,
+              jobId: job.id,
+              jobBikeId: jobBike.id,
+              mechanicJobItemId: item.id,
+              productId: item.productId,
+              serviceProductId: item.serviceProductId,
+              fromLifecycleId: fromLifecycleId,
+              toLifecycleId: toLifecycleId,
+              systemKey: target.systemKey,
+              componentSlotKey: target.componentSlotKey,
+              location: target.location,
+              interventionType: target.interventionType,
+              title: _buildInterventionTitle(target, item),
+              summary: _buildInterventionSummary(item),
+              performedAt: job.updatedAt,
+              source: sourceOverride,
+              payload: interventionPayload,
+            ),
+          );
+        } else if (existingIntervention.id != null) {
+          await Supabase.instance.client.from('bike_interventions').update({
+            'mechanic_job_item_id': item.id,
+            'product_id': item.productId,
+            'service_product_id': item.serviceProductId,
+            'from_lifecycle_id': fromLifecycleId,
+            'to_lifecycle_id': toLifecycleId,
+            'summary': _buildInterventionSummary(item),
+            'performed_at': job.updatedAt.toIso8601String(),
+            'payload': interventionPayload,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', existingIntervention.id!);
+        }
+
+        await upsertBikeSystemState(
+          BikeSystemState(
+            tenantId: job.tenantId,
+            bikeId: jobBike.bikeId,
+            jobId: job.id,
+            jobBikeId: jobBike.id,
+            systemKey: target.systemKey,
+            location: target.location,
+            overallStatus: BikeSystemOverallStatus.ok,
+            statusNote:
+                _truncateForStateNote(_buildInterventionTitle(target, item)),
+            lastReviewedAt: job.updatedAt,
+            payload: {
+              'source': sourceOverride,
+              'job_number': job.jobNumber,
+            },
+          ),
+        );
+      }
+    }
+  }
+
+  Future<BikeIntervention?> _findExistingDerivedIntervention({
+    required String jobId,
+    required String bikeId,
+    required _BikeMemoryTarget target,
+    required MechanicJobItem item,
+    required String source,
+  }) async {
+    try {
+      var query = Supabase.instance.client
+          .from('bike_interventions')
+          .select()
+          .eq('job_id', jobId)
+          .eq('bike_id', bikeId)
+          .eq('system_key', target.systemKey)
+          .eq('location_key', target.location.dbValue)
+          .eq('source', source);
+
+      if (target.componentSlotKey != null) {
+        query = query.eq('component_slot_key', target.componentSlotKey!);
+      } else {
+        query = query.eq('title', _buildInterventionTitle(target, item));
+      }
+
+      final data = await query.limit(1);
+      if (data.isNotEmpty) {
+        return BikeIntervention.fromJson(data.first);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Could not fetch existing intervention: $e');
+      }
+    }
+    return null;
+  }
+
+  Future<BikeComponentLifecycle?> _findCurrentLifecycle({
+    required String bikeId,
+    required String componentSlotKey,
+    required BikeMemoryLocation location,
+  }) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('bike_component_lifecycles')
+          .select()
+          .eq('bike_id', bikeId)
+          .eq('component_slot_key', componentSlotKey)
+          .eq('location_key', location.dbValue)
+          .eq('status', BikeComponentLifecycleStatus.installed.dbValue)
+          .limit(1);
+
+      if (data.isNotEmpty) {
+        return BikeComponentLifecycle.fromJson(data.first);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Could not fetch current lifecycle: $e');
+      }
+    }
+    return null;
+  }
+
+  List<_BikeMemoryTarget> _inferTargetsFromItem(MechanicJobItem item) {
+    final haystack = _normalizeText('${item.productName} ${item.notes ?? ''}');
+    final location = _inferLocationFromText(haystack);
+    final isServiceItem =
+        item.itemType == 'service' || item.serviceProductId != null;
+
+    if (_containsAny(haystack, ['cadena', 'chain'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: 'drivetrain',
+          componentSlotKey: isServiceItem ? null : 'chain',
+          location: BikeMemoryLocation.none,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['cassette', 'piñon', 'pinon'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: 'drivetrain',
+          componentSlotKey: isServiceItem ? null : 'cassette',
+          location: BikeMemoryLocation.none,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['plato', 'chainring', 'corona'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: 'drivetrain',
+          componentSlotKey: isServiceItem ? null : 'chainring',
+          location: BikeMemoryLocation.none,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['hanger', 'patilla'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: 'drivetrain',
+          componentSlotKey: isServiceItem ? null : 'derailleur_hanger',
+          location: BikeMemoryLocation.none,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['rotor', 'disco'])) {
+      final brakeSystem = _brakeSystemForLocation(location);
+      return [
+        _BikeMemoryTarget(
+          systemKey: brakeSystem,
+          componentSlotKey:
+              isServiceItem ? null : _slotForLocation(location, 'rotor'),
+          location: location,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['pastilla', 'pad'])) {
+      final brakeSystem = _brakeSystemForLocation(location);
+      return [
+        _BikeMemoryTarget(
+          systemKey: brakeSystem,
+          componentSlotKey:
+              isServiceItem ? null : _slotForLocation(location, 'pads'),
+          location: location,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['freno', 'brake', 'sangrado', 'bleed'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: _brakeSystemForLocation(location),
+          componentSlotKey: null,
+          location: location,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.adjustment,
+          createsLifecycle: false,
+        ),
+      ];
+    }
+
+    if (_containsAny(haystack, ['cubierta', 'neumatic', 'tire', 'tyre'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: _wheelSystemForLocation(location),
+          componentSlotKey:
+              isServiceItem ? null : _slotForLocation(location, 'tire'),
+          location: location,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.replacement,
+          createsLifecycle: !isServiceItem,
+        ),
+      ];
+    }
+
+    if (_containsAny(
+        haystack, ['rueda', 'wheel', 'centrado', 'rayo', 'aro', 'llanta'])) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: _wheelSystemForLocation(location),
+          componentSlotKey: null,
+          location: location,
+          interventionType: isServiceItem
+              ? BikeInterventionType.service
+              : BikeInterventionType.adjustment,
+          createsLifecycle: false,
+        ),
+      ];
+    }
+
+    return const [];
+  }
+
+  List<_BikeMemoryTarget> _inferTargetsFromText(String text) {
+    final normalized = _normalizeText(text);
+    final targets = <String, _BikeMemoryTarget>{};
+
+    void add(_BikeMemoryTarget target) {
+      targets[target.key] = target;
+    }
+
+    if (_containsAny(normalized, [
+      'cadena',
+      'cassette',
+      'desviador',
+      'cambio',
+      'transmision',
+      'transmisión',
+      'drivetrain'
+    ])) {
+      add(const _BikeMemoryTarget(
+        systemKey: 'drivetrain',
+        componentSlotKey: null,
+        location: BikeMemoryLocation.none,
+        interventionType: BikeInterventionType.inspection,
+        createsLifecycle: false,
+      ));
+    }
+
+    if (_containsAny(
+        normalized, ['freno', 'rotor', 'disco', 'pastilla', 'brake'])) {
+      final location = _inferLocationFromText(normalized);
+      add(_BikeMemoryTarget(
+        systemKey: _brakeSystemForLocation(location),
+        componentSlotKey: null,
+        location: location,
+        interventionType: BikeInterventionType.inspection,
+        createsLifecycle: false,
+      ));
+    }
+
+    if (_containsAny(normalized,
+        ['rueda', 'aro', 'llanta', 'rayo', 'neumatic', 'cubierta', 'wheel'])) {
+      final location = _inferLocationFromText(normalized);
+      add(_BikeMemoryTarget(
+        systemKey: _wheelSystemForLocation(location),
+        componentSlotKey: null,
+        location: location,
+        interventionType: BikeInterventionType.inspection,
+        createsLifecycle: false,
+      ));
+    }
+
+    return targets.values.toList();
+  }
+
+  BikeMemorySeverity _inferSeverityFromText(String text) {
+    final normalized = _normalizeText(text);
+    if (_containsAny(normalized, [
+      'quebrad',
+      'roto',
+      'critico',
+      'crítico',
+      'urgente',
+      'peligro',
+      'sin freno',
+    ])) {
+      return BikeMemorySeverity.critical;
+    }
+    return BikeMemorySeverity.warning;
+  }
+
+  BikeMemoryLocation _inferLocationFromText(String text) {
+    if (_containsAny(text, ['delanter', 'front']))
+      return BikeMemoryLocation.front;
+    if (_containsAny(text, ['traser', 'rear'])) return BikeMemoryLocation.rear;
+    if (_containsAny(text, ['izquierd', 'left']))
+      return BikeMemoryLocation.left;
+    if (_containsAny(text, ['derech', 'right']))
+      return BikeMemoryLocation.right;
+    if (_containsAny(text, ['centro', 'center']))
+      return BikeMemoryLocation.center;
+    return BikeMemoryLocation.none;
+  }
+
+  String _brakeSystemForLocation(BikeMemoryLocation location) {
+    switch (location) {
+      case BikeMemoryLocation.front:
+        return 'front_brake';
+      case BikeMemoryLocation.rear:
+        return 'rear_brake';
+      default:
+        return 'brakes';
+    }
+  }
+
+  String _wheelSystemForLocation(BikeMemoryLocation location) {
+    switch (location) {
+      case BikeMemoryLocation.front:
+        return 'front_wheel';
+      case BikeMemoryLocation.rear:
+        return 'rear_wheel';
+      default:
+        return 'wheels';
+    }
+  }
+
+  String _slotForLocation(BikeMemoryLocation location, String baseKey) {
+    switch (location) {
+      case BikeMemoryLocation.front:
+        return 'front_$baseKey';
+      case BikeMemoryLocation.rear:
+        return 'rear_$baseKey';
+      default:
+        return baseKey;
+    }
+  }
+
+  String _buildInterventionTitle(
+      _BikeMemoryTarget target, MechanicJobItem item) {
+    switch (target.interventionType) {
+      case BikeInterventionType.replacement:
+        return 'Reemplazo: ${item.productName}';
+      case BikeInterventionType.service:
+        return 'Servicio: ${item.productName}';
+      case BikeInterventionType.adjustment:
+        return 'Ajuste: ${item.productName}';
+      case BikeInterventionType.installation:
+        return 'Instalación: ${item.productName}';
+      case BikeInterventionType.removal:
+        return 'Retiro: ${item.productName}';
+      case BikeInterventionType.inspection:
+        return 'Inspección: ${item.productName}';
+    }
+  }
+
+  String _buildInterventionSummary(MechanicJobItem item) {
+    final parts = <String>[];
+    parts.add(
+        'Cantidad: ${item.quantity.toStringAsFixed(item.quantity == item.quantity.roundToDouble() ? 0 : 2)}');
+    if (item.notes != null && item.notes!.trim().isNotEmpty) {
+      parts.add(item.notes!.trim());
+    }
+    return parts.join(' · ');
+  }
+
+  String _truncateForStateNote(String text) {
+    final normalized = text.trim();
+    if (normalized.length <= 180) return normalized;
+    return '${normalized.substring(0, 177)}...';
+  }
+
+  String _normalizeText(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n');
+  }
+
+  bool _containsAny(String text, List<String> needles) {
+    for (final needle in needles) {
+      if (text.contains(_normalizeText(needle))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ============================================================
@@ -412,61 +1673,6 @@ class BikeshopService extends ChangeNotifier {
   // PEGA (MECHANIC JOB) OPERATIONS
   // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Now queries sales_invoices
   // ============================================================
-
-  /// Convert Invoice to MechanicJob for backward compatibility
-  MechanicJob _invoiceToMechanicJob(Invoice invoice) {
-    return MechanicJob(
-      id: invoice.id,
-      tenantId: invoice.tenantId,
-      jobNumber: invoice.jobNumber ?? invoice.invoiceNumber,
-      customerId: invoice.customerId ?? '',
-      bikeId: invoice.bikeId ?? '',
-      arrivalDate: invoice.entryDate ?? invoice.date,
-      deliveryDeadline: invoice.dueDate,
-      status: _invoiceStatusToJobStatus(invoice.status),
-      clientRequest: invoice.workDescription,
-      diagnosis: invoice.workDescription,
-      workPerformed: invoice.workDescription,
-      notes: invoice.notes,
-      partsCost: invoice.subtotal,
-      laborCost: 0,
-      totalCost: invoice.total,
-      createdAt: invoice.createdAt,
-      updatedAt: invoice.updatedAt,
-    );
-  }
-
-  JobStatus _invoiceStatusToJobStatus(InvoiceStatus status) {
-    switch (status) {
-      case InvoiceStatus.draft:
-        return JobStatus.pendiente;
-      case InvoiceStatus.confirmed:
-        return JobStatus.finalizado;
-      case InvoiceStatus.paid:
-        return JobStatus.entregado;
-      case InvoiceStatus.cancelled:
-        return JobStatus.cancelado;
-      default:
-        return JobStatus.pendiente;
-    }
-  }
-
-  InvoiceStatus _jobStatusToInvoiceStatus(JobStatus status) {
-    switch (status) {
-      case JobStatus.pendiente:
-      case JobStatus.diagnostico:
-      case JobStatus.esperandoAprobacion:
-      case JobStatus.esperandoRepuestos:
-      case JobStatus.enCurso:
-        return InvoiceStatus.draft;
-      case JobStatus.finalizado:
-        return InvoiceStatus.confirmed;
-      case JobStatus.entregado:
-        return InvoiceStatus.paid;
-      case JobStatus.cancelado:
-        return InvoiceStatus.cancelled;
-    }
-  }
 
   /// Get jobs with caching. Use forceRefresh=true to bypass cache.
   Future<List<MechanicJob>> getJobs({
@@ -655,9 +1861,12 @@ class BikeshopService extends ChangeNotifier {
             '✅ [CREATE JOB] Database returned: job_number=${data['job_number']}');
       }
 
+      final createdJob = MechanicJob.fromJson(data);
+      await _logJobCreatedBikeEvent(createdJob);
+
       invalidateJobsCache();
       notifyListeners();
-      return MechanicJob.fromJson(data);
+      return createdJob;
     } catch (e) {
       if (kDebugMode) {
         print('❌ [CREATE JOB ERROR] $e');
@@ -675,12 +1884,19 @@ class BikeshopService extends ChangeNotifier {
         throw Exception('ID de trabajo inválido');
       }
 
+      final previousJob = await getJobById(job.id!);
+
       // Use forUpdate: true to exclude arrival_date and created_at from being overwritten
       final data = await _db.update(
           'mechanic_jobs', job.id!, job.toJson(forUpdate: true));
+      final updatedJob = MechanicJob.fromJson(data);
+      await _logJobCompletionBikeEvent(
+        previousJob: previousJob,
+        updatedJob: updatedJob,
+      );
       invalidateJobsCache();
       notifyListeners();
-      return MechanicJob.fromJson(data);
+      return updatedJob;
     } catch (e) {
       if (kDebugMode) print('Error updating job: $e');
       rethrow;
@@ -696,6 +1912,159 @@ class BikeshopService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) print('Error deleting job: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _logBikeRegisteredEvent(Bike bike) async {
+    await _safeCreateBikeEvent(
+      BikeEvent(
+        tenantId: bike.tenantId,
+        bikeId: bike.id ?? '',
+        eventType: BikeEventType.bikeRegistered,
+        eventCategory: BikeEventCategory.state,
+        eventDate: bike.createdAt,
+        title: 'Bicicleta registrada',
+        summary: BikeProfileSummaryBuilder.buildIdentityLine(bike),
+        source: 'manual',
+        payload: {
+          'brand': bike.brand,
+          'model': bike.model,
+          'year': bike.year,
+        },
+      ),
+    );
+  }
+
+  Future<void> _logBikeProfileEvent(
+    BikeProfile profile, {
+    required bool isCreate,
+  }) async {
+    if (profile.bikeId.isEmpty) return;
+
+    final technicalValues = profile.technicalValues;
+    final intakeProfile = profile.intakeProfile;
+
+    await _safeCreateBikeEvent(
+      BikeEvent(
+        tenantId: profile.tenantId,
+        bikeId: profile.bikeId,
+        eventType: isCreate
+            ? BikeEventType.profileCreated
+            : BikeEventType.profileUpdated,
+        eventCategory: BikeEventCategory.state,
+        eventDate: profile.updatedAt,
+        title: isCreate ? 'Ficha creada' : 'Ficha actualizada',
+        summary: _buildProfileEventSummary(
+          intakeProfile: intakeProfile,
+          technicalValues: technicalValues,
+          isCreate: isCreate,
+        ),
+        source: 'profile_save',
+        payload: {
+          'hasIntakeProfile': intakeProfile.isNotEmpty,
+          'hasTechnicalProfile': technicalValues.isNotEmpty,
+          'lastConfirmedAt': profile.lastConfirmedAt?.toIso8601String(),
+        },
+      ),
+    );
+  }
+
+  Future<void> _logJobCreatedBikeEvent(MechanicJob job) async {
+    final bikeId = job.bikeId;
+    if (bikeId == null || bikeId.isEmpty) return;
+
+    await _safeCreateBikeEvent(
+      BikeEvent(
+        tenantId: job.tenantId,
+        bikeId: bikeId,
+        jobId: job.id,
+        eventType: BikeEventType.jobCreated,
+        eventCategory: BikeEventCategory.visit,
+        eventDate: job.arrivalDate,
+        title: 'Trabajo creado',
+        summary: job.clientRequest?.trim().isNotEmpty == true
+            ? job.clientRequest!.trim()
+            : 'Se abrió la orden ${job.jobNumber}.',
+        source: 'job_lifecycle',
+        referenceNumber: job.jobNumber,
+        payload: {
+          'status': job.status.name,
+          'priority': job.priority.name,
+        },
+      ),
+    );
+  }
+
+  Future<void> _logJobCompletionBikeEvent({
+    required MechanicJob? previousJob,
+    required MechanicJob updatedJob,
+  }) async {
+    final bikeId = updatedJob.bikeId;
+    if (bikeId == null || bikeId.isEmpty) return;
+    final previousStatus = previousJob?.status;
+    final newStatus = updatedJob.status;
+    final completionStatuses = {
+      JobStatus.finalizado,
+      JobStatus.entregado,
+    };
+
+    if (!completionStatuses.contains(newStatus) ||
+        completionStatuses.contains(previousStatus)) {
+      return;
+    }
+
+    await _safeCreateBikeEvent(
+      BikeEvent(
+        tenantId: updatedJob.tenantId,
+        bikeId: bikeId,
+        jobId: updatedJob.id,
+        eventType: BikeEventType.jobCompleted,
+        eventCategory: BikeEventCategory.visit,
+        eventDate: updatedJob.updatedAt,
+        title: 'Trabajo completado',
+        summary: updatedJob.workPerformed?.trim().isNotEmpty == true
+            ? updatedJob.workPerformed!.trim()
+            : 'Se completó la orden ${updatedJob.jobNumber}.',
+        source: 'job_lifecycle',
+        referenceNumber: updatedJob.jobNumber,
+        payload: {
+          'status': updatedJob.status.name,
+          'totalCost': updatedJob.totalCost,
+        },
+      ),
+    );
+  }
+
+  String _buildProfileEventSummary({
+    required Map<String, dynamic> intakeProfile,
+    required Map<String, dynamic> technicalValues,
+    required bool isCreate,
+  }) {
+    final sections = <String>[];
+    if (intakeProfile.isNotEmpty) sections.add('ingreso');
+    if (technicalValues.isNotEmpty) sections.add('ficha técnica');
+
+    if (sections.isEmpty) {
+      return isCreate
+          ? 'Se creó la ficha inicial de la bicicleta.'
+          : 'Se actualizó la ficha de la bicicleta.';
+    }
+
+    final sectionsText = sections.join(' y ');
+    return isCreate
+        ? 'Se creó la ficha con $sectionsText.'
+        : 'Se actualizó $sectionsText.';
+  }
+
+  Future<void> _safeCreateBikeEvent(BikeEvent event) async {
+    if (event.bikeId.isEmpty || event.tenantId.isEmpty) return;
+
+    try {
+      await createBikeEvent(event);
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Could not create bike event: $e');
+      }
     }
   }
 

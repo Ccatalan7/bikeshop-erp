@@ -1,5 +1,11 @@
 # Bike Workshop V1 Implementation Spec
 
+## Handoff Signatures
+
+- Planning updates, architecture notes, and non-visual groundwork handoff in this cycle: GPT-5.4
+- The agent implementing or refining the UI from this handoff should sign as: Gemini 3.1 Pro
+- Record-mode UI integration and job-context summary hardening: GitHub Copilot (GPT-5.4)
+
 ## Why This Is The Best Next Step
 
 The best next step is not a full schema redesign and not immediate broad coding across the whole workshop module.
@@ -33,19 +39,28 @@ This is the rule for continuing the bike workshop initiative in future chat tabs
 - `BikeProfile` model exists in Flutter
 - bikeshop service supports fetch and upsert for bike profiles
 - mechanic job form already renders a bike context summary card
+- the mechanic job context card now shows fallback core bike facts even when no full structured profile exists yet
 - bike entry has already been transformed from a flat dialog into a step-based wizard
 - wizard step order now reflects workshop reality: identity/base first, intake second, technical third, notes/photos last
 - conversational intake prompts are in place
 - inline catalog lookup is in place in the identity/base step
 - bike intake no longer stores job-specific concern data
+- the client logbook now opens saved bikes in a dedicated record-mode panel instead of defaulting to the wizard
 
 ### Still to accomplish next
 
 - stabilize the current wizard behavior through real workflow testing
 - verify quick-save and full-save semantics from real entry points
 - verify edit/reopen flows for existing bikes with existing profiles
-- harden the job-side edit/view loop around the bike context card
+- harden and explicitly validate the job-side edit/view loop around the bike context card
+- clean the remaining bikeshop analyzer warnings so validation noise is reduced
 - decide and document the next layer after V1 stabilization: bike history/events
+
+Phase 3 timeline handoff set prepared on 2026-04-09:
+
+- [BIKE_WORKSHOP_PHASE3_TIMELINE_PLAN_2026-04-09.md](BIKE_WORKSHOP_PHASE3_TIMELINE_PLAN_2026-04-09.md)
+- [BIKE_WORKSHOP_PHASE3_TIMELINE_SQL_SPEC_2026-04-09.md](BIKE_WORKSHOP_PHASE3_TIMELINE_SQL_SPEC_2026-04-09.md)
+- [BIKE_WORKSHOP_PHASE3_TIMELINE_UX_HANDOFF_2026-04-09.md](BIKE_WORKSHOP_PHASE3_TIMELINE_UX_HANDOFF_2026-04-09.md)
 
 ## Current V1 Logic Contract
 
@@ -77,7 +92,7 @@ When a mechanic opens a job for that bike, they should be able to:
 Status:
 
 - largely achieved in code
-- remaining work is validation, cleanup, and workflow hardening
+- remaining work is validation, cleanup, and workflow hardening before history/events begin
 
 ## V1 In Scope
 

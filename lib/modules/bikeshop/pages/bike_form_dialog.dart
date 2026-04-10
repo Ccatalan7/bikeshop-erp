@@ -690,76 +690,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     super.dispose();
   }
 
-  String? _labelFor(Map<String, String> options, String? value) {
-    if (value == null || value.isEmpty) return null;
-    return options[value] ?? value;
-  }
-
-  List<String> _buildIntakeHighlights() {
-    final highlights = <String>[];
-    final primaryUse = _labelFor(_primaryUseOptions, _primaryUse);
-    final maintenance =
-        _labelFor(_maintenanceHistoryOptions, _maintenanceHistory);
-    final accident = _labelFor(_yesNoUnknownOptions, _accidentHistory);
-    final storage = _labelFor(_storageConditionOptions, _storageCondition);
-
-    if (primaryUse != null) {
-      highlights.add('Uso principal: $primaryUse');
-    }
-    if (maintenance != null) {
-      highlights.add('Historial declarado: $maintenance');
-    }
-    if (accident != null) {
-      highlights.add('Accidentes: $accident');
-    }
-    if (storage != null) {
-      highlights.add('Guardado: $storage');
-    }
-
-    return highlights;
-  }
-
-  List<String> _buildTechnicalHighlights(Bike bike) {
-    final highlights = <String>[];
-    final brake = _labelFor(_brakeTypeOptions, _brakeType);
-    final freehub = _labelFor(_freehubTypeOptions, _freehubType);
-    final speeds = _drivetrainSpeedsController.text.trim();
-
-    if (brake != null) {
-      highlights.add('Frenos: $brake');
-    }
-    if (speeds.isNotEmpty) {
-      final config = _drivetrainConfigController.text.trim();
-      highlights.add(config.isNotEmpty
-          ? 'Transmision: $config'
-          : 'Transmision: ${speeds}v');
-    }
-    if (bike.rearHubSpacingMm != null) {
-      highlights.add('Eje trasero: ${bike.rearHubSpacingMm} mm');
-    }
-    if (freehub != null) {
-      highlights.add('Freehub: $freehub');
-    }
-    if (bike.spokeCount != null) {
-      highlights.add('Rayos: ${bike.spokeCount}');
-    }
-
-    return highlights;
-  }
-
-  List<String> _buildProfileWarnings() {
-    final warnings = <String>[];
-
-    if (_brakeType == null || _brakeType!.isEmpty) {
-      warnings.add('Falta confirmar tipo de freno');
-    }
-    if (_drivetrainSpeedsController.text.trim().isEmpty) {
-      warnings.add('Falta confirmar velocidad de transmision');
-    }
-
-    return warnings;
-  }
-
   bool _hasProfileData() {
     return _selectedCatalogBike != null ||
         _brakeType != null ||
@@ -810,14 +740,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         'drivetrainConfig': _drivetrainConfigController.text.trim(),
     };
 
-    final summarySnapshot = <String, dynamic>{
-      'identityLine':
-          '${savedBike.displayName}${savedBike.serialNumber != null && savedBike.serialNumber!.isNotEmpty ? ' (S/N: ${savedBike.serialNumber})' : ''}',
-      'intakeHighlights': _buildIntakeHighlights(),
-      'technicalHighlights': _buildTechnicalHighlights(savedBike),
-      'warnings': _buildProfileWarnings(),
-      'lastConfirmedAt': DateTime.now().toIso8601String(),
-    };
+    final summarySnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
+      bike: savedBike,
+      intakeProfile: intakeProfile,
+      technicalValues: technicalValues,
+      lastConfirmedAt: DateTime.now(),
+    );
 
     final profile = BikeProfile(
       id: _existingProfile?.id,

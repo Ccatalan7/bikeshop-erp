@@ -38,6 +38,9 @@ class _BikeTabData {
   final String tabId; // Unique ID for this tab
   Bike? bike;
   String? jobBikeId; // Database ID from mechanic_job_bikes (null for new)
+  String? diagnosisSheetKey;
+  MechanicJobDiagnosisSheet diagnosisSheet;
+  DateTime? diagnosisSheetUpdatedAt;
 
   // Per-bike text controllers
   final TextEditingController clientRequestController = TextEditingController();
@@ -61,7 +64,8 @@ class _BikeTabData {
     this.bike,
     this.jobBikeId,
     this.isGeneralTab = false,
-  }) : tabId = tabId ?? DateTime.now().microsecondsSinceEpoch.toString();
+  })  : diagnosisSheet = const MechanicJobDiagnosisSheet(),
+        tabId = tabId ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   void dispose() {
     clientRequestController.dispose();
@@ -78,6 +82,10 @@ class _BikeTabData {
   double get subtotal =>
       partItems.fold(0, (sum, item) => sum + item.quantity * item.unitPrice);
 }
+
+enum _JobWorkbenchTab { general, diagnosis, products }
+
+enum _DiagnosisWorkbenchTab { narrative, structured }
 
 class MechanicJobFormPage extends StatefulWidget {
   final String? jobId; // Null for new job, ID for editing
@@ -126,12 +134,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // ============================================================
   final List<_BikeTabData> _bikeTabs = [];
   int _selectedBikeTabIndex = 0;
+  _JobWorkbenchTab _selectedWorkbenchTab = _JobWorkbenchTab.general;
+  _DiagnosisWorkbenchTab _selectedDiagnosisWorkbenchTab =
+      _DiagnosisWorkbenchTab.narrative;
 
   /// Currently selected bike tab
   _BikeTabData? get _currentBikeTab =>
       _bikeTabs.isNotEmpty && _selectedBikeTabIndex < _bikeTabs.length
           ? _bikeTabs[_selectedBikeTabIndex]
           : null;
+
+  MechanicJobDiagnosisSheet get _currentDiagnosisSheet =>
+      _currentBikeTab?.diagnosisSheet ?? const MechanicJobDiagnosisSheet();
 
   // Legacy single-bike state (for backward compatibility during migration)
   // TODO: Remove once multi-bike is fully implemented
@@ -501,6 +515,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.diagnosisController.text = jobBike.diagnosis ?? '';
           tab.workRequestedController.text = jobBike.workPerformed ?? '';
           tab.technicianNotesController.text = jobBike.technicianNotes ?? '';
+          tab.diagnosisSheetKey = jobBike.diagnosisSheetKey;
+          tab.diagnosisSheet = jobBike.diagnosisSheet;
+          tab.diagnosisSheetUpdatedAt = jobBike.diagnosisSheetUpdatedAt;
           tab.isWarrantyWork = jobBike.isWarrantyWork;
           tab.requiresApproval = jobBike.requiresApproval;
           tab.approvedByCustomer = jobBike.approvedByCustomer;
@@ -942,12 +959,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_selectedBike == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    final profile = _selectedBikeProfile;
-    final actionLabel = profile == null ? 'Completar ficha' : 'Editar ficha';
-    final highlights = [
-      ...?profile?.intakeHighlights,
-      ...?profile?.technicalHighlights,
-    ];
+    final snapshot = BikeRecordSnapshot.fromBikeAndProfile(
+      bike: _selectedBike!,
+      profile: _selectedBikeProfile,
+    );
+    final actionLabel =
+        snapshot.hasStructuredProfile ? 'Editar ficha' : 'Completar ficha';
+    final highlights = snapshot.summaryHighlights;
 
     return Container(
       margin: const EdgeInsets.only(top: 16),
@@ -994,8 +1012,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            profile?.identityLine ??
-                '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}',
+            snapshot.profile?.identityLine ??
+                BikeProfileSummaryBuilder.buildIdentityLine(_selectedBike!),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -1003,37 +1021,52 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           const SizedBox(height: 10),
           if (_isLoadingSelectedBikeProfile)
             const LinearProgressIndicator()
-          else if (highlights.isEmpty)
-            Text(
-              'Aun no hay perfil estructurado guardado para esta bicicleta.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          else ...[
+            if (!snapshot.hasStructuredProfile)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Aun no hay perfil estructurado guardado para esta bicicleta.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else if (highlights.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Aun no hay resumen disponible para esta bicicleta.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: highlights
-                  .map(
-                    (line) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: theme.dividerColor.withValues(alpha: 0.35),
+            if (highlights.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: highlights
+                    .map(
+                      (line) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.35),
+                          ),
                         ),
+                        child: Text(line, style: theme.textTheme.bodySmall),
                       ),
-                      child: Text(line, style: theme.textTheme.bodySmall),
-                    ),
-                  )
-                  .toList(),
-            ),
-          if (profile?.warnings.isNotEmpty == true) ...[
+                    )
+                    .toList(),
+              ),
+          ],
+          if (snapshot.warnings.isNotEmpty) ...[
             const SizedBox(height: 10),
-            ...profile!.warnings.map(
+            ...snapshot.warnings.map(
               (warning) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
@@ -1055,10 +1088,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
             ),
           ],
-          if (profile?.lastConfirmedAt != null) ...[
+          if (snapshot.lastConfirmedAt != null) ...[
             const SizedBox(height: 8),
             Text(
-              'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(profile!.lastConfirmedAt!)}',
+              'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(snapshot.lastConfirmedAt!)}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1730,6 +1763,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           technicianNotes: tab.technicianNotesController.text.trim().isEmpty
               ? null
               : tab.technicianNotesController.text.trim(),
+          diagnosisSheetKey:
+              tab.diagnosisSheetKey ?? tab.diagnosisSheet.templateKey,
+          diagnosisSheet: tab.diagnosisSheet,
+          diagnosisSheetUpdatedAt: tab.diagnosisSheet.hasMeaningfulData
+              ? (tab.diagnosisSheetUpdatedAt ?? DateTime.now())
+              : null,
           isWarrantyWork: tab.isWarrantyWork,
           requiresApproval: tab.requiresApproval,
           approvedByCustomer: tab.approvedByCustomer,
@@ -1862,6 +1901,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
         }
       }
+
+      await bikeshopService.syncBikeMemoryFromJob(jobId);
 
       await _debugLogPegaInvoiceSnapshot(
         'before_invoice_phase',
@@ -2723,14 +2764,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           theme,
                           icon: Icons.build_outlined,
                           title: 'Detalles del Trabajo',
-                          child: _buildJobDetailsSection(),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.shopping_basket_outlined,
-                          title: 'Productos y Servicios',
-                          child: _buildPartsSection(),
+                          child: _buildWorkbenchContent(theme),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
@@ -2817,14 +2851,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   theme,
                   icon: Icons.build_outlined,
                   title: 'Detalles del Trabajo',
-                  child: _buildJobDetailsSection(),
-                ),
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.shopping_basket_outlined,
-                  title: 'Productos y Servicios',
-                  child: _buildPartsSection(),
+                  child: _buildWorkbenchContent(theme),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
@@ -3077,6 +3104,954 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWorkbenchContent(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildWorkbenchTabs(theme),
+        const SizedBox(height: 20),
+        if (_selectedWorkbenchTab == _JobWorkbenchTab.general)
+          _buildGeneralSection(theme)
+        else if (_selectedWorkbenchTab == _JobWorkbenchTab.diagnosis)
+          _buildDiagnosisSection(theme)
+        else
+          _buildPartsSection(),
+      ],
+    );
+  }
+
+  Widget _buildWorkbenchTabs(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildWorkbenchTabButton(
+              theme: theme,
+              tab: _JobWorkbenchTab.general,
+              icon: Icons.tune_outlined,
+              label: 'General',
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _buildWorkbenchTabButton(
+              theme: theme,
+              tab: _JobWorkbenchTab.diagnosis,
+              icon: Icons.medical_information_outlined,
+              label: 'Diagnóstico',
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _buildWorkbenchTabButton(
+              theme: theme,
+              tab: _JobWorkbenchTab.products,
+              icon: Icons.shopping_basket_outlined,
+              label: 'Productos y Servicios',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkbenchTabButton({
+    required ThemeData theme,
+    required _JobWorkbenchTab tab,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _selectedWorkbenchTab == tab;
+
+    return Material(
+      color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () {
+          if (_selectedWorkbenchTab == tab) return;
+          setState(() {
+            _selectedWorkbenchTab = tab;
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isSelected
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _updateCurrentDiagnosisSheet(
+    MechanicJobDiagnosisSheet Function(MechanicJobDiagnosisSheet current)
+        transform, {
+    bool refresh = true,
+  }) {
+    final currentTab = _currentBikeTab;
+    if (currentTab == null || currentTab.isGeneralTab) return;
+
+    void apply() {
+      currentTab.diagnosisSheet = transform(currentTab.diagnosisSheet);
+      currentTab.diagnosisSheetKey = currentTab.diagnosisSheet.templateKey;
+      currentTab.diagnosisSheetUpdatedAt = DateTime.now();
+    }
+
+    if (refresh) {
+      setState(apply);
+    } else {
+      apply();
+    }
+  }
+
+  double? _parseNullableDouble(String value) {
+    final normalized = value.trim().replaceAll(',', '.');
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
+  }
+
+  String? _normalizeNullableText(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  void _insertDiagnosisSnippet(
+      TextEditingController controller, String snippet) {
+    final value = controller.value;
+    final selection = value.selection;
+    final text = value.text;
+    final start = selection.isValid && selection.start >= 0
+        ? selection.start
+        : text.length;
+    final end =
+        selection.isValid && selection.end >= 0 ? selection.end : text.length;
+    final selectedText = text.substring(start, end);
+    final replacement =
+        selectedText.isEmpty ? snippet : '$selectedText$snippet';
+    final nextText = text.replaceRange(start, end, replacement);
+    final cursor = start + replacement.length;
+
+    controller.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: cursor),
+      composing: TextRange.empty,
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Color _diagnosisStatusColor(ThemeData theme, BikeSystemOverallStatus status) {
+    switch (status) {
+      case BikeSystemOverallStatus.ok:
+        return Colors.green.shade700;
+      case BikeSystemOverallStatus.attention:
+        return Colors.orange.shade700;
+      case BikeSystemOverallStatus.critical:
+        return theme.colorScheme.error;
+      case BikeSystemOverallStatus.unknown:
+        return theme.colorScheme.onSurfaceVariant;
+    }
+  }
+
+  String _formatDiagnosisSheetTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return 'Sin sincronizar';
+    return DateFormat('dd/MM HH:mm').format(timestamp);
+  }
+
+  Widget _buildDiagnosisWorkspace(
+    ThemeData theme,
+    _BikeTabData currentTab,
+    TextEditingController diagnosisCtrl,
+  ) {
+    final diagnosisSheet = _currentDiagnosisSheet;
+    final statuses = [
+      diagnosisSheet.drivetrain.overallStatus,
+      diagnosisSheet.frontBrake.overallStatus,
+      diagnosisSheet.rearBrake.overallStatus,
+    ];
+    final trackedSystems = statuses
+        .where((status) => status != BikeSystemOverallStatus.unknown)
+        .length;
+    final criticalSystems = statuses
+        .where((status) => status == BikeSystemOverallStatus.critical)
+        .length;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.7)),
+        color: theme.colorScheme.surfaceContainerLowest,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Diagnóstico ${currentTab.bike?.displayName ?? ''}'
+                                .trim(),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Narrativa técnica y storage model sincronizados por bicicleta.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color:
+                            theme.colorScheme.primaryContainer.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Sync ${_formatDiagnosisSheetTimestamp(currentTab.diagnosisSheetUpdatedAt)}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _buildDiagnosisSummaryChip(
+                      theme,
+                      icon: Icons.schema_outlined,
+                      label: 'Template ${diagnosisSheet.templateKey}',
+                    ),
+                    _buildDiagnosisSummaryChip(
+                      theme,
+                      icon: Icons.tune_outlined,
+                      label: '$trackedSystems sistemas revisados',
+                    ),
+                    _buildDiagnosisSummaryChip(
+                      theme,
+                      icon: Icons.warning_amber_rounded,
+                      label: '$criticalSystems críticos',
+                      tint: criticalSystems > 0
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.tertiary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: _buildDiagnosisSubtabs(theme),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: _selectedDiagnosisWorkbenchTab ==
+                    _DiagnosisWorkbenchTab.narrative
+                ? _buildNarrativeDiagnosisPanel(theme, diagnosisCtrl)
+                : _buildStructuredDiagnosisPanel(theme, currentTab),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosisSection(ThemeData theme) {
+    final currentTab = _currentBikeTab;
+    final diagnosisCtrl =
+        currentTab?.diagnosisController ?? _diagnosisController;
+
+    if (currentTab == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.pedal_bike_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Agrega una bicicleta para habilitar la pestaña de diagnóstico.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (currentTab.isGeneralTab) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'La pestaña General / Venta no tiene diagnóstico propio. El diagnóstico se registra por bicicleta.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildDiagnosisWorkspace(theme, currentTab, diagnosisCtrl);
+  }
+
+  Widget _buildDiagnosisSummaryChip(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    Color? tint,
+  }) {
+    final color = tint ?? theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosisSubtabs(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildDiagnosisSubtabButton(
+              theme: theme,
+              tab: _DiagnosisWorkbenchTab.narrative,
+              icon: Icons.edit_note_outlined,
+              label: 'Ficha narrativa',
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _buildDiagnosisSubtabButton(
+              theme: theme,
+              tab: _DiagnosisWorkbenchTab.structured,
+              icon: Icons.account_tree_outlined,
+              label: 'Modelo estructurado',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosisSubtabButton({
+    required ThemeData theme,
+    required _DiagnosisWorkbenchTab tab,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _selectedDiagnosisWorkbenchTab == tab;
+
+    return Material(
+      color: isSelected
+          ? theme.colorScheme.secondaryContainer
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () {
+          if (_selectedDiagnosisWorkbenchTab == tab) return;
+          setState(() {
+            _selectedDiagnosisWorkbenchTab = tab;
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected
+                    ? theme.colorScheme.onSecondaryContainer
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isSelected
+                        ? theme.colorScheme.onSecondaryContainer
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNarrativeDiagnosisPanel(
+    ThemeData theme,
+    TextEditingController diagnosisCtrl,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Diagnosis sheet narrativa',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Editor técnico con atajos para dejar hallazgos, acciones y repuestos en una sola hoja.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildDiagnosisToolbarButton(
+                  theme,
+                  icon: Icons.format_list_bulleted,
+                  label: 'Bullet',
+                  onTap: () => _insertDiagnosisSnippet(diagnosisCtrl, '• '),
+                ),
+                _buildDiagnosisToolbarButton(
+                  theme,
+                  icon: Icons.search_outlined,
+                  label: 'Hallazgo',
+                  onTap: () => _insertDiagnosisSnippet(
+                    diagnosisCtrl,
+                    '\nHallazgo:\n',
+                  ),
+                ),
+                _buildDiagnosisToolbarButton(
+                  theme,
+                  icon: Icons.construction_outlined,
+                  label: 'Acción',
+                  onTap: () => _insertDiagnosisSnippet(
+                    diagnosisCtrl,
+                    '\nAcción recomendada:\n',
+                  ),
+                ),
+                _buildDiagnosisToolbarButton(
+                  theme,
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Repuesto',
+                  onTap: () => _insertDiagnosisSnippet(
+                    diagnosisCtrl,
+                    '\nRepuesto sugerido:\n',
+                  ),
+                ),
+                _buildDiagnosisToolbarButton(
+                  theme,
+                  icon: Icons.priority_high_outlined,
+                  label: 'Urgente',
+                  onTap: () => _insertDiagnosisSnippet(
+                    diagnosisCtrl,
+                    '\n[URGENTE] ',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            key: ValueKey(
+              'diagnosis_workspace_${_currentBikeTab?.tabId ?? "legacy"}',
+            ),
+            controller: diagnosisCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Ficha de diagnóstico',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(),
+              hintText:
+                  'Describe hallazgos, pruebas realizadas, riesgos y acciones recomendadas...',
+            ),
+            maxLines: 12,
+            minLines: 10,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                '${diagnosisCtrl.text.trim().isEmpty ? 0 : diagnosisCtrl.text.trim().split(RegExp(r'\\s+')).length} palabras',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Se guarda en el diagnóstico narrativo de esta bicicleta',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosisToolbarButton(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: theme.colorScheme.onSurface,
+          side: BorderSide(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.7),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStructuredDiagnosisPanel(
+    ThemeData theme,
+    _BikeTabData currentTab,
+  ) {
+    final diagnosisSheet = currentTab.diagnosisSheet;
+
+    return Column(
+      children: [
+        _buildDiagnosisSystemCard(
+          theme,
+          title: 'Transmisión',
+          subtitle: 'Cadena, cassette y estado general del tren motriz.',
+          status: diagnosisSheet.drivetrain.overallStatus,
+          statusTint: _diagnosisStatusColor(
+              theme, diagnosisSheet.drivetrain.overallStatus),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              drivetrain: current.drivetrain.copyWith(overallStatus: status),
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      key: ValueKey('diag_chain_wear_${currentTab.tabId}'),
+                      initialValue: diagnosisSheet.drivetrain.chainWearPercent
+                          ?.toString(),
+                      decoration: const InputDecoration(
+                        labelText: 'Desgaste cadena (%)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.straighten_outlined),
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (value) {
+                        final parsed = _parseNullableDouble(value);
+                        _updateCurrentDiagnosisSheet(
+                          (current) => current.copyWith(
+                            drivetrain: current.drivetrain.copyWith(
+                              chainWearPercent: parsed,
+                              clearChainWearPercent: parsed == null,
+                            ),
+                          ),
+                          refresh: false,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      key: ValueKey('diag_cassette_${currentTab.tabId}'),
+                      initialValue: diagnosisSheet.drivetrain.cassetteCondition,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado cassette',
+                        border: OutlineInputBorder(),
+                        prefixIcon:
+                            Icon(Icons.settings_input_component_outlined),
+                      ),
+                      onChanged: (value) {
+                        final normalized = _normalizeNullableText(value);
+                        _updateCurrentDiagnosisSheet(
+                          (current) => current.copyWith(
+                            drivetrain: current.drivetrain.copyWith(
+                              cassetteCondition: normalized,
+                              clearCassetteCondition: normalized == null,
+                            ),
+                          ),
+                          refresh: false,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: ValueKey('diag_drive_notes_${currentTab.tabId}'),
+                initialValue: diagnosisSheet.drivetrain.notes,
+                decoration: const InputDecoration(
+                  labelText: 'Notas transmisión',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 3,
+                onChanged: (value) {
+                  final normalized = _normalizeNullableText(value);
+                  _updateCurrentDiagnosisSheet(
+                    (current) => current.copyWith(
+                      drivetrain: current.drivetrain.copyWith(
+                        notes: normalized,
+                        clearNotes: normalized == null,
+                      ),
+                    ),
+                    refresh: false,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildDiagnosisSystemCard(
+          theme,
+          title: 'Freno delantero',
+          subtitle: 'Desgaste de pastillas, rotor y condición general.',
+          status: diagnosisSheet.frontBrake.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.frontBrake.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              frontBrake: current.frontBrake.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildBrakeDiagnosisFields(
+            currentTab,
+            brakeSheet: diagnosisSheet.frontBrake,
+            prefix: 'front',
+            title: 'delantero',
+            update: (sheet) => _updateCurrentDiagnosisSheet(
+              (current) => current.copyWith(frontBrake: sheet),
+              refresh: false,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildDiagnosisSystemCard(
+          theme,
+          title: 'Freno trasero',
+          subtitle: 'Registro independiente del conjunto trasero.',
+          status: diagnosisSheet.rearBrake.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.rearBrake.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              rearBrake: current.rearBrake.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildBrakeDiagnosisFields(
+            currentTab,
+            brakeSheet: diagnosisSheet.rearBrake,
+            prefix: 'rear',
+            title: 'trasero',
+            update: (sheet) => _updateCurrentDiagnosisSheet(
+              (current) => current.copyWith(rearBrake: sheet),
+              refresh: false,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiagnosisSystemCard(
+    ThemeData theme, {
+    required String title,
+    required String subtitle,
+    required BikeSystemOverallStatus status,
+    required Color statusTint,
+    required ValueChanged<BikeSystemOverallStatus> onStatusChanged,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusTint.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status.displayName,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: statusTint,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<BikeSystemOverallStatus>(
+            initialValue: status,
+            decoration: const InputDecoration(
+              labelText: 'Estado general',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.monitor_heart_outlined),
+            ),
+            items: BikeSystemOverallStatus.values.map((value) {
+              return DropdownMenuItem(
+                value: value,
+                child: Text(value.displayName),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onStatusChanged(value);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrakeDiagnosisFields(
+    _BikeTabData currentTab, {
+    required BrakeDiagnosisSheet brakeSheet,
+    required String prefix,
+    required String title,
+    required ValueChanged<BrakeDiagnosisSheet> update,
+  }) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey('diag_${prefix}_pad_${currentTab.tabId}'),
+                initialValue: brakeSheet.padWearPercent?.toString(),
+                decoration: InputDecoration(
+                  labelText: 'Desgaste pastillas $title (%)',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.percent_outlined),
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) {
+                  final parsed = _parseNullableDouble(value);
+                  update(
+                    brakeSheet.copyWith(
+                      padWearPercent: parsed,
+                      clearPadWearPercent: parsed == null,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                key: ValueKey('diag_${prefix}_rotor_${currentTab.tabId}'),
+                initialValue: brakeSheet.rotorThicknessMm?.toString(),
+                decoration: InputDecoration(
+                  labelText: 'Grosor rotor $title (mm)',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.straighten_outlined),
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) {
+                  final parsed = _parseNullableDouble(value);
+                  update(
+                    brakeSheet.copyWith(
+                      rotorThicknessMm: parsed,
+                      clearRotorThicknessMm: parsed == null,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: ValueKey('diag_${prefix}_notes_${currentTab.tabId}'),
+          initialValue: brakeSheet.notes,
+          decoration: InputDecoration(
+            labelText: 'Notas freno $title',
+            border: const OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              brakeSheet.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -3352,13 +4327,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
-  Widget _buildJobDetailsSection() {
+  Widget _buildGeneralSection(ThemeData theme) {
     // Get current bike tab (if any)
     final currentTab = _currentBikeTab;
 
-    // Use tab-specific controllers if available, otherwise fall back to legacy
-    final diagnosisCtrl =
-        currentTab?.diagnosisController ?? _diagnosisController;
     final workRequestedCtrl =
         currentTab?.workRequestedController ?? _workSummaryController;
     final techNotesCtrl =
@@ -3587,13 +4559,66 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
 
         // ========== PER-BIKE FIELDS (from current tab) ==========
-        if (!(currentTab?.isGeneralTab ?? false)) ...[
+        if (currentTab == null) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.pedal_bike_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Agrega una bicicleta para habilitar la ficha de diagnóstico y el storage model.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else if (currentTab.isGeneralTab) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'La pestaña General / Venta conserva cargos huérfanos o ventas sueltas. El diagnóstico estructurado se registra por bicicleta.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
           // Using keys to force widget recreation when tab changes
           const SizedBox(height: 16),
           TextFormField(
-            key: ValueKey('clientRequest_${currentTab?.tabId ?? "legacy"}'),
-            controller:
-                currentTab?.clientRequestController ?? _clientRequestController,
+            key: ValueKey('clientRequest_${currentTab.tabId}'),
+            controller: currentTab.clientRequestController,
             decoration: const InputDecoration(
               labelText: 'Solicitud del cliente',
               border: OutlineInputBorder(),
@@ -3604,19 +4629,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 16),
           TextFormField(
-            key: ValueKey('diagnosis_${currentTab?.tabId ?? "legacy"}'),
-            controller: diagnosisCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Diagnóstico',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.description),
-              hintText: 'Descripción técnica del problema...',
-            ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            key: ValueKey('workRequested_${currentTab?.tabId ?? "legacy"}'),
+            key: ValueKey('workRequested_${currentTab.tabId}'),
             controller: workRequestedCtrl,
             decoration: const InputDecoration(
               labelText: 'Trabajos a realizar',
@@ -3629,7 +4642,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 16),
           TextFormField(
-            key: ValueKey('techNotes_${currentTab?.tabId ?? "legacy"}'),
+            key: ValueKey('techNotes_${currentTab.tabId}'),
             controller: techNotesCtrl,
             decoration: const InputDecoration(
               labelText: 'Notas del técnico',
@@ -3641,7 +4654,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 16),
           Row(
-            key: ValueKey('checkboxes_${currentTab?.tabId ?? "legacy"}'),
+            key: ValueKey('checkboxes_${currentTab.tabId}'),
             children: [
               Expanded(
                 child: CheckboxListTile(
@@ -3649,11 +4662,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   value: requiresApproval,
                   onChanged: (value) {
                     setState(() {
-                      if (currentTab != null) {
-                        currentTab.requiresApproval = value ?? false;
-                      } else {
-                        _requiresApproval = value ?? false;
-                      }
+                      currentTab.requiresApproval = value ?? false;
                     });
                   },
                   controlAffinity: ListTileControlAffinity.leading,
@@ -3706,11 +4715,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         value: isWarranty,
                         onChanged: (value) {
                           setState(() {
-                            if (currentTab != null) {
-                              currentTab.isWarrantyWork = value ?? false;
-                            } else {
-                              _isWarrantyJob = value ?? false;
-                            }
+                            currentTab.isWarrantyWork = value ?? false;
                           });
                         },
                         controlAffinity: ListTileControlAffinity.leading,

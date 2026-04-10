@@ -12483,6 +12483,265 @@ create index if not exists idx_bike_profiles_catalog_bike_id on bike_profiles(ca
 
 alter table bike_profiles enable row level security;
 
+-- Table: bike_events
+-- Long-term evidence and history timeline for each bike
+create table if not exists bike_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  bike_id uuid references bikes(id) on delete cascade not null,
+  job_id uuid references mechanic_jobs(id) on delete set null,
+  event_type text not null,
+  event_category text not null check (event_category in ('state', 'visit', 'evidence', 'incident', 'component')),
+  event_date timestamp with time zone not null default now(),
+  title text not null,
+  summary text,
+  source text not null default 'manual',
+  reference_number text,
+  severity text check (severity is null or severity in ('info', 'warning', 'critical')),
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'tenant_id') then
+    alter table bike_events add column tenant_id uuid references tenants(id) on delete cascade not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'bike_id') then
+    alter table bike_events add column bike_id uuid references bikes(id) on delete cascade not null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'job_id') then
+    alter table bike_events add column job_id uuid references mechanic_jobs(id) on delete set null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'event_type') then
+    alter table bike_events add column event_type text not null default 'profile_updated';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'event_category') then
+    alter table bike_events add column event_category text not null default 'state';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'event_date') then
+    alter table bike_events add column event_date timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'title') then
+    alter table bike_events add column title text not null default 'Evento';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'summary') then
+    alter table bike_events add column summary text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'source') then
+    alter table bike_events add column source text not null default 'manual';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'reference_number') then
+    alter table bike_events add column reference_number text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'severity') then
+    alter table bike_events add column severity text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'payload') then
+    alter table bike_events add column payload jsonb not null default '{}'::jsonb;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'created_by') then
+    alter table bike_events add column created_by uuid references auth.users(id) default auth.uid();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'created_at') then
+    alter table bike_events add column created_at timestamp with time zone not null default now();
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'updated_at') then
+    alter table bike_events add column updated_at timestamp with time zone not null default now();
+  end if;
+
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where table_name = 'bike_events'
+      and constraint_name = 'bike_events_event_category_check'
+  ) then
+    alter table bike_events add constraint bike_events_event_category_check
+      check (event_category in ('state', 'visit', 'evidence', 'incident', 'component'));
+  end if;
+
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where table_name = 'bike_events'
+      and constraint_name = 'bike_events_severity_check'
+  ) then
+    alter table bike_events add constraint bike_events_severity_check
+      check (severity is null or severity in ('info', 'warning', 'critical'));
+  end if;
+exception
+  when undefined_table then raise notice '⚠ Table bike_events does not exist yet';
+end $$;
+
+create index if not exists idx_bike_events_tenant on bike_events(tenant_id);
+create index if not exists idx_bike_events_bike_id on bike_events(bike_id);
+create index if not exists idx_bike_events_bike_date_desc on bike_events(bike_id, event_date desc, created_at desc);
+create index if not exists idx_bike_events_job_id on bike_events(job_id) where job_id is not null;
+create index if not exists idx_bike_events_event_type on bike_events(event_type);
+
+alter table bike_events enable row level security;
+
+-- Table: bike_system_states
+-- Current high-level technical status per bike system
+create table if not exists bike_system_states (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  bike_id uuid references bikes(id) on delete cascade not null,
+  job_id uuid references mechanic_jobs(id) on delete set null,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
+  system_key text not null,
+  location_key text not null default 'none'
+    check (location_key in ('none', 'front', 'rear', 'left', 'right', 'center')),
+  overall_status text not null default 'unknown'
+    check (overall_status in ('ok', 'attention', 'critical', 'unknown')),
+  status_note text,
+  last_reviewed_at timestamp with time zone,
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique (tenant_id, bike_id, system_key, location_key)
+);
+
+create index if not exists idx_bike_system_states_tenant on bike_system_states(tenant_id);
+create index if not exists idx_bike_system_states_bike on bike_system_states(bike_id);
+create index if not exists idx_bike_system_states_job on bike_system_states(job_id) where job_id is not null;
+create index if not exists idx_bike_system_states_job_bike on bike_system_states(job_bike_id) where job_bike_id is not null;
+create index if not exists idx_bike_system_states_system on bike_system_states(bike_id, system_key, location_key);
+
+alter table bike_system_states enable row level security;
+
+-- Table: bike_component_lifecycles
+-- Tracks currently installed and historical tracked components per bike slot
+create table if not exists bike_component_lifecycles (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  bike_id uuid references bikes(id) on delete cascade not null,
+  job_id uuid references mechanic_jobs(id) on delete set null,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
+  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  product_id uuid references products(id) on delete set null,
+  service_product_id uuid references products(id) on delete set null,
+  system_key text not null,
+  component_slot_key text not null,
+  location_key text not null default 'none'
+    check (location_key in ('none', 'front', 'rear', 'left', 'right', 'center')),
+  component_label text not null,
+  status text not null default 'installed'
+    check (status in ('installed', 'removed', 'superseded')),
+  installed_at timestamp with time zone not null default now(),
+  removed_at timestamp with time zone,
+  removal_reason text,
+  source text not null default 'manual',
+  notes text,
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_bike_component_lifecycles_tenant on bike_component_lifecycles(tenant_id);
+create index if not exists idx_bike_component_lifecycles_bike on bike_component_lifecycles(bike_id);
+create index if not exists idx_bike_component_lifecycles_job on bike_component_lifecycles(job_id) where job_id is not null;
+create index if not exists idx_bike_component_lifecycles_job_bike on bike_component_lifecycles(job_bike_id) where job_bike_id is not null;
+create index if not exists idx_bike_component_lifecycles_item on bike_component_lifecycles(mechanic_job_item_id) where mechanic_job_item_id is not null;
+create index if not exists idx_bike_component_lifecycles_product on bike_component_lifecycles(product_id) where product_id is not null;
+create index if not exists idx_bike_component_lifecycles_service_product on bike_component_lifecycles(service_product_id) where service_product_id is not null;
+create index if not exists idx_bike_component_lifecycles_slot on bike_component_lifecycles(bike_id, component_slot_key, location_key, installed_at desc);
+create unique index if not exists idx_bike_component_lifecycles_current_slot
+  on bike_component_lifecycles(tenant_id, bike_id, component_slot_key, location_key)
+  where status = 'installed';
+
+alter table bike_component_lifecycles enable row level security;
+
+-- Table: bike_observations
+-- Structured technical facts recorded during intake, diagnosis, measurement, or follow-up
+create table if not exists bike_observations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  bike_id uuid references bikes(id) on delete cascade not null,
+  job_id uuid references mechanic_jobs(id) on delete set null,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
+  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  lifecycle_id uuid references bike_component_lifecycles(id) on delete set null,
+  product_id uuid references products(id) on delete set null,
+  service_product_id uuid references products(id) on delete set null,
+  system_key text not null,
+  component_slot_key text,
+  location_key text not null default 'none'
+    check (location_key in ('none', 'front', 'rear', 'left', 'right', 'center')),
+  observation_kind text not null
+    check (observation_kind in ('measurement', 'condition_assessment', 'diagnosis_snapshot', 'incident', 'confirmation')),
+  observation_key text not null,
+  title text not null,
+  summary text,
+  status_value text,
+  value_numeric numeric(12,4),
+  value_text text,
+  unit text,
+  severity text check (severity is null or severity in ('info', 'warning', 'critical')),
+  observed_at timestamp with time zone not null default now(),
+  source text not null default 'manual',
+  source_field text,
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_bike_observations_tenant on bike_observations(tenant_id);
+create index if not exists idx_bike_observations_bike on bike_observations(bike_id, observed_at desc, created_at desc);
+create index if not exists idx_bike_observations_job on bike_observations(job_id) where job_id is not null;
+create index if not exists idx_bike_observations_job_bike on bike_observations(job_bike_id) where job_bike_id is not null;
+create index if not exists idx_bike_observations_item on bike_observations(mechanic_job_item_id) where mechanic_job_item_id is not null;
+create index if not exists idx_bike_observations_lifecycle on bike_observations(lifecycle_id) where lifecycle_id is not null;
+create index if not exists idx_bike_observations_system on bike_observations(bike_id, system_key, location_key, observed_at desc);
+create index if not exists idx_bike_observations_slot on bike_observations(bike_id, component_slot_key, location_key, observed_at desc) where component_slot_key is not null;
+create index if not exists idx_bike_observations_key on bike_observations(observation_key);
+
+alter table bike_observations enable row level security;
+
+-- Table: bike_interventions
+-- Historical actions that changed bike state or component lifecycle
+create table if not exists bike_interventions (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  bike_id uuid references bikes(id) on delete cascade not null,
+  job_id uuid references mechanic_jobs(id) on delete set null,
+  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
+  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  product_id uuid references products(id) on delete set null,
+  service_product_id uuid references products(id) on delete set null,
+  from_lifecycle_id uuid references bike_component_lifecycles(id) on delete set null,
+  to_lifecycle_id uuid references bike_component_lifecycles(id) on delete set null,
+  system_key text not null,
+  component_slot_key text,
+  location_key text not null default 'none'
+    check (location_key in ('none', 'front', 'rear', 'left', 'right', 'center')),
+  intervention_type text not null
+    check (intervention_type in ('replacement', 'service', 'adjustment', 'installation', 'removal', 'inspection')),
+  title text not null,
+  summary text,
+  performed_at timestamp with time zone not null default now(),
+  source text not null default 'manual',
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create index if not exists idx_bike_interventions_tenant on bike_interventions(tenant_id);
+create index if not exists idx_bike_interventions_bike on bike_interventions(bike_id, performed_at desc, created_at desc);
+create index if not exists idx_bike_interventions_job on bike_interventions(job_id) where job_id is not null;
+create index if not exists idx_bike_interventions_job_bike on bike_interventions(job_bike_id) where job_bike_id is not null;
+create index if not exists idx_bike_interventions_item on bike_interventions(mechanic_job_item_id) where mechanic_job_item_id is not null;
+create index if not exists idx_bike_interventions_system on bike_interventions(bike_id, system_key, location_key, performed_at desc);
+create index if not exists idx_bike_interventions_slot on bike_interventions(bike_id, component_slot_key, location_key, performed_at desc) where component_slot_key is not null;
+create index if not exists idx_bike_interventions_from_lifecycle on bike_interventions(from_lifecycle_id) where from_lifecycle_id is not null;
+create index if not exists idx_bike_interventions_to_lifecycle on bike_interventions(to_lifecycle_id) where to_lifecycle_id is not null;
+
+alter table bike_interventions enable row level security;
+
 -- Table: service_packages
 -- Predefined service templates (e.g., "Basic Tune-up", "Full Overhaul")
 create table if not exists service_packages (
@@ -12915,6 +13174,9 @@ create table if not exists mechanic_job_bikes (
   work_requested text,        -- Solicitud del cliente (per bike)
   work_performed text,        -- Lo que se hizo
   technician_notes text,      -- Notas del técnico
+  diagnosis_sheet_key text,
+  diagnosis_sheet_data jsonb not null default '{}'::jsonb,
+  diagnosis_sheet_updated_at timestamp with time zone,
   
   -- Per-bike cost tracking (calculated from items)
   parts_cost numeric(12,2) not null default 0,
@@ -12936,6 +13198,9 @@ create table if not exists mechanic_job_bikes (
 
 -- Add status_id column if not exists (for existing tables)
 alter table mechanic_job_bikes add column if not exists status_id uuid references job_statuses(id) on delete set null;
+alter table mechanic_job_bikes add column if not exists diagnosis_sheet_key text;
+alter table mechanic_job_bikes add column if not exists diagnosis_sheet_data jsonb not null default '{}'::jsonb;
+alter table mechanic_job_bikes add column if not exists diagnosis_sheet_updated_at timestamp with time zone;
 
 -- Indexes for mechanic_job_bikes
 create index if not exists idx_mechanic_job_bikes_tenant on mechanic_job_bikes(tenant_id);
@@ -15227,6 +15492,31 @@ create trigger trg_bikes_updated_at
 drop trigger if exists trg_bike_profiles_updated_at on bike_profiles cascade;
 create trigger trg_bike_profiles_updated_at
   before update on bike_profiles
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_bike_events_updated_at on bike_events cascade;
+create trigger trg_bike_events_updated_at
+  before update on bike_events
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_bike_system_states_updated_at on bike_system_states cascade;
+create trigger trg_bike_system_states_updated_at
+  before update on bike_system_states
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_bike_component_lifecycles_updated_at on bike_component_lifecycles cascade;
+create trigger trg_bike_component_lifecycles_updated_at
+  before update on bike_component_lifecycles
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_bike_observations_updated_at on bike_observations cascade;
+create trigger trg_bike_observations_updated_at
+  before update on bike_observations
+  for each row execute procedure public.set_updated_at();
+
+drop trigger if exists trg_bike_interventions_updated_at on bike_interventions cascade;
+create trigger trg_bike_interventions_updated_at
+  before update on bike_interventions
   for each row execute procedure public.set_updated_at();
 
 drop trigger if exists trg_service_packages_updated_at on service_packages cascade;
@@ -19448,6 +19738,71 @@ exception
   when duplicate_object then raise notice '⚠ Policies already exist for bike_profiles';
 end $$;
 
+-- Bike Events: Tenant isolation
+do $$ begin
+  create policy "bike_events_select" on bike_events for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_events_insert" on bike_events for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "bike_events_update" on bike_events for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_events_delete" on bike_events for delete to authenticated using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bike_events';
+exception
+  when undefined_table then raise notice '⚠ Table bike_events does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bike_events';
+  when duplicate_object then raise notice '⚠ Policies already exist for bike_events';
+end $$;
+
+-- Bike System States: Tenant isolation
+do $$ begin
+  create policy "bike_system_states_select" on bike_system_states for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_system_states_insert" on bike_system_states for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "bike_system_states_update" on bike_system_states for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_system_states_delete" on bike_system_states for delete to authenticated using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bike_system_states';
+exception
+  when undefined_table then raise notice '⚠ Table bike_system_states does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bike_system_states';
+  when duplicate_object then raise notice '⚠ Policies already exist for bike_system_states';
+end $$;
+
+-- Bike Component Lifecycles: Tenant isolation
+do $$ begin
+  create policy "bike_component_lifecycles_select" on bike_component_lifecycles for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_component_lifecycles_insert" on bike_component_lifecycles for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "bike_component_lifecycles_update" on bike_component_lifecycles for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_component_lifecycles_delete" on bike_component_lifecycles for delete to authenticated using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bike_component_lifecycles';
+exception
+  when undefined_table then raise notice '⚠ Table bike_component_lifecycles does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bike_component_lifecycles';
+  when duplicate_object then raise notice '⚠ Policies already exist for bike_component_lifecycles';
+end $$;
+
+-- Bike Observations: Tenant isolation
+do $$ begin
+  create policy "bike_observations_select" on bike_observations for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_observations_insert" on bike_observations for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "bike_observations_update" on bike_observations for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_observations_delete" on bike_observations for delete to authenticated using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bike_observations';
+exception
+  when undefined_table then raise notice '⚠ Table bike_observations does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bike_observations';
+  when duplicate_object then raise notice '⚠ Policies already exist for bike_observations';
+end $$;
+
+-- Bike Interventions: Tenant isolation
+do $$ begin
+  create policy "bike_interventions_select" on bike_interventions for select to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_interventions_insert" on bike_interventions for insert to authenticated with check (tenant_id = public.user_tenant_id());
+  create policy "bike_interventions_update" on bike_interventions for update to authenticated using (tenant_id = public.user_tenant_id());
+  create policy "bike_interventions_delete" on bike_interventions for delete to authenticated using (tenant_id = public.user_tenant_id());
+  raise notice '✓ Created RLS policies for bike_interventions';
+exception
+  when undefined_table then raise notice '⚠ Table bike_interventions does not exist yet';
+  when undefined_column then raise notice '⚠ Column tenant_id missing in bike_interventions';
+  when duplicate_object then raise notice '⚠ Policies already exist for bike_interventions';
+end $$;
+
 -- Mechanic Jobs: Tenant isolation
 do $$ begin
   create policy "mechanic_jobs_select" on mechanic_jobs for select using (tenant_id = public.user_tenant_id());
@@ -22205,7 +22560,10 @@ security definer
 as $$
 declare
   v_next_number integer;
+  v_max_existing integer := 0;
   v_prefix text;
+  v_table_name text;
+  v_column_name text;
   v_formatted_number text;
 begin
   -- Default prefixes if not provided
@@ -22220,13 +22578,57 @@ begin
     when 'expense' then 'GTO'
     else 'DOC'
   end);
+
+  case p_document_type
+    when 'sales_invoice' then
+      v_table_name := 'sales_invoices';
+      v_column_name := 'invoice_number';
+    when 'purchase_invoice' then
+      v_table_name := 'purchase_invoices';
+      v_column_name := 'invoice_number';
+    when 'sales_payment' then
+      v_table_name := 'sales_payments';
+      v_column_name := 'payment_number';
+    when 'purchase_payment' then
+      v_table_name := 'purchase_payments';
+      v_column_name := 'payment_number';
+    when 'journal_entry' then
+      v_table_name := 'journal_entries';
+      v_column_name := 'entry_number';
+    when 'mechanic_job' then
+      v_table_name := 'mechanic_jobs';
+      v_column_name := 'job_number';
+    when 'stock_adjustment' then
+      v_table_name := 'stock_adjustments';
+      v_column_name := 'adjustment_number';
+    when 'expense' then
+      v_table_name := 'expenses';
+      v_column_name := 'expense_number';
+    else
+      v_table_name := null;
+      v_column_name := null;
+  end case;
+
+  -- Self-heal stale sequence rows by never issuing a number below the real max
+  if v_table_name is not null and v_column_name is not null then
+    execute format(
+      'select coalesce(max((substring(%1$I from ''([0-9]+)$''))::integer), 0)
+         from public.%2$I
+        where tenant_id = $1
+          and %1$I ~ $2',
+      v_column_name,
+      v_table_name
+    )
+    into v_max_existing
+    using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
+  end if;
   
   -- Insert or update sequence (atomic operation)
   insert into document_sequences (tenant_id, document_type, last_number)
-  values (p_tenant_id, p_document_type, 1)
+  values (p_tenant_id, p_document_type, greatest(v_max_existing, 0) + 1)
   on conflict (tenant_id, document_type)
   do update set
-    last_number = document_sequences.last_number + 1,
+    last_number = greatest(document_sequences.last_number, v_max_existing) + 1,
     updated_at = now()
   returning last_number into v_next_number;
   
@@ -22252,8 +22654,11 @@ security definer
 as $$
 declare
   v_current_number integer;
+  v_max_existing integer := 0;
   v_next_number integer;
   v_prefix text;
+  v_table_name text;
+  v_column_name text;
   v_formatted_number text;
 begin
   -- Default prefixes if not provided
@@ -22268,14 +22673,57 @@ begin
     when 'expense' then 'GTO'
     else 'DOC'
   end);
+
+  case p_document_type
+    when 'sales_invoice' then
+      v_table_name := 'sales_invoices';
+      v_column_name := 'invoice_number';
+    when 'purchase_invoice' then
+      v_table_name := 'purchase_invoices';
+      v_column_name := 'invoice_number';
+    when 'sales_payment' then
+      v_table_name := 'sales_payments';
+      v_column_name := 'payment_number';
+    when 'purchase_payment' then
+      v_table_name := 'purchase_payments';
+      v_column_name := 'payment_number';
+    when 'journal_entry' then
+      v_table_name := 'journal_entries';
+      v_column_name := 'entry_number';
+    when 'mechanic_job' then
+      v_table_name := 'mechanic_jobs';
+      v_column_name := 'job_number';
+    when 'stock_adjustment' then
+      v_table_name := 'stock_adjustments';
+      v_column_name := 'adjustment_number';
+    when 'expense' then
+      v_table_name := 'expenses';
+      v_column_name := 'expense_number';
+    else
+      v_table_name := null;
+      v_column_name := null;
+  end case;
+
+  if v_table_name is not null and v_column_name is not null then
+    execute format(
+      'select coalesce(max((substring(%1$I from ''([0-9]+)$''))::integer), 0)
+         from public.%2$I
+        where tenant_id = $1
+          and %1$I ~ $2',
+      v_column_name,
+      v_table_name
+    )
+    into v_max_existing
+    using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
+  end if;
   
   -- Get current sequence value (or 0 if none)
   select coalesce(last_number, 0) into v_current_number
   from document_sequences
   where tenant_id = p_tenant_id and document_type = p_document_type;
   
-  -- Next number is current + 1 (or 1 if no sequence exists)
-  v_next_number := coalesce(v_current_number, 0) + 1;
+  -- Preview should never suggest a number below the real max already in use
+  v_next_number := greatest(coalesce(v_current_number, 0), coalesce(v_max_existing, 0)) + 1;
   
   -- Format: PREFIX-NNNNN (e.g., FV-00143)
   v_formatted_number := v_prefix || '-' || lpad(v_next_number::text, 5, '0');

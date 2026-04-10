@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -11,10 +13,13 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
+import '../widgets/bike_record_panel.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
 
 enum JobViewFilter { active, completed, all }
+
+enum ClientBikePanelMode { none, record, creating, editing }
 
 class ClientLogbookPage extends StatefulWidget {
   final String customerId;
@@ -43,7 +48,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   String? _selectedJobId;
   String? _selectedBikeId;
   bool _isEditingJob = false;
-  bool _isEditingBike = false;
+  ClientBikePanelMode _bikePanelMode = ClientBikePanelMode.none;
+  BikeRecordSnapshot? _selectedBikeRecordSnapshot;
+  bool _isLoadingSelectedBikeRecordSnapshot = false;
+  String? _bikeRecordLoadError;
 
   late TabController _tabController;
 
@@ -250,6 +258,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       // Sort timeline by date descending (most recent first)
       allTimeline.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+      final selectedBikeStillExists =
+          _selectedBikeId == null || bikeIndex.containsKey(_selectedBikeId);
+
       setState(() {
         _customer = customer;
         _bikes = bikes;
@@ -259,8 +270,18 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         _jobIndex = jobIndex;
         _timeline = allTimeline;
         _loyalty = loyalty;
+        if (!selectedBikeStillExists) {
+          _selectedBikeId = null;
+          _bikePanelMode = ClientBikePanelMode.none;
+          _selectedBikeRecordSnapshot = null;
+          _isLoadingSelectedBikeRecordSnapshot = false;
+        }
         _isLoading = false;
       });
+
+      if (selectedBikeStillExists && _selectedBikeId != null) {
+        unawaited(_loadSelectedBikeRecordSnapshot(_selectedBikeId));
+      }
     } catch (e) {
       setState(() {
         _error = 'Error al cargar datos: $e';
@@ -1063,10 +1084,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                           );
                           if (ok == true) _loadData();
                         } else {
-                          setState(() {
-                            _selectedBikeId = null;
-                            _isEditingBike = true;
-                          });
+                          _openNewBikePane();
                         }
                       },
                       icon: const Icon(Icons.add, size: 16),
@@ -1145,7 +1163,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 900;
         final showRightPane =
-            isDesktop && (_selectedBikeId != null || _isEditingBike);
+            isDesktop && _bikePanelMode != ClientBikePanelMode.none;
 
         if (!showRightPane) {
           return _buildBikesList();
@@ -1155,45 +1173,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
             ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
             : null;
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 1,
-              child: _buildBikesList(),
-            ),
-            Container(
-              width: 1,
-              color: Colors.grey[300],
-            ),
-            Expanded(
-              flex: 1,
-              child: ColoredBox(
-                color: Colors.white,
-                child: Scaffold(
-                  backgroundColor: Colors.white,
-                  body: BikeFormDialog(
-                    key: ValueKey(_selectedBikeId ?? 'new_bike'),
-                    customerId: widget.customerId,
-                    bike: selectedBike,
-                    isEmbedded: true,
-                    onSaved: (_) {
-                      setState(() {
-                        _isEditingBike = false;
-                      });
-                      _loadData();
-                    },
-                    onCanceled: () {
-                      setState(() {
-                        _isEditingBike = false;
-                        _selectedBikeId = null;
-                      });
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
+        return ColoredBox(
+          color: Colors.white,
+          child: Scaffold(
+            backgroundColor: Colors.white,
+            body: _buildBikePaneBody(selectedBike),
+          ),
         );
       },
     );
@@ -2234,10 +2219,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         if (MediaQuery.of(context).size.width < 900) {
           _editBike(bike);
         } else {
-          setState(() {
-            _selectedBikeId = bike.id;
-            _isEditingBike = true;
-          });
+          _openBikeRecordPane(bike);
         }
       },
       hoverColor: Colors.blue[50]?.withOpacity(0.5),
@@ -2384,10 +2366,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                     if (MediaQuery.of(context).size.width < 900) {
                       _editBike(bike);
                     } else {
-                      setState(() {
-                        _selectedBikeId = bike.id;
-                        _isEditingBike = true;
-                      });
+                      _openBikeEditorPane(bike);
                     }
                   }
                   if (value == 'delete') _confirmDeleteBike(bike);
@@ -2906,6 +2885,184 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // ============================================================
   // BIKE MANAGEMENT
   // ============================================================
+
+  void _openNewBikePane() {
+    setState(() {
+      _selectedBikeId = null;
+      _bikePanelMode = ClientBikePanelMode.creating;
+      _selectedBikeRecordSnapshot = null;
+      _isLoadingSelectedBikeRecordSnapshot = false;
+    });
+  }
+
+  void _openBikeRecordPane(Bike bike) {
+    setState(() {
+      _selectedBikeId = bike.id;
+      _bikePanelMode = ClientBikePanelMode.record;
+    });
+    unawaited(_loadSelectedBikeRecordSnapshot(bike.id));
+  }
+
+  void _openBikeEditorPane(Bike bike) {
+    setState(() {
+      _selectedBikeId = bike.id;
+      _bikePanelMode = ClientBikePanelMode.editing;
+    });
+    unawaited(_loadSelectedBikeRecordSnapshot(bike.id));
+  }
+
+  void _closeBikePane() {
+    setState(() {
+      _selectedBikeId = null;
+      _bikePanelMode = ClientBikePanelMode.none;
+      _selectedBikeRecordSnapshot = null;
+      _isLoadingSelectedBikeRecordSnapshot = false;
+    });
+  }
+
+  Future<void> _loadSelectedBikeRecordSnapshot(String? bikeId) async {
+    if (bikeId == null || bikeId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _selectedBikeRecordSnapshot = null;
+        _isLoadingSelectedBikeRecordSnapshot = false;
+        _bikeRecordLoadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingSelectedBikeRecordSnapshot = true;
+      _bikeRecordLoadError = null;
+    });
+
+    try {
+      final bikeshopService = context.read<BikeshopService>();
+      final snapshot = await bikeshopService.getBikeRecordSnapshot(bikeId);
+      if (!mounted || _selectedBikeId != bikeId) return;
+
+      setState(() {
+        _selectedBikeRecordSnapshot = snapshot;
+        _isLoadingSelectedBikeRecordSnapshot = false;
+        if (snapshot == null) {
+          _bikeRecordLoadError = 'La bicicleta no fue encontrada en la base de datos.';
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading bike record snapshot: $e');
+      if (mounted && _selectedBikeId == bikeId) {
+        setState(() {
+          _bikeRecordLoadError = 'Error de conexión: $e';
+        });
+      }
+    } finally {
+      if (mounted && _selectedBikeId == bikeId) {
+        setState(() => _isLoadingSelectedBikeRecordSnapshot = false);
+      }
+    }
+  }
+
+  Widget _buildBikePaneBody(Bike? selectedBike) {
+    if (_bikePanelMode == ClientBikePanelMode.none) {
+      return const SizedBox.shrink();
+    }
+
+    final recordSnapshot = _selectedBikeRecordSnapshot;
+    final isLoadingRecordSnapshot = _isLoadingSelectedBikeRecordSnapshot;
+    final bikeForDisplay = recordSnapshot?.bike ?? selectedBike;
+
+    if ((_bikePanelMode == ClientBikePanelMode.record ||
+            _bikePanelMode == ClientBikePanelMode.editing) &&
+        bikeForDisplay == null) {
+      return const Center(child: Text('Bicicleta no encontrada'));
+    }
+
+    final isCreatingNew = _bikePanelMode == ClientBikePanelMode.creating;
+
+    if (_bikePanelMode == ClientBikePanelMode.record) {
+      if (isLoadingRecordSnapshot) {
+        return const ColoredBox(
+          color: Colors.white,
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+      if (recordSnapshot == null) {
+        // Fallback or error state
+        return Container(
+          color: Colors.white,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  _bikeRecordLoadError ?? 'No se pudo cargar la vista de la bicicleta.',
+                  style: const TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _openBikeEditorPane(bikeForDisplay!),
+                  child: const Text('Abrir Editor Principal'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return BikeRecordPanel(
+        snapshot: recordSnapshot,
+        ownerName: _customer?.name ?? 'Desconocido',
+        isLoading: false,
+        onEdit: () {
+          setState(() {
+            _bikePanelMode = ClientBikePanelMode.editing;
+          });
+        },
+        onNewJob: () {
+          if (MediaQuery.of(context).size.width < 900) {
+            context.push(
+                '/taller/pegas/nueva?customer_id=${widget.customerId}&bike_id=${bikeForDisplay!.id}');
+          } else {
+            setState(() {
+              _selectedJobId = null;
+              _isEditingJob = true;
+              _tabController.index = 1; // Jobs tab
+            });
+          }
+        },
+        onClose: _closeBikePane,
+      );
+    }
+
+    return BikeFormDialog(
+      key: ValueKey(
+        '${_bikePanelMode.name}_${_selectedBikeId ?? 'new_bike'}_${isLoadingRecordSnapshot ? 'loading' : 'ready'}',
+      ),
+      customerId: widget.customerId,
+      bike: bikeForDisplay,
+      isEmbedded: true,
+      onSaved: (savedBike) {
+        if (isCreatingNew) {
+          _closeBikePane();
+        } else {
+          _openBikeRecordPane(savedBike);
+        }
+        _loadData();
+      },
+      onCanceled: () {
+        if (_bikePanelMode == ClientBikePanelMode.editing &&
+            selectedBike != null) {
+          _openBikeRecordPane(selectedBike);
+          return;
+        }
+        _closeBikePane();
+      },
+    );
+  }
 
   void _editBike(Bike bike) async {
     final result = await showDialog<Bike?>(
