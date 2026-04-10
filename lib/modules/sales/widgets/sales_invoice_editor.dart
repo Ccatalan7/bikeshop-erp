@@ -14,6 +14,7 @@ import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/smart_product_field.dart';
@@ -1190,72 +1191,15 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         return;
       }
 
-      // ── Resolve bike names from the database ──────────────────────────────
-      final Map<String, String> resolvedBikeNames = {};
-      try {
-        if (!mounted) return;
-        final db = context.read<DatabaseService>();
-        final invoice = _loadedInvoice!;
-
-        // 1. Single-bike invoice via invoice.bikeId
-        if (invoice.bikeId != null && invoice.bikeId!.isNotEmpty) {
-          final bikeData = await db.supabase
-              .from('bikes')
-              .select('brand, model, year')
-              .eq('id', invoice.bikeId as Object)
-              .maybeSingle();
-          if (bikeData != null) {
-            final parts = <String>[
-              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
-                bikeData['brand'] as String,
-              if ((bikeData['model'] as String?)?.isNotEmpty == true)
-                bikeData['model'] as String,
-              if (bikeData['year'] != null) bikeData['year'].toString(),
-            ];
-            if (parts.isNotEmpty) resolvedBikeNames['single'] = parts.join(' ');
-          }
-        }
-
-        // 2. Multi-bike items via jobBikeId
-        final jobBikeIds = invoice.items
-            .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
-            .map((i) => i.jobBikeId!)
-            .toSet();
-
-        for (final jobBikeId in jobBikeIds) {
-          final existingName = invoice.items
-              .firstWhere((i) => i.jobBikeId == jobBikeId)
-              .bikeName;
-          if (existingName != null && existingName.isNotEmpty) {
-            resolvedBikeNames[jobBikeId] = existingName;
-            continue;
-          }
-          final jobBikeData = await db.supabase
-              .from('mechanic_job_bikes')
-              .select('bikes(brand, model, year)')
-              .eq('id', jobBikeId as Object)
-              .maybeSingle();
-          if (jobBikeData != null) {
-            final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
-            if (bikeMap != null) {
-              final parts = <String>[
-                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
-                  bikeMap['brand'] as String,
-                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
-                  bikeMap['model'] as String,
-                if (bikeMap['year'] != null) bikeMap['year'].toString(),
-              ];
-              if (parts.isNotEmpty) {
-                resolvedBikeNames[jobBikeId] = parts.join(' ');
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Could not resolve bike names for PDF: $e');
-      }
-
-      final pdf = await _generateInvoicePDF(_loadedInvoice!, resolvedBikeNames);
+      final resolvedBikeNames = await InvoicePdfGenerator.resolveBikeNames(
+        context,
+        _loadedInvoice!,
+      );
+      final pdf = await InvoicePdfGenerator.generateInvoicePDF(
+        context,
+        _loadedInvoice!,
+        resolvedBikeNames,
+      );
       final bytes = await pdf.save();
 
       // Platform-specific download
@@ -1298,6 +1242,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
+  // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
@@ -1623,9 +1568,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
 
     final isMultiBike = bikeNames.length > 1;
-    final label =
-        isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
-
     return [
       pw.Container(
         width: double.infinity,
@@ -2692,6 +2634,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   /// Builds compact list items grouped by bike.
+  // ignore: unused_element
   List<Widget> _buildGroupedCompactListItems(ThemeData theme) {
     final widgets = <Widget>[];
     String? lastBikeName;

@@ -11,9 +11,9 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data' show Uint8List;
 
 import '../../../shared/models/tax_treatment.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -894,77 +894,16 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         throw Exception('No se pudo cargar la factura');
       }
 
-      // ── Resolve bike names from the database ──────────────────────────────
-      // Key: jobBikeId (for multi-bike items) OR 'single' for invoice.bikeId.
-      final Map<String, String> resolvedBikeNames = {};
-      try {
-        if (!mounted) return;
-        final db = context.read<DatabaseService>();
+      final resolvedBikeNames = await InvoicePdfGenerator.resolveBikeNames(
+        context,
+        freshInvoice,
+      );
 
-        // 1. Single-bike invoice: fetch bike directly via invoice.bikeId
-        if (freshInvoice.bikeId != null && freshInvoice.bikeId!.isNotEmpty) {
-          final bikeData = await db.supabase
-              .from('bikes')
-              .select('brand, model, year')
-              .eq('id', freshInvoice.bikeId as Object)
-              .maybeSingle();
-          if (bikeData != null) {
-            final parts = <String>[
-              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
-                bikeData['brand'] as String,
-              if ((bikeData['model'] as String?)?.isNotEmpty == true)
-                bikeData['model'] as String,
-              if (bikeData['year'] != null) bikeData['year'].toString(),
-            ];
-            if (parts.isNotEmpty) {
-              resolvedBikeNames['single'] = parts.join(' ');
-            }
-          }
-        }
-
-        // 2. Multi-bike items: fetch bike name per unique jobBikeId
-        final jobBikeIds = freshInvoice.items
-            .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
-            .map((i) => i.jobBikeId!)
-            .toSet();
-
-        for (final jobBikeId in jobBikeIds) {
-          // item.bikeName already populated → use it
-          final existingName = freshInvoice.items
-              .firstWhere((i) => i.jobBikeId == jobBikeId)
-              .bikeName;
-          if (existingName != null && existingName.isNotEmpty) {
-            resolvedBikeNames[jobBikeId] = existingName;
-            continue;
-          }
-          // Otherwise, look up via mechanic_job_bikes → bikes join
-          final jobBikeData = await db.supabase
-              .from('mechanic_job_bikes')
-              .select('bikes(brand, model, year)')
-              .eq('id', jobBikeId as Object)
-              .maybeSingle();
-          if (jobBikeData != null) {
-            final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
-            if (bikeMap != null) {
-              final parts = <String>[
-                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
-                  bikeMap['brand'] as String,
-                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
-                  bikeMap['model'] as String,
-                if (bikeMap['year'] != null) bikeMap['year'].toString(),
-              ];
-              if (parts.isNotEmpty) {
-                resolvedBikeNames[jobBikeId] = parts.join(' ');
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Could not resolve bike names for PDF: $e');
-        // Non-fatal: PDF will still generate without bike banner
-      }
-
-      final pdf = await _generateInvoicePDF(freshInvoice, resolvedBikeNames);
+      final pdf = await InvoicePdfGenerator.generateInvoicePDF(
+        context,
+        freshInvoice,
+        resolvedBikeNames,
+      );
       final bytes = await pdf.save();
 
       // Platform-specific download
@@ -1010,6 +949,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
@@ -1268,10 +1208,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
 
     final isMultiBike = bikeNames.length > 1;
-    final label =
-        isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio';
-
-        return [
+    return [
       pw.Container(
         width: double.infinity,
         padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
@@ -1364,13 +1301,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               decoration: const pw.BoxDecoration(color: PdfColors.grey100),
               children: [
                 pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 4),
+                  padding:
+                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   child: pw.SizedBox(),
                 ),
                 pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 4),
+                  padding:
+                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   child: pw.Text(
                     bikeName,
                     style: pw.TextStyle(
@@ -1398,8 +1335,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           children: [
             _buildPdfTableCell('$itemIndex'),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 6, vertical: 5),
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
@@ -1412,7 +1349,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   ),
                   if (hasDescription) ...[
                     pw.SizedBox(height: 3),
-                    pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
+                    pw.Text(
+                      _cleanPdfText(item.description!),
+                      style: const pw.TextStyle(
                         fontSize: 9,
                         color: PdfColors.grey700,
                       ),
@@ -1432,13 +1371,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return rows;
   }
 
-  
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(

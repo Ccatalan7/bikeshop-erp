@@ -115,196 +115,299 @@ class InvoicePdfGenerator {
     }
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.letter,
         margin: const pw.EdgeInsets.all(40),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Header - much more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Company logo or text fallback
-                if (logoImage != null)
-                  pw.Image(logoImage,
-                      width: 120, height: 40, fit: pw.BoxFit.contain)
-                else
-                  pw.Text(
-                    'VIÑABIKE',
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey800,
-                    ),
-                  ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      '# ${invoice.invoiceNumber}',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.Text(
-                      'Saldo adeudado',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 1),
-                    pw.Text(
-                      ChileanUtils.formatCurrency(invoice.balance),
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Company info - smaller
-            pw.Text('Viñabike',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Valparaíso',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Chile',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-
-            pw.SizedBox(height: 16),
-
-            // Customer and date info - more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'Facturar a',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      invoice.customerName ?? 'Sin registro',
-                      style: pw.TextStyle(
-                        fontSize: 11,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue700,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      'Fecha de la factura :',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      ChileanUtils.formatDate(invoice.date),
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // ── Bicycle info banner ──────────────────────────────────
-            ..._buildFormPdfBikeBanner(invoice, resolvedBikeNames),
-
-            // Items table - much tighter
-            pw.Table(
-              border: pw.TableBorder.all(
-                color: PdfColors.grey300,
-                width: 0.3, // Ultra thin borders
+        maxPages: 200,
+        footer: (pageContext) => _buildPdfFooter(pageContext),
+        build: (pageContext) => [
+          _buildPdfHeader(logoImage, invoice),
+          pw.SizedBox(height: 16),
+          _buildPdfCompanyInfo(),
+          pw.SizedBox(height: 16),
+          _buildPdfCustomerInfo(invoice),
+          pw.SizedBox(height: 16),
+          ..._buildFormPdfBikeBanner(invoice, resolvedBikeNames),
+          if (invoice.items.isEmpty)
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 16,
               ),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(35),
-                1: const pw.FlexColumnWidth(3),
-                2: const pw.FixedColumnWidth(60),
-                3: const pw.FixedColumnWidth(70),
-                4: const pw.FixedColumnWidth(70),
-              },
-              children: [
-                // Header row
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
-                  children: [
-                    _buildPdfTableCell('#', isHeader: true),
-                    _buildPdfTableCell('Artículo & Descripción',
-                        isHeader: true),
-                    _buildPdfTableCell('Cant.', isHeader: true),
-                    _buildPdfTableCell('Tarifa', isHeader: true),
-                    _buildPdfTableCell('Cantidad', isHeader: true),
-                  ],
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.3),
+              ),
+              child: pw.Text(
+                'Esta factura no tiene ítems asociados.',
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey700,
                 ),
-                // Data rows grouped by bike
-                ..._buildFormPdfItemRows(invoice, resolvedBikeNames),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Totals - tighter
-            pw.Row(
-              children: [
-                pw.Spacer(),
-                pw.SizedBox(
-                  width: 250,
-                  child: pw.Column(
-                    children: [
-                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
-                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
-                      if (invoice.paidAmount > 0) ...[
-                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                        _buildPdfTotalRow(
-                            'Pago realizado', -invoice.paidAmount),
-                      ],
-                      pw.Divider(thickness: 1, color: PdfColors.grey800),
-                      _buildPdfTotalRow('Saldo adeudado', invoice.balance,
-                          isTotal: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            )
+          else
+            _buildPdfItemsTable(invoice, resolvedBikeNames),
+          pw.SizedBox(height: 16),
+          _buildPdfTotals(invoice),
+        ],
       ),
     );
 
     return pdf;
+  }
+
+  static pw.Widget _buildPdfHeader(
+    pw.ImageProvider? logoImage,
+    Invoice invoice,
+  ) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (logoImage != null)
+          pw.Image(
+            logoImage,
+            width: 120,
+            height: 40,
+            fit: pw.BoxFit.contain,
+          )
+        else
+          pw.Text(
+            'VIÑABIKE',
+            style: pw.TextStyle(
+              fontSize: 18,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey800,
+            ),
+          ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              '# ${invoice.invoiceNumber}',
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Text(
+              'Saldo adeudado',
+              style: const pw.TextStyle(
+                fontSize: 9,
+                color: PdfColors.grey700,
+              ),
+            ),
+            pw.SizedBox(height: 1),
+            pw.Text(
+              ChileanUtils.formatCurrency(invoice.balance),
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPdfCompanyInfo() {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Viñabike',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+        pw.Text(
+          'Valparaíso',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+        pw.Text(
+          'Chile',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPdfCustomerInfo(Invoice invoice) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Facturar a',
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey700,
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Text(
+              invoice.customerName ?? 'Sin registro',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            if (invoice.customerRut != null && invoice.customerRut!.isNotEmpty)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 2),
+                child: pw.Text(
+                  invoice.customerRut!,
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.black,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              'Fecha de la factura :',
+              style: const pw.TextStyle(
+                fontSize: 9,
+                color: PdfColors.grey700,
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Text(
+              ChileanUtils.formatDate(invoice.date),
+              style: const pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.black,
+              ),
+            ),
+            if (invoice.dueDate != null)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 4),
+                child: pw.Text(
+                  'Vence: ${ChileanUtils.formatDate(invoice.dueDate!)}',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPdfItemsTable(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    return pw.Table(
+      border: pw.TableBorder.all(
+        color: PdfColors.grey300,
+        width: 0.3,
+      ),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(35),
+        1: const pw.FlexColumnWidth(3),
+        2: const pw.FixedColumnWidth(60),
+        3: const pw.FixedColumnWidth(70),
+        4: const pw.FixedColumnWidth(70),
+      },
+      children: [
+        pw.TableRow(
+          repeat: true,
+          decoration: const pw.BoxDecoration(color: PdfColors.grey800),
+          children: [
+            _buildPdfTableCell('#', isHeader: true),
+            _buildPdfTableCell('Artículo & Descripción', isHeader: true),
+            _buildPdfTableCell(
+              'Cant.',
+              isHeader: true,
+              textAlign: pw.TextAlign.center,
+            ),
+            _buildPdfTableCell(
+              'Tarifa',
+              isHeader: true,
+              textAlign: pw.TextAlign.right,
+            ),
+            _buildPdfTableCell(
+              'Importe',
+              isHeader: true,
+              textAlign: pw.TextAlign.right,
+            ),
+          ],
+        ),
+        ..._buildFormPdfItemRows(invoice, resolvedBikeNames),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPdfTotals(Invoice invoice) {
+    return pw.Row(
+      children: [
+        pw.Spacer(),
+        pw.SizedBox(
+          width: 250,
+          child: pw.Column(
+            children: [
+              _buildPdfTotalRow('Subtotal', invoice.subtotal),
+              pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+              _buildPdfTotalRow('Total', invoice.total, isTotal: true),
+              if (invoice.paidAmount > 0) ...[
+                pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
+              ],
+              pw.Divider(thickness: 1, color: PdfColors.grey800),
+              _buildPdfTotalRow(
+                'Saldo adeudado',
+                invoice.balance,
+                isTotal: true,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildPdfFooter(pw.Context context) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(top: 10),
+      decoration: const pw.BoxDecoration(
+        border:
+            pw.Border(top: pw.BorderSide(width: 0.5, color: PdfColors.grey400)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'Generado el ${ChileanUtils.formatDate(DateTime.now())}',
+            style: const pw.TextStyle(
+              fontSize: 8,
+              color: PdfColors.grey600,
+            ),
+          ),
+          pw.Text(
+            'Página ${context.pageNumber} de ${context.pagesCount}',
+            style: const pw.TextStyle(
+              fontSize: 8,
+              color: PdfColors.grey600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   static List<pw.Widget> _buildFormPdfBikeBanner(
@@ -483,9 +586,18 @@ class InvoicePdfGenerator {
                 ],
               ),
             ),
-            _buildPdfTableCell(item.quantity.toStringAsFixed(2)),
-            _buildPdfTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
-            _buildPdfTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
+            _buildPdfTableCell(
+              _formatQuantity(item.quantity),
+              textAlign: pw.TextAlign.center,
+            ),
+            _buildPdfTableCell(
+              ChileanUtils.formatCurrency(item.unitPrice),
+              textAlign: pw.TextAlign.right,
+            ),
+            _buildPdfTableCell(
+              ChileanUtils.formatCurrency(item.lineTotal),
+              textAlign: pw.TextAlign.right,
+            ),
           ],
         ),
       );
@@ -501,11 +613,21 @@ class InvoicePdfGenerator {
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-  static pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  static String _formatQuantity(double quantity) {
+    final isInteger = quantity.truncateToDouble() == quantity;
+    return quantity.toStringAsFixed(isInteger ? 0 : 2);
+  }
+
+  static pw.Widget _buildPdfTableCell(
+    String text, {
+    bool isHeader = false,
+    pw.TextAlign textAlign = pw.TextAlign.left,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(
         text,
+        textAlign: textAlign,
         style: pw.TextStyle(
           color: isHeader ? PdfColors.white : PdfColors.black,
           fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,

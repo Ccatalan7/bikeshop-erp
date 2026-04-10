@@ -16,6 +16,7 @@ import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -2217,7 +2218,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   // Table header
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
@@ -3065,7 +3067,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.warning_amber, size: 12, color: Colors.red),
+                      const Icon(Icons.warning_amber,
+                          size: 12, color: Colors.red),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
@@ -3399,72 +3402,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     try {
       final currentInvoice = _buildCurrentInvoice();
 
-      // ── Resolve bike names from the database ──────────────────────────────
-      final Map<String, String> resolvedBikeNames = {};
-      try {
-        if (!mounted) return;
-        final db = context.read<DatabaseService>();
-
-        // 1. Single-bike invoice: fetch via invoice.bikeId (from loaded invoice)
-        final bikeId = _loadedInvoice?.bikeId;
-        if (bikeId != null && bikeId.isNotEmpty) {
-          final bikeData = await db.supabase
-              .from('bikes')
-              .select('brand, model, year')
-              .eq('id', bikeId as Object)
-              .maybeSingle();
-          if (bikeData != null) {
-            final parts = <String>[
-              if ((bikeData['brand'] as String?)?.isNotEmpty == true)
-                bikeData['brand'] as String,
-              if ((bikeData['model'] as String?)?.isNotEmpty == true)
-                bikeData['model'] as String,
-              if (bikeData['year'] != null) bikeData['year'].toString(),
-            ];
-            if (parts.isNotEmpty) resolvedBikeNames['single'] = parts.join(' ');
-          }
-        }
-
-        // 2. Multi-bike items via jobBikeId
-        final jobBikeIds = currentInvoice.items
-            .where((i) => i.jobBikeId != null && i.jobBikeId!.isNotEmpty)
-            .map((i) => i.jobBikeId!)
-            .toSet();
-
-        for (final jobBikeId in jobBikeIds) {
-          final existingName = currentInvoice.items
-              .firstWhere((i) => i.jobBikeId == jobBikeId)
-              .bikeName;
-          if (existingName != null && existingName.isNotEmpty) {
-            resolvedBikeNames[jobBikeId] = existingName;
-            continue;
-          }
-          final jobBikeData = await db.supabase
-              .from('mechanic_job_bikes')
-              .select('bikes(brand, model, year)')
-              .eq('id', jobBikeId as Object)
-              .maybeSingle();
-          if (jobBikeData != null) {
-            final bikeMap = jobBikeData['bikes'] as Map<String, dynamic>?;
-            if (bikeMap != null) {
-              final parts = <String>[
-                if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
-                  bikeMap['brand'] as String,
-                if ((bikeMap['model'] as String?)?.isNotEmpty == true)
-                  bikeMap['model'] as String,
-                if (bikeMap['year'] != null) bikeMap['year'].toString(),
-              ];
-              if (parts.isNotEmpty) {
-                resolvedBikeNames[jobBikeId] = parts.join(' ');
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Could not resolve bike names for PDF: $e');
-      }
-
-      final pdf = await _generateInvoicePDF(currentInvoice, resolvedBikeNames);
+      final resolvedBikeNames = await InvoicePdfGenerator.resolveBikeNames(
+        context,
+        currentInvoice,
+      );
+      final pdf = await InvoicePdfGenerator.generateInvoicePDF(
+        context,
+        currentInvoice,
+        resolvedBikeNames,
+      );
       final bytes = await pdf.save();
 
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
@@ -3506,6 +3452,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     }
   }
 
+  // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
