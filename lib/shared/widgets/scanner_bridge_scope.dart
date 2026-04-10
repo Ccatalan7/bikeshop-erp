@@ -11,6 +11,11 @@ import '../services/remote_scanner_service.dart';
 /// 1. Listens to RawKeyboard events for physical USB scanners.
 /// 2. Bridges RemoteScannerService events into BarcodeScannerService.
 /// 3. Provides a unified stream via BarcodeScannerService.
+///
+/// IMPORTANT:
+/// Remote scans are enabled globally, but keyboard-wedge scans are not armed
+/// globally. A screen must explicitly call BarcodeScannerService.startListening()
+/// if it wants raw keyboard input to be interpreted as scanner input.
 class ScannerBridgeScope extends StatefulWidget {
   final Widget child;
 
@@ -37,19 +42,14 @@ class _ScannerBridgeScopeState extends State<ScannerBridgeScope> {
       return;
     }
 
-    final barcodeService = context.read<BarcodeScannerService>();
     final remoteService = context.read<RemoteScannerService>();
 
-    // 1. Enable Barcode Service (Keyboard logic)
-    barcodeService.startListening();
-
-    // 2. Enable Remote Service (Supabase Realtime)
+    // Keep remote/mobile scanning available across the app.
     remoteService.startListening();
 
-    // 3. Bridge Remote -> Barcode
+    // Bridge remote scans into the unified barcode stream.
     _remoteSubscription = remoteService.scanStream.listen((event) {
-      // Inject remote scan as if it were a physical scan (final result)
-      barcodeService.addBarcode(event.barcode);
+      context.read<BarcodeScannerService>().addBarcode(event.barcode);
     });
   }
 

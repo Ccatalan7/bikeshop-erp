@@ -139,13 +139,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
-
-    // Listen for barcode scans
-    _scanSubscription = _remoteScannerService.scanStream.listen((scan) {
-      if (mounted && _canEditFields) {
-        _handleBarcodeScan(scan.barcode);
-      }
-    });
   }
 
   @override
@@ -216,6 +209,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     try {
       if (_scannerEnabled) {
         await _remoteScannerService.stopListening();
+        _scanSubscription?.cancel();
+        _scanSubscription = null;
         HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
         _hwScanTimer?.cancel();
         _scanBuffer.clear();
@@ -229,7 +224,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         // Also subscribe to remote scanner stream (phone scanning)
         _scanSubscription?.cancel();
         _scanSubscription = barcodeService.barcodeStream.listen((barcode) {
-          if (mounted && _canEditFields) _handleBarcodeScan(barcode);
+          if (mounted && _scannerEnabled && _canEditFields) {
+            _handleBarcodeScan(barcode);
+          }
         });
         setState(() => _scannerEnabled = true);
         if (mounted) {

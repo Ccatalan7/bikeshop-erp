@@ -68,7 +68,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     // Listen for barcode scans from remote/phone scanner
     _scanSubscription =
         context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
-      if (mounted) {
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) {
         _handleBarcodeScan(barcode);
       }
     });
@@ -92,7 +92,14 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   /// Returns false so key events still reach focused widgets (text fields).
   bool _hardwareKeyHandler(KeyEvent event) {
     if (!mounted) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
     if (event is! KeyDownEvent) return false;
+
+    if (_isTextInputFocused) {
+      _scanBuffer.clear();
+      _hwScanTimer?.cancel();
+      return false;
+    }
 
     final now = DateTime.now();
     if (_lastScanKeyTime != null &&
@@ -103,6 +110,12 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     _hwScanTimer?.cancel();
 
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _scanBuffer.clear();
+      _hwScanTimer?.cancel();
+      return false;
+    }
+
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
       final barcode = _scanBuffer.toString().trim();
@@ -114,7 +127,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     }
 
     final char = event.character;
-    if (char != null && char.isNotEmpty) {
+    if (char != null && char.trim().isNotEmpty) {
       _scanBuffer.write(char);
       _hwScanTimer = Timer(_scanKeyTimeout, () {
         final barcode = _scanBuffer.toString().trim();
@@ -126,6 +139,22 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     }
 
     return false; // Never consume — let events reach text fields normally
+  }
+
+  bool get _isTextInputFocused {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    if (focusedContext == null) return false;
+
+    try {
+      if (focusedContext.widget is EditableText) {
+        return true;
+      }
+
+      return focusedContext.findAncestorWidgetOfExactType<EditableText>() !=
+          null;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
@@ -503,7 +532,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                           Expanded(
                                             child: DropdownButtonFormField<
                                                 ProductType?>(
-                                              initialValue: _selectedProductType,
+                                              initialValue:
+                                                  _selectedProductType,
                                               decoration: const InputDecoration(
                                                 labelText: 'Tipo',
                                                 border: OutlineInputBorder(),
@@ -534,7 +564,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                           Expanded(
                                             child: DropdownButtonFormField<
                                                 String?>(
-                                              initialValue: _selectedCategoryKey,
+                                              initialValue:
+                                                  _selectedCategoryKey,
                                               decoration: InputDecoration(
                                                 labelText: 'Categorías',
                                                 border:
@@ -1292,7 +1323,6 @@ class _CashierPanelState extends State<_CashierPanel> {
   // Pending invoices state
   List<Invoice> _pendingInvoices = [];
   bool _showPendingInvoices = false;
-  bool _isLoadingInvoices = false;
 
   // Invoice payment form state
   String? _selectedPaymentMethodId;
@@ -1488,7 +1518,6 @@ class _CashierPanelState extends State<_CashierPanel> {
     if (!mounted) return;
 
     setState(() {
-      _isLoadingInvoices = true;
       _showPendingInvoices = false;
     });
 
@@ -1505,13 +1534,11 @@ class _CashierPanelState extends State<_CashierPanel> {
       setState(() {
         _pendingInvoices = pendingInvoices;
         _showPendingInvoices = pendingInvoices.isNotEmpty;
-        _isLoadingInvoices = false;
       });
     } catch (e) {
       debugPrint('Error checking pending invoices: $e');
       if (mounted) {
         setState(() {
-          _isLoadingInvoices = false;
           _showPendingInvoices = false;
         });
       }
@@ -2286,7 +2313,8 @@ class _CashierPanelState extends State<_CashierPanel> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: theme.colorScheme.primary.withOpacity(0.3),

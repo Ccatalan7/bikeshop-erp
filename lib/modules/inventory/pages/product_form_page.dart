@@ -123,6 +123,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   late CategoryService _categoryService;
   late PurchaseService _purchaseService;
   late BrandService _brandService;
+  late BarcodeScannerService _barcodeScannerService;
 
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
@@ -179,6 +180,13 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   StreamSubscription? _scanSubscription;
 
+  // Hardware keyboard scanner state (for USB/Bluetooth barcode scanners)
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
+
   // ── Ficha Técnica (Spec Engine) ──────────────────────────────────────────
   SpecTemplate? _specTemplate;
   Map<String, dynamic> _specValues = {};
@@ -202,6 +210,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _categoryService = Provider.of<CategoryService>(context, listen: false);
     _purchaseService = Provider.of<PurchaseService>(context, listen: false);
     _brandService = Provider.of<BrandService>(context, listen: false);
+    _barcodeScannerService = context.read<BarcodeScannerService>();
 
     _inventoryQtyController.text = '0';
     _minStockController.text = '1';
@@ -217,19 +226,24 @@ class _ProductFormPageState extends State<ProductFormPage>
       _loadProduct();
     }
 
-    // Listen for unified barcode scans
-    _scanSubscription =
-        context.read<BarcodeScannerService>().barcodeStream.listen((barcode) {
+    // Remote scans arrive via the unified barcode stream.
+    _scanSubscription = _barcodeScannerService.barcodeStream.listen((barcode) {
       if (mounted && ModalRoute.of(context)!.isCurrent) {
         _handleBarcodeScan(barcode);
       }
     });
+
+    // HID scanning is also scoped to this form so barcode readers can fill the
+    // SKU even while a text field is focused.
+    HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _scanSubscription?.cancel();
+    HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+    _hwScanTimer?.cancel();
     _nameController.dispose();
     _skuController.dispose();
     _supplierCodeController.dispose();
@@ -246,6 +260,50 @@ class _ProductFormPageState extends State<ProductFormPage>
     _inventoryQtyController.dispose();
     _minStockController.dispose();
     super.dispose();
+  }
+
+  bool _hardwareKeyHandler(KeyEvent event) {
+    if (!mounted) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    if (_lastScanKeyTime != null &&
+        now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
+      _scanBuffer.clear();
+    }
+    _lastScanKeyTime = now;
+    _hwScanTimer?.cancel();
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _scanBuffer.clear();
+      return false;
+    }
+
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final barcode = _scanBuffer.toString().trim();
+      _scanBuffer.clear();
+      if (barcode.length >= _minBarcodeLen) {
+        _handleBarcodeScan(barcode);
+      }
+      return false;
+    }
+
+    final char = event.character;
+    if (char != null && char.trim().isNotEmpty) {
+      _scanBuffer.write(char);
+      _hwScanTimer = Timer(_scanKeyTimeout, () {
+        final barcode = _scanBuffer.toString().trim();
+        _scanBuffer.clear();
+        if (barcode.length >= _minBarcodeLen && mounted) {
+          _handleBarcodeScan(barcode);
+        }
+      });
+    }
+
+    return false;
   }
 
   void _handleBarcodeScan(String barcode) {
@@ -3550,8 +3608,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color:
-                Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withOpacity(0.4),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(

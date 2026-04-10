@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/models/tax_treatment.dart';
@@ -96,6 +98,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   RemoteScannerService? _remoteScannerService; // Lazy init to avoid blocking
   bool _scannerEnabled = false;
 
+  // Hardware keyboard scanner state (for USB/Bluetooth barcode scanners)
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
+
   // Global invoice-level discount
   String _discountType = 'percentage'; // 'percentage' or 'amount'
   bool _isDiscountBeforeTax = true;
@@ -135,6 +144,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       entry.dispose();
     }
     _scanSubscription?.cancel();
+    HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+    _hwScanTimer?.cancel();
     super.dispose();
   }
 
@@ -154,19 +165,33 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
 
     try {
+      final barcodeService = context.read<BarcodeScannerService>();
+
       // Lazy init scanner service
       _remoteScannerService ??= RemoteScannerService();
 
       if (_scannerEnabled) {
         await _remoteScannerService!.stopListening();
+        _scanSubscription?.cancel();
+        _scanSubscription = null;
+        HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
+        _hwScanTimer?.cancel();
+        _scanBuffer.clear();
         setState(() => _scannerEnabled = false);
       } else {
         await _remoteScannerService!.startListening();
+        HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
+        _scanSubscription?.cancel();
+        _scanSubscription = barcodeService.barcodeStream.listen((barcode) {
+          if (mounted && _scannerEnabled && _canEditFields) {
+            _handleBarcodeScan(barcode);
+          }
+        });
         setState(() => _scannerEnabled = true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('📱 Escáner remoto activado'),
+              content: Text('📱 Escáner activado'),
               duration: Duration(seconds: 2),
               backgroundColor: Colors.green,
             ),
@@ -185,7 +210,56 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  /// Hardware keyboard handler for USB/Bluetooth barcode scanners.
+  /// Returns false so key events still reach focused widgets (text fields).
+  bool _hardwareKeyHandler(KeyEvent event) {
+    if (!_scannerEnabled || !mounted || !_canEditFields) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final now = DateTime.now();
+    if (_lastScanKeyTime != null &&
+        now.difference(_lastScanKeyTime!) > _scanKeyTimeout) {
+      _scanBuffer.clear();
+    }
+    _lastScanKeyTime = now;
+    _hwScanTimer?.cancel();
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _scanBuffer.clear();
+      return false;
+    }
+
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final barcode = _scanBuffer.toString().trim();
+      _scanBuffer.clear();
+      if (barcode.length >= _minBarcodeLen) {
+        _handleBarcodeScan(barcode);
+      }
+      return false;
+    }
+
+    final char = event.character;
+    if (char != null && char.trim().isNotEmpty) {
+      _scanBuffer.write(char);
+      _hwScanTimer = Timer(_scanKeyTimeout, () {
+        final barcode = _scanBuffer.toString().trim();
+        _scanBuffer.clear();
+        if (barcode.length >= _minBarcodeLen && mounted && _canEditFields) {
+          _handleBarcodeScan(barcode);
+        }
+      });
+    }
+
+    return false;
+  }
+
   Future<void> _handleBarcodeScan(String barcode) async {
+    if (!_scannerEnabled || !mounted || !_canEditFields) {
+      return;
+    }
+
     // Search for product by SKU
     final product = _productCache.cast<Product?>().firstWhere(
           (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
@@ -467,36 +541,36 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
           // FALLBACK: If no pre-matched product, try to match locally
           matchedProduct ??= _productCache.cast<Product?>().firstWhere(
-              (product) {
-                if (product == null) return false;
+            (product) {
+              if (product == null) return false;
 
-                // 1. Match by SKU or Supplier Code (Exact match)
-                if (item.sku != null && item.sku!.isNotEmpty) {
-                  final productSku = product.sku.trim().toUpperCase();
-                  final itemSku = item.sku!.trim().toUpperCase();
+              // 1. Match by SKU or Supplier Code (Exact match)
+              if (item.sku != null && item.sku!.isNotEmpty) {
+                final productSku = product.sku.trim().toUpperCase();
+                final itemSku = item.sku!.trim().toUpperCase();
 
-                  // Match by SKU
-                  if (productSku == itemSku) {
-                    return true;
-                  }
-
-                  // Match by Supplier Code (Código Proveedor)
-                  if (product.supplierCode != null &&
-                      product.supplierCode!.isNotEmpty) {
-                    final productSupplierCode =
-                        product.supplierCode!.trim().toUpperCase();
-                    if (productSupplierCode == itemSku) {
-                      return true;
-                    }
-                  }
+                // Match by SKU
+                if (productSku == itemSku) {
+                  return true;
                 }
 
-                // NOTE: No fuzzy name matching here - only SKU/Supplier Code
-                // The OCR verification already handled name matching
-                return false;
-              },
-              orElse: () => null,
-            );
+                // Match by Supplier Code (Código Proveedor)
+                if (product.supplierCode != null &&
+                    product.supplierCode!.isNotEmpty) {
+                  final productSupplierCode =
+                      product.supplierCode!.trim().toUpperCase();
+                  if (productSupplierCode == itemSku) {
+                    return true;
+                  }
+                }
+              }
+
+              // NOTE: No fuzzy name matching here - only SKU/Supplier Code
+              // The OCR verification already handled name matching
+              return false;
+            },
+            orElse: () => null,
+          );
 
           if (matchedProduct != null) {
             debugPrint(
@@ -792,16 +866,6 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
-
-        // Set up barcode scanner subscription AFTER initialization completes
-        // Lazy init scanner service only when needed
-        _remoteScannerService ??= RemoteScannerService();
-        _scanSubscription = _remoteScannerService!.scanStream.listen((scan) {
-          if (mounted && _canEditFields) {
-            _handleBarcodeScan(scan.barcode);
-          }
-        });
-        debugPrint('✅ Barcode scanner subscription set up');
       }
     }
   }
@@ -2691,7 +2755,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   // Table header
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(7),
                         topRight: Radius.circular(7),

@@ -130,7 +130,7 @@ class _ProductListPageState extends State<ProductListPage> {
   ProductSortOption _sortOption = ProductSortOption.nameAsc;
 
   // 📷 Scanner State
-  bool _isScannerEnabled = true;
+  bool _isScannerEnabled = false;
 
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
@@ -482,6 +482,12 @@ class _ProductListPageState extends State<ProductListPage> {
     _hwScanTimer?.cancel();
 
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _scanBuffer.clear();
+      _hwScanTimer?.cancel();
+      return false;
+    }
+
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
       final barcode = _scanBuffer.toString().trim();
@@ -493,7 +499,7 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     final char = event.character;
-    if (char != null && char.isNotEmpty) {
+    if (char != null && char.trim().isNotEmpty) {
       _scanBuffer.write(char);
       _hwScanTimer = Timer(_scanKeyTimeout, () {
         if (_isTextInputFocused) {
@@ -515,7 +521,16 @@ class _ProductListPageState extends State<ProductListPage> {
     final focusedContext = FocusManager.instance.primaryFocus?.context;
     if (focusedContext == null) return false;
 
-    return focusedContext.widget is EditableText;
+    try {
+      if (focusedContext.widget is EditableText) {
+        return true;
+      }
+
+      return focusedContext.findAncestorWidgetOfExactType<EditableText>() !=
+          null;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
@@ -1332,7 +1347,8 @@ class _ProductListPageState extends State<ProductListPage> {
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                fillColor:
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
               ),
             ),
           ),
@@ -2411,8 +2427,8 @@ class _ProductListPageState extends State<ProductListPage> {
                           BorderSide(color: theme.colorScheme.outlineVariant),
                     ),
                     filled: true,
-                    fillColor:
-                        theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    fillColor: theme.colorScheme.surfaceContainerHighest
+                        .withOpacity(0.3),
                   ),
                 ),
               ),
@@ -2427,7 +2443,8 @@ class _ProductListPageState extends State<ProductListPage> {
                 decoration: BoxDecoration(
                   color: _hasActiveFilters
                       ? theme.colorScheme.primaryContainer
-                      : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      : theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _hasActiveFilters
@@ -2479,8 +2496,8 @@ class _ProductListPageState extends State<ProductListPage> {
                             BorderSide(color: theme.colorScheme.outlineVariant),
                       ),
                       filled: true,
-                      fillColor:
-                          theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      fillColor: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.3),
                     ),
                   ),
                 ),
@@ -3729,7 +3746,8 @@ class _ProductListPageState extends State<ProductListPage> {
                                     errorBuilder: (_, __, ___) => Container(
                                       width: 250,
                                       height: 250,
-                                      color: theme.colorScheme.surfaceContainerHighest,
+                                      color: theme
+                                          .colorScheme.surfaceContainerHighest,
                                       child: const Icon(Icons.broken_image,
                                           size: 48),
                                     ),
