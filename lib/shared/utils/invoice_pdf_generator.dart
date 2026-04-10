@@ -90,143 +90,259 @@ class InvoicePdfGenerator {
     Map<String, String> resolvedBikeNames,
   ) async {
     final pdf = pw.Document();
+    final logoImage = await _loadLogoImage(context);
 
-    // Try to load company logo (use cache if available)
-    pw.ImageProvider? logoImage;
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.fromLTRB(34, 32, 34, 28),
+        footer: (pageContext) => _buildFooter(pageContext),
+        build: (pageContext) => [
+          _buildHeader(invoice, logoImage),
+          pw.SizedBox(height: 14),
+          _buildPartyAndDateBlock(invoice),
+          ..._buildBikeBanner(invoice, resolvedBikeNames),
+          _buildItemsTable(invoice, resolvedBikeNames),
+          pw.SizedBox(height: 18),
+          _buildTotals(invoice),
+        ],
+      ),
+    );
+
+    return pdf;
+  }
+
+  static Future<pw.ImageProvider?> _loadLogoImage(BuildContext context) async {
     try {
       final appearanceService = context.read<AppearanceService>();
       final logoUrl = appearanceService.companyLogoUrl;
-      if (logoUrl != null && logoUrl.isNotEmpty) {
-        // Check if we already have cached bytes for this URL
-        if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
-          logoImage = pw.MemoryImage(_cachedLogoBytes!);
-        } else {
-          // Fetch and cache
-          final response = await http.get(Uri.parse(logoUrl));
-          if (response.statusCode == 200) {
-            _cachedLogoBytes = response.bodyBytes;
-            _cachedLogoUrl = logoUrl;
-            logoImage = pw.MemoryImage(_cachedLogoBytes!);
-          }
-        }
+      if (logoUrl == null || logoUrl.isEmpty) {
+        return null;
       }
+
+      if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
+        return pw.MemoryImage(_cachedLogoBytes!);
+      }
+
+      final response = await http.get(Uri.parse(logoUrl));
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      _cachedLogoBytes = response.bodyBytes;
+      _cachedLogoUrl = logoUrl;
+      return pw.MemoryImage(_cachedLogoBytes!);
     } catch (e) {
       debugPrint('Error loading logo for PDF: $e');
+      return null;
     }
+  }
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.all(40),
-        build: (context) => pw.Column(
+  static pw.Widget _buildHeader(
+    Invoice invoice,
+    pw.ImageProvider? logoImage,
+  ) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // Header - much more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Company logo or text fallback
-                if (logoImage != null)
-                  pw.Image(logoImage,
-                      width: 120, height: 40, fit: pw.BoxFit.contain)
-                else
-                  pw.Text(
-                    'VIÑABIKE',
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey800,
-                    ),
-                  ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      '# ${invoice.invoiceNumber}',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.Text(
-                      'Saldo adeudado',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 1),
-                    pw.Text(
-                      ChileanUtils.formatCurrency(invoice.balance),
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
+            if (logoImage != null)
+              pw.Image(
+                logoImage,
+                width: 128,
+                height: 42,
+                fit: pw.BoxFit.contain,
+              )
+            else
+              pw.Text(
+                'VINABIKE',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey800,
                 ),
-              ],
+              ),
+            pw.SizedBox(height: 12),
+            pw.Text(
+              'Viñabike',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
             ),
+            pw.Text(
+              'Valparaíso',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+            ),
+            pw.Text(
+              'Chile',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+            ),
+          ],
+        ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              '# ${invoice.invoiceNumber}',
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Text(
+              'Saldo adeudado',
+              style: const pw.TextStyle(
+                fontSize: 9,
+                color: PdfColors.grey700,
+              ),
+            ),
+            pw.SizedBox(height: 1),
+            pw.Text(
+              ChileanUtils.formatCurrency(invoice.balance),
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-            pw.SizedBox(height: 16),
-
-            // Company info - smaller
-            pw.Text('Viñabike',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Valparaíso',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Chile',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-
-            pw.SizedBox(height: 16),
-
-            // Customer and date info - more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'Facturar a',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      invoice.customerName ?? 'Sin registro',
-                      style: pw.TextStyle(
-                        fontSize: 11,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue700,
-                      ),
-                    ),
-                  ],
+  static pw.Widget _buildPartyAndDateBlock(Invoice invoice) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Facturar a',
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey700,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              invoice.customerName ?? 'Sin registro',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            if (invoice.customerRut != null && invoice.customerRut!.isNotEmpty)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 2),
+                child: pw.Text(
+                  invoice.customerRut!,
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey700,
+                  ),
                 ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+              ),
+          ],
+        ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            _buildMetaLine(
+                'Fecha de la factura', ChileanUtils.formatDate(invoice.date)),
+            if (invoice.dueDate != null)
+              _buildMetaLine(
+                'Vencimiento',
+                ChileanUtils.formatDate(invoice.dueDate!),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildMetaLine(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.Row(
+        children: [
+          pw.Text(
+            '$label: ',
+            style: const pw.TextStyle(
+              fontSize: 9,
+              color: PdfColors.grey700,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static List<pw.Widget> _buildBikeBanner(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final bikeNames = _collectBikeNames(invoice, resolvedBikeNames);
+    if (bikeNames.isEmpty) {
+      return const [];
+    }
+
+    final isMultiBike = bikeNames.length > 1;
+    return [
+      pw.SizedBox(height: 14),
+      pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio',
+            style: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey800,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          if (!isMultiBike)
+            pw.Text(
+              bikeNames.first,
+              style: const pw.TextStyle(
+                fontSize: 10,
+                color: PdfColors.black,
+              ),
+            )
+          else
+            ...bikeNames.map(
+              (name) => pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 2, left: 4),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text(
-                      'Fecha de la factura :',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
+                    pw.Container(
+                      width: 3,
+                      height: 3,
+                      margin: const pw.EdgeInsets.only(right: 6),
+                      decoration: const pw.BoxDecoration(
+                        shape: pw.BoxShape.circle,
+                        color: PdfColors.black,
                       ),
                     ),
-                    pw.SizedBox(height: 3),
                     pw.Text(
-                      ChileanUtils.formatDate(invoice.date),
+                      name,
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.black,
@@ -234,264 +350,273 @@ class InvoicePdfGenerator {
                     ),
                   ],
                 ),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // ── Bicycle info banner ──────────────────────────────────
-            ..._buildFormPdfBikeBanner(invoice, resolvedBikeNames),
-
-            // Items table - much tighter
-            pw.Table(
-              border: pw.TableBorder.all(
-                color: PdfColors.grey300,
-                width: 0.3, // Ultra thin borders
               ),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(35),
-                1: const pw.FlexColumnWidth(3),
-                2: const pw.FixedColumnWidth(60),
-                3: const pw.FixedColumnWidth(70),
-                4: const pw.FixedColumnWidth(70),
-              },
-              children: [
-                // Header row
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
-                  children: [
-                    _buildPdfTableCell('#', isHeader: true),
-                    _buildPdfTableCell('Artículo & Descripción',
-                        isHeader: true),
-                    _buildPdfTableCell('Cant.', isHeader: true),
-                    _buildPdfTableCell('Tarifa', isHeader: true),
-                    _buildPdfTableCell('Cantidad', isHeader: true),
-                  ],
-                ),
-                // Data rows grouped by bike
-                ..._buildFormPdfItemRows(invoice, resolvedBikeNames),
-              ],
             ),
-
-            pw.SizedBox(height: 16),
-
-            // Totals - tighter
-            pw.Row(
-              children: [
-                pw.Spacer(),
-                pw.SizedBox(
-                  width: 250,
-                  child: pw.Column(
-                    children: [
-                      _buildPdfTotalRow('Subtotal', invoice.subtotal),
-                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
-                      if (invoice.paidAmount > 0) ...[
-                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                        _buildPdfTotalRow(
-                            'Pago realizado', -invoice.paidAmount),
-                      ],
-                      pw.Divider(thickness: 1, color: PdfColors.grey800),
-                      _buildPdfTotalRow('Saldo adeudado', invoice.balance,
-                          isTotal: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        ],
       ),
-    );
-
-    return pdf;
-  }
-
-  static List<pw.Widget> _buildFormPdfBikeBanner(
-    Invoice invoice,
-    Map<String, String> resolvedBikeNames,
-  ) {
-    final multiBikeNames = <String>[];
-    for (final item in invoice.items) {
-      final jbId = item.jobBikeId;
-      if (jbId != null && jbId.isNotEmpty) {
-        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
-        if (name.isNotEmpty && !multiBikeNames.contains(name)) {
-          multiBikeNames.add(name);
-        }
-      }
-    }
-
-    final singleBikeName = resolvedBikeNames['single'];
-    final List<String> bikeNames;
-    if (multiBikeNames.isNotEmpty) {
-      bikeNames = multiBikeNames;
-    } else if (singleBikeName != null && singleBikeName.isNotEmpty) {
-      bikeNames = [singleBikeName];
-    } else {
-      return [];
-    }
-
-    final isMultiBike = bikeNames.length > 1;
-    return [
-      pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.only(top: 8, bottom: 8),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              isMultiBike ? 'Bicicletas en servicio' : 'Bicicleta en servicio',
-              style: pw.TextStyle(
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.grey800,
-              ),
-            ),
-            pw.SizedBox(height: 4),
-            if (!isMultiBike)
-              pw.Text(
-                bikeNames.first,
-                style: const pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.black,
-                ),
-              )
-            else
-              ...bikeNames.map(
-                (name) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(top: 2, left: 4),
-                  child: pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      pw.Container(
-                        width: 3,
-                        height: 3,
-                        margin: const pw.EdgeInsets.only(right: 6),
-                        decoration: const pw.BoxDecoration(
-                          shape: pw.BoxShape.circle,
-                          color: PdfColors.black,
-                        ),
-                      ),
-                      pw.Text(
-                        name,
-                        style: const pw.TextStyle(
-                          fontSize: 10,
-                          color: PdfColors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      pw.SizedBox(height: 12),
     ];
   }
 
-  static List<pw.TableRow> _buildFormPdfItemRows(
+  static pw.Widget _buildItemsTable(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
   ) {
-    final rows = <pw.TableRow>[];
-    String? lastBikeName;
-    int itemIndex = 0;
+    final groups = _groupItemsByBike(invoice, resolvedBikeNames);
+    final showBikeHeaders = groups.length > 1;
+    var itemIndex = 0;
 
-    final bikeNamesForItems = <String>{};
-    for (final item in invoice.items) {
-      final jbId = item.jobBikeId;
-      if (jbId != null && jbId.isNotEmpty) {
-        final name = resolvedBikeNames[jbId] ?? item.bikeName ?? '';
-        if (name.isNotEmpty) {
-          bikeNamesForItems.add(name);
-        }
+    final rows = <pw.TableRow>[
+      pw.TableRow(
+        repeat: true,
+        decoration: const pw.BoxDecoration(color: PdfColors.grey800),
+        children: [
+          _buildPdfTableCell('#',
+              isHeader: true, alignment: pw.TextAlign.center),
+          _buildPdfTableCell('Artículo & Descripción', isHeader: true),
+          _buildPdfTableCell('Cant.',
+              isHeader: true, alignment: pw.TextAlign.center),
+          _buildPdfTableCell('Tarifa',
+              isHeader: true, alignment: pw.TextAlign.right),
+          _buildPdfTableCell('Total',
+              isHeader: true, alignment: pw.TextAlign.right),
+        ],
+      ),
+    ];
+
+    for (final group in groups) {
+      if (showBikeHeaders) {
+        rows.add(
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              _buildEmptyCell(),
+              _buildPdfTableCell(
+                group.label,
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              _buildEmptyCell(),
+              _buildEmptyCell(),
+              _buildEmptyCell(),
+            ],
+          ),
+        );
+      }
+
+      for (final item in group.items) {
+        itemIndex += 1;
+        rows.add(
+          pw.TableRow(
+            verticalAlignment: pw.TableCellVerticalAlignment.middle,
+            children: [
+              _buildPdfTableCell(
+                '$itemIndex',
+                alignment: pw.TextAlign.center,
+              ),
+              _buildDescriptionCell(item),
+              _buildPdfTableCell(
+                _formatQuantity(item.quantity),
+                alignment: pw.TextAlign.center,
+              ),
+              _buildPdfTableCell(
+                ChileanUtils.formatCurrency(item.unitPrice),
+                alignment: pw.TextAlign.right,
+              ),
+              _buildPdfTableCell(
+                ChileanUtils.formatCurrency(item.lineTotal),
+                alignment: pw.TextAlign.right,
+              ),
+            ],
+          ),
+        );
       }
     }
 
-    final hasMultiBike = bikeNamesForItems.length > 1;
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 14),
+      child: pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.35),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(24),
+          1: const pw.FlexColumnWidth(4.8),
+          2: const pw.FixedColumnWidth(48),
+          3: const pw.FixedColumnWidth(76),
+          4: const pw.FixedColumnWidth(76),
+        },
+        defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+        children: rows,
+      ),
+    );
+  }
 
-    for (final item in invoice.items) {
-      if (hasMultiBike) {
-        final jbId = item.jobBikeId ?? '';
-        final bikeName = jbId.isNotEmpty
-            ? (resolvedBikeNames[jbId] ?? item.bikeName ?? '')
-            : (item.bikeName ?? '');
-        if (bikeName.isNotEmpty && bikeName != lastBikeName) {
-          lastBikeName = bikeName;
-          rows.add(
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-              children: [
-                pw.Padding(
-                  padding:
-                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: pw.SizedBox(),
-                ),
-                pw.Padding(
-                  padding:
-                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: pw.Text(
-                    bikeName,
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.grey800,
-                    ),
-                  ),
-                ),
-                pw.SizedBox(),
-                pw.SizedBox(),
-                pw.SizedBox(),
-              ],
+  static pw.Widget _buildDescriptionCell(InvoiceItem item) {
+    final hasDescription =
+        item.description != null && item.description!.trim().isNotEmpty;
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            _cleanPdfText(item.productName ?? item.productSku ?? 'Producto'),
+            style: pw.TextStyle(
+              fontSize: 9.5,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.black,
             ),
-          );
-        }
-      }
-
-      itemIndex++;
-      final hasDescription =
-          item.description != null && item.description!.isNotEmpty;
-      rows.add(
-        pw.TableRow(
-          children: [
-            _buildPdfTableCell('$itemIndex'),
+          ),
+          if (hasDescription)
             pw.Padding(
-              padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    _cleanPdfText(item.productName ?? 'Sin nombre'),
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                  if (hasDescription) ...[
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      _cleanPdfText(item.description!),
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                  ],
-                ],
+              padding: const pw.EdgeInsets.only(top: 2),
+              child: pw.Text(
+                _cleanPdfText(item.description!.trim()),
+                style: const pw.TextStyle(
+                  fontSize: 8.2,
+                  color: PdfColors.grey700,
+                ),
               ),
             ),
-            _buildPdfTableCell(item.quantity.toStringAsFixed(2)),
-            _buildPdfTableCell(ChileanUtils.formatCurrency(item.unitPrice)),
-            _buildPdfTableCell(ChileanUtils.formatCurrency(item.lineTotal)),
-          ],
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildTotals(Invoice invoice) {
+    return pw.Row(
+      children: [
+        pw.Spacer(),
+        pw.SizedBox(
+          width: 250,
+          child: pw.Column(
+            children: [
+              _buildPdfTotalRow('Subtotal', invoice.subtotal),
+              if (invoice.ivaAmount > 0) ...[
+                pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                _buildPdfTotalRow('IVA (19%)', invoice.ivaAmount),
+              ],
+              pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+              _buildPdfTotalRow('Total', invoice.total, isTotal: true),
+              if (invoice.paidAmount > 0) ...[
+                pw.Divider(thickness: 0.3, color: PdfColors.grey400),
+                _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
+              ],
+              pw.Divider(thickness: 1, color: PdfColors.grey800),
+              _buildPdfTotalRow('Saldo adeudado', invoice.balance,
+                  isTotal: true),
+            ],
+          ),
         ),
-      );
+      ],
+    );
+  }
+
+  static pw.Widget _buildFooter(pw.Context context) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 10),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'Gracias por su preferencia',
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontStyle: pw.FontStyle.italic,
+              color: PdfColors.grey700,
+            ),
+          ),
+          pw.Text(
+            'Página ${context.pageNumber} de ${context.pagesCount}',
+            style: const pw.TextStyle(
+              fontSize: 8,
+              color: PdfColors.grey600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static List<String> _collectBikeNames(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final bikeNames = <String>[];
+    final seen = <String>{};
+
+    for (final item in invoice.items) {
+      final bikeName = _resolveBikeName(invoice, item, resolvedBikeNames);
+      if (bikeName == null || bikeName.isEmpty || seen.contains(bikeName)) {
+        continue;
+      }
+      seen.add(bikeName);
+      bikeNames.add(bikeName);
     }
 
-    return rows;
+    final singleBikeName = resolvedBikeNames['single'];
+    if (bikeNames.isEmpty &&
+        singleBikeName != null &&
+        singleBikeName.trim().isNotEmpty) {
+      bikeNames.add(singleBikeName.trim());
+    }
+
+    return bikeNames;
+  }
+
+  static List<_PdfInvoiceGroup> _groupItemsByBike(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final groups = <_PdfInvoiceGroup>[];
+    final byKey = <String, _PdfInvoiceGroup>{};
+
+    for (final item in invoice.items) {
+      final bikeName = _resolveBikeName(invoice, item, resolvedBikeNames);
+      final normalizedName = bikeName?.trim();
+      final label = normalizedName == null || normalizedName.isEmpty
+          ? 'Sin bicicleta asociada'
+          : normalizedName;
+      final key = normalizedName == null || normalizedName.isEmpty
+          ? '__unassigned__'
+          : normalizedName;
+
+      final group = byKey.putIfAbsent(key, () {
+        final createdGroup = _PdfInvoiceGroup(label: label);
+        groups.add(createdGroup);
+        return createdGroup;
+      });
+
+      group.items.add(item);
+    }
+
+    return groups;
+  }
+
+  static String? _resolveBikeName(
+    Invoice invoice,
+    InvoiceItem item,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final jobBikeId = item.jobBikeId;
+    if (jobBikeId != null && jobBikeId.isNotEmpty) {
+      final resolved = resolvedBikeNames[jobBikeId]?.trim();
+      if (resolved != null && resolved.isNotEmpty) {
+        return resolved;
+      }
+    }
+
+    final itemBikeName = item.bikeName?.trim();
+    if (itemBikeName != null && itemBikeName.isNotEmpty) {
+      return itemBikeName;
+    }
+
+    if (invoice.bikeId != null && invoice.bikeId!.isNotEmpty) {
+      final singleBikeName = resolvedBikeNames['single']?.trim();
+      if (singleBikeName != null && singleBikeName.isNotEmpty) {
+        return singleBikeName;
+      }
+    }
+
+    return null;
   }
 
   static String _cleanPdfText(String text) {
@@ -501,17 +626,39 @@ class InvoicePdfGenerator {
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-  static pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  static String _formatQuantity(double quantity) {
+    if (quantity.truncateToDouble() == quantity) {
+      return quantity.toStringAsFixed(0);
+    }
+    return quantity.toStringAsFixed(2);
+  }
+
+  static pw.Widget _buildPdfTableCell(
+    String text, {
+    bool isHeader = false,
+    pw.TextAlign alignment = pw.TextAlign.left,
+    double? fontSize,
+    pw.FontWeight? fontWeight,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(
         text,
+        textAlign: alignment,
         style: pw.TextStyle(
           color: isHeader ? PdfColors.white : PdfColors.black,
-          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
-          fontSize: isHeader ? 9 : 10,
+          fontWeight: fontWeight ??
+              (isHeader ? pw.FontWeight.bold : pw.FontWeight.normal),
+          fontSize: fontSize ?? (isHeader ? 9 : 9.2),
         ),
       ),
+    );
+  }
+
+  static pw.Widget _buildEmptyCell() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      child: pw.SizedBox(),
     );
   }
 
@@ -542,4 +689,11 @@ class InvoicePdfGenerator {
       ),
     );
   }
+}
+
+class _PdfInvoiceGroup {
+  _PdfInvoiceGroup({required this.label});
+
+  final String label;
+  final List<InvoiceItem> items = <InvoiceItem>[];
 }
