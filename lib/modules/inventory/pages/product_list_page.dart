@@ -1012,7 +1012,8 @@ class _ProductListPageState extends State<ProductListPage> {
             decoration: BoxDecoration(
               border: Border(
                 right: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
                     width: 1),
               ),
             ),
@@ -1072,7 +1073,8 @@ class _ProductListPageState extends State<ProductListPage> {
               color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             child: TextField(
               controller: _searchController,
@@ -1082,7 +1084,8 @@ class _ProductListPageState extends State<ProductListPage> {
               decoration: InputDecoration(
                 hintText: 'Buscar por nombre, SKU, marca...',
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  color:
+                      theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 12, right: 8),
@@ -1347,8 +1350,8 @@ class _ProductListPageState extends State<ProductListPage> {
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: true,
-                fillColor:
-                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                fillColor: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -1644,7 +1647,8 @@ class _ProductListPageState extends State<ProductListPage> {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
               color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
@@ -1716,7 +1720,8 @@ class _ProductListPageState extends State<ProductListPage> {
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
@@ -3651,8 +3656,9 @@ class _ProductListPageState extends State<ProductListPage> {
   // Re-implementing _buildZohoTableRow as it was likely cut off or needed updates
   Widget _buildZohoTableRow(Product product, ThemeData theme) {
     final isSelected = _selectedProduct?.id == product.id;
-    final rowColor =
-        isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1) : null;
+    final rowColor = isSelected
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1)
+        : null;
 
     final isProductSet = product.isSet; // Using direct property
     final isExpanded =
@@ -3678,7 +3684,8 @@ class _ProductListPageState extends State<ProductListPage> {
               color: rowColor,
               border: Border(
                 bottom: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -3938,7 +3945,8 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
+        border:
+            Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -5110,8 +5118,10 @@ class _ModernFilterChipState extends State<_ModernFilterChip> {
               gradient: widget.isActive
                   ? LinearGradient(
                       colors: [
-                        widget.theme.colorScheme.primary.withValues(alpha: 0.15),
-                        widget.theme.colorScheme.primary.withValues(alpha: 0.08),
+                        widget.theme.colorScheme.primary
+                            .withValues(alpha: 0.15),
+                        widget.theme.colorScheme.primary
+                            .withValues(alpha: 0.08),
                       ],
                     )
                   : null,
@@ -5123,7 +5133,8 @@ class _ModernFilterChipState extends State<_ModernFilterChip> {
               border: Border.all(
                 color: widget.isActive
                     ? widget.theme.colorScheme.primary.withValues(alpha: 0.4)
-                    : widget.theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                    : widget.theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.6),
                 width: widget.isActive ? 1.5 : 1,
               ),
             ),
