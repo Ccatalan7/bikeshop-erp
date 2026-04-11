@@ -113,28 +113,31 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // PRO HEADER (Cover + Avatar + Main actions)
-          _buildCoverAndIdentity(theme, statusColor, bike),
+          if (!_bikeExpanded)
+            _buildCoverAndIdentity(theme, statusColor, bike),
 
           // TAB BAR
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: theme.primaryColor,
-              unselectedLabelColor: Colors.grey.shade600,
-              indicatorColor: theme.primaryColor,
-              indicatorWeight: 3,
-              labelStyle:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              tabs: const [
-                Tab(text: 'General y Notas'),
-                Tab(text: 'Ficha Técnica'),
-                Tab(text: 'Historial'),
-              ],
+          if (!_bikeExpanded)
+            Container(
+              color: Colors.white,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: theme.primaryColor,
+                unselectedLabelColor: Colors.grey.shade600,
+                indicatorColor: theme.primaryColor,
+                indicatorWeight: 3,
+                labelStyle:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                tabs: const [
+                  Tab(text: 'General y Notas'),
+                  Tab(text: 'Ficha Técnica'),
+                  Tab(text: 'Historial'),
+                ],
+              ),
             ),
-          ),
 
-          const Divider(height: 1, thickness: 1),
+          if (!_bikeExpanded)
+            const Divider(height: 1, thickness: 1),
 
           // CONTENT
           Expanded(
