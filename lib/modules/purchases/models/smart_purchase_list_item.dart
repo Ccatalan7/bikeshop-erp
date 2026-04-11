@@ -30,6 +30,8 @@ class SmartPurchaseListItem {
   final DateTime addedDate;
   final String? linkedPurchaseInvoiceId;
   final String? linkedExpenseId;
+  final String? linkedJobId;
+  final String? linkedJobNumber;
   final DateTime? orderedDate;
   final DateTime? receivedDate;
   final DateTime createdAt;
@@ -63,6 +65,8 @@ class SmartPurchaseListItem {
     required this.addedDate,
     this.linkedPurchaseInvoiceId,
     this.linkedExpenseId,
+    this.linkedJobId,
+    this.linkedJobNumber,
     this.orderedDate,
     this.receivedDate,
     required this.createdAt,
@@ -129,6 +133,8 @@ class SmartPurchaseListItem {
           : DateTime.now(),
       linkedPurchaseInvoiceId: json['linked_purchase_invoice_id'] as String?,
       linkedExpenseId: json['linked_expense_id'] as String?,
+      linkedJobId: json['linked_job_id'] as String?,
+      linkedJobNumber: json['linked_job_number'] as String?,
       orderedDate: json['ordered_date'] != null
           ? DateTime.parse(json['ordered_date'] as String)
           : null,
@@ -173,6 +179,8 @@ class SmartPurchaseListItem {
       'added_date': addedDate.toIso8601String(),
       'linked_purchase_invoice_id': linkedPurchaseInvoiceId,
       'linked_expense_id': linkedExpenseId,
+      'linked_job_id': linkedJobId,
+      'linked_job_number': linkedJobNumber,
       'ordered_date': orderedDate?.toIso8601String(),
       'received_date': receivedDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
@@ -208,6 +216,8 @@ class SmartPurchaseListItem {
     DateTime? addedDate,
     String? linkedPurchaseInvoiceId,
     String? linkedExpenseId,
+    String? linkedJobId,
+    String? linkedJobNumber,
     DateTime? orderedDate,
     DateTime? receivedDate,
     DateTime? createdAt,
@@ -244,6 +254,8 @@ class SmartPurchaseListItem {
       linkedPurchaseInvoiceId:
           linkedPurchaseInvoiceId ?? this.linkedPurchaseInvoiceId,
       linkedExpenseId: linkedExpenseId ?? this.linkedExpenseId,
+      linkedJobId: linkedJobId ?? this.linkedJobId,
+      linkedJobNumber: linkedJobNumber ?? this.linkedJobNumber,
       orderedDate: orderedDate ?? this.orderedDate,
       receivedDate: receivedDate ?? this.receivedDate,
       createdAt: createdAt ?? this.createdAt,

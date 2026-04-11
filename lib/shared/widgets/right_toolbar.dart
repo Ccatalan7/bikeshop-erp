@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
 import 'quick_access_expense_rail.dart';
+import 'quick_purchase_panel.dart';
 import 'quick_sale_panel.dart';
 import 'quick_task_panel.dart';
 
@@ -13,6 +14,7 @@ enum ToolbarTool {
   newJob,
   quickSale,
   expenses,
+  purchases,
   tasks,
   calculator,
 }
@@ -90,6 +92,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Venta Rápida';
       case ToolbarTool.expenses:
         return 'Gastos Rápidos';
+      case ToolbarTool.purchases:
+        return 'Compras';
       case ToolbarTool.tasks:
         return 'Tareas';
       case ToolbarTool.calculator:
@@ -105,6 +109,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.flash_on;
       case ToolbarTool.expenses:
         return Icons.receipt_long_outlined;
+      case ToolbarTool.purchases:
+        return Icons.shopping_cart_outlined;
       case ToolbarTool.tasks:
         return Icons.task_alt;
       case ToolbarTool.calculator:
@@ -120,6 +126,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return const QuickSalePanel();
       case ToolbarTool.expenses:
         return const QuickAccessExpenseRail(embedded: true);
+      case ToolbarTool.purchases:
+        return const QuickPurchasePanel();
       case ToolbarTool.tasks:
         return const QuickTaskPanel();
       case ToolbarTool.calculator:
@@ -274,7 +282,8 @@ class _RightToolbarState extends State<RightToolbar> {
                           child: Icon(
                             Icons.close,
                             size: 18,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -326,7 +335,8 @@ class _RightToolbarState extends State<RightToolbar> {
                           size: 20,
                           color: t == tool
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.55),
                         ),
                       ),
                     ),

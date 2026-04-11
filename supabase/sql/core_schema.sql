@@ -3628,9 +3628,12 @@ alter table smart_purchase_list add column if not exists stock_at_receipt intege
 -- Add category columns if they don't exist (migration for existing tables)
 alter table smart_purchase_list add column if not exists category_id uuid references product_categories(id) on delete set null;
 alter table smart_purchase_list add column if not exists category_name text;
+alter table smart_purchase_list add column if not exists linked_job_id uuid references mechanic_jobs(id) on delete set null;
+alter table smart_purchase_list add column if not exists linked_job_number text;
 
 -- Add index for category filtering
 create index if not exists idx_smart_purchase_list_category on smart_purchase_list(category_id);
+create index if not exists idx_smart_purchase_list_linked_job on smart_purchase_list(linked_job_id);
 
 -- Enable RLS for smart_purchase_list
 alter table smart_purchase_list enable row level security;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/models/product.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/smart_purchase_list_item.dart';
@@ -718,6 +719,7 @@ class SmartPurchaseListService extends ChangeNotifier {
 
   /// Manually add item to purchase list (for ad-hoc items)
   Future<void> addItem({
+    Product? product,
     String? productId,
     required String productName,
     String? productSku,
@@ -725,21 +727,34 @@ class SmartPurchaseListService extends ChangeNotifier {
     String? supplierName,
     required int quantity,
     String? notes,
+    String? linkedJobId,
+    String? linkedJobNumber,
   }) async {
     try {
+      final resolvedProductId = productId ?? product?.id;
+      final resolvedSku = productSku ?? product?.sku;
+      final resolvedSupplierId = supplierId ?? product?.supplierId;
+      final resolvedSupplierName = supplierName ?? product?.supplierName;
+
       final data = {
-        'product_id': productId,
+        'product_id': resolvedProductId,
         'product_name': productName,
-        'product_sku': productSku,
-        'supplier_id': supplierId,
-        'supplier_name': supplierName,
+        'product_sku': resolvedSku,
+        'supplier_id': resolvedSupplierId,
+        'supplier_name': resolvedSupplierName,
+        'purchase_treatment':
+            (product?.purchaseTreatment ?? PurchaseTreatment.inventory).dbValue,
+        'category_id': product?.categoryId,
+        'category_name': product?.categoryName,
         'suggested_quantity': quantity,
         'status': 'pending',
         'priority': 50.0, // Default priority for manual additions
-        'current_stock': 0,
-        'min_stock_level': 0,
-        'lead_time_days': 0,
+        'current_stock': product?.stockQuantity ?? 0,
+        'min_stock_level': product?.minStockLevel ?? 0,
+        'lead_time_days': product?.leadTimeDays ?? 0,
         'notes': notes,
+        'linked_job_id': linkedJobId,
+        'linked_job_number': linkedJobNumber,
         'added_by': _client.auth.currentUser?.id,
         'added_date': DateTime.now().toIso8601String(),
       };
@@ -751,6 +766,110 @@ class SmartPurchaseListService extends ChangeNotifier {
       debugPrint('❌ $_error');
       notifyListeners();
     }
+  }
+
+  Future<List<SmartPurchaseListItem>> getItemsForJob(
+    String jobId, {
+    List<String> statuses = const ['pending', 'ordered', 'received'],
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No tenant ID');
+
+    var query = _client.from('smart_purchase_list').select('''
+          *,
+          products!smart_purchase_list_product_id_fkey(
+            category_id,
+            purchase_treatment,
+            track_stock,
+            product_type,
+            product_categories!products_category_id_fkey(
+              id,
+              name,
+              full_path
+            )
+          )
+        ''').eq('tenant_id', tenantId).eq('linked_job_id', jobId);
+
+    if (statuses.isNotEmpty) {
+      query = query.inFilter('status', statuses);
+    }
+
+    final response = await query.order('added_date', ascending: false);
+    return (response as List<dynamic>)
+        .map((json) => SmartPurchaseListItem.fromJson(json))
+        .toList();
+  }
+
+  Future<void> addOrMergeJobItem({
+    required String jobId,
+    String? jobNumber,
+    Product? product,
+    required String productName,
+    required int quantity,
+    String? notes,
+  }) async {
+    final trimmedName = productName.trim();
+    if (trimmedName.isEmpty) {
+      throw Exception('Product name cannot be empty');
+    }
+
+    final activeItems = await getItemsForJob(
+      jobId,
+      statuses: const ['pending', 'ordered'],
+    );
+
+    SmartPurchaseListItem? existing;
+    if (product != null && product.id.isNotEmpty) {
+      for (final item in activeItems) {
+        if (item.productId == product.id) {
+          existing = item;
+          break;
+        }
+      }
+    } else {
+      final normalizedName = trimmedName.toLowerCase();
+      for (final item in activeItems) {
+        final isSameCustomName =
+            (item.productId == null || item.productId!.isEmpty) &&
+                item.productName.trim().toLowerCase() == normalizedName;
+        if (isSameCustomName) {
+          existing = item;
+          break;
+        }
+      }
+    }
+
+    if (existing != null) {
+      await updateItem(existing.id, {
+        'suggested_quantity': existing.suggestedQuantity + quantity,
+        'notes': _mergeNotes(existing.notes, notes),
+        'linked_job_number': jobNumber ?? existing.linkedJobNumber,
+      });
+      return;
+    }
+
+    await addItem(
+      product: product,
+      productId: product?.id,
+      productName: trimmedName,
+      productSku: product?.sku,
+      supplierId: product?.supplierId,
+      supplierName: product?.supplierName,
+      quantity: quantity,
+      notes: notes,
+      linkedJobId: jobId,
+      linkedJobNumber: jobNumber,
+    );
+  }
+
+  String? _mergeNotes(String? existingNotes, String? newNotes) {
+    final current = existingNotes?.trim();
+    final incoming = newNotes?.trim();
+
+    if (incoming == null || incoming.isEmpty) return current;
+    if (current == null || current.isEmpty) return incoming;
+    if (current.contains(incoming)) return current;
+    return '$current\n$incoming';
   }
 
   /// Update item

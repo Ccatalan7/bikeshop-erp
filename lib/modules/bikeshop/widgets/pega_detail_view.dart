@@ -77,7 +77,10 @@ class _PegaDetailViewState extends State<PegaDetailView>
                   .withValues(alpha: 0.3),
               border: Border(
                 bottom: BorderSide(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.3),
                 ),
               ),
             ),
@@ -144,8 +147,6 @@ class _PegaDetailViewState extends State<PegaDetailView>
   }
 
   Widget _buildDetailsTab() {
-    // All items are treated uniformly now
-    final allItems = widget.items;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(

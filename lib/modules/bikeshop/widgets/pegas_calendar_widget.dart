@@ -640,7 +640,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 4, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: statusColor.withValues(alpha: 0.2),
+                                            color: statusColor.withValues(
+                                                alpha: 0.2),
                                             borderRadius:
                                                 BorderRadius.circular(4),
                                           ),
@@ -648,8 +649,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                             children: [
                                               Icon(icon,
                                                   size: 10,
-                                                  color: statusColor
-                                                      .withValues(alpha: 0.9)),
+                                                  color: statusColor.withValues(
+                                                      alpha: 0.9)),
                                               const SizedBox(width: 2),
                                               Expanded(
                                                 child: Text(
@@ -1038,7 +1039,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.1),
-        border: Border(bottom: BorderSide(color: statusColor.withValues(alpha: 0.3))),
+        border: Border(
+            bottom: BorderSide(color: statusColor.withValues(alpha: 0.3))),
       ),
       child: Column(
         children: [
@@ -1743,8 +1745,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color:
-                      Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.2)),
             ),
             child: Column(
               children: [
@@ -1795,8 +1799,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color:
-                      Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.2)),
             ),
             child: Column(
               children: [
@@ -1858,8 +1864,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -1976,8 +1984,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                         Chip(
                           label: Text(bike.bikeType!.displayName),
                           visualDensity: VisualDensity.compact,
-                          backgroundColor:
-                              theme.colorScheme.secondary.withValues(alpha: 0.2),
+                          backgroundColor: theme.colorScheme.secondary
+                              .withValues(alpha: 0.2),
                         ),
                       ],
                     ],
