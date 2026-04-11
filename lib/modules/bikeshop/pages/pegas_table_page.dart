@@ -1867,7 +1867,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           segments: const [
                             ButtonSegment(
                                 value: 'active', label: Text('Activos')),
-                          ButtonSegment(value: 'test', label: Text('Tests')),
+                            ButtonSegment(value: 'test', label: Text('Tests')),
                             ButtonSegment(
                                 value: 'completed', label: Text('Completados')),
                             ButtonSegment(
@@ -2222,7 +2222,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     // fall back to 1 if the job has a bikeId but no entry in the map yet.
     int bicycles = 0;
     for (final j in _filteredJobs) {
-      if (j.jobType == JobType.itemService) continue; // item/accessory jobs have no bike
+      if (j.jobType == JobType.itemService)
+        continue; // item/accessory jobs have no bike
       final jobBikes = _jobBikesMap[j.id ?? ''];
       if (jobBikes != null && jobBikes.isNotEmpty) {
         bicycles += jobBikes.length;
@@ -2239,8 +2240,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     // and should not count as "active" warranties in the counter.
     final warranties = _filteredJobs.where((j) {
       if (j.jobType != JobType.warranty) return false;
-      final phase = j.customStatus?.phase ??
-          _inferPhaseFromLegacyStatus(j.status);
+      final phase =
+          j.customStatus?.phase ?? _inferPhaseFromLegacyStatus(j.status);
       return phase != StatusPhase.complete;
     }).length;
     final quotations =
@@ -3542,8 +3543,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                   icon: Icon(
                     Icons.more_vert,
                     size: 16,
-                    color:
-                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.6),
                   ),
                   tooltip: 'Acciones rápidas',
                   padding: EdgeInsets.zero,
@@ -3609,7 +3612,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.pedal_bike,
                   size: 35,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(width: 6),
@@ -3668,8 +3674,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                   errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.pedal_bike,
                     size: 35,
-                    color:
-                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.7),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -3762,7 +3770,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.pedal_bike,
                   size: 35,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(width: 6),
@@ -4663,7 +4674,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         decoration: BoxDecoration(
           // Slightly different background for expanded sub-rows
           color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+              ? Theme.of(context)
+                  .colorScheme
+                  .primaryContainer
+                  .withValues(alpha: 0.3)
               : Theme.of(context).colorScheme.surfaceContainerLow,
           border: Border(
             bottom: BorderSide(
@@ -8051,8 +8065,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                   color: statusColor,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color:
-                        isSelected ? statusColor : statusColor.withValues(alpha: 0.5),
+                    color: isSelected
+                        ? statusColor
+                        : statusColor.withValues(alpha: 0.5),
                     width: isSelected ? 3 : 1,
                   ),
                 ),
