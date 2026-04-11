@@ -45,7 +45,7 @@ class CustomerAccountMenu extends StatelessWidget {
         children: [
           ListTile(
             leading: CircleAvatar(
-              backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
+              backgroundColor: PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
               child: Text(
                 userInitial,
                 style: const TextStyle(fontWeight: FontWeight.bold),
@@ -89,7 +89,7 @@ class CustomerAccountMenu extends StatelessWidget {
           CircleAvatar(
             radius: 18,
             backgroundColor: textColor?.withValues(alpha: 0.1) ??
-                PublicStoreTheme.primaryBlue.withOpacity(0.1),
+                PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
             child: Text(
               userInitial,
               style: TextStyle(

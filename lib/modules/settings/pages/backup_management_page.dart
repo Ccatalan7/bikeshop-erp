@@ -387,7 +387,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       leading: CircleAvatar(
-        backgroundColor: statusColor.withOpacity(0.1),
+        backgroundColor: statusColor.withValues(alpha: 0.1),
         child: Icon(statusIcon, color: statusColor),
       ),
       title: Text(

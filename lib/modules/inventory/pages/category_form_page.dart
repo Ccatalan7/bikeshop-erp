@@ -807,7 +807,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
               color: Colors.grey[600],
             ),
           ),
-          tileColor: isSelected ? Colors.blue.withOpacity(0.1) : null,
+          tileColor: isSelected ? Colors.blue.withValues(alpha: 0.1) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(
@@ -865,9 +865,9 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
                   padding: const EdgeInsets.all(8),
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -932,7 +932,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
                   ),
                 ),
                 tileColor: _selectedCategory == null
-                    ? Colors.blue.withOpacity(0.1)
+                    ? Colors.blue.withValues(alpha: 0.1)
                     : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1046,7 +1046,7 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
               color: isSelected ? Colors.blue : null,
             ),
           ),
-          tileColor: isSelected ? Colors.blue.withOpacity(0.1) : null,
+          tileColor: isSelected ? Colors.blue.withValues(alpha: 0.1) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(

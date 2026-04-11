@@ -495,7 +495,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -726,7 +726,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           horizontal: 12, vertical: 12),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(8)),
                       ),
@@ -1752,7 +1752,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                             decoration: BoxDecoration(
                                               color: entry.isHoveringImage
                                                   ? Colors.blue
-                                                      .withOpacity(0.08)
+                                                      .withValues(alpha: 0.08)
                                                   : Colors.grey[100],
                                               border: Border.all(
                                                 color: entry.isHoveringImage

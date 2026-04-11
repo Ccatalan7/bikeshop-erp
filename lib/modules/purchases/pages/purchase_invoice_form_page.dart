@@ -1752,7 +1752,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           icon: const Icon(Icons.document_scanner_outlined),
           tooltip: 'Escanear Factura (OCR)',
           style: IconButton.styleFrom(
-            backgroundColor: Colors.blue.withOpacity(0.1),
+            backgroundColor: Colors.blue.withValues(alpha: 0.1),
           ),
         ),
         const SizedBox(width: 8),
@@ -1765,7 +1765,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           icon: const Icon(Icons.build_circle_outlined, color: Colors.orange),
           tooltip: 'Reparar Datos OCR',
           style: IconButton.styleFrom(
-            backgroundColor: Colors.orange.withOpacity(0.1),
+            backgroundColor: Colors.orange.withValues(alpha: 0.1),
           ),
         ),
         const SizedBox(width: 8),
@@ -1781,7 +1781,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
           style: IconButton.styleFrom(
             backgroundColor:
-                _scannerEnabled ? Colors.green.withOpacity(0.1) : null,
+                _scannerEnabled ? Colors.green.withValues(alpha: 0.1) : null,
           ),
         ),
         const SizedBox(width: 8),
@@ -2016,7 +2016,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -2179,7 +2179,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -2216,7 +2216,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2397,7 +2397,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -2440,7 +2440,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           leading: CircleAvatar(
             backgroundColor: _selectedSupplier == null
                 ? theme.colorScheme.surfaceContainerHighest
-                : theme.colorScheme.primary.withOpacity(0.12),
+                : theme.colorScheme.primary.withValues(alpha: 0.12),
             child: Icon(
               Icons.store,
               color: _selectedSupplier == null
@@ -2527,7 +2527,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               filled: true,
               fillColor: _canEditFields
                   ? null
-                  : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             ),
             items: const [
               DropdownMenuItem(
@@ -2609,9 +2609,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: accentColor.withOpacity(0.1),
+        color: accentColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accentColor.withOpacity(0.25)),
+        border: Border.all(color: accentColor.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2687,10 +2687,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
                       color:
-                          theme.colorScheme.primaryContainer.withOpacity(0.3),
+                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: theme.colorScheme.primary.withOpacity(0.3),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -2747,7 +2747,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -2756,7 +2756,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(7),
                         topRight: Radius.circular(7),
@@ -2774,7 +2774,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                               border: Border(
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Center(
@@ -2794,7 +2794,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                                 border: Border(
                                   right: BorderSide(
                                       color: theme.colorScheme.outline
-                                          .withOpacity(0.2)),
+                                          .withValues(alpha: 0.2)),
                                 ),
                               ),
                               child: Text('DETALLES DEL ARTÍCULO',
@@ -2811,7 +2811,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                               border: Border(
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Center(
@@ -2829,7 +2829,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                               border: Border(
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Center(
@@ -2847,7 +2847,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                               border: Border(
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Center(
@@ -2879,7 +2879,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   Divider(
                       height: 1,
                       thickness: 1,
-                      color: theme.colorScheme.outline.withOpacity(0.2)),
+                      color: theme.colorScheme.outline.withValues(alpha: 0.2)),
 
                   // Line items
                   Column(
@@ -2903,7 +2903,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                               border: Border(
                                 top: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Row(
@@ -2956,7 +2956,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Header with Product Name and Delete Action
           Container(
             padding: const EdgeInsets.all(12),
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

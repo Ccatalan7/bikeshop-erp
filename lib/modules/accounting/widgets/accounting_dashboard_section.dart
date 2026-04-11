@@ -478,7 +478,7 @@ class _AccountingDashboardSectionState
             height: 4,
             child: LinearProgressIndicator(
               backgroundColor: Colors.transparent,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
             ),
           ),
       ],
@@ -565,7 +565,7 @@ class _SkeletonCard extends StatelessWidget {
         height: height,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
         ),
@@ -914,8 +914,8 @@ class _StatChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-        color: color.withOpacity(0.05),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.05),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1121,14 +1121,14 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                   color: Theme.of(context)
                       .colorScheme
                       .outlineVariant
-                      .withOpacity(0.2),
+                      .withValues(alpha: 0.2),
                   strokeWidth: 1,
                 ),
                 getDrawingVerticalLine: (value) => FlLine(
                   color: Theme.of(context)
                       .colorScheme
                       .outlineVariant
-                      .withOpacity(0.12),
+                      .withValues(alpha: 0.12),
                   strokeWidth: 1,
                   dashArray: const [4, 4],
                 ),
@@ -1305,7 +1305,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color:
-                        Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -1331,7 +1331,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1376,7 +1376,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                           '${NumberFormat.currency(locale: 'es_CL', symbol: '', decimalDigits: 0).format(average)} / $label',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: color.withOpacity(0.8),
+                                    color: color.withValues(alpha: 0.8),
                                     fontSize: 10,
                                   ),
                         );
@@ -1454,7 +1454,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
         return ListTile(
           dense: true,
           leading: CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
+            backgroundColor: color.withValues(alpha: 0.1),
             radius: 18,
             child: Icon(Icons.calendar_today, color: color, size: 18),
           ),
@@ -1667,7 +1667,7 @@ class _ToggleIconButton extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: isSelected
-                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
@@ -1676,7 +1676,7 @@ class _ToggleIconButton extends StatelessWidget {
             size: 18,
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -1721,7 +1721,7 @@ class _PeriodDetailTile extends StatelessWidget {
     return ListTile(
       dense: true,
       leading: CircleAvatar(
-        backgroundColor: color.withOpacity(0.1),
+        backgroundColor: color.withValues(alpha: 0.1),
         radius: 18,
         child: Icon(icon, color: color, size: 18),
       ),
@@ -1780,8 +1780,8 @@ class _LegendSummary extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-        color: color.withOpacity(0.06),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.06),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2148,7 +2148,7 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: Colors.black
-                                                        .withOpacity(0.15),
+                                                        .withValues(alpha: 0.15),
                                                     blurRadius: 6,
                                                     offset: const Offset(0, 2),
                                                   ),
@@ -2329,7 +2329,7 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(

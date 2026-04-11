@@ -423,7 +423,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                 Text(
                   'Ahora si es un panel real: configura el template de primer contacto, la tarifa referencial para la estimacion y el estado operativo de cada canal. La telemetria sigue disponible, pero como apoyo, no como protagonista.',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.74),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.74),
                     height: 1.45,
                   ),
                 ),
@@ -480,7 +480,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                       Text(
                         'Estos valores si afectan el envio real del primer mensaje por WhatsApp. Se guardan por tenant en company_settings.',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.72),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
                         ),
                       ),
                     ],
@@ -643,7 +643,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
             Text(
               'La parte util del dashboard sigue aqui, pero compacta y legible.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.72),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 18),
@@ -754,7 +754,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
             Text(
               'Activa o desactiva cada numero desde aqui. El estado se guarda directamente sobre whatsapp_channels.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.72),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 16),
@@ -1082,7 +1082,7 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
             child: Text(
               label,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
           ),
@@ -1166,9 +1166,9 @@ class _StatTile extends StatelessWidget {
       width: 200,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.08),
+        color: accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.16)),
+        border: Border.all(color: accent.withValues(alpha: 0.16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

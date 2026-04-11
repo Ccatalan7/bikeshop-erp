@@ -144,13 +144,13 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
         Chip(
           label: Text('$totalBikes bicicletas'),
           backgroundColor:
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
         ),
         const SizedBox(width: 8),
         Chip(
           label: Text('$uniqueCustomers clientes'),
           backgroundColor:
-              Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
         ),
         const Spacer(),
         IconButton(
@@ -248,7 +248,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
         contentPadding: const EdgeInsets.all(16),
         leading: CircleAvatar(
           radius: 24,
-          backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
           child: Text(
             ownerInitials,
             style: TextStyle(

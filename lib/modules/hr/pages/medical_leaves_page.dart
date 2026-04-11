@@ -159,7 +159,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: leave.statusColor.withOpacity(0.2),
+                              backgroundColor: leave.statusColor.withValues(alpha: 0.2),
                               child: Icon(Icons.medical_services, color: leave.statusColor),
                             ),
                             title: Text(employee.fullName),
@@ -182,7 +182,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                             ),
                             trailing: Chip(
                               label: Text(leave.statusLabel),
-                              backgroundColor: leave.statusColor.withOpacity(0.2),
+                              backgroundColor: leave.statusColor.withValues(alpha: 0.2),
                               labelStyle: TextStyle(color: leave.statusColor),
                             ),
                             onTap: () => _showLeaveDialog(context, leave: leave),

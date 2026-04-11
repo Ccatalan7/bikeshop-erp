@@ -266,7 +266,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -703,7 +703,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -718,7 +718,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -783,7 +783,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             decoration: BoxDecoration(
               color: isSelected
                   ? (isDark
-                      ? theme.colorScheme.primary.withOpacity(0.15)
+                      ? theme.colorScheme.primary.withValues(alpha: 0.15)
                       : Colors.blue[50])
                   : theme.cardColor,
               border: Border(
@@ -833,7 +833,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     const SizedBox(width: 8),
                     Text(
                       '•',
-                      style: TextStyle(color: theme.hintColor.withOpacity(0.6)),
+                      style: TextStyle(color: theme.hintColor.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -1350,7 +1350,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -2203,7 +2203,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.1),
+                    color: primaryColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child:
@@ -2219,7 +2219,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: primaryColor.withOpacity(0.8),
+                          color: primaryColor.withValues(alpha: 0.8),
                           letterSpacing: 1.2,
                         ),
                       ),

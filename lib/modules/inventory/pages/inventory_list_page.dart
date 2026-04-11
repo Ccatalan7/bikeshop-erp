@@ -255,7 +255,7 @@ class _InventoryListPageState extends State<InventoryListPage> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: (color ?? Colors.blue).withOpacity(0.7),
+            color: (color ?? Colors.blue).withValues(alpha: 0.7),
           ),
         ),
       ],

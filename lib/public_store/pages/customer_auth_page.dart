@@ -189,7 +189,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: PublicStoreTheme.success.withOpacity(0.1),
+                          color: PublicStoreTheme.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(

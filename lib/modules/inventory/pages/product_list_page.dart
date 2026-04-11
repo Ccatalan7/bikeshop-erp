@@ -998,7 +998,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1012,7 +1012,7 @@ class _ProductListPageState extends State<ProductListPage> {
             decoration: BoxDecoration(
               border: Border(
                 right: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
                     width: 1),
               ),
             ),
@@ -1032,7 +1032,7 @@ class _ProductListPageState extends State<ProductListPage> {
                           end: Alignment.bottomCenter,
                           colors: [
                             theme.colorScheme.primary,
-                            theme.colorScheme.primary.withOpacity(0.5)
+                            theme.colorScheme.primary.withValues(alpha: 0.5)
                           ],
                         ),
                         borderRadius: BorderRadius.circular(2),
@@ -1072,7 +1072,7 @@ class _ProductListPageState extends State<ProductListPage> {
               color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             child: TextField(
               controller: _searchController,
@@ -1082,7 +1082,7 @@ class _ProductListPageState extends State<ProductListPage> {
               decoration: InputDecoration(
                 hintText: 'Buscar por nombre, SKU, marca...',
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 12, right: 8),
@@ -1220,7 +1220,7 @@ class _ProductListPageState extends State<ProductListPage> {
             borderRadius: BorderRadius.circular(10),
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.primary.withOpacity(0.35),
+                color: theme.colorScheme.primary.withValues(alpha: 0.35),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
@@ -1255,7 +1255,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
         ),
       ),
       child: Column(
@@ -1348,7 +1348,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: true,
                 fillColor:
-                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -1376,7 +1376,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   ? LinearGradient(
                       colors: [
                         theme.colorScheme.primary,
-                        theme.colorScheme.primary.withOpacity(0.85),
+                        theme.colorScheme.primary.withValues(alpha: 0.85),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1389,7 +1389,7 @@ class _ProductListPageState extends State<ProductListPage> {
               boxShadow: _isScannerEnabled
                   ? [
                       BoxShadow(
-                        color: theme.colorScheme.primary.withOpacity(0.3),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1437,7 +1437,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.2)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2)),
         ),
       ),
       child: Row(
@@ -1612,7 +1612,7 @@ class _ProductListPageState extends State<ProductListPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: theme.colorScheme.errorContainer.withOpacity(0.3),
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -1644,10 +1644,10 @@ class _ProductListPageState extends State<ProductListPage> {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1716,10 +1716,10 @@ class _ProductListPageState extends State<ProductListPage> {
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1744,10 +1744,10 @@ class _ProductListPageState extends State<ProductListPage> {
     return Container(
       height: 38,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1762,7 +1762,7 @@ class _ProductListPageState extends State<ProductListPage> {
           Container(
               width: 1,
               height: 20,
-              color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4)),
           _buildToggleOption(
             theme: theme,
             icon: Icons.grid_view_rounded,
@@ -1795,7 +1795,7 @@ class _ProductListPageState extends State<ProductListPage> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? theme.colorScheme.primary.withOpacity(0.15)
+                ? theme.colorScheme.primary.withValues(alpha: 0.15)
                 : Colors.transparent,
             borderRadius: BorderRadius.horizontal(
               left: isFirst ? const Radius.circular(9) : Radius.zero,
@@ -2341,7 +2341,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surfaceContainerLowest,
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
         ),
       ),
       child: Row(
@@ -2398,7 +2398,7 @@ class _ProductListPageState extends State<ProductListPage> {
           color: theme.colorScheme.surface,
           border: Border(
             bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
           ),
         ),
         child: Row(
@@ -2428,7 +2428,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     ),
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.3),
+                        .withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -2444,7 +2444,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   color: _hasActiveFilters
                       ? theme.colorScheme.primaryContainer
                       : theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _hasActiveFilters
@@ -2470,7 +2470,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
         ),
       ),
       child: Column(
@@ -2497,7 +2497,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       ),
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -2530,7 +2530,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   color: theme.colorScheme.onSurfaceVariant,
                   selectedColor: theme.colorScheme.primary,
                   fillColor:
-                      theme.colorScheme.primaryContainer.withOpacity(0.2),
+                      theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
                   children: const [
                     Icon(Icons.table_rows_outlined, size: 18),
                     Icon(Icons.grid_view_outlined, size: 18),
@@ -2637,7 +2637,7 @@ class _ProductListPageState extends State<ProductListPage> {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
@@ -2749,7 +2749,7 @@ class _ProductListPageState extends State<ProductListPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? (color ?? theme.colorScheme.primary).withOpacity(0.1)
+              ? (color ?? theme.colorScheme.primary).withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -2814,7 +2814,7 @@ class _ProductListPageState extends State<ProductListPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? theme.colorScheme.primary.withOpacity(0.1)
+              ? theme.colorScheme.primary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -2877,7 +2877,7 @@ class _ProductListPageState extends State<ProductListPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: isInactiveSelected
-              ? theme.colorScheme.error.withOpacity(0.1)
+              ? theme.colorScheme.error.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -2930,7 +2930,7 @@ class _ProductListPageState extends State<ProductListPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: hasValue
-            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -3034,7 +3034,7 @@ class _ProductListPageState extends State<ProductListPage> {
       height: 32, // Sleek height
       decoration: BoxDecoration(
         color: hasValue
-            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -3327,7 +3327,7 @@ class _ProductListPageState extends State<ProductListPage> {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
           ),
         ),
         child: Row(
@@ -3338,11 +3338,11 @@ class _ProductListPageState extends State<ProductListPage> {
               preferBelow: false,
               verticalOffset: 60,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.9),
+                color: Colors.black.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -3652,7 +3652,7 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildZohoTableRow(Product product, ThemeData theme) {
     final isSelected = _selectedProduct?.id == product.id;
     final rowColor =
-        isSelected ? theme.colorScheme.primaryContainer.withOpacity(0.1) : null;
+        isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1) : null;
 
     final isProductSet = product.isSet; // Using direct property
     final isExpanded =
@@ -3678,7 +3678,7 @@ class _ProductListPageState extends State<ProductListPage> {
               color: rowColor,
               border: Border(
                 bottom: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.2),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -3724,11 +3724,11 @@ class _ProductListPageState extends State<ProductListPage> {
                         preferBelow: false,
                         verticalOffset: 50,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.9),
+                          color: Colors.black.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
+                              color: Colors.black.withValues(alpha: 0.3),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -3938,7 +3938,7 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -3995,10 +3995,10 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildSetComponentsPanel(Product product, ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -4061,7 +4061,7 @@ class _ProductListPageState extends State<ProductListPage> {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -4101,8 +4101,8 @@ class _ProductListPageState extends State<ProductListPage> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: hasStock
-                    ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-                    : theme.colorScheme.errorContainer.withOpacity(0.3),
+                    ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                    : theme.colorScheme.errorContainer.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -4141,7 +4141,7 @@ class _ProductListPageState extends State<ProductListPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: theme.colorScheme.secondaryContainer.withOpacity(0.5),
+            color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
@@ -4159,7 +4159,7 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: theme.colorScheme.tertiaryContainer.withOpacity(0.5),
+              color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -4189,9 +4189,9 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.15),
+              color: Colors.orange.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withOpacity(0.5)),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -5110,20 +5110,20 @@ class _ModernFilterChipState extends State<_ModernFilterChip> {
               gradient: widget.isActive
                   ? LinearGradient(
                       colors: [
-                        widget.theme.colorScheme.primary.withOpacity(0.15),
-                        widget.theme.colorScheme.primary.withOpacity(0.08),
+                        widget.theme.colorScheme.primary.withValues(alpha: 0.15),
+                        widget.theme.colorScheme.primary.withValues(alpha: 0.08),
                       ],
                     )
                   : null,
               color: widget.isActive
                   ? null
                   : widget.theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.5),
+                      .withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: widget.isActive
-                    ? widget.theme.colorScheme.primary.withOpacity(0.4)
-                    : widget.theme.colorScheme.outlineVariant.withOpacity(0.6),
+                    ? widget.theme.colorScheme.primary.withValues(alpha: 0.4)
+                    : widget.theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
                 width: widget.isActive ? 1.5 : 1,
               ),
             ),

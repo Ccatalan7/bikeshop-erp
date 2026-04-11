@@ -105,7 +105,7 @@ class _F29DetailPageState extends State<F29DetailPage> {
     }
 
     return Card(
-      color: statusColor.withOpacity(0.1),
+      color: statusColor.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -432,10 +432,10 @@ class _F29DetailPageState extends State<F29DetailPage> {
             children: [
               if (isCredit)
                 Icon(Icons.arrow_upward,
-                    size: 16, color: Colors.red.withOpacity(0.7)),
+                    size: 16, color: Colors.red.withValues(alpha: 0.7)),
               if (isDebit)
                 Icon(Icons.arrow_downward,
-                    size: 16, color: Colors.green.withOpacity(0.7)),
+                    size: 16, color: Colors.green.withValues(alpha: 0.7)),
               const SizedBox(width: 4),
               Text(
                 isPercentage

@@ -2719,7 +2719,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color:
-                                Theme.of(context).primaryColor.withOpacity(0.8),
+                                Theme.of(context).primaryColor.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -2912,7 +2912,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -2958,7 +2958,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       CircleAvatar(
                         radius: 18,
                         backgroundColor:
-                            theme.colorScheme.primary.withOpacity(0.12),
+                            theme.colorScheme.primary.withValues(alpha: 0.12),
                         child: Icon(icon,
                             color: theme.colorScheme.primary, size: 18),
                       ),
@@ -2995,7 +2995,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildInlineBikeTabs(ThemeData theme) {
     final primary = theme.colorScheme.primary;
     final onSurface = theme.colorScheme.onSurfaceVariant;
-    final dividerColor = theme.colorScheme.outlineVariant.withOpacity(0.5);
+    final dividerColor = theme.colorScheme.outlineVariant.withValues(alpha: 0.5);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -3056,7 +3056,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       child: InkWell(
                         onTap: _showAddBikeSelector,
                         borderRadius: BorderRadius.circular(6),
-                        hoverColor: primary.withOpacity(0.08),
+                        hoverColor: primary.withValues(alpha: 0.08),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 10),
@@ -3313,7 +3313,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.7)),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7)),
         color: theme.colorScheme.surfaceContainerLowest,
       ),
       child: Column(
@@ -3352,7 +3352,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color:
-                            theme.colorScheme.primaryContainer.withOpacity(0.5),
+                            theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -3483,9 +3483,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -3598,7 +3598,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.6)),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3721,7 +3721,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         style: OutlinedButton.styleFrom(
           foregroundColor: theme.colorScheme.onSurface,
           side: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.7),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
@@ -3933,7 +3933,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusTint.withOpacity(0.10),
+                  color: statusTint.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -4677,13 +4677,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           color: Theme.of(context)
                               .colorScheme
                               .primaryContainer
-                              .withOpacity(0.45),
+                              .withValues(alpha: 0.45),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: Theme.of(context)
                                 .colorScheme
                                 .primary
-                                .withOpacity(0.18),
+                                .withValues(alpha: 0.18),
                           ),
                         ),
                         child: Row(
@@ -4823,7 +4823,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                                color: colorScheme.primary.withOpacity(0.2),
+                                color: colorScheme.primary.withValues(alpha: 0.2),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2))
                           ]
@@ -5225,7 +5225,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -5235,7 +5235,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
@@ -5249,7 +5249,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             border: Border(
                               right: BorderSide(
                                   color: theme.colorScheme.outline
-                                      .withOpacity(0.2)),
+                                      .withValues(alpha: 0.2)),
                             ),
                           ),
                           child: Center(
@@ -5269,7 +5269,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               border: Border(
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                             ),
                             child: Text(
@@ -5288,7 +5288,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             border: Border(
                               right: BorderSide(
                                   color: theme.colorScheme.outline
-                                      .withOpacity(0.2)),
+                                      .withValues(alpha: 0.2)),
                             ),
                           ),
                           child: Center(
@@ -5306,7 +5306,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             border: Border(
                               right: BorderSide(
                                   color: theme.colorScheme.outline
-                                      .withOpacity(0.2)),
+                                      .withValues(alpha: 0.2)),
                             ),
                           ),
                           child: Center(
@@ -5337,7 +5337,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   Divider(
                       height: 1,
                       thickness: 1,
-                      color: theme.colorScheme.outline.withOpacity(0.2)),
+                      color: theme.colorScheme.outline.withValues(alpha: 0.2)),
 
                   // Part items, labor items, and add row
                   Column(
@@ -5364,7 +5364,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             top: _currentPartItems.isNotEmpty
                                 ? BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2))
+                                        .withValues(alpha: 0.2))
                                 : BorderSide.none,
                           ),
                         ),
@@ -5379,7 +5379,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                   border: Border(
                                     right: BorderSide(
                                         color: theme.colorScheme.outline
-                                            .withOpacity(0.2)),
+                                            .withValues(alpha: 0.2)),
                                   ),
                                 ),
                               ),
@@ -5394,7 +5394,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     border: Border(
                                       right: BorderSide(
                                           color: theme.colorScheme.outline
-                                              .withOpacity(0.2)),
+                                              .withValues(alpha: 0.2)),
                                     ),
                                   ),
                                   child: ProductAutocompleteField(
@@ -5423,7 +5423,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                   border: Border(
                                     right: BorderSide(
                                         color: theme.colorScheme.outline
-                                            .withOpacity(0.2)),
+                                            .withValues(alpha: 0.2)),
                                   ),
                                 ),
                               ),
@@ -5433,7 +5433,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                   border: Border(
                                     right: BorderSide(
                                         color: theme.colorScheme.outline
-                                            .withOpacity(0.2)),
+                                            .withValues(alpha: 0.2)),
                                   ),
                                 ),
                               ),
@@ -5603,7 +5603,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     child: Container(
                       decoration: BoxDecoration(
                         border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.2)),
+                            color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -5613,7 +5613,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           Container(
                             decoration: BoxDecoration(
                               color: theme.colorScheme.surfaceContainerHighest
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(8)),
                             ),
@@ -5628,7 +5628,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     border: Border(
                                       right: BorderSide(
                                           color: theme.colorScheme.outline
-                                              .withOpacity(0.2)),
+                                              .withValues(alpha: 0.2)),
                                     ),
                                   ),
                                   child: Center(
@@ -5650,7 +5650,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                       border: Border(
                                         right: BorderSide(
                                             color: theme.colorScheme.outline
-                                                .withOpacity(0.2)),
+                                                .withValues(alpha: 0.2)),
                                       ),
                                     ),
                                     child: Text(
@@ -5671,7 +5671,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     border: Border(
                                       right: BorderSide(
                                           color: theme.colorScheme.outline
-                                              .withOpacity(0.2)),
+                                              .withValues(alpha: 0.2)),
                                     ),
                                   ),
                                   child: Center(
@@ -5691,7 +5691,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     border: Border(
                                       right: BorderSide(
                                           color: theme.colorScheme.outline
-                                              .withOpacity(0.2)),
+                                              .withValues(alpha: 0.2)),
                                     ),
                                   ),
                                   child: Center(
@@ -5711,7 +5711,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     border: Border(
                                       right: BorderSide(
                                           color: theme.colorScheme.outline
-                                              .withOpacity(0.2)),
+                                              .withValues(alpha: 0.2)),
                                     ),
                                   ),
                                   child: Center(
@@ -5745,7 +5745,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               height: 1,
                               thickness: 1,
                               color:
-                                  theme.colorScheme.outline.withOpacity(0.2)),
+                                  theme.colorScheme.outline.withValues(alpha: 0.2)),
 
                           // Labor items
                           Column(
@@ -5763,7 +5763,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                     top: _serviceItems.isNotEmpty
                                         ? BorderSide(
                                             color: theme.colorScheme.outline
-                                                .withOpacity(0.2))
+                                                .withValues(alpha: 0.2))
                                         : BorderSide.none,
                                   ),
                                 ),
@@ -5779,7 +5779,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                           border: Border(
                                             right: BorderSide(
                                                 color: theme.colorScheme.outline
-                                                    .withOpacity(0.2)),
+                                                    .withValues(alpha: 0.2)),
                                           ),
                                         ),
                                       ),
@@ -5872,7 +5872,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   color: Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.2),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2),
                   ),
                 ),
                 child: ClipRRect(
@@ -5963,7 +5963,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(4),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outline.withOpacity(0.3)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.3)),
               ),
               prefixText: '\$ ',
               prefixStyle: theme.textTheme.bodyMedium,
@@ -6178,7 +6178,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color:
-                          theme.colorScheme.primaryContainer.withOpacity(0.3),
+                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -6200,7 +6200,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color:
-                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
+                  theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -6247,7 +6247,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               Icon(
                 Icons.sticky_note_2_outlined,
                 size: 13,
-                color: theme.colorScheme.tertiary.withOpacity(0.7),
+                color: theme.colorScheme.tertiary.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -6256,7 +6256,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 11,
                     fontStyle: FontStyle.italic,
-                    color: theme.colorScheme.onSurface.withOpacity(0.65),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                     height: 1.4,
                   ),
                 ),
@@ -6621,9 +6621,9 @@ class _ServiceLineBadge extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: color.withOpacity(0.35)),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -7628,7 +7628,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
                     prefixIcon: const Icon(Icons.search, size: 20),
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.3),
+                        .withValues(alpha: 0.3),
                     contentPadding:
                         const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                     border: OutlineInputBorder(
@@ -7665,7 +7665,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
         // Table Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           child: Row(
             children: [
               Expanded(
@@ -7722,7 +7722,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
                     return InkWell(
                       onTap: () => Navigator.of(context).pop(customer),
                       hoverColor:
-                          theme.colorScheme.primaryContainer.withOpacity(0.3),
+                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 12),
@@ -7962,19 +7962,19 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
           decoration: BoxDecoration(
             color: widget.isSelected
                 ? theme.colorScheme.surface
-                : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             border: widget.isSelected
                 ? Border(
                     top: BorderSide(color: theme.colorScheme.primary, width: 3),
                     left:
-                        BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+                        BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
                     right:
-                        BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+                        BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
                   )
                 : Border(
                     bottom: BorderSide(
-                        color: theme.dividerColor.withOpacity(0.5), width: 1),
+                        color: theme.dividerColor.withValues(alpha: 0.5), width: 1),
                   ),
           ),
           child: Row(
@@ -8011,7 +8011,7 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: _isHovered
-                          ? theme.colorScheme.error.withOpacity(0.1)
+                          ? theme.colorScheme.error.withValues(alpha: 0.1)
                           : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
@@ -8021,7 +8021,7 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                       size: 14,
                       color: _isHovered
                           ? theme.colorScheme.error
-                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                          : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
                   ),
                 ),
@@ -8084,7 +8084,7 @@ class _BikeTabButtonState extends State<_BikeTabButton> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: widget.isSelected
-                  ? widget.primaryColor.withOpacity(0.08)
+                  ? widget.primaryColor.withValues(alpha: 0.08)
                   : Colors.transparent,
               border: Border(
                 bottom: BorderSide(
@@ -8130,13 +8130,13 @@ class _BikeTabButtonState extends State<_BikeTabButton> {
                       child: InkWell(
                         onTap: widget.onClose,
                         borderRadius: BorderRadius.circular(999),
-                        hoverColor: theme.colorScheme.error.withOpacity(0.12),
+                        hoverColor: theme.colorScheme.error.withValues(alpha: 0.12),
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: showClose
                                 ? theme.colorScheme.surfaceContainerHighest
-                                    .withOpacity(0.6)
+                                    .withValues(alpha: 0.6)
                                 : Colors.transparent,
                             shape: BoxShape.circle,
                           ),

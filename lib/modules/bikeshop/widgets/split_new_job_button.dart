@@ -48,7 +48,7 @@ class SplitNewJobButton extends StatelessWidget {
           Container(
             width: 1,
             height: 40,
-            color: foregroundColor.withOpacity(0.3),
+            color: foregroundColor.withValues(alpha: 0.3),
           ),
           PopupMenuButton<String>(
             tooltip: 'Tipo de trabajo',

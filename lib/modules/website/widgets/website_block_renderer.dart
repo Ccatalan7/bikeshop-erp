@@ -965,8 +965,8 @@ class WebsiteBlockRenderer {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(overlayOpacity * 0.5),
-                    Colors.black.withOpacity(overlayOpacity * 0.8),
+                    Colors.black.withValues(alpha: overlayOpacity * 0.5),
+                    Colors.black.withValues(alpha: overlayOpacity * 0.8),
                   ],
                 ),
               )
@@ -1727,7 +1727,7 @@ class WebsiteBlockRenderer {
 
     return Container(
       padding: padding,
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -1844,7 +1844,7 @@ class WebsiteBlockRenderer {
         defaultVertical: 64,
         defaultHorizontal: 24,
       ),
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.15),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -2021,7 +2021,7 @@ class WebsiteBlockRenderer {
             : 'CLP $priceRaw';
 
     final cardColor = isHighlighted
-        ? accentColor.withOpacity(0.12)
+        ? accentColor.withValues(alpha: 0.12)
         : theme.colorScheme.surface;
     final borderColor = isHighlighted ? accentColor : theme.dividerColor;
 
@@ -2474,9 +2474,9 @@ class WebsiteBlockRenderer {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 32),
                     decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.08),
+                      color: accentColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: primaryColor.withOpacity(0.2)),
+                      border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
                     ),
                     child: Column(
                       children: [
@@ -2899,7 +2899,7 @@ class WebsiteBlockRenderer {
                           children: [
                             CircleAvatar(
                               radius: 48,
-                              backgroundColor: accentColor.withOpacity(0.12),
+                              backgroundColor: accentColor.withValues(alpha: 0.12),
                               backgroundImage: avatarUrl.isNotEmpty
                                   ? NetworkImage(avatarUrl)
                                   : null,
@@ -4187,9 +4187,9 @@ class _CategoryCard extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: previewMode ? null : () => onNavigate?.call(href),
-              hoverColor: Colors.black.withOpacity(0.2),
-              splashColor: Colors.white.withOpacity(0.1),
-              highlightColor: Colors.white.withOpacity(0.05),
+              hoverColor: Colors.black.withValues(alpha: 0.2),
+              splashColor: Colors.white.withValues(alpha: 0.1),
+              highlightColor: Colors.white.withValues(alpha: 0.05),
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
@@ -4206,7 +4206,7 @@ class _CategoryCard extends StatelessWidget {
                         letterSpacing: 1,
                         shadows: [
                           Shadow(
-                            color: Colors.black.withOpacity(0.5),
+                            color: Colors.black.withValues(alpha: 0.5),
                             blurRadius: 8,
                           ),
                         ],
@@ -4234,7 +4234,7 @@ class _CategoryCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.black,
                         border:
-                            Border.all(color: Colors.white.withOpacity(0.3)),
+                            Border.all(color: Colors.white.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         ctaText.toUpperCase(),
@@ -4424,7 +4424,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                           decoration: BoxDecoration(
                             color: isActive
                                 ? Colors.white
-                                : Colors.white.withOpacity(0.4),
+                                : Colors.white.withValues(alpha: 0.4),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -4544,8 +4544,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(overlayOpacity * 0.4),
-                  Colors.black.withOpacity(overlayOpacity * 0.7),
+                  Colors.black.withValues(alpha: overlayOpacity * 0.4),
+                  Colors.black.withValues(alpha: overlayOpacity * 0.7),
                 ],
               ),
             )
@@ -5452,8 +5452,8 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(widget.overlayOpacity * 0.3),
-                      Colors.black.withOpacity(widget.overlayOpacity),
+                      Colors.black.withValues(alpha: widget.overlayOpacity * 0.3),
+                      Colors.black.withValues(alpha: widget.overlayOpacity),
                     ],
                   ),
                 ),
@@ -5524,7 +5524,7 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                   child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(

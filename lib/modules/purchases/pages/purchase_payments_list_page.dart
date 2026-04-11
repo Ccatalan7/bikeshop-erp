@@ -239,7 +239,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                       decoration: BoxDecoration(
                                         color: _getPaymentMethodColor(
                                                 payment.paymentMethodId)
-                                            .withOpacity(0.15),
+                                            .withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(

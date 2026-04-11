@@ -53,7 +53,7 @@ class _ConversationTileState extends State<ConversationTile> {
 
     Widget content = ListTile(
       selected: widget.isActive,
-      selectedTileColor: Theme.of(context).primaryColor.withOpacity(0.1),
+      selectedTileColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
       contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       onTap: widget.onTap,
       leading: Stack(

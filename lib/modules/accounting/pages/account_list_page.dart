@@ -399,14 +399,14 @@ class _AccountListPageState extends State<AccountListPage> {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
               : null,
           child: ListTile(
             leading: Container(
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: _getTypeColor(account.type).withOpacity(0.1),
+                color: _getTypeColor(account.type).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: _getTypeColor(account.type),
@@ -445,7 +445,7 @@ class _AccountListPageState extends State<AccountListPage> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: _getTypeColor(account.type).withOpacity(0.1),
+                        color: _getTypeColor(account.type).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: _getTypeColor(account.type),
@@ -468,7 +468,7 @@ class _AccountListPageState extends State<AccountListPage> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.1),
+                        color: Colors.grey.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: Colors.grey,

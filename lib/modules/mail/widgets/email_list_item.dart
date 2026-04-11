@@ -67,11 +67,11 @@ class EmailListItem extends StatelessWidget {
 
     return Material(
       color: isSelected
-          ? colorScheme.primaryContainer.withOpacity(0.3)
+          ? colorScheme.primaryContainer.withValues(alpha: 0.3)
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        hoverColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        hoverColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(

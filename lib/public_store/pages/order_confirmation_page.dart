@@ -377,7 +377,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -417,8 +417,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                   decoration: BoxDecoration(
                     color: _paymentMessage!.contains('exitoso') ||
                             _paymentMessage!.contains('confirmado')
-                        ? const Color(0xFF10B981).withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
+                        ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                        : Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: _paymentMessage!.contains('exitoso') ||
@@ -521,7 +521,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: PublicStoreTheme.primaryBlue.withOpacity(0.1),
+                          color: PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -555,7 +555,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               if (order.paymentMethod == 'transfer')
                 Card(
                   elevation: 2,
-                  color: const Color(0xFFF59E0B).withOpacity(0.1),
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Column(

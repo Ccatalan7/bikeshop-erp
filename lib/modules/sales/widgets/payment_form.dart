@@ -344,7 +344,7 @@ class _PaymentFormState extends State<PaymentForm> {
                 color: Theme.of(context)
                     .colorScheme
                     .primaryContainer
-                    .withOpacity(0.3),
+                    .withValues(alpha: 0.3),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(

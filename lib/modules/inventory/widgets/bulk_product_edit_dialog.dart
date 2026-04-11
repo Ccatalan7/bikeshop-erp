@@ -802,10 +802,10 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               width: 250,
               decoration: BoxDecoration(
                 color:
-                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 border: Border(
                   right: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                   ),
                 ),
               ),
@@ -916,7 +916,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       color: isActive
                           ? theme.colorScheme.primary
                           : isDone
-                              ? theme.colorScheme.primary.withOpacity(0.1)
+                              ? theme.colorScheme.primary.withValues(alpha: 0.1)
                               : Colors.transparent,
                       shape: BoxShape.circle,
                       border: Border.all(
@@ -929,7 +929,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                           ? [
                               BoxShadow(
                                 color:
-                                    theme.colorScheme.primary.withOpacity(0.3),
+                                    theme.colorScheme.primary.withValues(alpha: 0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               )
@@ -957,8 +957,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       height: 32,
                       decoration: BoxDecoration(
                         color: isDone
-                            ? theme.colorScheme.primary.withOpacity(0.3)
-                            : theme.colorScheme.outlineVariant.withOpacity(0.3),
+                            ? theme.colorScheme.primary.withValues(alpha: 0.3)
+                            : theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -989,7 +989,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                           color: isActive
                               ? theme.colorScheme.onSurfaceVariant
                               : theme.colorScheme.onSurfaceVariant
-                                  .withOpacity(0.7),
+                                  .withValues(alpha: 0.7),
                           height: 1.3,
                         ),
                       ),
@@ -1108,7 +1108,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                   color: isSelected
                       ? theme.colorScheme.primaryContainer
                       : theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.4),
+                          .withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
                   border:
                       isSelected ? null : Border.all(color: Colors.transparent),
@@ -1146,7 +1146,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: isSelected
                                     ? theme.colorScheme.onPrimaryContainer
-                                        .withOpacity(0.8)
+                                        .withValues(alpha: 0.8)
                                     : theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
@@ -1173,7 +1173,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
       child: ListView(
@@ -1210,12 +1210,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -1246,12 +1246,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -1512,7 +1512,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1553,7 +1553,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
       child: Column(
@@ -1587,7 +1587,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           ),
           if (!_isRefreshingScope) _buildCleanStatRow(theme),
           const SizedBox(height: 16),
-          Divider(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          Divider(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Expanded(
             child: _matchedProducts.isEmpty
@@ -1611,7 +1611,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     itemCount: math.min(_matchedProducts.length, 10),
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
-                      color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
                     ),
                     itemBuilder: (context, index) {
                       final product = _matchedProducts[index];
@@ -1637,7 +1637,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                               color: theme.colorScheme.primary
-                                                  .withOpacity(0.5),
+                                                  .withValues(alpha: 0.5),
                                             ),
                                           ),
                                         ),
@@ -1802,13 +1802,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     border: Border.all(
                       color: isSelected
                           ? theme.colorScheme.primary
-                          : theme.colorScheme.outlineVariant.withOpacity(0.3),
+                          : theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
                       width: isSelected ? 2 : 1,
                     ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             )
@@ -1885,12 +1885,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             collapsedShape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             title: Row(
               children: [
@@ -1942,7 +1942,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -2027,7 +2027,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )
@@ -2056,7 +2056,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           ),
           Divider(
               height: 1,
-              color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
           Expanded(
             child: switch (_operation) {
               BulkProductEditOperation.classification =>
@@ -2578,13 +2578,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: _isDraggingImages
-                      ? theme.colorScheme.primary.withOpacity(0.08)
+                      ? theme.colorScheme.primary.withValues(alpha: 0.08)
                       : theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: _isDraggingImages
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                        : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                   ),
                 ),
                 child: Row(
@@ -2945,7 +2945,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.25)),
+          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) {
         final product = _matchedProducts[index];
         final productId = product.id;
@@ -3113,7 +3113,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.25)),
+          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) {
         final product = _matchedProducts[index];
         final productId = product.id;
@@ -3290,13 +3290,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: isRowDropTarget
-                      ? theme.colorScheme.primary.withOpacity(0.08)
+                      ? theme.colorScheme.primary.withValues(alpha: 0.08)
                       : theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.35),
+                          .withValues(alpha: 0.35),
                   border: Border.all(
                     color: isRowDropTarget
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outlineVariant.withOpacity(0.6),
+                        : theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
                     width: isRowDropTarget ? 2 : 1,
                   ),
                   borderRadius: BorderRadius.circular(8),
@@ -3368,13 +3368,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _applyErrors.isEmpty
-            ? theme.colorScheme.primary.withOpacity(0.08)
-            : theme.colorScheme.error.withOpacity(0.08),
+            ? theme.colorScheme.primary.withValues(alpha: 0.08)
+            : theme.colorScheme.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _applyErrors.isEmpty
-              ? theme.colorScheme.primary.withOpacity(0.25)
-              : theme.colorScheme.error.withOpacity(0.25),
+              ? theme.colorScheme.primary.withValues(alpha: 0.25)
+              : theme.colorScheme.error.withValues(alpha: 0.25),
         ),
       ),
       child: Column(
@@ -3411,7 +3411,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         color: theme.colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -3568,9 +3568,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       selected: value,
       onSelected: onChanged,
       showCheckmark: false,
-      selectedColor: theme.colorScheme.primary.withOpacity(0.12),
+      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.12),
       side:
-          BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+          BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
     );
   }
 
@@ -3585,7 +3585,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.25)),
+          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: rowBuilder(_matchedProducts[index]),

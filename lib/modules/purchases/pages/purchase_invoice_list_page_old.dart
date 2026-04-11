@@ -377,7 +377,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: _statusColor(invoice.status).withOpacity(0.15),
+                        color: _statusColor(invoice.status).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(

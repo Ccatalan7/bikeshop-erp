@@ -17,7 +17,7 @@ class GlobalErrorOverlay extends StatelessWidget {
           color: Colors.transparent,
           child: Container(
             width: double.infinity,
-            color: Colors.red.shade900.withOpacity(0.95),
+            color: Colors.red.shade900.withValues(alpha: 0.95),
             padding: const EdgeInsets.all(12),
             child: SingleChildScrollView(
               child: Column(

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,7 +7,9 @@ import 'package:provider/provider.dart';
 
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
+import 'bike_measurement_timeline.dart';
 
+part 'interactive_vector_bike.dart';
 class BikeRecordPanel extends StatefulWidget {
   final BikeRecordSnapshot snapshot;
   final String ownerName;
@@ -33,7 +37,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   late TabController _tabController;
   late Future<_BikeRecordHistoryData> _historyFuture;
   String? _selectedDiagnosisSystemKey;
-  String? _hoveredDiagnosisSystemKey;
+  bool _bikeExpanded = false;
+  
 
   @override
   void initState() {
@@ -48,7 +53,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     if (oldWidget.snapshot.bike.id != widget.snapshot.bike.id) {
       _historyFuture = _loadBikeHistoryData(widget.snapshot.bike.id);
       _selectedDiagnosisSystemKey = null;
-      _hoveredDiagnosisSystemKey = null;
     }
   }
 
@@ -63,18 +67,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       return const _BikeRecordHistoryData.empty();
     }
 
-    final bikeshopService = context.read<BikeshopService>();
-    final results = await Future.wait<Object?>([
-      bikeshopService.getBikeEvents(bikeId),
-      bikeshopService.getBikeObservations(bikeId),
-      bikeshopService.getBikeSystemStates(bikeId),
-    ]);
+    try {
+      final bikeshopService = context.read<BikeshopService>();
+      final results = await Future.wait<Object?>([
+        bikeshopService.getBikeEvents(bikeId),
+        bikeshopService.getBikeObservations(bikeId),
+        bikeshopService.getBikeSystemStates(bikeId),
+      ]);
 
-    return _BikeRecordHistoryData.fromRaw(
-      events: (results[0] as List<BikeEvent>?) ?? const [],
-      observations: (results[1] as List<BikeObservation>?) ?? const [],
-      systemStates: (results[2] as List<BikeSystemState>?) ?? const [],
-    );
+      return _BikeRecordHistoryData.fromRaw(
+        events: (results[0] as List<BikeEvent>?) ?? const [],
+        observations: (results[1] as List<BikeObservation>?) ?? const [],
+        systemStates: (results[2] as List<BikeSystemState>?) ?? const [],
+      );
+    } catch (_) {
+      return const _BikeRecordHistoryData.empty();
+    }
   }
 
   @override
@@ -175,7 +183,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     image: CachedNetworkImageProvider(coverImageUrl),
                     fit: BoxFit.cover,
                     colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.4),
+                      Colors.black.withValues(alpha: 0.4),
                       BlendMode.darken,
                     ),
                   )
@@ -205,7 +213,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 icon: const Icon(Icons.arrow_back, size: 18),
                 label: const Text('Volver a bicicletas'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.92),
+                  backgroundColor: Colors.white.withValues(alpha: 0.92),
                   foregroundColor: Colors.black87,
                   elevation: 0,
                   padding:
@@ -219,7 +227,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     icon: const Icon(Icons.edit, size: 16),
                     label: const Text('Editar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.9),
+                      backgroundColor: Colors.white.withValues(alpha: 0.9),
                       foregroundColor: Colors.black87,
                       elevation: 0,
                     ),
@@ -265,7 +273,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -300,9 +308,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -566,48 +574,206 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     final activeSystemKey =
         history.resolveActiveSystemKey(_selectedDiagnosisSystemKey);
     final activeSystem = history.systemFor(activeSystemKey);
-    final wideLayout = MediaQuery.of(context).size.width > 1280;
 
+    // Shared bike widget builder (avoids repetition)
+    Widget bikeWidget = RepaintBoundary(
+      child: _InteractiveVectorBike(
+        history: history,
+        activeSystemKey: activeSystemKey,
+        onSystemSelected: (key) {
+          setState(() {
+            _selectedDiagnosisSystemKey = key;
+          });
+        },
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, overallConstraints) {
+        final wideLayout = overallConstraints.maxWidth > 1100;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: const Color(0xFFE4E9F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header row with title + expand button ──────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mapa de Diagnóstico Pro',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Vista esquemática de la bicicleta, alertas e historiales de desgaste.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.grey.shade500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Expand / collapse toggle
+                  Tooltip(
+                    message: _bikeExpanded ? 'Vista dividida' : 'Vista completa',
+                    child: InkWell(
+                      onTap: () => setState(() => _bikeExpanded = !_bikeExpanded),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: _bikeExpanded
+                              ? const Color(0xFF2563EB).withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _bikeExpanded
+                                ? const Color(0xFF2563EB).withValues(alpha: 0.4)
+                                : const Color(0xFFCBD5E1),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _bikeExpanded
+                                  ? Icons.view_column_outlined
+                                  : Icons.fullscreen,
+                              size: 16,
+                              color: _bikeExpanded
+                                  ? const Color(0xFF2563EB)
+                                  : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _bikeExpanded ? 'Dividir' : 'Expandir',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _bikeExpanded
+                                    ? const Color(0xFF2563EB)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // ── Bike canvas + optional telemetry ───────────────────────────
+              if (wideLayout && !_bikeExpanded)
+                // Split view: bike (square) + telemetry side by side
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // AspectRatio(1.0) keeps it square — no gray side margins
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480, maxHeight: 480),
+                      child: AspectRatio(
+                        aspectRatio: 1.0,
+                        child: bikeWidget,
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: _buildTelemetrySection(theme, activeSystem),
+                    ),
+                  ],
+                )
+              else if (wideLayout && _bikeExpanded)
+                // Full-width bike view
+                AspectRatio(
+                  aspectRatio: 16 / 7,
+                  child: bikeWidget,
+                )
+              else ...[
+                // Narrow: stack vertically
+                AspectRatio(
+                  aspectRatio: 1.0,
+                  child: bikeWidget,
+                ),
+                const SizedBox(height: 24),
+                _buildTelemetrySection(theme, activeSystem),
+              ],
+
+              // Show telemetry below when expanded in wide mode
+              if (wideLayout && _bikeExpanded && activeSystem != null) ...[
+                const SizedBox(height: 24),
+                _buildTelemetrySection(theme, activeSystem),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTelemetrySection(
+    ThemeData theme,
+    _BikeDiagnosisSystemView? activeSystem,
+  ) {
+    if (activeSystem == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Text(
+            'Selecciona un componente en el diagrama para ver su progresión.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Mapa de diagnóstico',
-          style: theme.textTheme.titleLarge?.copyWith(
+          'TELEMETRÍA: ${activeSystem.displayName.toUpperCase()}',
+          style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: Colors.black87,
+            color: const Color(0xFF1E293B),
+            letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Navega por los sistemas desde el esquema de la bici y revisa mediciones, diagnósticos y trabajos relacionados sin mezclar todo en una sola lista.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.grey.shade600,
-            height: 1.4,
+        const SizedBox(height: 16),
+        if (activeSystem.measurementSeries.isNotEmpty)
+          ...activeSystem.measurementSeries
+              .map((series) => _buildMeasurementTimelineRow(theme, series))
+        else
+          Text(
+            'Sin mediciones registradas para este sistema.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.grey.shade500,
+              fontStyle: FontStyle.italic,
+            ),
           ),
-        ),
-        const SizedBox(height: 18),
-        if (wideLayout)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 5,
-                child:
-                    _buildSystemExplorerCard(theme, history, activeSystemKey),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                flex: 7,
-                child: _buildSystemDetailCard(theme, history, activeSystem),
-              ),
-            ],
-          )
-        else ...[
-          _buildSystemExplorerCard(theme, history, activeSystemKey),
-          const SizedBox(height: 18),
-          _buildSystemDetailCard(theme, history, activeSystem),
-        ],
       ],
     );
   }
@@ -630,12 +796,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF161E29), // Slightly lighter than the workbench
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -652,10 +818,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Esquema interactivo',
+                      'Esquema Interactivo',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: Colors.black87,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -664,7 +830,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           ? 'Última lectura: ${DateFormat('dd/MM/yyyy').format(latestDate)}'
                           : 'Sin fecha de lectura registrada.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
+                        color: Colors.grey.shade400,
                       ),
                     ),
                   ],
@@ -673,9 +839,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               if (history.latestDiagnosisJobNumber != null)
                 _buildReferencePill(
                   label: history.latestDiagnosisJobNumber!,
-                  backgroundColor: const Color(0xFFEAF2FF),
-                  borderColor: const Color(0xFFBED2FF),
-                  foregroundColor: const Color(0xFF2457C5),
+                  backgroundColor: const Color(0xFF1C2C45),
+                  borderColor: const Color(0xFF263C5D),
+                  foregroundColor: const Color(0xFF4C8DFF),
                 ),
             ],
           ),
@@ -686,29 +852,29 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             children: [
               _buildReferencePill(
                 label: '${history.diagnosisSystems.length} sistemas',
-                backgroundColor: const Color(0xFFF3F6FA),
-                borderColor: const Color(0xFFE1E7EF),
-                foregroundColor: Colors.blueGrey.shade700,
+                backgroundColor: Colors.white.withValues(alpha: 0.1),
+                borderColor: Colors.transparent,
+                foregroundColor: Colors.white,
               ),
               if (criticalCount > 0)
                 _buildReferencePill(
                   label:
                       '$criticalCount crítico${criticalCount == 1 ? '' : 's'}',
-                  backgroundColor: const Color(0xFFFFF0F0),
-                  borderColor: const Color(0xFFFFD2D2),
-                  foregroundColor: Colors.red.shade700,
+                  backgroundColor: Colors.red.withValues(alpha: 0.15),
+                  borderColor: Colors.red.withValues(alpha: 0.3),
+                  foregroundColor: Colors.redAccent,
                 ),
               if (attentionCount > 0)
                 _buildReferencePill(
                   label: '$attentionCount en atención',
-                  backgroundColor: const Color(0xFFFFF7ED),
-                  borderColor: const Color(0xFFFED7AA),
-                  foregroundColor: Colors.orange.shade700,
+                  backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                  borderColor: Colors.orange.withValues(alpha: 0.3),
+                  foregroundColor: Colors.orangeAccent,
                 ),
             ],
           ),
           const SizedBox(height: 18),
-          _buildBikeSchemaNavigator(theme, history, activeSystemKey),
+          // _buildBikeSchemaNavigator(theme, history, activeSystemKey),
           if (history.overviewNarrativeObservation?.summary != null &&
               history.overviewNarrativeObservation!.summary!
                   .trim()
@@ -718,7 +884,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               'Narrativa original de la orden',
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Colors.grey.shade900,
+                color: Colors.white70,
               ),
             ),
             const SizedBox(height: 8),
@@ -726,14 +892,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: Colors.white.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE6ECF3)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Text(
                 history.overviewNarrativeObservation!.summary!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade700,
+                  color: Colors.grey.shade400,
                   height: 1.45,
                 ),
               ),
@@ -744,162 +910,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
-  Widget _buildBikeSchemaNavigator(
-    ThemeData theme,
-    _BikeRecordHistoryData history,
-    String? activeSystemKey,
-  ) {
-    final highlightedSystemKey = _hoveredDiagnosisSystemKey ?? activeSystemKey;
 
-    return Container(
-      height: 300,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF8FBFF), Color(0xFFF3F6FB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E7F1)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _BikeSchemaPainter(
-                    lineColor: const Color(0xFFB8C5D6),
-                    baseWheelColor: const Color(0xFFD8E0EA),
-                    highlightSystemKey: highlightedSystemKey,
-                    highlightColor: const Color(0xFF1F6FEB),
-                  ),
-                ),
-              ),
-              ...history.diagnosisSystems.map(
-                (system) => _buildSchemaNode(
-                  theme,
-                  system,
-                  constraints,
-                  activeSystemKey == system.systemKey,
-                  highlightedSystemKey == system.systemKey,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSchemaNode(
-    ThemeData theme,
-    _BikeDiagnosisSystemView system,
-    BoxConstraints constraints,
-    bool isSelected,
-    bool isHighlighted,
-  ) {
-    final placement = _schemaPlacementFor(system.systemKey, constraints);
-    final accentColor = _getSystemStatusColor(system.overallStatus);
-
-    return Positioned(
-      left: placement.dx,
-      top: placement.dy,
-      child: MouseRegion(
-        onEnter: (_) {
-          setState(() {
-            _hoveredDiagnosisSystemKey = system.systemKey;
-          });
-        },
-        onExit: (_) {
-          if (_hoveredDiagnosisSystemKey == system.systemKey) {
-            setState(() {
-              _hoveredDiagnosisSystemKey = null;
-            });
-          }
-        },
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedDiagnosisSystemKey = system.systemKey;
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: placement.width,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected || isHighlighted
-                  ? accentColor.withOpacity(0.12)
-                  : Colors.white.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected || isHighlighted
-                    ? accentColor.withOpacity(0.7)
-                    : const Color(0xFFD6DEE8),
-                width: isSelected ? 1.6 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isSelected ? 0.08 : 0.04),
-                  blurRadius: isSelected ? 16 : 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        system.displayName,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      _systemIconFor(system.systemKey),
-                      size: 16,
-                      color: accentColor,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _buildReferencePill(
-                      label: system.overallStatus.displayName,
-                      backgroundColor: accentColor.withOpacity(0.10),
-                      borderColor: accentColor.withOpacity(0.22),
-                      foregroundColor: accentColor,
-                    ),
-                    if (system.latestMeasureLabel != null) ...[
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          system.latestMeasureLabel!,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildSystemDetailCard(
     ThemeData theme,
@@ -910,9 +921,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFF161E29),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,13 +932,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               'Selecciona un sistema',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Haz clic sobre un sistema del esquema para ver diagnósticos, mediciones y trabajos relacionados.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey.shade600,
+                color: Colors.grey.shade400,
                 height: 1.45,
               ),
             ),
@@ -941,12 +953,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF161E29),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -962,7 +974,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.10),
+                  color: accentColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
@@ -982,14 +994,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                             system.displayName,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: Colors.black87,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                         _buildReferencePill(
                           label: system.overallStatus.displayName,
-                          backgroundColor: accentColor.withOpacity(0.10),
-                          borderColor: accentColor.withOpacity(0.22),
+                          backgroundColor: accentColor.withValues(alpha: 0.15),
+                          borderColor: accentColor.withValues(alpha: 0.3),
                           foregroundColor: accentColor,
                         ),
                       ],
@@ -998,7 +1010,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     Text(
                       system.subheadline,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
+                        color: Colors.grey.shade400,
                       ),
                     ),
                   ],
@@ -1013,14 +1025,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: Colors.white.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE6ECF3)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Text(
                 system.primaryNarrative!,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade800,
+                  color: Colors.white70,
                   height: 1.5,
                 ),
               ),
@@ -1051,7 +1063,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       label,
       style: theme.textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
-        color: Colors.grey.shade900,
+        color: const Color(0xFF1E293B), // Slate 800
       ),
     );
   }
@@ -1064,114 +1076,62 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white, // Light sleek
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE3E8EF)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      series.title,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        series.title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF334155),
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      series.subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
+                      const SizedBox(height: 2),
+                      Text(
+                        series.subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey.shade600,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              _buildReferencePill(
-                label: series.latestValueLabel,
-                backgroundColor: accentColor.withOpacity(0.10),
-                borderColor: accentColor.withOpacity(0.18),
-                foregroundColor: accentColor,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 46,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final points = series.points;
-                final maxWidth = constraints.maxWidth;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      top: 18,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCE4ED),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    for (int index = 0; index < points.length; index++)
-                      Positioned(
-                        left: points.length == 1
-                            ? (maxWidth / 2) - 7
-                            : (maxWidth - 14) * (index / (points.length - 1)),
-                        top: 11,
-                        child: Tooltip(
-                          message:
-                              '${DateFormat('dd/MM/yyyy').format(points[index].observedAt)} • ${_formatObservationValue(points[index].valueNumeric)} ${points[index].unit ?? ''} • ${points[index].payload['job_number'] ?? 'Sin orden'}',
-                          child: Container(
-                            width: 14,
-                            height: 14,
-                            decoration: BoxDecoration(
-                              color: index == points.length - 1
-                                  ? accentColor
-                                  : Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: accentColor,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
+                _buildReferencePill(
+                  label: series.latestValueLabel,
+                  backgroundColor: accentColor.withValues(alpha: 0.15),
+                  borderColor: accentColor.withValues(alpha: 0.3),
+                  foregroundColor: accentColor,
+                ),
+              ],
             ),
           ),
-          Row(
-            children: [
-              Text(
-                series.firstDateLabel,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade500,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                series.lastDateLabel,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade500,
-                ),
-              ),
-            ],
+          BikeMeasurementTimeline(
+            title: series.title,
+            unit: series.unit,
+            points: series.points,
+            accentColor: accentColor,
           ),
         ],
       ),
@@ -1189,9 +1149,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF1A2330),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE3E8EF)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1203,16 +1163,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   observation.title,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+                    color: Colors.white,
                   ),
                 ),
               ),
               if (jobNumber != null && jobNumber.isNotEmpty)
                 _buildReferencePill(
                   label: jobNumber,
-                  backgroundColor: const Color(0xFFF3F6FA),
-                  borderColor: const Color(0xFFE1E7EF),
-                  foregroundColor: Colors.blueGrey.shade700,
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  borderColor: Colors.transparent,
+                  foregroundColor: Colors.white,
                 ),
             ],
           ),
@@ -1222,7 +1182,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 ? observation.summary!
                 : observation.statusValue ?? 'Sin resumen detallado.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade700,
+              color: Colors.grey.shade400,
               height: 1.45,
             ),
           ),
@@ -1240,8 +1200,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 const SizedBox(width: 8),
                 _buildReferencePill(
                   label: _formatSeverityLabel(observation.severity),
-                  backgroundColor: accentColor.withOpacity(0.10),
-                  borderColor: accentColor.withOpacity(0.18),
+                  backgroundColor: accentColor.withValues(alpha: 0.15),
+                  borderColor: accentColor.withValues(alpha: 0.3),
                   foregroundColor: accentColor,
                 ),
               ],
@@ -1348,7 +1308,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         border: Border.all(color: Colors.white, width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 2,
                           ),
                         ],
@@ -1479,23 +1439,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     }
   }
 
-  _SchemaPlacement _schemaPlacementFor(
-    String systemKey,
-    BoxConstraints constraints,
-  ) {
-    final width = constraints.maxWidth;
-    switch (systemKey) {
-      case 'rear_brake':
-        return _SchemaPlacement(dx: 14, dy: 18, width: width * 0.36);
-      case 'front_brake':
-        return _SchemaPlacement(dx: width * 0.58, dy: 18, width: width * 0.34);
-      case 'drivetrain':
-        return _SchemaPlacement(dx: width * 0.31, dy: 212, width: width * 0.38);
-      default:
-        return _SchemaPlacement(dx: width * 0.34, dy: 112, width: width * 0.3);
-    }
-  }
-
   Color _getSystemStatusColor(BikeSystemOverallStatus status) {
     switch (status) {
       case BikeSystemOverallStatus.ok:
@@ -1556,7 +1499,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
+                  color: iconColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 20, color: iconColor),
@@ -1582,7 +1525,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 border: Border.all(color: borderColor),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   )
@@ -1826,9 +1769,9 @@ class _BikeRecordHistoryData {
         diagnosisSystems.any((system) => system.systemKey == preferred)) {
       return preferred;
     }
-    return diagnosisSystems.isNotEmpty
-        ? diagnosisSystems.first.systemKey
-        : null;
+    // Do NOT auto-select first — return null so the workbench starts empty
+    // and only shows telemetry after the user explicitly clicks a pin.
+    return null;
   }
 
   _BikeDiagnosisSystemView? systemFor(String? systemKey) {
@@ -2006,120 +1949,3 @@ class _BikeMeasurementSeries {
       DateFormat('dd/MM').format(points.last.observedAt);
 }
 
-class _SchemaPlacement {
-  final double dx;
-  final double dy;
-  final double width;
-
-  const _SchemaPlacement({
-    required this.dx,
-    required this.dy,
-    required this.width,
-  });
-}
-
-class _BikeSchemaPainter extends CustomPainter {
-  final String? highlightSystemKey;
-  final Color highlightColor;
-  final Color lineColor;
-  final Color baseWheelColor;
-
-  const _BikeSchemaPainter({
-    required this.highlightSystemKey,
-    required this.highlightColor,
-    required this.lineColor,
-    required this.baseWheelColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rearWheel = Offset(size.width * 0.28, size.height * 0.66);
-    final frontWheel = Offset(size.width * 0.72, size.height * 0.66);
-    final crank = Offset(size.width * 0.5, size.height * 0.58);
-    final seat = Offset(size.width * 0.42, size.height * 0.34);
-    final head = Offset(size.width * 0.62, size.height * 0.34);
-
-    final highlightPaint = Paint()
-      ..color = highlightColor.withOpacity(0.10)
-      ..style = PaintingStyle.fill;
-
-    switch (highlightSystemKey) {
-      case 'front_brake':
-        canvas.drawCircle(frontWheel, size.width * 0.14, highlightPaint);
-        break;
-      case 'rear_brake':
-        canvas.drawCircle(rearWheel, size.width * 0.14, highlightPaint);
-        break;
-      case 'drivetrain':
-        canvas.drawOval(
-          Rect.fromCenter(
-            center: crank,
-            width: size.width * 0.26,
-            height: size.height * 0.18,
-          ),
-          highlightPaint,
-        );
-        break;
-    }
-
-    final wheelPaint = Paint()
-      ..color = baseWheelColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-    final linePaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 4;
-    final accentPaint = Paint()
-      ..color = highlightColor.withOpacity(0.75)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 4.5;
-
-    canvas.drawCircle(rearWheel, size.width * 0.12, wheelPaint);
-    canvas.drawCircle(frontWheel, size.width * 0.12, wheelPaint);
-
-    canvas.drawLine(rearWheel, crank, linePaint);
-    canvas.drawLine(seat, crank, linePaint);
-    canvas.drawLine(seat, head, linePaint);
-    canvas.drawLine(crank, head, linePaint);
-    canvas.drawLine(head, frontWheel, linePaint);
-    canvas.drawLine(
-        seat, Offset(seat.dx, seat.dy - size.height * 0.07), linePaint);
-    canvas.drawLine(
-        head,
-        Offset(head.dx + size.width * 0.05, head.dy - size.height * 0.04),
-        linePaint);
-
-    if (highlightSystemKey == 'drivetrain') {
-      canvas.drawCircle(crank, size.width * 0.045, accentPaint);
-    }
-    if (highlightSystemKey == 'front_brake') {
-      canvas.drawLine(
-        Offset(frontWheel.dx - size.width * 0.02,
-            frontWheel.dy - size.height * 0.11),
-        Offset(frontWheel.dx + size.width * 0.03,
-            frontWheel.dy - size.height * 0.02),
-        accentPaint,
-      );
-    }
-    if (highlightSystemKey == 'rear_brake') {
-      canvas.drawLine(
-        Offset(rearWheel.dx + size.width * 0.02,
-            rearWheel.dy - size.height * 0.11),
-        Offset(rearWheel.dx - size.width * 0.03,
-            rearWheel.dy - size.height * 0.02),
-        accentPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BikeSchemaPainter oldDelegate) {
-    return oldDelegate.highlightSystemKey != highlightSystemKey ||
-        oldDelegate.highlightColor != highlightColor ||
-        oldDelegate.lineColor != lineColor ||
-        oldDelegate.baseWheelColor != baseWheelColor;
-  }
-}

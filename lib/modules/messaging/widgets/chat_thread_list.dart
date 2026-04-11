@@ -84,7 +84,7 @@ class ChatThreadList extends StatelessWidget {
           },
           child: ListTile(
             selected: isSelected,
-            selectedTileColor: Theme.of(context).primaryColor.withOpacity(0.1),
+            selectedTileColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
             leading: CircleAvatar(
               backgroundColor: _getTypeColor(conversation.type),
               child: Icon(

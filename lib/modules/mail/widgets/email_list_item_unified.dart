@@ -27,11 +27,11 @@ class EmailListItemUnified extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: isSelected
-                ? colorScheme.primaryContainer.withOpacity(0.3)
+                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
                 : (isUnread ? colorScheme.surface : null),
             border: Border(
               bottom: BorderSide(
-                  color: colorScheme.outlineVariant.withOpacity(0.3)),
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
               // Left border for unread
               left: isUnread
                   ? const BorderSide(color: Color(0xFF0078D4), width: 4)

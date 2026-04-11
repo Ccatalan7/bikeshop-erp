@@ -479,14 +479,14 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
           width: _isExpanded ? 472 : 64,
           constraints: const BoxConstraints(maxHeight: 760),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withOpacity(0.98),
+            color: theme.colorScheme.surface.withValues(alpha: 0.98),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.12),
+                color: Colors.black.withValues(alpha: 0.12),
                 blurRadius: 28,
                 offset: const Offset(0, 18),
               ),
@@ -510,7 +510,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            theme.colorScheme.primary.withOpacity(0.08),
+            theme.colorScheme.primary.withValues(alpha: 0.08),
             theme.colorScheme.surfaceContainerHigh,
           ],
           begin: Alignment.topCenter,
@@ -628,7 +628,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         gradient: LinearGradient(
           colors: [
             theme.colorScheme.primary,
-            theme.colorScheme.primary.withOpacity(0.78),
+            theme.colorScheme.primary.withValues(alpha: 0.78),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -644,7 +644,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.16),
+                  color: Colors.white.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.flash_on_rounded, color: Colors.white),
@@ -665,7 +665,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                     Text(
                       'Registra un gasto pagado sin salir del módulo actual.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withOpacity(0.84),
+                        color: Colors.white.withValues(alpha: 0.84),
                       ),
                     ),
                   ],
@@ -678,7 +678,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.14),
+                color: Colors.white.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
@@ -746,7 +746,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.35),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
       child: Column(
@@ -970,7 +970,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                         leading: CircleAvatar(
                           radius: 16,
                           backgroundColor:
-                              theme.colorScheme.primary.withOpacity(0.12),
+                              theme.colorScheme.primary.withValues(alpha: 0.12),
                           child: Icon(
                             Icons.person_2_outlined,
                             size: 16,
@@ -1035,7 +1035,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.35),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
               ),
             ),
             child: Column(
@@ -1147,7 +1147,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
                               color: theme.colorScheme.outlineVariant
-                                  .withOpacity(0.28),
+                                  .withValues(alpha: 0.28),
                             ),
                           ),
                           child: Row(
@@ -1157,7 +1157,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                                 height: 42,
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Icon(
@@ -1256,7 +1256,7 @@ class _RailButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: selected ? accentColor.withOpacity(0.14) : Colors.transparent,
+        color: selected ? accentColor.withValues(alpha: 0.14) : Colors.transparent,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
@@ -1299,7 +1299,7 @@ class _StatCard extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.24),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.24),
         ),
       ),
       child: Column(
@@ -1309,7 +1309,7 @@ class _StatCard extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.14),
+              color: accentColor.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: accentColor, size: 18),

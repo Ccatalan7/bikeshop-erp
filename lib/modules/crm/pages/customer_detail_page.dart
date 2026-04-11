@@ -338,7 +338,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       height: 60,
                       decoration: BoxDecoration(
                         color:
-                            _getLoyaltyColor(_loyalty!.tier).withOpacity(0.1),
+                            _getLoyaltyColor(_loyalty!.tier).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Icon(

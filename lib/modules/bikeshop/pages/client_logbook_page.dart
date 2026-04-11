@@ -1139,8 +1139,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: highlight
-            ? theme.colorScheme.primary.withOpacity(0.12)
-            : Colors.grey.withOpacity(0.12),
+            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+            : Colors.grey.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
@@ -2222,7 +2222,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           _openBikeRecordPane(bike);
         }
       },
-      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
       child: Container(
         height: 52,
         decoration: BoxDecoration(
@@ -2239,7 +2239,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               child: Icon(
                 Icons.pedal_bike,
                 size: 18,
-                color: theme.colorScheme.primary.withOpacity(0.65),
+                color: theme.colorScheme.primary.withValues(alpha: 0.65),
               ),
             ),
             SizedBox(
@@ -2411,7 +2411,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     final defaultDescription = _getDefaultDescription(event.eventType);
 
     return InkWell(
-      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
       child: Container(
         height: 52,
         decoration: BoxDecoration(
@@ -2427,7 +2427,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 14),
@@ -2671,7 +2671,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           });
         }
       },
-      hoverColor: Colors.blue[50]?.withOpacity(0.5),
+      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
       child: Container(
         height: 52,
         decoration: BoxDecoration(
@@ -2685,7 +2685,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
             Container(
               width: 4,
               height: 52,
-              color: priorityColor.withOpacity(0.65),
+              color: priorityColor.withValues(alpha: 0.65),
             ),
             const SizedBox(width: 12),
             SizedBox(
@@ -2819,9 +2819,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         status.displayName,

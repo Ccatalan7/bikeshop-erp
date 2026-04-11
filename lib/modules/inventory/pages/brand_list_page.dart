@@ -334,7 +334,7 @@ class _BrandListPageState extends State<BrandListPage> {
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
           child: Icon(
             Icons.sell_outlined,
             color: theme.colorScheme.primary,
@@ -366,7 +366,7 @@ class _BrandListPageState extends State<BrandListPage> {
                   backgroundColor: (brand.isActive
                           ? Colors.greenAccent
                           : Colors.orangeAccent)
-                      .withOpacity(0.18),
+                      .withValues(alpha: 0.18),
                 ),
                 Chip(
                   avatar: const Icon(Icons.public, size: 18),
@@ -437,7 +437,7 @@ class _BrandListPageState extends State<BrandListPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
       ),
       child: Row(
         children: [
@@ -453,7 +453,7 @@ class _BrandListPageState extends State<BrandListPage> {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(color: color.withOpacity(0.9)),
+            style: TextStyle(color: color.withValues(alpha: 0.9)),
           ),
         ],
       ),

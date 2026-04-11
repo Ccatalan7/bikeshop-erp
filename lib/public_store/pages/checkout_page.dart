@@ -1158,10 +1158,10 @@ class _CheckoutPageState extends State<CheckoutPage>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: PublicStoreTheme.info.withOpacity(0.1),
+                color: PublicStoreTheme.info.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border:
-                    Border.all(color: PublicStoreTheme.info.withOpacity(0.3)),
+                    Border.all(color: PublicStoreTheme.info.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [

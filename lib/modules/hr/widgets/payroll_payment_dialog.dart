@@ -390,7 +390,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                 fontWeight: FontWeight.bold)),
                         Text(_voucher!.periodLabel ?? 'Sin período',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.9))),
+                                color: Colors.white.withValues(alpha: 0.9))),
                       ],
                     ),
                   ),

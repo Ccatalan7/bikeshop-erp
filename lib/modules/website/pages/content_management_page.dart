@@ -377,7 +377,7 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: section.color.withOpacity(0.1),
+                      color: section.color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -394,7 +394,7 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: Colors.green.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Row(
@@ -424,7 +424,7 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
+                        color: Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Row(
@@ -665,8 +665,8 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
                           style: const TextStyle(fontSize: 12),
                         ),
                         backgroundColor: _hasChanges
-                            ? Colors.orange.withOpacity(0.2)
-                            : Colors.green.withOpacity(0.2),
+                            ? Colors.orange.withValues(alpha: 0.2)
+                            : Colors.green.withValues(alpha: 0.2),
                         avatar: Icon(
                           _hasChanges ? Icons.edit : Icons.check,
                           size: 16,

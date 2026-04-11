@@ -522,7 +522,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
                     ),
@@ -568,7 +568,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                             color: isSelected
                                 ? Theme.of(context)
                                     .primaryColor
-                                    .withOpacity(0.1)
+                                    .withValues(alpha: 0.1)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: isToday
@@ -640,7 +640,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 4, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: statusColor.withOpacity(0.2),
+                                            color: statusColor.withValues(alpha: 0.2),
                                             borderRadius:
                                                 BorderRadius.circular(4),
                                           ),
@@ -649,7 +649,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                               Icon(icon,
                                                   size: 10,
                                                   color: statusColor
-                                                      .withOpacity(0.9)),
+                                                      .withValues(alpha: 0.9)),
                                               const SizedBox(width: 2),
                                               Expanded(
                                                 child: Text(
@@ -657,7 +657,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     color: statusColor
-                                                        .withOpacity(0.9),
+                                                        .withValues(alpha: 0.9),
                                                   ),
                                                   maxLines: 1,
                                                   overflow:
@@ -757,7 +757,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.3),
+                        .withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -766,7 +766,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                   ),
                 ],
@@ -834,7 +834,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.4),
+                        .withValues(alpha: 0.4),
                   ),
                 ],
               ),
@@ -845,7 +845,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.7),
+                          .withValues(alpha: 0.7),
                     ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -903,7 +903,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     final theme = Theme.of(context);
     final baseColor = isHighlighted
         ? theme.colorScheme.primary
-        : theme.colorScheme.onSurface.withOpacity(0.6);
+        : theme.colorScheme.onSurface.withValues(alpha: 0.6);
     final color = isOverdue ? Colors.red : baseColor;
     final fontWeight =
         isHighlighted || isOverdue ? FontWeight.bold : FontWeight.normal;
@@ -1037,8 +1037,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
-        border: Border(bottom: BorderSide(color: statusColor.withOpacity(0.3))),
+        color: statusColor.withValues(alpha: 0.1),
+        border: Border(bottom: BorderSide(color: statusColor.withValues(alpha: 0.3))),
       ),
       child: Column(
         children: [
@@ -1084,7 +1084,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.2),
+                    color: statusColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor, width: 1.5),
                   ),
@@ -1744,7 +1744,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color:
-                      Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                      Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
             ),
             child: Column(
               children: [
@@ -1796,7 +1796,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color:
-                      Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                      Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
             ),
             child: Column(
               children: [
@@ -1859,7 +1859,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                     color:
-                        Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+                        Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -1943,7 +1943,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1951,7 +1951,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -1977,7 +1977,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           label: Text(bike.bikeType!.displayName),
                           visualDensity: VisualDensity.compact,
                           backgroundColor:
-                              theme.colorScheme.secondary.withOpacity(0.2),
+                              theme.colorScheme.secondary.withValues(alpha: 0.2),
                         ),
                       ],
                     ],
@@ -2072,7 +2072,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: theme.colorScheme.outline.withOpacity(0.3),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
                 ),
               ),
               child: Text(
@@ -2109,7 +2109,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.6),
+                        .withValues(alpha: 0.6),
                   ),
                 ),
                 Text(

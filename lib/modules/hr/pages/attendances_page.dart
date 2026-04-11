@@ -545,7 +545,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
         color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -963,7 +963,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
               fontSize: 11,
               color: isToday
                   ? Theme.of(context).primaryColor
-                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 4),
@@ -988,7 +988,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isToday
-            ? Theme.of(context).primaryColor.withOpacity(0.1)
+            ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
             : Theme.of(context).colorScheme.surface,
         border: Border.all(
             color:

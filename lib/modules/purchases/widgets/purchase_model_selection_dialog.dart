@@ -103,7 +103,7 @@ class _PurchaseModelSelectionDialogState
             width: isSelected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: isSelected ? color.withOpacity(0.05) : null,
+          color: isSelected ? color.withValues(alpha: 0.05) : null,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

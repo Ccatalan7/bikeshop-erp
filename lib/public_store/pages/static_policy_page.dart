@@ -374,7 +374,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
                 _error!,
                 textAlign: TextAlign.center,
                 style:
-                    TextStyle(fontSize: 14, color: textColor.withOpacity(0.7)),
+                    TextStyle(fontSize: 14, color: textColor.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -388,7 +388,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
           padding: const EdgeInsets.all(32),
           child: Text(
             'Esta página está en construcción',
-            style: TextStyle(fontSize: 18, color: textColor.withOpacity(0.7)),
+            style: TextStyle(fontSize: 18, color: textColor.withValues(alpha: 0.7)),
           ),
         ),
       );

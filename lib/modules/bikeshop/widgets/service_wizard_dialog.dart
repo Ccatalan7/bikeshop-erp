@@ -155,7 +155,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
           end: Alignment.bottomRight,
           colors: [
             colorScheme.primary,
-            colorScheme.primary.withOpacity(0.75),
+            colorScheme.primary.withValues(alpha: 0.75),
           ],
         ),
       ),
@@ -167,7 +167,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.build_circle_outlined,
@@ -194,7 +194,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
                       ? widget.profile!.name
                       : 'Configurar servicio',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 12.5,
                     fontWeight: FontWeight.w400,
                   ),
@@ -217,7 +217,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.dividerColor),
       ),

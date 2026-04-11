@@ -248,7 +248,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
               color: Theme.of(context).cardColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -545,7 +545,7 @@ class _EmployeeCard extends StatelessWidget {
               CircleAvatar(
                 radius: 28,
                 backgroundColor:
-                    Theme.of(context).primaryColor.withOpacity(0.1),
+                    Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 child: employee.photoUrl != null
                     ? ClipOval(
                         child: Image.network(
@@ -594,7 +594,7 @@ class _EmployeeCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: _getStatusColor().withOpacity(0.1),
+                            color: _getStatusColor().withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: _getStatusColor()),
                           ),

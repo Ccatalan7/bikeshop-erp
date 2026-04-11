@@ -120,9 +120,9 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               border: Border(
-                  bottom: BorderSide(color: Colors.orange.withOpacity(0.3))),
+                  bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.3))),
             ),
             child: Row(
               children: [
@@ -142,9 +142,9 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               border: Border(
-                  bottom: BorderSide(color: Colors.red.withOpacity(0.3))),
+                  bottom: BorderSide(color: Colors.red.withValues(alpha: 0.3))),
             ),
             child: Row(
               children: [
@@ -200,7 +200,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -372,7 +372,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.15),
+          color: Colors.green.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(20),
         ),
         child: const Row(
@@ -392,7 +392,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.15),
+          color: Colors.red.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(20),
         ),
         child: const Row(
@@ -423,7 +423,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),

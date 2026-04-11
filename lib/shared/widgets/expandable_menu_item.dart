@@ -93,7 +93,7 @@ class ExpandableMenuItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: isAnySubItemSelected
-                      ? theme.primaryColor.withOpacity(0.1)
+                      ? theme.primaryColor.withValues(alpha: 0.1)
                       : Colors.transparent,
                 ),
                 child: Row(
@@ -104,7 +104,7 @@ class ExpandableMenuItem extends StatelessWidget {
                       color: enabled
                           ? (isAnySubItemSelected
                               ? theme.primaryColor
-                              : theme.colorScheme.onSurface.withOpacity(0.7))
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.7))
                           : theme.disabledColor,
                     ),
                     const SizedBox(width: 12),
@@ -149,7 +149,7 @@ class ExpandableMenuItem extends StatelessWidget {
                           Icons.keyboard_arrow_down,
                           size: 20,
                           color: enabled
-                              ? theme.colorScheme.onSurface.withOpacity(0.5)
+                              ? theme.colorScheme.onSurface.withValues(alpha: 0.5)
                               : theme.disabledColor,
                         ),
                       ),
@@ -172,7 +172,7 @@ class ExpandableMenuItem extends StatelessWidget {
                     subItem.title,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -212,7 +212,7 @@ class ExpandableMenuItem extends StatelessWidget {
                                       Icon(Icons.tab,
                                           size: 18,
                                           color: theme.colorScheme.onSurface
-                                              .withOpacity(0.7)),
+                                              .withValues(alpha: 0.7)),
                                       const SizedBox(width: 8),
                                       const Text('Abrir en esta pestaña'),
                                     ],
@@ -283,7 +283,7 @@ class ExpandableMenuItem extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
                           color: isSelected
-                              ? theme.primaryColor.withOpacity(0.08)
+                              ? theme.primaryColor.withValues(alpha: 0.08)
                               : Colors.transparent,
                         ),
                         child: Row(
@@ -294,7 +294,7 @@ class ExpandableMenuItem extends StatelessWidget {
                               color: isSelected
                                   ? theme.primaryColor
                                   : theme.colorScheme.onSurface
-                                      .withOpacity(0.6),
+                                      .withValues(alpha: 0.6),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -307,7 +307,7 @@ class ExpandableMenuItem extends StatelessWidget {
                                   color: isSelected
                                       ? theme.primaryColor
                                       : theme.colorScheme.onSurface
-                                          .withOpacity(0.8),
+                                          .withValues(alpha: 0.8),
                                 ),
                               ),
                             ),

@@ -73,7 +73,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color:
-                  darkStyle ? Colors.white.withOpacity(0.9) : Colors.grey[700],
+                  darkStyle ? Colors.white.withValues(alpha: 0.9) : Colors.grey[700],
             ),
           ),
           const SizedBox(height: 6),
@@ -86,7 +86,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               color:
-                  darkStyle ? Colors.white.withOpacity(0.5) : Colors.grey[600],
+                  darkStyle ? Colors.white.withValues(alpha: 0.5) : Colors.grey[600],
             ),
           ),
         ],
@@ -105,10 +105,10 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: darkStyle ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+          color: darkStyle ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
           border: Border.all(
             color:
-                darkStyle ? Colors.white.withOpacity(0.1) : Colors.grey[300]!,
+                darkStyle ? Colors.white.withValues(alpha: 0.1) : Colors.grey[300]!,
           ),
           borderRadius: BorderRadius.circular(6),
         ),
@@ -118,7 +118,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
               icon,
               size: 16,
               color:
-                  darkStyle ? Colors.white.withOpacity(0.7) : Colors.grey[700],
+                  darkStyle ? Colors.white.withValues(alpha: 0.7) : Colors.grey[700],
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -129,7 +129,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   color: darkStyle
-                      ? Colors.white.withOpacity(0.9)
+                      ? Colors.white.withValues(alpha: 0.9)
                       : Colors.grey[800],
                 ),
               ),
@@ -139,7 +139,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
               Icons.edit,
               size: 14,
               color:
-                  darkStyle ? Colors.white.withOpacity(0.4) : Colors.grey[500],
+                  darkStyle ? Colors.white.withValues(alpha: 0.4) : Colors.grey[500],
             ),
           ],
         ),
@@ -571,7 +571,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final editorTheme = isDark
         ? parentTheme.copyWith(
             scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-            dividerColor: Colors.white.withOpacity(0.1),
+            dividerColor: Colors.white.withValues(alpha: 0.1),
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF1E1E1E),
               elevation: 0,
@@ -588,8 +588,8 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-              prefixIconColor: Colors.white.withOpacity(0.4),
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+              prefixIconColor: Colors.white.withValues(alpha: 0.4),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
             ),
@@ -598,7 +598,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               displayColor: Colors.white,
             ),
             listTileTheme: ListTileThemeData(
-              iconColor: Colors.white.withOpacity(0.7),
+              iconColor: Colors.white.withValues(alpha: 0.7),
               textColor: Colors.white,
             ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
@@ -686,7 +686,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                   height: 40,
                                   decoration: BoxDecoration(
                                     color: isDark
-                                        ? Colors.white.withOpacity(0.05)
+                                        ? Colors.white.withValues(alpha: 0.05)
                                         : Colors.grey[100],
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -710,13 +710,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                   href,
                                   style: TextStyle(
                                     color: isDark
-                                        ? Colors.white.withOpacity(0.5)
+                                        ? Colors.white.withValues(alpha: 0.5)
                                         : Colors.grey[600],
                                     fontSize: 12,
                                   ),
                                 ),
                                 hoverColor: isDark
-                                    ? Colors.white.withOpacity(0.05)
+                                    ? Colors.white.withValues(alpha: 0.05)
                                     : null,
                                 contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16, vertical: 4),
@@ -757,7 +757,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final editorTheme = isDark
         ? parentTheme.copyWith(
             scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-            dividerColor: Colors.white.withOpacity(0.1),
+            dividerColor: Colors.white.withValues(alpha: 0.1),
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF1E1E1E),
               elevation: 0,
@@ -774,8 +774,8 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-              prefixIconColor: Colors.white.withOpacity(0.4),
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+              prefixIconColor: Colors.white.withValues(alpha: 0.4),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
             ),
@@ -784,7 +784,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               displayColor: Colors.white,
             ),
             listTileTheme: ListTileThemeData(
-              iconColor: Colors.white.withOpacity(0.7),
+              iconColor: Colors.white.withValues(alpha: 0.7),
               textColor: Colors.white,
             ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
@@ -866,7 +866,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                   height: 40,
                                   decoration: BoxDecoration(
                                     color: isDark
-                                        ? Colors.white.withOpacity(0.05)
+                                        ? Colors.white.withValues(alpha: 0.05)
                                         : Colors.grey[100],
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -886,13 +886,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                   c.id,
                                   style: TextStyle(
                                     color: isDark
-                                        ? Colors.white.withOpacity(0.5)
+                                        ? Colors.white.withValues(alpha: 0.5)
                                         : Colors.grey[600],
                                     fontSize: 12,
                                   ),
                                 ),
                                 hoverColor: isDark
-                                    ? Colors.white.withOpacity(0.05)
+                                    ? Colors.white.withValues(alpha: 0.05)
                                     : null,
                                 contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16, vertical: 4),

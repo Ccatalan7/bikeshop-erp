@@ -1348,7 +1348,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withOpacity(0.1),
+          color: theme.colorScheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
@@ -1723,7 +1723,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   Widget _buildReadOnlyNotice(ThemeData theme) {
     if (widget.isCompact) return const SizedBox.shrink();
     return Card(
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
       child: ListTile(
         leading:
             Icon(Icons.lock_outline, color: theme.colorScheme.onSurfaceVariant),
@@ -1752,7 +1752,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -1791,7 +1791,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           leading: widget.isCompact
               ? null
               : CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
                   child: Icon(
                     Icons.person,
                     color: theme.colorScheme.primary,
@@ -1831,7 +1831,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1841,7 +1841,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                   Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
@@ -1873,7 +1873,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                   Divider(
                       height: 1,
                       thickness: 1,
-                      color: theme.colorScheme.outline.withOpacity(0.2)),
+                      color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                   Column(
                     children: [
                       ..._buildGroupedTableRows(theme),
@@ -1985,8 +1985,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
-          bottom: BorderSide(color: theme.colorScheme.outline.withOpacity(0.1)),
+          top: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
         ),
       ),
       child: Row(
@@ -1997,10 +1997,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.2)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   )
@@ -2041,7 +2041,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
               border:
-                  Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                  Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2075,9 +2075,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         padding: const EdgeInsets.symmetric(horizontal: 8),
         margin: const EdgeInsets.only(top: 4),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
@@ -2089,7 +2089,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
             icon: Icon(Icons.pedal_bike,
                 size: 14,
-                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             items: const [],
             onChanged: null,
           ),
@@ -2102,9 +2102,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       padding: const EdgeInsets.symmetric(horizontal: 8),
       margin: const EdgeInsets.only(top: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
@@ -2400,9 +2400,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         _getLocalizedStatus(_status).toUpperCase(),

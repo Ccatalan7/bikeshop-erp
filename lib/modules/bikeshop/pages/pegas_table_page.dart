@@ -675,6 +675,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     var filtered = _jobs.where((job) {
       final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
+      final isMarkedAsTest = _jobMatchesTestFilter(job);
       final isInvoicedEffective = job.isInvoiced || job.invoiceId != null;
       final isPaidEffective =
           job.isPaid || (invoice?.status == InvoiceStatus.paid);
@@ -691,6 +692,12 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Get the job's phase from custom status, or infer from legacy status
       final jobPhase =
           job.customStatus?.phase ?? _inferPhaseFromLegacyStatus(job.status);
+
+      if (_statusFilter == 'test') {
+        if (!isMarkedAsTest) return false;
+      } else if (isMarkedAsTest) {
+        return false;
+      }
 
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
@@ -840,6 +847,38 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Persist state for navigation
     _saveTableState();
+  }
+
+  bool _jobMatchesTestFilter(MechanicJob job) {
+    final customer = _customers[job.customerId];
+    final bike = _bikes[job.bikeId];
+
+    final customerName = customer?.name.trim().toLowerCase() ?? '';
+    if (customerName == 'test' || customerName.startsWith('test ')) {
+      return true;
+    }
+
+    final bikeName = bike?.displayName.trim().toLowerCase() ?? '';
+    if (bikeName == 'test' || bikeName.startsWith('test ')) {
+      return true;
+    }
+
+    final auditText = [
+      job.jobNumber,
+      job.clientRequest,
+      job.diagnosis,
+      job.workPerformed,
+      job.notes,
+      bike?.brand,
+      bike?.model,
+      bike?.serialNumber,
+    ].whereType<String>().join(' ').toLowerCase();
+
+    return auditText.contains('[test') ||
+        auditText.contains('test perfil') ||
+        auditText.contains('test data') ||
+        auditText.contains('sandbox') ||
+        auditText.contains('dummy');
   }
 
   void _sortByColumn(String column) {
@@ -997,7 +1036,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -1016,7 +1055,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -1828,6 +1867,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           segments: const [
                             ButtonSegment(
                                 value: 'active', label: Text('Activos')),
+                          ButtonSegment(value: 'test', label: Text('Tests')),
                             ButtonSegment(
                                 value: 'completed', label: Text('Completados')),
                             ButtonSegment(
@@ -1905,6 +1945,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                           value: 'active',
                           label:
                               Text('Activos', style: TextStyle(fontSize: 13)),
+                        ),
+                        ButtonSegment(
+                          value: 'test',
+                          label: Text('Tests', style: TextStyle(fontSize: 13)),
                         ),
                         ButtonSegment(
                           value: 'completed',
@@ -2251,7 +2295,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               color: Theme.of(context)
                   .colorScheme
                   .onSurfaceVariant
-                  .withOpacity(0.3),
+                  .withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
@@ -2555,9 +2599,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         status.displayName,
@@ -2599,7 +2643,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -2640,9 +2684,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
@@ -2681,7 +2725,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -2701,7 +2745,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (color ?? theme.colorScheme.onSurface).withOpacity(0.05),
+        color: (color ?? theme.colorScheme.onSurface).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -2801,7 +2845,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest
-            .withOpacity(0.3),
+            .withValues(alpha: 0.3),
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).dividerColor,
@@ -2881,7 +2925,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -3231,11 +3275,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ? Theme.of(context)
                       .colorScheme
                       .primaryContainer
-                      .withOpacity(0.3)
+                      .withValues(alpha: 0.3)
                   : null,
               border: Border(
                 bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.withOpacity(0.5),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -3324,7 +3368,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               shape: BoxShape.circle,
               color: statusColor,
               border: Border.all(
-                color: statusColor.withOpacity(0.5),
+                color: statusColor.withValues(alpha: 0.5),
                 width: 2,
               ),
             ),
@@ -3475,7 +3519,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                         decorationColor: Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.3),
+                            .withValues(alpha: 0.3),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -3499,7 +3543,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     Icons.more_vert,
                     size: 16,
                     color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
                   ),
                   tooltip: 'Acciones rápidas',
                   padding: EdgeInsets.zero,
@@ -3565,7 +3609,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.pedal_bike,
                   size: 35,
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(width: 6),
@@ -3625,7 +3669,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     Icons.pedal_bike,
                     size: 35,
                     color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -3718,7 +3762,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.pedal_bike,
                   size: 35,
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(width: 6),
@@ -3809,10 +3853,10 @@ class _PegasTablePageState extends State<PegasTablePage>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: statusColor.withOpacity(0.3),
+                  color: statusColor.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -3852,10 +3896,10 @@ class _PegasTablePageState extends State<PegasTablePage>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: statusColor.withOpacity(0.3),
+                color: statusColor.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
@@ -3892,7 +3936,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     _formatStatusTimestamp(statusUpdatedAt),
                     style: TextStyle(
                       fontSize: 9,
-                      color: statusColor.withOpacity(0.7),
+                      color: statusColor.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -3914,10 +3958,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: priorityColor.withOpacity(0.1),
+            color: priorityColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: priorityColor.withOpacity(0.3),
+              color: priorityColor.withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -4444,7 +4488,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             child: Container(
               decoration: isDroppingOnThis
                   ? BoxDecoration(
-                      color: Colors.blue.withOpacity(0.2),
+                      color: Colors.blue.withValues(alpha: 0.2),
                       border: Border.all(color: Colors.blue, width: 2),
                       borderRadius: BorderRadius.circular(4),
                     )
@@ -4619,11 +4663,11 @@ class _PegasTablePageState extends State<PegasTablePage>
         decoration: BoxDecoration(
           // Slightly different background for expanded sub-rows
           color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
               : Theme.of(context).colorScheme.surfaceContainerLow,
           border: Border(
             bottom: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.5),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
             ),
           ),
         ),
@@ -5975,7 +6019,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       blurRadius: 20,
                     ),
                   ],
@@ -6604,7 +6648,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               color: bgColor,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border.all(color: statusColor.withOpacity(0.3)),
+              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -7232,7 +7276,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 2,
                         offset: const Offset(0, 1),
                       ),
@@ -7741,7 +7785,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                                color: colorValue.withOpacity(0.5),
+                                color: colorValue.withValues(alpha: 0.5),
                                 blurRadius: 8,
                                 spreadRadius: 2),
                           ]
@@ -7760,10 +7804,10 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _parseColor(_selectedColor).withOpacity(0.1),
+              color: _parseColor(_selectedColor).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: _parseColor(_selectedColor).withOpacity(0.3)),
+                  color: _parseColor(_selectedColor).withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -8008,7 +8052,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                   shape: BoxShape.circle,
                   border: Border.all(
                     color:
-                        isSelected ? statusColor : statusColor.withOpacity(0.5),
+                        isSelected ? statusColor : statusColor.withValues(alpha: 0.5),
                     width: isSelected ? 3 : 1,
                   ),
                 ),

@@ -697,7 +697,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -712,7 +712,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -765,7 +765,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark
-                    ? theme.colorScheme.primary.withOpacity(0.15)
+                    ? theme.colorScheme.primary.withValues(alpha: 0.15)
                     : Colors.blue[50])
                 : theme.cardColor,
             border: Border(
@@ -813,7 +813,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     invoice.supplierName ?? 'Sin proveedor',
                     style: TextStyle(
                       color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
+                          theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
                       fontSize: 13,
                     ),
                   ),
@@ -1141,7 +1141,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark
-                  ? theme.colorScheme.primary.withOpacity(0.15)
+                  ? theme.colorScheme.primary.withValues(alpha: 0.15)
                   : Colors.blue[50])
               : null,
           border: Border(
@@ -1438,7 +1438,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(3),
       ),
       child: Text(
@@ -1852,7 +1852,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
+                color: primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.info_outline, color: primaryColor, size: 20),
@@ -1867,7 +1867,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: primaryColor.withOpacity(0.8),
+                      color: primaryColor.withValues(alpha: 0.8),
                       letterSpacing: 1.2,
                     ),
                   ),
@@ -1928,7 +1928,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),

@@ -1644,7 +1644,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color:
-                        isMe ? Colors.white.withOpacity(0.3) : Colors.grey[100],
+                        isMe ? Colors.white.withValues(alpha: 0.3) : Colors.grey[100],
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -1719,7 +1719,7 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 1,
                   offset: const Offset(0, 1),
                 ),
@@ -2002,7 +2002,7 @@ class _ChatWindowState extends State<ChatWindow> {
     final headerIconColor = isMe ? Colors.green[900] : Colors.green;
     final headerTextColor = isMe ? Colors.green[900] : Colors.green[800];
     final headerBgColor =
-        isMe ? Colors.black.withOpacity(0.05) : Colors.green[50];
+        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.green[50];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2112,7 +2112,7 @@ class _ChatWindowState extends State<ChatWindow> {
     Color iconColor;
     Color titleColor = Colors.black87;
     Color headerBgColor =
-        isMe ? Colors.black.withOpacity(0.05) : Colors.grey[50]!;
+        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.grey[50]!;
 
     switch (actionType) {
       case 'approve_quote':
@@ -2163,9 +2163,9 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.green).withOpacity(0.05),
+          color: (isMe ? Colors.black : Colors.green).withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.withOpacity(0.5)),
+          border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2184,9 +2184,9 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.red).withOpacity(0.05),
+          color: (isMe ? Colors.black : Colors.red).withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(0.5)),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

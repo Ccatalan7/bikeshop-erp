@@ -202,8 +202,8 @@ class _BikeBrandsPageState extends State<BikeBrandsPage> {
                           ListTile(
                             leading: CircleAvatar(
                               backgroundColor: brand.isActive
-                                  ? Colors.blue.withOpacity(0.2)
-                                  : Colors.grey.withOpacity(0.2),
+                                  ? Colors.blue.withValues(alpha: 0.2)
+                                  : Colors.grey.withValues(alpha: 0.2),
                               child: Icon(
                                 Icons.pedal_bike,
                                 color: brand.isActive ? Colors.blue : Colors.grey,

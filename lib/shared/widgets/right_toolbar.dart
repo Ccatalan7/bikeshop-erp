@@ -136,8 +136,8 @@ class _RightToolbarState extends State<RightToolbar> {
     final barBorder =
         isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
     final activeBg = isDark
-        ? theme.colorScheme.primary.withOpacity(0.2)
-        : theme.colorScheme.primary.withOpacity(0.1);
+        ? theme.colorScheme.primary.withValues(alpha: 0.2)
+        : theme.colorScheme.primary.withValues(alpha: 0.1);
 
     final double currentWidth = _isExpanded ? _expandedWidth : _collapsedWidth;
 
@@ -216,7 +216,7 @@ class _RightToolbarState extends State<RightToolbar> {
                   child: Icon(
                     _toolIcon(tool),
                     size: 22,
-                    color: theme.colorScheme.onSurface.withOpacity(0.65),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
               ),
@@ -274,7 +274,7 @@ class _RightToolbarState extends State<RightToolbar> {
                           child: Icon(
                             Icons.close,
                             size: 18,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -317,7 +317,7 @@ class _RightToolbarState extends State<RightToolbar> {
                         decoration: BoxDecoration(
                           color: t == tool
                               ? theme.colorScheme.primary
-                                  .withOpacity(isDark ? 0.25 : 0.12)
+                                  .withValues(alpha: isDark ? 0.25 : 0.12)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -326,7 +326,7 @@ class _RightToolbarState extends State<RightToolbar> {
                           size: 20,
                           color: t == tool
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withOpacity(0.55),
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.55),
                         ),
                       ),
                     ),

@@ -281,7 +281,7 @@ class CartPage extends StatelessWidget {
                           horizontal: 12, vertical: 8),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: PublicStoreTheme.error.withOpacity(0.1),
+                        color: PublicStoreTheme.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: PublicStoreTheme.error),
                       ),

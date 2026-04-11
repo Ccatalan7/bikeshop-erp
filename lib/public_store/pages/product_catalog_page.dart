@@ -1582,7 +1582,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
               boxShadow: hoverActive
                   ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha: 0.06),
                         blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),

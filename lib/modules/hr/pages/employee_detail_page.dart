@@ -616,7 +616,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -680,10 +680,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: _getStatusColor(_status).withOpacity(0.1),
+            color: _getStatusColor(_status).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border:
-                Border.all(color: _getStatusColor(_status).withOpacity(0.5)),
+                Border.all(color: _getStatusColor(_status).withValues(alpha: 0.5)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -941,10 +941,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
         filled: !enabled,
-        fillColor: enabled ? null : Colors.grey.withOpacity(0.05),
+        fillColor: enabled ? null : Colors.grey.withValues(alpha: 0.05),
       ),
       validator: (value) {
         if (enabled && (value == null || value.isEmpty)) {
@@ -972,7 +972,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+            borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
           ),
         ),
         child: Text(
@@ -994,7 +994,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
       ),
       items: [
@@ -1015,7 +1015,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
       ),
       items: const [
@@ -1041,7 +1041,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
       ),
       items: const [
@@ -1078,7 +1078,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
           if (_isLoadingHours)
             LinearProgressIndicator(
-              backgroundColor: theme.dividerColor.withOpacity(0.1),
+              backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
               minHeight: 2,
             ),
 
@@ -1214,7 +1214,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               borderRadius: BorderRadius.circular(7),
               constraints: const BoxConstraints(minHeight: 30, minWidth: 60),
               selectedColor: theme.primaryColor,
-              fillColor: theme.primaryColor.withOpacity(0.1),
+              fillColor: theme.primaryColor.withValues(alpha: 0.1),
               textStyle:
                   const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
               children: const [
@@ -1235,7 +1235,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             border: Border.all(color: theme.dividerColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -1372,7 +1372,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color:
-                  Colors.grey.withOpacity(0.05), // Very light grey background
+                  Colors.grey.withValues(alpha: 0.05), // Very light grey background
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: theme.dividerColor),
             ),
@@ -1525,7 +1525,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
         helperText: _paymentMethods.isEmpty ? 'Cargando métodos...' : null,
       ),
@@ -1566,7 +1566,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
       ),
       items: const [
@@ -1597,7 +1597,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
         helperText: _salaryAccounts.isEmpty
             ? 'Cargando cuentas...'

@@ -217,7 +217,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: theme.colorScheme.primary.withOpacity(0.3),
+          color: theme.colorScheme.primary.withValues(alpha: 0.3),
           width: 2,
         ),
       ),
@@ -226,7 +226,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
-              theme.colorScheme.primaryContainer.withOpacity(0.3),
+              theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
               theme.colorScheme.surface,
             ],
             begin: Alignment.topLeft,
@@ -327,7 +327,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _getTemplateColor(page.template).withOpacity(0.1),
+                  color: _getTemplateColor(page.template).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -409,8 +409,8 @@ class _PageManagementPageState extends State<PageManagementPage> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: isPublished
-            ? Colors.green.withOpacity(0.1)
-            : Colors.orange.withOpacity(0.1),
+            ? Colors.green.withValues(alpha: 0.1)
+            : Colors.orange.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

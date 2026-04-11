@@ -228,7 +228,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
               color: Theme.of(context).cardColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -573,7 +573,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                     top: 4,
                     right: 4,
                     child: Material(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       shape: const CircleBorder(),
                       child: PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 20),

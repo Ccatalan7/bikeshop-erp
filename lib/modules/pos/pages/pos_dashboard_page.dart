@@ -2314,10 +2314,10 @@ class _CashierPanelState extends State<_CashierPanel> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.3),
+                      .withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.3),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -2444,7 +2444,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: posService.cartItems.length,
                       separatorBuilder: (_, __) => Divider(
-                          color: theme.colorScheme.outline.withOpacity(0.1)),
+                          color: theme.colorScheme.outline.withValues(alpha: 0.1)),
                       itemBuilder: (context, index) {
                         final item = posService.cartItems[index];
                         return Column(
@@ -3266,7 +3266,7 @@ class _MobileCartSummary extends StatelessWidget {
             color: theme.colorScheme.surface,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, -2),
               ),

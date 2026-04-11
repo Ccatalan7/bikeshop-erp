@@ -528,7 +528,7 @@ class _ConversationTile extends StatelessWidget {
         onTap: onTap,
         contentPadding: const EdgeInsets.all(16),
         leading: CircleAvatar(
-          backgroundColor: Colors.blue.withOpacity(0.1),
+          backgroundColor: Colors.blue.withValues(alpha: 0.1),
           child: const Icon(Icons.chat_bubble, color: Colors.blue),
         ),
         title: const Text('Consulta',

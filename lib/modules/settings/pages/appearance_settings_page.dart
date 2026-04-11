@@ -45,7 +45,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.7),
+                              .withValues(alpha: 0.7),
                         ),
                   ),
                   const SizedBox(height: 24),
@@ -112,7 +112,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.7),
+                              .withValues(alpha: 0.7),
                         ),
                   ),
                   const SizedBox(height: 24),
@@ -127,13 +127,13 @@ class AppearanceSettingsPage extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .primaryContainer
-                              .withOpacity(0.3),
+                              .withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: Theme.of(context)
                                 .colorScheme
                                 .primary
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                           ),
                         ),
                         child: Column(
@@ -156,7 +156,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
+                                      color: Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -202,7 +202,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onSurface
-                                      .withOpacity(0.3),
+                                      .withValues(alpha: 0.3),
                                 ),
                               ),
                           ],
@@ -287,7 +287,7 @@ class AppearanceSettingsPage extends StatelessWidget {
             color: Theme.of(context)
                 .colorScheme
                 .secondaryContainer
-                .withOpacity(0.3),
+                .withValues(alpha: 0.3),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(

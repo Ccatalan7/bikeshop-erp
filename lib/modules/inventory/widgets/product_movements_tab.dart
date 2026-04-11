@@ -141,7 +141,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
                       border: Border(
                           bottom: BorderSide(
                               color: theme.colorScheme.outlineVariant
-                                  .withOpacity(0.5))),
+                                  .withValues(alpha: 0.5))),
                     ),
                     child: Row(
                       children: [
@@ -201,7 +201,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
                           indent: 16,
                           endIndent: 16,
                           color: theme.colorScheme.outlineVariant
-                              .withOpacity(0.2)),
+                              .withValues(alpha: 0.2)),
                       itemBuilder: (context, index) {
                         return _buildMovementRow(context, _movements[index]);
                       },
@@ -233,7 +233,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -290,7 +290,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(

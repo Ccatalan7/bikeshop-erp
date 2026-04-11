@@ -104,7 +104,7 @@ class AppTheme {
       headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
       dataRowColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return primaryBlue.withOpacity(0.1);
+          return primaryBlue.withValues(alpha: 0.1);
         }
         return null;
       }),

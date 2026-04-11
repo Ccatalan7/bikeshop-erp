@@ -514,7 +514,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isDark
-                    ? theme.colorScheme.errorContainer.withOpacity(0.2)
+                    ? theme.colorScheme.errorContainer.withValues(alpha: 0.2)
                     : Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -532,7 +532,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.green.withOpacity(0.2)
+                    ? Colors.green.withValues(alpha: 0.2)
                     : Colors.green.shade100,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -749,7 +749,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                 BorderRadius.circular(_previewMode != 'desktop' ? 12 : 8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),
@@ -799,9 +799,9 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           end: Alignment.bottomCenter,
           colors: [
             _primaryColor
-                .withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.8),
+                .withValues(alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.8),
             _accentColor
-                .withOpacity(_heroShowOverlay ? _heroOverlayOpacity : 0.6),
+                .withValues(alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.6),
           ],
         ),
       ),
@@ -933,7 +933,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
   Widget _buildPreviewServices() {
     return Container(
       padding: EdgeInsets.all(_sectionSpacing),
-      color: _primaryColor.withOpacity(0.05),
+      color: _primaryColor.withValues(alpha: 0.05),
       child: Column(
         children: [
           Text(
@@ -1188,7 +1188,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           Text(
             '© 2025 Vinabike. Todos los derechos reservados.',
             style: TextStyle(
-              color: footerTextSecondaryColor.withOpacity(0.5),
+              color: footerTextSecondaryColor.withValues(alpha: 0.5),
               fontSize: _bodySize * 0.875,
               fontFamily: _bodyFont,
             ),
@@ -1225,7 +1225,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(-2, 0),
           ),
@@ -2252,7 +2252,7 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: (isColorDark ? Colors.white : Colors.black)
-                        .withOpacity(0.2),
+                        .withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -2317,10 +2317,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
 
     // Use theme colors or specific shades that work in both modes
     final bgColor = isDark
-        ? theme.colorScheme.primaryContainer.withOpacity(0.2)
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.2)
         : Colors.blue.shade50;
     final borderColor = isDark
-        ? theme.colorScheme.primary.withOpacity(0.3)
+        ? theme.colorScheme.primary.withValues(alpha: 0.3)
         : Colors.blue.shade200;
     final iconColor = isDark ? theme.colorScheme.primary : Colors.blue.shade700;
     final textColor =

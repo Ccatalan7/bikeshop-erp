@@ -951,7 +951,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
           ),
           child: isMobile
               ? Column(
@@ -966,7 +966,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                           Divider(
                               height: 1,
                               color: theme.colorScheme.outlineVariant
-                                  .withOpacity(0.5)),
+                                  .withValues(alpha: 0.5)),
                       ],
                     );
                   }).toList(),
@@ -987,7 +987,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                               height: 48,
                               width: 1,
                               color: theme.colorScheme.outlineVariant
-                                  .withOpacity(0.5),
+                                  .withValues(alpha: 0.5),
                             ),
                         ],
                       );
@@ -1094,7 +1094,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         color: Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                       ),
                     ),
                     child: Icon(
@@ -1123,7 +1123,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                           color: Theme.of(context)
                               .colorScheme
                               .outlineVariant
-                              .withOpacity(0.5)),
+                              .withValues(alpha: 0.5)),
                     ),
                     child: TextField(
                       decoration: const InputDecoration(
@@ -1225,7 +1225,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                   color: Theme.of(context)
                                       .colorScheme
                                       .outlineVariant
-                                      .withOpacity(0.5)),
+                                      .withValues(alpha: 0.5)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1295,7 +1295,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1504,7 +1504,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     final isArchivedView = _statusFilter == 'archived';
 
     return Card(
-      color: Theme.of(context).primaryColor.withOpacity(0.1),
+      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -1880,7 +1880,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          color: Colors.blue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Row(
@@ -1974,14 +1974,14 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       fontWeight: FontWeight.w600,
       fontSize: 11,
       letterSpacing: 0.5,
-      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
     );
 
     return Container(
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
             width: 1,
           ),
         ),
@@ -2113,11 +2113,11 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
               border: Border(
                   bottom: BorderSide(
                       color:
-                          theme.colorScheme.outlineVariant.withOpacity(0.2))),
+                          theme.colorScheme.outlineVariant.withValues(alpha: 0.2))),
             ),
             child: Material(
               color: isSelected
-                  ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
                   : Colors.transparent,
               child: InkWell(
                 onTap: item.isPending
@@ -2132,7 +2132,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                         });
                       }
                     : null,
-                hoverColor: theme.colorScheme.onSurface.withOpacity(0.02),
+                hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.02),
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -2476,7 +2476,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                   tooltip: 'Editar',
                                   color: theme.colorScheme.onSurfaceVariant,
                                   hoverColor: theme.colorScheme.primary
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.archive, size: 18),
@@ -2485,7 +2485,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                   tooltip: 'Archivar',
                                   color: theme.colorScheme.onSurfaceVariant,
                                   hoverColor: theme.colorScheme.primary
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.visibility_off,
@@ -2495,16 +2495,16 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                   tooltip: 'Ignorar',
                                   color: theme.colorScheme.onSurfaceVariant,
                                   hoverColor: theme.colorScheme.primary
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                 ),
                               ],
                               IconButton(
                                 icon: const Icon(Icons.delete, size: 18),
                                 onPressed: () => _confirmDelete(item, service),
                                 tooltip: 'Eliminar',
-                                color: theme.colorScheme.error.withOpacity(0.7),
+                                color: theme.colorScheme.error.withValues(alpha: 0.7),
                                 hoverColor:
-                                    theme.colorScheme.error.withOpacity(0.1),
+                                    theme.colorScheme.error.withValues(alpha: 0.1),
                               ),
                             ],
                           ),

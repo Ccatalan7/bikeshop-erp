@@ -697,7 +697,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                 
                 return Card(
                   elevation: isSelected ? 8 : 2,
-                  color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+                  color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
                   child: InkWell(
                     onTap: () {
                       setState(() => _selectedHub = hub);
@@ -807,7 +807,7 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                 
                 return Card(
                   elevation: isSelected ? 8 : 2,
-                  color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+                  color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
                   child: InkWell(
                     onTap: () {
                       setState(() => _selectedRim = rim);
@@ -1228,7 +1228,7 @@ class _StepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: isActive ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+      color: isActive ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
       child: Row(
         children: [
           CircleAvatar(
@@ -1302,7 +1302,7 @@ class _LacingPatternCard extends StatelessWidget {
       width: 300,
       child: Card(
         elevation: isSelected ? 8 : 2,
-        color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+        color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
         child: InkWell(
           onTap: onTap,
           child: Padding(

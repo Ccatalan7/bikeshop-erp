@@ -290,7 +290,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -453,7 +453,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
     return Material(
       color: isSelected
-          ? theme.colorScheme.primary.withOpacity(0.06)
+          ? theme.colorScheme.primary.withValues(alpha: 0.06)
           : Colors.transparent,
       child: InkWell(
         onTap: () {
@@ -472,7 +472,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 width: 3,
               ),
               bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.18),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.18),
               ),
             ),
           ),
@@ -703,7 +703,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.35),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
           ),
         ),
       ),
@@ -1060,8 +1060,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: detail.isIncrease
-                      ? Colors.green.withOpacity(0.12)
-                      : Colors.red.withOpacity(0.12),
+                      ? Colors.green.withValues(alpha: 0.12)
+                      : Colors.red.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -1115,7 +1115,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color:
-                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+                  theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1302,9 +1302,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
+                  color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1341,7 +1341,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               border: Border.all(color: Colors.grey[200]!),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 10,
                     offset: const Offset(0, 4)),
               ],
@@ -1400,7 +1400,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   border: Border.all(color: Colors.grey[200]!),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha: 0.02),
                         blurRadius: 8,
                         offset: const Offset(0, 2)),
                   ],
@@ -1580,7 +1580,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                     border: Border.all(color: Colors.grey[200]!),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4))
                     ],
@@ -1721,7 +1721,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.05), shape: BoxShape.circle),
+              color: Colors.blue.withValues(alpha: 0.05), shape: BoxShape.circle),
           child: Icon(icon, size: 16, color: Colors.blue[700]),
         ),
         const SizedBox(width: 12),
@@ -1815,9 +1815,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
+                  color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1853,7 +1853,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               border: Border.all(color: Colors.grey[200]!),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 )
@@ -2186,7 +2186,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: _startDate != null && _endDate != null
-                  ? Colors.blue.withOpacity(0.1)
+                  ? Colors.blue.withValues(alpha: 0.1)
                   : Colors.white,
               foregroundColor: _startDate != null && _endDate != null
                   ? Colors.blue
@@ -2218,7 +2218,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.05),
+        color: Colors.blue.withValues(alpha: 0.05),
         border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
       ),
       child: Row(
@@ -2370,7 +2370,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         color: theme.colorScheme.surfaceContainerLowest,
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.35)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35)),
         ),
       ),
       child: Row(
@@ -2466,7 +2466,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.22)),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.22)),
         ),
       ),
       child: Row(
@@ -2648,8 +2648,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: movement.hasNavigableReference
-              ? theme.colorScheme.primary.withOpacity(0.22)
-              : theme.colorScheme.outlineVariant.withOpacity(0.35),
+              ? theme.colorScheme.primary.withValues(alpha: 0.22)
+              : theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
       child: Row(
@@ -2823,9 +2823,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         movement.movementTypeDisplay,

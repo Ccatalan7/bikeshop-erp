@@ -296,7 +296,7 @@ class _JobSubjectsPageState extends State<JobSubjectsPage> {
                     ),
                     filled: true,
                     fillColor:
-                        colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                        colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                   ),
                   onChanged: (v) => setState(() => _searchTerm = v),
                 ),

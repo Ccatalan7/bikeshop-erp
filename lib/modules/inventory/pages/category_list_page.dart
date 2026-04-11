@@ -430,8 +430,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     height: 56,
                     decoration: BoxDecoration(
                       color: category.isActive
-                          ? Colors.blue.withOpacity(0.1)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.grey.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -446,8 +446,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: category.isActive
-                      ? Colors.blue.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.1),
+                      ? Colors.blue.withValues(alpha: 0.1)
+                      : Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -573,8 +573,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                       ),
                       errorWidget: (context, url, error) => Container(
                         color: category.isActive
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
+                            ? Colors.blue.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.1),
                         child: Icon(
                           Icons.category,
                           size: 48,
@@ -584,8 +584,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                     )
                   : Container(
                       color: category.isActive
-                          ? Colors.blue.withOpacity(0.1)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.grey.withValues(alpha: 0.1),
                       child: Icon(
                         Icons.category,
                         size: 48,

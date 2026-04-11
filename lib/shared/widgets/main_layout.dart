@@ -490,7 +490,7 @@ class _SidebarOptionsPanel extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
             ),
             child: Column(
@@ -520,7 +520,7 @@ class _SidebarOptionsPanel extends StatelessWidget {
                     children: [
                       Icon(Icons.zoom_in,
                           size: 18,
-                          color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                       const SizedBox(width: 12),
                       Text('Zoom', style: theme.textTheme.bodyMedium),
                       const Spacer(),
@@ -559,7 +559,7 @@ class _SidebarOptionsPanel extends StatelessWidget {
                 ),
                 Divider(
                     height: 1,
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
                 // Reorder modules
                 _OptionTile(
                   icon: navigationService.isReorderMode
@@ -613,7 +613,7 @@ class _OptionTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon,
-                size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
             const SizedBox(width: 12),
             Text(label, style: theme.textTheme.bodyMedium),
           ],
@@ -697,7 +697,7 @@ class _MainLayoutState extends State<MainLayout> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -1360,7 +1360,7 @@ class _AppSidebarState extends State<AppSidebar> {
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surface,
                             border: Border.all(
-                              color: theme.colorScheme.primary.withOpacity(0.3),
+                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
                               width: 1,
                             ),
                             borderRadius: BorderRadius.circular(8),
@@ -1375,7 +1375,7 @@ class _AppSidebarState extends State<AppSidebar> {
                                   Icons.drag_indicator,
                                   size: 18,
                                   color: theme.colorScheme.primary
-                                      .withOpacity(0.6),
+                                      .withValues(alpha: 0.6),
                                 ),
                               ),
                               Expanded(
@@ -1514,7 +1514,7 @@ class _AppSidebarState extends State<AppSidebar> {
                               Icons.logout_outlined,
                               size: 20,
                               color:
-                                  theme.colorScheme.onSurface.withOpacity(0.7),
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1522,7 +1522,7 @@ class _AppSidebarState extends State<AppSidebar> {
                                 'Cerrar Sesión',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   color: theme.colorScheme.onSurface
-                                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                 ),
                               ),
                             ),
@@ -1547,7 +1547,7 @@ class _AppSidebarState extends State<AppSidebar> {
                               Icons.more_horiz,
                               size: 18,
                               color:
-                                  theme.colorScheme.onSurface.withOpacity(0.6),
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
                             ),
                             iconSize: 18,
                             padding: EdgeInsets.zero,
@@ -1578,7 +1578,7 @@ class _AppSidebarState extends State<AppSidebar> {
                             style: IconButton.styleFrom(
                               backgroundColor: theme.colorScheme.surface,
                               foregroundColor:
-                                  theme.colorScheme.onSurface.withOpacity(0.6),
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -1598,7 +1598,7 @@ class _AppSidebarState extends State<AppSidebar> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       height: 1,
-      color: Theme.of(context).dividerColor.withOpacity(0.5),
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
     );
   }
 
@@ -1644,7 +1644,7 @@ class _AppSidebarState extends State<AppSidebar> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               color: isSelected
-                  ? theme.primaryColor.withOpacity(0.1)
+                  ? theme.primaryColor.withValues(alpha: 0.1)
                   : Colors.transparent,
             ),
             child: Row(
@@ -1655,7 +1655,7 @@ class _AppSidebarState extends State<AppSidebar> {
                   color: enabled
                       ? (isSelected
                           ? theme.primaryColor
-                          : theme.colorScheme.onSurface.withOpacity(0.7))
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.7))
                       : theme.disabledColor,
                 ),
                 const SizedBox(width: 12),
@@ -1716,7 +1716,7 @@ class _AppSidebarState extends State<AppSidebar> {
             Text(
               'ERP Sistema',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
           ],
@@ -2418,7 +2418,7 @@ class _Helper {
         Text(
           'Sistema Integral de Gestión',
           style: TextStyle(
-            color: theme.colorScheme.onSurface.withOpacity(0.7),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             fontSize: 14,
           ),
         ),

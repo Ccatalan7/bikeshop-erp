@@ -8733,9 +8733,9 @@ class _CategoryGridBlockControls extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF00A09D).withOpacity(0.15),
+            color: const Color(0xFF00A09D).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF00A09D).withOpacity(0.3)),
+            border: Border.all(color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -8746,7 +8746,7 @@ class _CategoryGridBlockControls extends StatelessWidget {
                 child: Text(
                   'Las categorías se cargan automáticamente desde Tema > Categorías',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 12,
                   ),
                 ),

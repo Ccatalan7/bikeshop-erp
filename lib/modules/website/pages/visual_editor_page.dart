@@ -271,7 +271,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(-2, 0),
                   ),
@@ -453,12 +453,12 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Theme.of(context).brightness == Brightness.dark
-              ? theme.colorScheme.primaryContainer.withOpacity(0.2)
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.2)
               : Colors.blue.shade50,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
               color: Theme.of(context).brightness == Brightness.dark
-                  ? theme.colorScheme.primary.withOpacity(0.3)
+                  ? theme.colorScheme.primary.withValues(alpha: 0.3)
                   : Colors.blue.shade200),
         ),
         child: Row(
@@ -720,7 +720,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
             blurRadius: 10,
           ),
         ],
@@ -747,7 +747,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                     const Spacer(),
                     Text(
                       'Menú  Productos  Servicios',
-                      style: TextStyle(color: Colors.white.withOpacity(0.9)),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
                     ),
                   ],
                 ),
@@ -761,8 +761,8 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      _primaryColor.withOpacity(0.8),
-                      _accentColor.withOpacity(0.6),
+                      _primaryColor.withValues(alpha: 0.8),
+                      _accentColor.withValues(alpha: 0.6),
                     ],
                   ),
                 ),
@@ -901,7 +901,7 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                           Text(
                             'Tu tienda de confianza',
                             style:
-                                TextStyle(color: Colors.white.withOpacity(0.7)),
+                                TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                           ),
                         ],
                       ),
@@ -923,21 +923,21 @@ class _VisualEditorPageState extends State<VisualEditorPage> {
                                 ? 'Teléfono'
                                 : _contactPhoneController.text,
                             style:
-                                TextStyle(color: Colors.white.withOpacity(0.7)),
+                                TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                           ),
                           Text(
                             _contactEmailController.text.isEmpty
                                 ? 'Email'
                                 : _contactEmailController.text,
                             style:
-                                TextStyle(color: Colors.white.withOpacity(0.7)),
+                                TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                           ),
                           Text(
                             _contactAddressController.text.isEmpty
                                 ? 'Dirección'
                                 : _contactAddressController.text,
                             style:
-                                TextStyle(color: Colors.white.withOpacity(0.7)),
+                                TextStyle(color: Colors.white.withValues(alpha: 0.7)),
                           ),
                         ],
                       ),

@@ -186,7 +186,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
             Text(
               'Agrega enlaces para la navegación',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 24),
@@ -1348,7 +1348,7 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: widget.getColor(link.linkType).withOpacity(0.1),
+                    color: widget.getColor(link.linkType).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(

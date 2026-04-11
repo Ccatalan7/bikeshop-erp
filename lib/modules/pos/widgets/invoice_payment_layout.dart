@@ -137,7 +137,7 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(widget.invoice.status).withOpacity(0.1),
+                        color: _getStatusColor(widget.invoice.status).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: _getStatusColor(widget.invoice.status),
@@ -398,7 +398,7 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
             color: theme.scaffoldBackgroundColor,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 4,
                 offset: const Offset(0, -2),
               ),

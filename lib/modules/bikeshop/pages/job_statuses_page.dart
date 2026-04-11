@@ -156,7 +156,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                   style: TextStyle(
                     fontSize: 13,
                     color: _getPhaseTextColor(phase, isDark: isDark)
-                        .withOpacity(0.7),
+                        .withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -210,7 +210,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
       key: ValueKey(status.id),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
         ),
       ),
       child: ListTile(
@@ -301,9 +301,9 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
       case StatusPhase.todo:
         return isDark ? Colors.grey[800]! : Colors.grey[100]!;
       case StatusPhase.inProgress:
-        return isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50]!;
+        return isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue[50]!;
       case StatusPhase.complete:
-        return isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50]!;
+        return isDark ? Colors.green[900]!.withValues(alpha: 0.3) : Colors.green[50]!;
     }
   }
 
@@ -535,7 +535,7 @@ class _JobStatusesPageState extends State<JobStatusesPage> {
                                 ? [
                                     BoxShadow(
                                       color:
-                                          _parseColor(color).withOpacity(0.5),
+                                          _parseColor(color).withValues(alpha: 0.5),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),

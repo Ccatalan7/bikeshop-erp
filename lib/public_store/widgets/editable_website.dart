@@ -465,7 +465,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
                   child: Container(
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: isSelected ? Colors.blue : Colors.blue.withOpacity(0.5),
+                        color: isSelected ? Colors.blue : Colors.blue.withValues(alpha: 0.5),
                         width: isSelected ? 3 : 2,
                       ),
                     ),
@@ -797,7 +797,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
         icon: Icon(icon, size: 18),
         label: Text(label),
         style: TextButton.styleFrom(
-          backgroundColor: isActive ? Colors.blue.withOpacity(0.1) : null,
+          backgroundColor: isActive ? Colors.blue.withValues(alpha: 0.1) : null,
           foregroundColor: isActive ? Colors.blue : Colors.black87,
         ),
       ),
@@ -895,7 +895,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: primaryColor.withOpacity(0.1),
+              backgroundColor: primaryColor.withValues(alpha: 0.1),
               child: Icon(_getBlockIcon(def.type), color: primaryColor),
             ),
             title: Text(def.title),

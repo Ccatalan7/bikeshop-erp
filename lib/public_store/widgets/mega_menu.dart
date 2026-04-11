@@ -654,7 +654,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
             Container(
               width: 1,
               height: 300,
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               margin: const EdgeInsets.symmetric(horizontal: 40),
             ),
 

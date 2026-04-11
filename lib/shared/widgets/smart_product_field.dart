@@ -260,10 +260,10 @@ class _SmartProductFieldState extends State<SmartProductField> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: theme.colorScheme.outline.withOpacity(0.15),
+              color: theme.colorScheme.outline.withValues(alpha: 0.15),
             ),
           ),
           child: _product?.imageUrl != null && _product!.imageUrl!.isNotEmpty
@@ -277,7 +277,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                         Icons.inventory_2_outlined,
                         size: 20,
                         color:
-                            theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                            theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                       );
                     },
                   ),
@@ -285,7 +285,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
               : Icon(
                   Icons.inventory_2_outlined,
                   size: 20,
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                 ),
         ),
         const SizedBox(width: 10),
@@ -342,10 +342,10 @@ class _SmartProductFieldState extends State<SmartProductField> {
               height: 48,
               decoration: BoxDecoration(
                 color:
-                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: theme.colorScheme.outline.withOpacity(0.15),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.15),
                 ),
               ),
               child: _product?.imageUrl != null &&
@@ -360,7 +360,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                             Icons.inventory_2_outlined,
                             size: 24,
                             color: theme.colorScheme.onSurfaceVariant
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                           );
                         },
                       ),
@@ -369,7 +369,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                       Icons.inventory_2_outlined,
                       size: 24,
                       color:
-                          theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                          theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                     ),
             ),
             const SizedBox(width: 12),
@@ -402,7 +402,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                             Icons.more_horiz,
                             size: 20,
                             color: theme.colorScheme.onSurfaceVariant
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 200),
@@ -458,7 +458,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                             Icons.close,
                             size: 16,
                             color: theme.colorScheme.onSurfaceVariant
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -472,7 +472,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
                         'SKU (Código de artículo): $_productSku',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant
-                              .withOpacity(0.7),
+                              .withValues(alpha: 0.7),
                           fontSize: 12,
                         ),
                       ),
@@ -487,7 +487,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
         Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: theme.colorScheme.outline.withOpacity(0.3),
+              color: theme.colorScheme.outline.withValues(alpha: 0.3),
             ),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -496,7 +496,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
             decoration: InputDecoration(
               hintText: 'Agregue una descripción a su artículo',
               hintStyle: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                 fontSize: 13,
               ),
               border: InputBorder.none,

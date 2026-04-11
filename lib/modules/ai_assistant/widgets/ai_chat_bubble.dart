@@ -380,7 +380,7 @@ class _AIChatPanelState extends State<AIChatPanel> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             offset: const Offset(-2, 0),
             blurRadius: 10,
           )
@@ -457,11 +457,11 @@ class _AIChatPanelState extends State<AIChatPanel> {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color:
-                      Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.18),
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
                   ),
                 ),
                 child: Row(
@@ -592,10 +592,10 @@ class _AssistantActionCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(color: accent.withOpacity(0.18)),
+            border: Border.all(color: accent.withValues(alpha: 0.18)),
             boxShadow: [
               BoxShadow(
-                color: accent.withOpacity(0.08),
+                color: accent.withValues(alpha: 0.08),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
@@ -610,7 +610,7 @@ class _AssistantActionCard extends StatelessWidget {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: accent.withOpacity(0.12),
+                    color: accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(_iconFor(card.kind), color: accent, size: 22),
@@ -669,7 +669,7 @@ class _AssistantActionCard extends StatelessWidget {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
-                                          color: accent.withOpacity(0.14)),
+                                          color: accent.withValues(alpha: 0.14)),
                                     ),
                                     child: Text(
                                       chip,

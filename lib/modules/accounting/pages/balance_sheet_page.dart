@@ -301,8 +301,8 @@ class _BalanceSheetPageState extends State<BalanceSheetPage> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Card(
         color: isBalanced
-            ? Colors.green.withOpacity(0.1)
-            : Colors.red.withOpacity(0.1),
+            ? Colors.green.withValues(alpha: 0.1)
+            : Colors.red.withValues(alpha: 0.1),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(

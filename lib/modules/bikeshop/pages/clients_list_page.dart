@@ -378,7 +378,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(status).withOpacity(0.1),
+                    color: _getStatusColor(status).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -437,7 +437,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurface
-                                          .withOpacity(0.6),
+                                          .withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],
@@ -457,7 +457,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurface
-                                          .withOpacity(0.6),
+                                          .withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],
@@ -580,7 +580,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                       ),
                     ),
@@ -625,7 +625,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                             color: isSelected
                                 ? Theme.of(context)
                                     .primaryColor
-                                    .withOpacity(0.1)
+                                    .withValues(alpha: 0.1)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: isToday
@@ -690,7 +690,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: _getStatusColor(job.status)
-                                              .withOpacity(0.2),
+                                              .withValues(alpha: 0.2),
                                           borderRadius:
                                               BorderRadius.circular(4),
                                         ),
@@ -715,7 +715,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurface
-                                          .withOpacity(0.6),
+                                          .withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ),
@@ -775,7 +775,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 style: TextStyle(
                   fontSize: 12,
                   color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -790,7 +790,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.6),
+                          .withValues(alpha: 0.6),
                     ),
                   ),
                 )
@@ -812,7 +812,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor:
-                            _getStatusColor(job.status).withOpacity(0.2),
+                            _getStatusColor(job.status).withValues(alpha: 0.2),
                         child: Icon(
                           Icons.build,
                           color: _getStatusColor(job.status),
@@ -1187,7 +1187,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color),
       ),

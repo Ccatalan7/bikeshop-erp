@@ -67,7 +67,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundColor: PublicStoreTheme.primaryBlue.withOpacity(0.1),
+                backgroundColor: PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
                 child: Text(
                   (profile['name'] as String?)?.isNotEmpty == true
                       ? profile['name'][0].toUpperCase()

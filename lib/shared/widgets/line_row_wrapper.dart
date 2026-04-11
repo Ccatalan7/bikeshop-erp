@@ -148,11 +148,11 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
         key: widget.rowKey,
         decoration: BoxDecoration(
           color: _isHovered 
-              ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.3) 
+              ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3) 
               : null,
           border: Border(
             bottom: BorderSide(
-              color: theme.colorScheme.outline.withOpacity(0.2),
+              color: theme.colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
         ),
@@ -181,7 +181,7 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         border: Border(
-          right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+          right: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
         ),
       ),
       child: Column(
@@ -234,7 +234,7 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
     final borderDecoration = column.showRightBorder
         ? BoxDecoration(
             border: Border(
-              right: BorderSide(color: theme.colorScheme.outline.withOpacity(0.2)),
+              right: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
             ),
           )
         : null;

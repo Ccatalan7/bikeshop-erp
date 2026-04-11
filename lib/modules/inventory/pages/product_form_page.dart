@@ -1171,7 +1171,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                           color: Theme.of(context)
                               .colorScheme
                               .surfaceContainerHighest
-                              .withOpacity(0.45),
+                              .withValues(alpha: 0.45),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(
@@ -1577,7 +1577,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                       color: Theme.of(context)
                           .colorScheme
                           .surfaceContainerHighest
-                          .withOpacity(0.45),
+                          .withValues(alpha: 0.45),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -1758,12 +1758,12 @@ class _ProductFormPageState extends State<ProductFormPage>
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _canRestoreOriginalState
-              ? theme.colorScheme.primary.withOpacity(0.25)
-              : theme.dividerColor.withOpacity(0.3),
+              ? theme.colorScheme.primary.withValues(alpha: 0.25)
+              : theme.dividerColor.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -1844,7 +1844,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   Widget _buildConversionJournalPreview(BuildContext context) {
     final theme = Theme.of(context);
     final inventoryValue = _existingTrackedInventoryValue;
-    final borderColor = theme.dividerColor.withOpacity(0.35);
+    final borderColor = theme.dividerColor.withValues(alpha: 0.35);
 
     Widget buildHeader() {
       return Container(
@@ -1948,7 +1948,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -1963,7 +1963,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.45),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -2073,7 +2073,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     color: Theme.of(context)
                         .colorScheme
                         .surfaceContainerHighest
-                        .withOpacity(0.45),
+                        .withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -2713,7 +2713,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
@@ -2781,7 +2781,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -3334,7 +3334,7 @@ class _ProductFormPageState extends State<ProductFormPage>
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -3524,10 +3524,10 @@ class _ProductFormPageState extends State<ProductFormPage>
                   color: Theme.of(context)
                       .colorScheme
                       .surfaceContainerHighest
-                      .withOpacity(0.25),
+                      .withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).dividerColor.withOpacity(0.1),
+                    color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
                   ),
                 ),
                 child: Row(
@@ -3541,7 +3541,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                       color: Theme.of(context)
                           .colorScheme
                           .onSurfaceVariant
-                          .withOpacity(0.7),
+                          .withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -3590,9 +3590,9 @@ class _ProductFormPageState extends State<ProductFormPage>
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.08),
+                    color: Colors.orange.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.24)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.24)),
                   ),
                   child: Text(
                     'Al guardar se descargará el stock existente y se reclasificará su valor contable automáticamente para convertir este producto en ${_inventoryConversionTargetLabel()}.',
@@ -3611,7 +3611,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             color: Theme.of(context)
                 .colorScheme
                 .surfaceContainerHighest
-                .withOpacity(0.4),
+                .withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -3809,7 +3809,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withOpacity(0.25),
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.25),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -3882,7 +3882,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                         showDuration: const Duration(seconds: 6),
                         preferBelow: false,
                         child: Material(
-                          color: theme.colorScheme.primary.withOpacity(0.12),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.12),
                           shape: const CircleBorder(),
                           child: IconButton(
                             tooltip: 'Registrar ajuste de stock',
@@ -4225,7 +4225,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   right: -8,
                   child: Material(
                     shape: const CircleBorder(),
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: () => _removeGalleryImage(url),

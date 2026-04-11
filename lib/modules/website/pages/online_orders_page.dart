@@ -80,7 +80,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           // Filters
           Container(
             padding: const EdgeInsets.all(16),
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             child: ConstraintLayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 600) {
@@ -294,7 +294,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: statusColor),
                       ),
@@ -314,7 +314,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: paymentStatusColor.withOpacity(0.1),
+                        color: paymentStatusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: paymentStatusColor),
                       ),
