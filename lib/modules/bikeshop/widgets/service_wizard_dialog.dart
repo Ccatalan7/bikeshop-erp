@@ -12,6 +12,8 @@ Future<ServiceWizardResult?> showServiceWizardDialog(
   required bool productIsService,
   ServiceWizardProfile? profile,
   Map<String, dynamic>? initialAnswers,
+  String? helperText,
+  Set<String> hiddenQuestionKeys = const <String>{},
 }) {
   return showDialog<ServiceWizardResult>(
     context: context,
@@ -20,6 +22,8 @@ Future<ServiceWizardResult?> showServiceWizardDialog(
       productName: productName,
       profile: profile,
       initialAnswers: initialAnswers,
+      helperText: helperText,
+      hiddenQuestionKeys: hiddenQuestionKeys,
     ),
   );
 }
@@ -28,11 +32,15 @@ class _ServiceWizardDialog extends StatefulWidget {
   final String productName;
   final ServiceWizardProfile? profile;
   final Map<String, dynamic>? initialAnswers;
+  final String? helperText;
+  final Set<String> hiddenQuestionKeys;
 
   const _ServiceWizardDialog({
     required this.productName,
     required this.profile,
     this.initialAnswers,
+    this.helperText,
+    this.hiddenQuestionKeys = const <String>{},
   });
 
   bool get isEditing => initialAnswers != null && initialAnswers!.isNotEmpty;
@@ -77,7 +85,11 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
 
   List<ServiceProfileQuestion> get _visibleQuestions {
     final questions = widget.profile?.questions ?? [];
-    return questions.where((q) => !q.isAdvanced).toList();
+    return questions
+        .where(
+          (q) => !q.isAdvanced && !widget.hiddenQuestionKeys.contains(q.key),
+        )
+        .toList();
   }
 
   void _confirm() {
@@ -123,6 +135,10 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.helperText != null) ...[
+                        _buildContextHint(theme, widget.helperText!),
+                        const SizedBox(height: 16),
+                      ],
                       if (hasProfile) ...[
                         ..._visibleQuestions
                             .map((q) => _buildQuestion(theme, q)),
@@ -240,6 +256,40 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     );
   }
 
+  Widget _buildContextHint(ThemeData theme, String helperText) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.link_outlined,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              helperText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuestion(ThemeData theme, ServiceProfileQuestion q) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -317,14 +367,16 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (val == option.value) ...[
-                    Icon(Icons.check, size: 14, color: theme.colorScheme.onPrimary),
+                    Icon(Icons.check,
+                        size: 14, color: theme.colorScheme.onPrimary),
                     const SizedBox(width: 4),
                   ],
                   Text(
                     option.label,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight:
-                          val == option.value ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: val == option.value
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                       color: val == option.value
                           ? theme.colorScheme.onPrimary
                           : theme.colorScheme.onSurface,
@@ -365,7 +417,8 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isSelected) ...[
-                  Icon(Icons.check, size: 14, color: theme.colorScheme.onPrimary),
+                  Icon(Icons.check,
+                      size: 14, color: theme.colorScheme.onPrimary),
                   const SizedBox(width: 4),
                 ],
                 Text(
@@ -384,7 +437,6 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
       }).toList(),
     );
   }
-
 
   Widget _buildMultiSelectInput(ThemeData theme, ServiceProfileQuestion q) {
     final selected = (_answers[q.key] as List?)?.cast<String>() ?? <String>[];
@@ -499,7 +551,8 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
           FilledButton.icon(
             onPressed: _confirm,
             icon: const Icon(Icons.check, size: 18),
-            label: Text(widget.isEditing ? 'Actualizar servicio' : 'Agregar servicio'),
+            label: Text(
+                widget.isEditing ? 'Actualizar servicio' : 'Agregar servicio'),
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),

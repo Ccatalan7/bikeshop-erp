@@ -25,9 +25,37 @@ class _BikeMemoryTarget {
       '$systemKey|${componentSlotKey ?? '-'}|${location.dbValue}|${interventionType.dbValue}|$createsLifecycle';
 }
 
+class _BikeSystemStateTarget {
+  final String bikeId;
+  final String systemKey;
+  final BikeMemoryLocation location;
+
+  const _BikeSystemStateTarget({
+    required this.bikeId,
+    required this.systemKey,
+    required this.location,
+  });
+
+  String get key => '$bikeId|$systemKey|${location.dbValue}';
+}
+
 class BikeshopService extends ChangeNotifier {
   final DatabaseService _db;
   final TenantService _tenantService = TenantService();
+
+  static const List<String> _derivedJobObservationSources = [
+    'job_diagnosis_sync',
+  ];
+  static const List<String> _derivedJobItemSources = [
+    'job_item_sync',
+    'job_general_item_sync',
+  ];
+  static const List<String> _derivedJobStateSources = [
+    'diagnosis_sheet',
+    'job_diagnosis_sync',
+    'job_item_sync',
+    'job_general_item_sync',
+  ];
 
   RealtimeChannel? _mechanicJobsChannel;
   RealtimeChannel? _salesInvoicesChannel; // For invoice status updates
@@ -504,7 +532,10 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<void> syncBikeMemoryFromJob(String jobId) async {
+  Future<void> syncBikeMemoryFromJob(
+    String jobId, {
+    bool swallowErrors = true,
+  }) async {
     try {
       if (jobId.isEmpty) return;
 
@@ -512,20 +543,18 @@ class BikeshopService extends ChangeNotifier {
       if (job == null || job.id == null) return;
 
       final jobBikes = await getJobBikes(jobId);
-      if (jobBikes.isEmpty) return;
+      final staleTargets = await _clearDerivedBikeMemoryForJob(jobId);
+
+      if (jobBikes.isEmpty) {
+        await _refreshDerivedSystemStates(staleTargets.values);
+        return;
+      }
 
       final jobItems = await getJobItems(jobId);
       final itemsByJobBikeId = <String?, List<MechanicJobItem>>{};
       for (final item in jobItems) {
         itemsByJobBikeId.putIfAbsent(item.jobBikeId, () => []).add(item);
       }
-
-      await Supabase.instance.client
-          .from('bike_observations')
-          .delete()
-          .eq('job_id', jobId)
-          .eq('source', 'job_diagnosis_sync');
-
       final isCompleted = {
         JobStatus.finalizado,
         JobStatus.entregado,
@@ -557,11 +586,46 @@ class BikeshopService extends ChangeNotifier {
           );
         }
       }
+
+      await _refreshDerivedSystemStates(staleTargets.values);
     } catch (e) {
       if (kDebugMode) {
         print(
             '⚠️ [BikeshopService] Could not sync bike memory from job $jobId: $e');
       }
+      if (!swallowErrors) rethrow;
+    }
+  }
+
+  Future<void> _safeSyncBikeMemoryForJob(String? jobId) async {
+    if (jobId == null || jobId.isEmpty) return;
+
+    try {
+      await syncBikeMemoryFromJob(jobId);
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Could not sync bike memory for $jobId: $e');
+      }
+    }
+  }
+
+  Future<bool> _jobShouldSyncCompletedItemMemory(String? jobId) async {
+    if (jobId == null || jobId.isEmpty) return false;
+
+    try {
+      final job = await getJobById(jobId);
+      if (job == null) return false;
+
+      return {
+        JobStatus.finalizado,
+        JobStatus.entregado,
+      }.contains(job.status);
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+            '⚠️ [BikeshopService] Could not determine bike sync status for $jobId: $e');
+      }
+      return false;
     }
   }
 
@@ -571,6 +635,7 @@ class BikeshopService extends ChangeNotifier {
     required List<MechanicJobItem> items,
   }) async {
     final diagnosisSheet = jobBike.diagnosisSheet;
+    final observedAt = _resolveJobBikeDiagnosisObservedAt(job, jobBike);
     final combinedText = [
       jobBike.workRequested,
       jobBike.diagnosis,
@@ -587,6 +652,7 @@ class BikeshopService extends ChangeNotifier {
         job: job,
         jobBike: jobBike,
         diagnosisSheet: diagnosisSheet,
+        observedAt: observedAt,
       );
 
       if (combinedText.isNotEmpty) {
@@ -603,7 +669,7 @@ class BikeshopService extends ChangeNotifier {
             title: 'Notas del diagnóstico',
             summary: combinedText,
             severity: _inferSeverityFromText(combinedText),
-            observedAt: job.updatedAt,
+            observedAt: observedAt,
             source: 'job_diagnosis_sync',
             sourceField: 'diagnosis',
             payload: {
@@ -656,7 +722,7 @@ class BikeshopService extends ChangeNotifier {
         title: 'Diagnóstico registrado',
         summary: combinedText,
         severity: severity,
-        observedAt: job.updatedAt,
+        observedAt: observedAt,
         source: 'job_diagnosis_sync',
         sourceField: 'diagnosis',
         payload: {
@@ -683,7 +749,7 @@ class BikeshopService extends ChangeNotifier {
                 ? BikeSystemOverallStatus.critical
                 : BikeSystemOverallStatus.attention,
             statusNote: _truncateForStateNote(combinedText),
-            lastReviewedAt: job.updatedAt,
+            lastReviewedAt: observedAt,
             payload: {
               'source': 'job_diagnosis_sync',
               'job_number': job.jobNumber,
@@ -698,17 +764,20 @@ class BikeshopService extends ChangeNotifier {
     required MechanicJob job,
     required MechanicJobBike jobBike,
     required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
   }) async {
     await _syncDrivetrainDiagnosisSection(
       job: job,
       jobBike: jobBike,
       diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
       section: diagnosisSheet.drivetrain,
     );
     await _syncBrakeDiagnosisSection(
       job: job,
       jobBike: jobBike,
       diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
       systemKey: 'front_brake',
       title: 'Diagnóstico freno delantero',
       location: BikeMemoryLocation.front,
@@ -718,6 +787,7 @@ class BikeshopService extends ChangeNotifier {
       job: job,
       jobBike: jobBike,
       diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
       systemKey: 'rear_brake',
       title: 'Diagnóstico freno trasero',
       location: BikeMemoryLocation.rear,
@@ -729,6 +799,7 @@ class BikeshopService extends ChangeNotifier {
     required MechanicJob job,
     required MechanicJobBike jobBike,
     required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
     required DrivetrainDiagnosisSheet section,
   }) async {
     if (!section.hasMeaningfulData) return;
@@ -762,7 +833,7 @@ class BikeshopService extends ChangeNotifier {
         summary: summary.isEmpty ? null : summary,
         statusValue: section.overallStatus.dbValue,
         severity: _severityFromSystemStatus(section.overallStatus),
-        observedAt: job.updatedAt,
+        observedAt: observedAt,
         source: 'job_diagnosis_sync',
         sourceField: 'diagnosis_sheet',
         payload: {
@@ -784,7 +855,7 @@ class BikeshopService extends ChangeNotifier {
         location: BikeMemoryLocation.center,
         overallStatus: section.overallStatus,
         statusNote: summary.isEmpty ? null : _truncateForStateNote(summary),
-        lastReviewedAt: job.updatedAt,
+        lastReviewedAt: observedAt,
         payload: {
           'source': 'diagnosis_sheet',
           'job_number': job.jobNumber,
@@ -809,7 +880,7 @@ class BikeshopService extends ChangeNotifier {
           valueNumeric: section.chainWearPercent,
           unit: '%',
           severity: _severityFromWearPercent(section.chainWearPercent),
-          observedAt: job.updatedAt,
+          observedAt: observedAt,
           source: 'job_diagnosis_sync',
           sourceField: 'diagnosis_sheet',
           payload: {
@@ -841,7 +912,7 @@ class BikeshopService extends ChangeNotifier {
               : (section.cassetteCondition == 'attention'
                   ? BikeMemorySeverity.warning
                   : null),
-          observedAt: job.updatedAt,
+          observedAt: observedAt,
           source: 'job_diagnosis_sync',
           sourceField: 'diagnosis_sheet',
           payload: {
@@ -857,6 +928,7 @@ class BikeshopService extends ChangeNotifier {
     required MechanicJob job,
     required MechanicJobBike jobBike,
     required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
     required String systemKey,
     required String title,
     required BikeMemoryLocation location,
@@ -894,7 +966,7 @@ class BikeshopService extends ChangeNotifier {
         summary: summary.isEmpty ? null : summary,
         statusValue: section.overallStatus.dbValue,
         severity: _severityFromSystemStatus(section.overallStatus),
-        observedAt: job.updatedAt,
+        observedAt: observedAt,
         source: 'job_diagnosis_sync',
         sourceField: 'diagnosis_sheet',
         payload: {
@@ -916,7 +988,7 @@ class BikeshopService extends ChangeNotifier {
         location: location,
         overallStatus: section.overallStatus,
         statusNote: summary.isEmpty ? null : _truncateForStateNote(summary),
-        lastReviewedAt: job.updatedAt,
+        lastReviewedAt: observedAt,
         payload: {
           'source': 'diagnosis_sheet',
           'job_number': job.jobNumber,
@@ -941,7 +1013,7 @@ class BikeshopService extends ChangeNotifier {
           valueNumeric: section.padWearPercent,
           unit: '%',
           severity: _severityFromWearPercent(section.padWearPercent),
-          observedAt: job.updatedAt,
+          observedAt: observedAt,
           source: 'job_diagnosis_sync',
           sourceField: 'diagnosis_sheet',
           payload: {
@@ -968,7 +1040,7 @@ class BikeshopService extends ChangeNotifier {
           valueNumeric: section.rotorThicknessMm,
           unit: 'mm',
           severity: _severityFromRotorThickness(section.rotorThicknessMm),
-          observedAt: job.updatedAt,
+          observedAt: observedAt,
           source: 'job_diagnosis_sync',
           sourceField: 'diagnosis_sheet',
           payload: {
@@ -1014,6 +1086,8 @@ class BikeshopService extends ChangeNotifier {
     required List<MechanicJobItem> items,
     String sourceOverride = 'job_item_sync',
   }) async {
+    final performedAt = _resolveJobItemPerformedAt(job);
+
     for (final item in items) {
       final targets = _inferTargetsFromItem(item);
       if (targets.isEmpty) continue;
@@ -1053,7 +1127,7 @@ class BikeshopService extends ChangeNotifier {
                   .from('bike_component_lifecycles')
                   .update({
                 'status': BikeComponentLifecycleStatus.superseded.dbValue,
-                'removed_at': job.updatedAt.toIso8601String(),
+                'removed_at': performedAt.toIso8601String(),
                 'removal_reason': 'replaced',
                 'updated_at': DateTime.now().toIso8601String(),
               }).eq('id', currentLifecycle.id!);
@@ -1073,7 +1147,7 @@ class BikeshopService extends ChangeNotifier {
                 location: target.location,
                 componentLabel: item.productName,
                 status: BikeComponentLifecycleStatus.installed,
-                installedAt: job.updatedAt,
+                installedAt: performedAt,
                 source: sourceOverride,
                 notes: item.notes,
                 payload: {
@@ -1116,7 +1190,7 @@ class BikeshopService extends ChangeNotifier {
               interventionType: target.interventionType,
               title: _buildInterventionTitle(target, item),
               summary: _buildInterventionSummary(item),
-              performedAt: job.updatedAt,
+              performedAt: performedAt,
               source: sourceOverride,
               payload: interventionPayload,
             ),
@@ -1129,7 +1203,7 @@ class BikeshopService extends ChangeNotifier {
             'from_lifecycle_id': fromLifecycleId,
             'to_lifecycle_id': toLifecycleId,
             'summary': _buildInterventionSummary(item),
-            'performed_at': job.updatedAt.toIso8601String(),
+            'performed_at': performedAt.toIso8601String(),
             'payload': interventionPayload,
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('id', existingIntervention.id!);
@@ -1146,7 +1220,7 @@ class BikeshopService extends ChangeNotifier {
             overallStatus: BikeSystemOverallStatus.ok,
             statusNote:
                 _truncateForStateNote(_buildInterventionTitle(target, item)),
-            lastReviewedAt: job.updatedAt,
+            lastReviewedAt: performedAt,
             payload: {
               'source': sourceOverride,
               'job_number': job.jobNumber,
@@ -1155,6 +1229,428 @@ class BikeshopService extends ChangeNotifier {
         );
       }
     }
+  }
+
+  DateTime _resolveJobBikeDiagnosisObservedAt(
+    MechanicJob job,
+    MechanicJobBike jobBike,
+  ) {
+    return jobBike.diagnosisSheetUpdatedAt ??
+        job.statusUpdatedAt ??
+        job.diagnosticSentAt ??
+        job.startedAt ??
+        job.arrivalDate;
+  }
+
+  DateTime _resolveJobItemPerformedAt(MechanicJob job) {
+    return job.completedAt ??
+        job.deliveredAt ??
+        job.statusUpdatedAt ??
+        job.startedAt ??
+        job.arrivalDate;
+  }
+
+  DateTime _resolveJobCompletionEventAt(MechanicJob job) {
+    if (job.status == JobStatus.entregado) {
+      return job.deliveredAt ??
+          job.completedAt ??
+          job.statusUpdatedAt ??
+          job.arrivalDate;
+    }
+
+    return job.completedAt ??
+        job.statusUpdatedAt ??
+        job.deliveredAt ??
+        job.arrivalDate;
+  }
+
+  Future<Map<String, _BikeSystemStateTarget>> _clearDerivedBikeMemoryForJob(
+    String jobId,
+  ) async {
+    final targets = <String, _BikeSystemStateTarget>{};
+
+    void registerTarget({
+      String? bikeId,
+      String? systemKey,
+      String? locationKey,
+    }) {
+      if (bikeId == null || bikeId.isEmpty) return;
+      if (systemKey == null || systemKey.isEmpty) return;
+
+      final target = _BikeSystemStateTarget(
+        bikeId: bikeId,
+        systemKey: systemKey,
+        location: BikeMemoryLocation.fromDbValue(locationKey),
+      );
+      targets[target.key] = target;
+    }
+
+    try {
+      final observationRows = await Supabase.instance.client
+          .from('bike_observations')
+          .select('id,bike_id,system_key,location_key')
+          .eq('job_id', jobId)
+          .inFilter('source', _derivedJobObservationSources);
+
+      for (final row in observationRows as List) {
+        final json = row as Map<String, dynamic>;
+        registerTarget(
+          bikeId: json['bike_id']?.toString(),
+          systemKey: json['system_key']?.toString(),
+          locationKey: json['location_key']?.toString(),
+        );
+      }
+
+      if ((observationRows as List).isNotEmpty) {
+        await Supabase.instance.client
+            .from('bike_observations')
+            .delete()
+            .eq('job_id', jobId)
+            .inFilter('source', _derivedJobObservationSources);
+      }
+
+      final stateRows = await Supabase.instance.client
+          .from('bike_system_states')
+          .select('id,bike_id,system_key,location_key,payload')
+          .eq('job_id', jobId);
+
+      final derivedStateIds = <String>[];
+      for (final row in stateRows as List) {
+        final json = row as Map<String, dynamic>;
+        final payload = json['payload'] is Map
+            ? Map<String, dynamic>.from(json['payload'] as Map)
+            : const <String, dynamic>{};
+        final source = payload['source']?.toString();
+        if (!_derivedJobStateSources.contains(source)) continue;
+
+        final id = json['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          derivedStateIds.add(id);
+        }
+
+        registerTarget(
+          bikeId: json['bike_id']?.toString(),
+          systemKey: json['system_key']?.toString(),
+          locationKey: json['location_key']?.toString(),
+        );
+      }
+
+      if (derivedStateIds.isNotEmpty) {
+        await Supabase.instance.client
+            .from('bike_system_states')
+            .delete()
+            .inFilter('id', derivedStateIds);
+      }
+
+      final interventionRows = await Supabase.instance.client
+          .from('bike_interventions')
+          .select(
+              'id,bike_id,system_key,location_key,from_lifecycle_id,to_lifecycle_id')
+          .eq('job_id', jobId)
+          .inFilter('source', _derivedJobItemSources);
+
+      final interventionIds = <String>[];
+      final previousLifecycleIds = <String>{};
+      final deletedLifecycleIds = <String>{};
+
+      for (final row in interventionRows as List) {
+        final json = row as Map<String, dynamic>;
+        final id = json['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          interventionIds.add(id);
+        }
+
+        final fromLifecycleId = json['from_lifecycle_id']?.toString();
+        if (fromLifecycleId != null && fromLifecycleId.isNotEmpty) {
+          previousLifecycleIds.add(fromLifecycleId);
+        }
+
+        final toLifecycleId = json['to_lifecycle_id']?.toString();
+        if (toLifecycleId != null && toLifecycleId.isNotEmpty) {
+          deletedLifecycleIds.add(toLifecycleId);
+        }
+
+        registerTarget(
+          bikeId: json['bike_id']?.toString(),
+          systemKey: json['system_key']?.toString(),
+          locationKey: json['location_key']?.toString(),
+        );
+      }
+
+      if (interventionIds.isNotEmpty) {
+        await Supabase.instance.client
+            .from('bike_interventions')
+            .delete()
+            .inFilter('id', interventionIds);
+      }
+
+      final lifecycleRows = await Supabase.instance.client
+          .from('bike_component_lifecycles')
+          .select('id,bike_id,system_key,component_slot_key,location_key')
+          .eq('job_id', jobId)
+          .inFilter('source', _derivedJobItemSources);
+
+      for (final row in lifecycleRows as List) {
+        final json = row as Map<String, dynamic>;
+        final id = json['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          deletedLifecycleIds.add(id);
+        }
+
+        registerTarget(
+          bikeId: json['bike_id']?.toString(),
+          systemKey: json['system_key']?.toString(),
+          locationKey: json['location_key']?.toString(),
+        );
+      }
+
+      if (deletedLifecycleIds.isNotEmpty) {
+        await Supabase.instance.client
+            .from('bike_component_lifecycles')
+            .delete()
+            .inFilter('id', deletedLifecycleIds.toList());
+      }
+
+      await _restoreSupersededLifecycles(
+        previousLifecycleIds: previousLifecycleIds,
+        deletedLifecycleIds: deletedLifecycleIds,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+            '⚠️ [BikeshopService] Could not clear derived bike memory for job $jobId: $e');
+      }
+    }
+
+    return targets;
+  }
+
+  Future<void> _restoreSupersededLifecycles({
+    required Set<String> previousLifecycleIds,
+    required Set<String> deletedLifecycleIds,
+  }) async {
+    if (previousLifecycleIds.isEmpty) return;
+
+    try {
+      final previousRows = await Supabase.instance.client
+          .from('bike_component_lifecycles')
+          .select('id,bike_id,component_slot_key,location_key,status')
+          .inFilter('id', previousLifecycleIds.toList());
+
+      for (final row in previousRows as List) {
+        final json = row as Map<String, dynamic>;
+        final lifecycleId = json['id']?.toString();
+        if (lifecycleId == null || lifecycleId.isEmpty) continue;
+        if (deletedLifecycleIds.contains(lifecycleId)) continue;
+
+        final bikeId = json['bike_id']?.toString();
+        final componentSlotKey = json['component_slot_key']?.toString();
+        final locationKey = json['location_key']?.toString();
+
+        if (bikeId == null ||
+            bikeId.isEmpty ||
+            componentSlotKey == null ||
+            componentSlotKey.isEmpty) {
+          continue;
+        }
+
+        final installedRows = await Supabase.instance.client
+            .from('bike_component_lifecycles')
+            .select('id')
+            .eq('bike_id', bikeId)
+            .eq('component_slot_key', componentSlotKey)
+            .eq('location_key', locationKey ?? BikeMemoryLocation.none.dbValue)
+            .eq('status', BikeComponentLifecycleStatus.installed.dbValue)
+            .not('id', 'eq', lifecycleId)
+            .limit(1);
+
+        if ((installedRows as List).isNotEmpty) continue;
+
+        await Supabase.instance.client
+            .from('bike_component_lifecycles')
+            .update({
+          'status': BikeComponentLifecycleStatus.installed.dbValue,
+          'removed_at': null,
+          'removal_reason': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', lifecycleId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+            '⚠️ [BikeshopService] Could not restore superseded lifecycles: $e');
+      }
+    }
+  }
+
+  Future<void> _refreshDerivedSystemStates(
+    Iterable<_BikeSystemStateTarget> targets,
+  ) async {
+    for (final target in targets) {
+      await _refreshDerivedSystemState(target);
+    }
+  }
+
+  Future<void> _refreshDerivedSystemState(
+    _BikeSystemStateTarget target,
+  ) async {
+    try {
+      final observationRows = await Supabase.instance.client
+          .from('bike_observations')
+          .select()
+          .eq('bike_id', target.bikeId)
+          .eq('system_key', target.systemKey)
+          .eq('location_key', target.location.dbValue)
+          .order('observed_at', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(12);
+
+      final observations = (observationRows as List)
+          .map((row) => BikeObservation.fromJson(row as Map<String, dynamic>))
+          .toList();
+
+      final interventionRows = await Supabase.instance.client
+          .from('bike_interventions')
+          .select()
+          .eq('bike_id', target.bikeId)
+          .eq('system_key', target.systemKey)
+          .eq('location_key', target.location.dbValue)
+          .order('performed_at', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      final observationState =
+          _buildDerivedSystemStateFromObservations(observations);
+      final interventionState = (interventionRows as List).isNotEmpty
+          ? _buildDerivedSystemStateFromIntervention(
+              BikeIntervention.fromJson(
+                interventionRows.first,
+              ),
+            )
+          : null;
+
+      BikeSystemState? nextState;
+      if (observationState != null && interventionState != null) {
+        final observationAt = observationState.lastReviewedAt;
+        final interventionAt = interventionState.lastReviewedAt;
+        if (observationAt == null) {
+          nextState = interventionState;
+        } else if (interventionAt == null ||
+            observationAt.isAfter(interventionAt)) {
+          nextState = observationState;
+        } else {
+          nextState = interventionState;
+        }
+      } else {
+        nextState = observationState ?? interventionState;
+      }
+
+      if (nextState == null) {
+        await Supabase.instance.client
+            .from('bike_system_states')
+            .delete()
+            .eq('bike_id', target.bikeId)
+            .eq('system_key', target.systemKey)
+            .eq('location_key', target.location.dbValue);
+        return;
+      }
+
+      await upsertBikeSystemState(nextState);
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+            '⚠️ [BikeshopService] Could not refresh derived state for ${target.key}: $e');
+      }
+    }
+  }
+
+  BikeSystemState? _buildDerivedSystemStateFromObservations(
+    List<BikeObservation> observations,
+  ) {
+    for (final observation in observations) {
+      final status = _deriveSystemStatusFromObservation(observation);
+      if (status == null) continue;
+
+      final noteSource = observation.summary?.trim().isNotEmpty == true
+          ? observation.summary!.trim()
+          : observation.title;
+
+      return BikeSystemState(
+        tenantId: observation.tenantId,
+        bikeId: observation.bikeId,
+        jobId: observation.jobId,
+        jobBikeId: observation.jobBikeId,
+        systemKey: observation.systemKey,
+        location: observation.location,
+        overallStatus: status,
+        statusNote: _truncateForStateNote(noteSource),
+        lastReviewedAt: observation.observedAt,
+        payload: {
+          'source': observation.source,
+          'job_number': observation.payload['job_number'],
+          'derived_from': 'observation',
+          'observation_key': observation.observationKey,
+        },
+      );
+    }
+
+    return null;
+  }
+
+  BikeSystemState _buildDerivedSystemStateFromIntervention(
+    BikeIntervention intervention,
+  ) {
+    final noteSource = intervention.summary?.trim().isNotEmpty == true
+        ? intervention.summary!.trim()
+        : intervention.title;
+
+    return BikeSystemState(
+      tenantId: intervention.tenantId,
+      bikeId: intervention.bikeId,
+      jobId: intervention.jobId,
+      jobBikeId: intervention.jobBikeId,
+      systemKey: intervention.systemKey,
+      location: intervention.location,
+      overallStatus: BikeSystemOverallStatus.ok,
+      statusNote: _truncateForStateNote(noteSource),
+      lastReviewedAt: intervention.performedAt,
+      payload: {
+        'source': intervention.source,
+        'job_number': intervention.payload['job_number'],
+        'derived_from': 'intervention',
+        'intervention_type': intervention.interventionType.dbValue,
+      },
+    );
+  }
+
+  BikeSystemOverallStatus? _deriveSystemStatusFromObservation(
+    BikeObservation observation,
+  ) {
+    final explicitStatus = observation.statusValue?.trim();
+    if (explicitStatus != null && explicitStatus.isNotEmpty) {
+      for (final status in BikeSystemOverallStatus.values) {
+        if (status.dbValue == explicitStatus) {
+          return status;
+        }
+      }
+    }
+
+    switch (observation.severity) {
+      case BikeMemorySeverity.critical:
+        return BikeSystemOverallStatus.critical;
+      case BikeMemorySeverity.warning:
+        return BikeSystemOverallStatus.attention;
+      case BikeMemorySeverity.info:
+        return BikeSystemOverallStatus.ok;
+      case null:
+        break;
+    }
+
+    if (observation.observationKind == BikeObservationKind.confirmation) {
+      return BikeSystemOverallStatus.ok;
+    }
+
+    return null;
   }
 
   Future<BikeIntervention?> _findExistingDerivedIntervention({
@@ -1218,9 +1714,28 @@ class BikeshopService extends ChangeNotifier {
     return null;
   }
 
-  List<_BikeMemoryTarget> _inferTargetsFromItem(MechanicJobItem item) {
+  List<_BikeMemoryTarget> _inferTargetsFromItem(
+    MechanicJobItem item, {
+    bool preferStoredMetadata = true,
+  }) {
+    if (preferStoredMetadata &&
+        item.systemKey != null &&
+        item.systemKey!.isNotEmpty) {
+      return [
+        _BikeMemoryTarget(
+          systemKey: item.systemKey!,
+          componentSlotKey: item.componentSlotKey,
+          location: item.location,
+          interventionType: _defaultInterventionTypeForStoredTarget(item),
+          createsLifecycle: _defaultCreatesLifecycleForStoredTarget(item),
+        ),
+      ];
+    }
+
     final haystack = _normalizeText('${item.productName} ${item.notes ?? ''}');
-    final location = _inferLocationFromText(haystack);
+    final location = item.location != BikeMemoryLocation.none
+        ? item.location
+        : _inferLocationFromText(haystack);
     final isServiceItem =
         item.itemType == 'service' || item.serviceProductId != null;
 
@@ -1878,7 +2393,10 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<MechanicJob> updateJob(MechanicJob job) async {
+  Future<MechanicJob> updateJob(
+    MechanicJob job, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       if (job.id == null || job.id!.isEmpty) {
         throw Exception('ID de trabajo inválido');
@@ -1894,6 +2412,9 @@ class BikeshopService extends ChangeNotifier {
         previousJob: previousJob,
         updatedJob: updatedJob,
       );
+      if (syncBikeMemory) {
+        await _safeSyncBikeMemoryForJob(updatedJob.id);
+      }
       invalidateJobsCache();
       notifyListeners();
       return updatedJob;
@@ -2020,7 +2541,7 @@ class BikeshopService extends ChangeNotifier {
         jobId: updatedJob.id,
         eventType: BikeEventType.jobCompleted,
         eventCategory: BikeEventCategory.visit,
-        eventDate: updatedJob.updatedAt,
+        eventDate: _resolveJobCompletionEventAt(updatedJob),
         title: 'Trabajo completado',
         summary: updatedJob.workPerformed?.trim().isNotEmpty == true
             ? updatedJob.workPerformed!.trim()
@@ -2117,42 +2638,133 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<MechanicJobItem> createJobItem(MechanicJobItem item) async {
+  Future<MechanicJobItem> createJobItem(
+    MechanicJobItem item, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
-      final data = await _db.insert('mechanic_job_items', item.toJson());
+      final resolvedItem = _withResolvedTargetMetadata(item);
+      final data =
+          await _db.insert('mechanic_job_items', resolvedItem.toJson());
+      final createdItem = MechanicJobItem.fromJson(data);
+      if (syncBikeMemory &&
+          await _jobShouldSyncCompletedItemMemory(createdItem.jobId)) {
+        await _safeSyncBikeMemoryForJob(createdItem.jobId);
+      }
       notifyListeners();
-      return MechanicJobItem.fromJson(data);
+      return createdItem;
     } catch (e) {
       if (kDebugMode) print('Error creating job item: $e');
       rethrow;
     }
   }
 
-  Future<MechanicJobItem> updateJobItem(MechanicJobItem item) async {
+  Future<MechanicJobItem> updateJobItem(
+    MechanicJobItem item, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       if (item.id == null || item.id!.isEmpty) {
         throw Exception('ID de ítem inválido');
       }
 
-      final data =
-          await _db.update('mechanic_job_items', item.id!, item.toJson());
+      final resolvedItem = _withResolvedTargetMetadata(item);
+      final data = await _db.update(
+        'mechanic_job_items',
+        item.id!,
+        resolvedItem.toJson(),
+      );
+      final updatedItem = MechanicJobItem.fromJson(data);
+      if (syncBikeMemory &&
+          await _jobShouldSyncCompletedItemMemory(updatedItem.jobId)) {
+        await _safeSyncBikeMemoryForJob(updatedItem.jobId);
+      }
       notifyListeners();
-      return MechanicJobItem.fromJson(data);
+      return updatedItem;
     } catch (e) {
       if (kDebugMode) print('Error updating job item: $e');
       rethrow;
     }
   }
 
-  Future<void> deleteJobItem(String id) async {
+  Future<void> deleteJobItem(
+    String id, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       if (id.isEmpty) throw Exception('ID de ítem inválido');
+
+      String? jobId;
+      if (syncBikeMemory) {
+        final existing = await Supabase.instance.client
+            .from('mechanic_job_items')
+            .select('job_id')
+            .eq('id', id)
+            .maybeSingle();
+        jobId = existing?['job_id']?.toString();
+      }
+
       await _db.delete('mechanic_job_items', id);
+      if (syncBikeMemory && await _jobShouldSyncCompletedItemMemory(jobId)) {
+        await _safeSyncBikeMemoryForJob(jobId);
+      }
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error deleting job item: $e');
       rethrow;
     }
+  }
+
+  MechanicJobItem _withResolvedTargetMetadata(MechanicJobItem item) {
+    if (item.systemKey != null && item.systemKey!.isNotEmpty) {
+      final explicitInterventionType = item.interventionType ??
+          _defaultInterventionTypeForStoredTarget(item);
+      final explicitCreatesLifecycle = item.createsLifecycle ||
+          _defaultCreatesLifecycleForStoredTarget(item);
+
+      return item.copyWith(
+        location: item.location,
+        interventionType: explicitInterventionType,
+        createsLifecycle: explicitCreatesLifecycle,
+      );
+    }
+
+    final inferredTargets =
+        _inferTargetsFromItem(item, preferStoredMetadata: false);
+    if (inferredTargets.isEmpty) {
+      return item.copyWith(location: item.location);
+    }
+
+    final primaryTarget = inferredTargets.first;
+    return item.copyWith(
+      systemKey: primaryTarget.systemKey,
+      componentSlotKey: primaryTarget.componentSlotKey,
+      location: primaryTarget.location,
+      interventionType: primaryTarget.interventionType,
+      createsLifecycle: primaryTarget.createsLifecycle,
+    );
+  }
+
+  BikeInterventionType _defaultInterventionTypeForStoredTarget(
+    MechanicJobItem item,
+  ) {
+    final isServiceItem =
+        item.itemType == 'service' || item.serviceProductId != null;
+    if (item.interventionType != null) return item.interventionType!;
+    if (isServiceItem) return BikeInterventionType.service;
+    if (item.componentSlotKey != null && item.componentSlotKey!.isNotEmpty) {
+      return BikeInterventionType.replacement;
+    }
+    return BikeInterventionType.adjustment;
+  }
+
+  bool _defaultCreatesLifecycleForStoredTarget(MechanicJobItem item) {
+    if (item.createsLifecycle) return true;
+    final isServiceItem =
+        item.itemType == 'service' || item.serviceProductId != null;
+    return !isServiceItem &&
+        item.componentSlotKey != null &&
+        item.componentSlotKey!.isNotEmpty;
   }
 
   // ============================================================
@@ -2204,11 +2816,18 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Add a bike to a job
-  Future<MechanicJobBike> addBikeToJob(MechanicJobBike jobBike) async {
+  Future<MechanicJobBike> addBikeToJob(
+    MechanicJobBike jobBike, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       final data = await _db.insert('mechanic_job_bikes', jobBike.toJson());
+      final createdJobBike = MechanicJobBike.fromJson(data);
+      if (syncBikeMemory) {
+        await _safeSyncBikeMemoryForJob(createdJobBike.jobId);
+      }
       notifyListeners();
-      return MechanicJobBike.fromJson(data);
+      return createdJobBike;
     } catch (e) {
       if (kDebugMode) print('Error adding bike to job: $e');
       rethrow;
@@ -2216,15 +2835,22 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Update a job bike entry
-  Future<MechanicJobBike> updateJobBike(MechanicJobBike jobBike) async {
+  Future<MechanicJobBike> updateJobBike(
+    MechanicJobBike jobBike, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       if (jobBike.id == null || jobBike.id!.isEmpty) {
         throw Exception('ID de bicicleta de trabajo inválido');
       }
       final data =
           await _db.update('mechanic_job_bikes', jobBike.id!, jobBike.toJson());
+      final updatedJobBike = MechanicJobBike.fromJson(data);
+      if (syncBikeMemory) {
+        await _safeSyncBikeMemoryForJob(updatedJobBike.jobId);
+      }
       notifyListeners();
-      return MechanicJobBike.fromJson(data);
+      return updatedJobBike;
     } catch (e) {
       if (kDebugMode) print('Error updating job bike: $e');
       rethrow;
@@ -2232,10 +2858,27 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Remove a bike from a job
-  Future<void> removeBikeFromJob(String jobBikeId) async {
+  Future<void> removeBikeFromJob(
+    String jobBikeId, {
+    bool syncBikeMemory = true,
+  }) async {
     try {
       if (jobBikeId.isEmpty) throw Exception('ID inválido');
+
+      String? jobId;
+      if (syncBikeMemory) {
+        final existing = await Supabase.instance.client
+            .from('mechanic_job_bikes')
+            .select('job_id')
+            .eq('id', jobBikeId)
+            .maybeSingle();
+        jobId = existing?['job_id']?.toString();
+      }
+
       await _db.delete('mechanic_job_bikes', jobBikeId);
+      if (syncBikeMemory) {
+        await _safeSyncBikeMemoryForJob(jobId);
+      }
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error removing bike from job: $e');

@@ -470,6 +470,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           return cached;
         }
 
+        final fallbackProductType =
+            item.itemType == 'service' || item.serviceProductId != null
+                ? ProductType.service
+                : ProductType.product;
+
         return Product(
           id: item.productId!,
           name: item.productName,
@@ -478,7 +483,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           cost: 0,
           stockQuantity: 0,
           category: ProductCategory.other,
-          productType: ProductType.product,
+          productType: fallbackProductType,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
@@ -534,8 +539,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               product: product,
               name: item.productName,
               isCatalogProduct: item.productId != null,
+              isServiceItem: item.itemType == 'service' ||
+                  item.serviceProductId != null ||
+                  product?.isService == true,
               quantity: item.quantity.toInt(),
               unitPrice: item.unitPrice,
+              location: item.location,
               notes: item.notes,
             ));
           }
@@ -557,8 +566,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             product: product,
             name: item.productName,
             isCatalogProduct: item.productId != null,
+            isServiceItem: item.itemType == 'service' ||
+                item.serviceProductId != null ||
+                product?.isService == true,
             quantity: item.quantity.toInt(),
             unitPrice: item.unitPrice,
+            location: item.location,
             notes: item.notes,
           ));
         }
@@ -586,8 +599,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               product: product,
               name: item.productName,
               isCatalogProduct: item.productId != null,
+              isServiceItem: item.itemType == 'service' ||
+                  item.serviceProductId != null ||
+                  product?.isService == true,
               quantity: item.quantity.toInt(),
               unitPrice: item.unitPrice,
+              location: item.location,
               notes: item.notes,
             ));
           }
@@ -607,8 +624,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               product: product,
               name: item.productName,
               isCatalogProduct: item.productId != null,
+              isServiceItem: item.itemType == 'service' ||
+                  item.serviceProductId != null ||
+                  product?.isService == true,
               quantity: item.quantity.toInt(),
               unitPrice: item.unitPrice,
+              location: item.location,
               notes: item.notes,
             ));
           }
@@ -1180,50 +1201,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Future<void> _addCatalogPart(Product product) async {
-    // Always add as new line (allow duplicates on different lines)
-    String? notes;
-    Map<String, dynamic>? wizardAnswers;
-    ServiceWizardProfile? wizardProfile;
-
-    // Show service wizard for service products
-    if (product.isService && mounted) {
-      // Load profile in background (non-blocking)
-      final profile = await _serviceWizardService
-          .getProfileForProduct(product.id)
-          .catchError((_) => null);
-
-      if (!mounted) return;
-
-      final result = await showServiceWizardDialog(
-        context,
-        productName: product.name,
-        productIsService: true,
-        profile: profile,
-      );
-
-      if (result != null) {
-        notes = result.summary.isNotEmpty ? result.summary : null;
-        wizardAnswers = result.answers.isNotEmpty ? result.answers : null;
-        wizardProfile = profile;
-      }
-    }
-
     if (!mounted) return;
     setState(() {
       _currentPartItems.add(_JobPartItem(
         product: product,
         name: product.name,
         isCatalogProduct: true,
+        isServiceItem: product.isService,
         quantity: 1,
         unitPrice: product.price,
-        notes: notes,
-        wizardAnswers: wizardAnswers,
-        wizardProfile: wizardProfile,
+        notes: null,
       ));
       _partAutocompleteKey++; // Reset autocomplete field
-      if (wizardAnswers != null) {
-        _selectedServiceIndex = _currentPartItems.length - 1;
-      }
     });
   }
 
@@ -1234,6 +1223,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         product: null,
         name: description,
         isCatalogProduct: false,
+        isServiceItem: false,
         quantity: 1,
         unitPrice: 0, // User must enter price manually
         notes: null,
@@ -1249,11 +1239,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         product: null,
         name: '',
         isCatalogProduct: false,
+        isServiceItem: false,
         quantity: 1,
         unitPrice: 0,
         notes: null,
       ));
     });
+  }
+
+  String _itemTypeForPartItem(_JobPartItem item) {
+    if (item.isServiceItem) return 'service';
+    return item.isCatalogProduct ? 'product' : 'adhoc';
+  }
+
+  String? _serviceProductIdForPartItem(_JobPartItem item) {
+    if (!item.isServiceItem) return null;
+    return item.product?.id;
   }
 
   void _addServiceItem() {
@@ -1660,7 +1661,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (widget.jobId != null) {
         // Update existing job
-        await bikeshopService.updateJob(job);
+        await bikeshopService.updateJob(job, syncBikeMemory: false);
         jobId = widget.jobId!;
       } else {
         // Create new job
@@ -1677,7 +1678,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final existingItems = await bikeshopService.getJobItems(jobId);
         for (final existing in existingItems) {
           if (existing.id != null) {
-            await bikeshopService.deleteJobItem(existing.id!);
+            await bikeshopService.deleteJobItem(
+              existing.id!,
+              syncBikeMemory: false,
+            );
           }
         }
 
@@ -1685,7 +1689,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final existingJobBikes = await bikeshopService.getJobBikes(jobId);
         for (final existingJB in existingJobBikes) {
           if (existingJB.id != null) {
-            await bikeshopService.removeBikeFromJob(existingJB.id!);
+            await bikeshopService.removeBikeFromJob(
+              existingJB.id!,
+              syncBikeMemory: false,
+            );
           }
         }
       }
@@ -1708,15 +1715,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               jobBikeId: null, // General items have no bike
               tenantId: tenantId,
               productId: item.product?.id,
+              serviceProductId: _serviceProductIdForPartItem(item),
               productName: item.name,
               productSku: item.sku ?? '',
               quantity: quantity,
               unitPrice: unitPrice,
               totalPrice: quantity * unitPrice,
-              itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+              itemType: _itemTypeForPartItem(item),
+              location: item.location,
               notes: item.notes,
             );
-            final created = await bikeshopService.createJobItem(jobItem);
+            final created = await bikeshopService.createJobItem(
+              jobItem,
+              syncBikeMemory: false,
+            );
 
             // Auto-generate tasks from product description if available
             if (item.product != null &&
@@ -1774,7 +1786,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           approvedByCustomer: tab.approvedByCustomer,
         );
 
-        final createdJobBike = await bikeshopService.addBikeToJob(jobBike);
+        final createdJobBike = await bikeshopService.addBikeToJob(
+          jobBike,
+          syncBikeMemory: false,
+        );
         final jobBikeId = createdJobBike.id;
 
         debugPrint(
@@ -1791,15 +1806,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             jobBikeId: jobBikeId, // Link to specific bike!
             tenantId: tenantId,
             productId: item.product?.id,
+            serviceProductId: _serviceProductIdForPartItem(item),
             productName: item.name,
             productSku: item.sku ?? '',
             quantity: quantity,
             unitPrice: unitPrice,
             totalPrice: quantity * unitPrice,
-            itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+            itemType: _itemTypeForPartItem(item),
+            location: item.location,
             notes: item.notes, // ✅ Save the description!
           );
-          final created = await bikeshopService.createJobItem(jobItem);
+          final created = await bikeshopService.createJobItem(
+            jobItem,
+            syncBikeMemory: false,
+          );
 
           // Auto-generate tasks from product description if available
           if (item.product != null &&
@@ -1832,15 +1852,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             jobBikeId: null,
             tenantId: tenantId,
             productId: item.product?.id,
+            serviceProductId: _serviceProductIdForPartItem(item),
             productName: item.name,
             productSku: item.sku ?? '',
             quantity: quantity,
             unitPrice: unitPrice,
             totalPrice: quantity * unitPrice,
-            itemType: item.isCatalogProduct ? 'product' : 'adhoc',
+            itemType: _itemTypeForPartItem(item),
+            location: item.location,
             notes: item.notes,
           );
-          final created = await bikeshopService.createJobItem(jobItem);
+          final created = await bikeshopService.createJobItem(
+            jobItem,
+            syncBikeMemory: false,
+          );
           if (item.product != null &&
               item.product!.description != null &&
               item.product!.description!.isNotEmpty &&
@@ -1882,7 +1907,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr',
         );
 
-        final created = await bikeshopService.createJobItem(jobServiceItem);
+        final created = await bikeshopService.createJobItem(
+          jobServiceItem,
+          syncBikeMemory: false,
+        );
 
         if (serviceProduct != null &&
             serviceProduct.description != null &&
@@ -2718,8 +2746,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color:
-                                Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                            color: Theme.of(context)
+                                .primaryColor
+                                .withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -2912,7 +2941,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -2995,7 +3025,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildInlineBikeTabs(ThemeData theme) {
     final primary = theme.colorScheme.primary;
     final onSurface = theme.colorScheme.onSurfaceVariant;
-    final dividerColor = theme.colorScheme.outlineVariant.withValues(alpha: 0.5);
+    final dividerColor =
+        theme.colorScheme.outlineVariant.withValues(alpha: 0.5);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -3246,6 +3277,473 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return normalized.isEmpty ? null : normalized;
   }
 
+  BikeMemoryLocation _resolveWizardLocation(
+    BikeMemoryLocation currentLocation,
+    Map<String, dynamic> answers,
+  ) {
+    if (currentLocation != BikeMemoryLocation.none) {
+      return currentLocation;
+    }
+
+    switch (answers['which_wheel']?.toString()) {
+      case 'front':
+        return BikeMemoryLocation.front;
+      case 'rear':
+        return BikeMemoryLocation.rear;
+      default:
+        switch (answers['position']?.toString()) {
+          case 'front':
+            return BikeMemoryLocation.front;
+          case 'rear':
+            return BikeMemoryLocation.rear;
+          default:
+            return currentLocation;
+        }
+    }
+  }
+
+  bool _isBrakeServiceFamily(String? family) {
+    return family == 'brake' || family == 'brakes';
+  }
+
+  Set<String> _hiddenWizardQuestionKeys(
+    ServiceWizardProfile? profile,
+    BikeMemoryLocation location,
+  ) {
+    if (!_isBrakeServiceFamily(profile?.serviceFamily)) {
+      return const <String>{};
+    }
+
+    return {
+      'position',
+      if (location != BikeMemoryLocation.none) 'which_wheel',
+    };
+  }
+
+  String? _serviceWizardHelperText(
+    ServiceWizardProfile? profile,
+    BikeMemoryLocation location,
+  ) {
+    if (_isBrakeServiceFamily(profile?.serviceFamily)) {
+      if (location == BikeMemoryLocation.front) {
+        return 'Esta configuración se vinculará a la ficha técnica del freno delantero de esta bicicleta.';
+      }
+      if (location == BikeMemoryLocation.rear) {
+        return 'Esta configuración se vinculará a la ficha técnica del freno trasero de esta bicicleta.';
+      }
+      return 'Esta configuración puede vincularse a la ficha técnica del freno. Si quieres que quede claramente ligada, usa “Aplica a” en la fila para marcar Del. o Tras.';
+    }
+
+    if (profile?.serviceFamily == 'drivetrain') {
+      return 'Esta configuración puede actualizar la ficha técnica de transmisión de esta bicicleta.';
+    }
+
+    return null;
+  }
+
+  String? _serviceWizardSyncFeedback(
+    ServiceWizardProfile? profile,
+    _JobPartItem item,
+    Map<String, dynamic> answers,
+  ) {
+    if (_isBrakeServiceFamily(profile?.serviceFamily)) {
+      final targets = _resolveBrakeDiagnosisTargets(item.location, answers);
+      if (targets.isEmpty) {
+        return 'Servicio guardado. Para ligarlo a la ficha técnica, define Del./Tras. en “Aplica a”.';
+      }
+      if (targets.length == 2) {
+        return 'Servicio vinculado a la ficha técnica de freno delantero y trasero.';
+      }
+      if (targets.contains(BikeMemoryLocation.front)) {
+        return 'Servicio vinculado a la ficha técnica del freno delantero.';
+      }
+      if (targets.contains(BikeMemoryLocation.rear)) {
+        return 'Servicio vinculado a la ficha técnica del freno trasero.';
+      }
+    }
+
+    if (profile?.serviceFamily == 'drivetrain') {
+      return 'Servicio vinculado a la ficha técnica de transmisión.';
+    }
+
+    return null;
+  }
+
+  String? _buildPersistedWizardSummary(
+    ServiceWizardProfile? profile,
+    Map<String, dynamic> answers,
+    String fallbackSummary,
+  ) {
+    if (answers.isEmpty) {
+      return null;
+    }
+
+    if (profile == null) {
+      return _normalizeNullableText(fallbackSummary);
+    }
+
+    final filteredAnswers = Map<String, dynamic>.from(answers)
+      ..remove('which_wheel');
+    final filteredQuestions = profile.questions
+        .where((question) => question.key != 'which_wheel')
+        .toList();
+
+    String summary = ServiceWizardService.buildSummary(
+      filteredAnswers,
+      filteredQuestions,
+    );
+
+    final extraNotes =
+        _normalizeNullableText(answers['_notes']?.toString() ?? '');
+    if (extraNotes != null) {
+      summary = summary.isEmpty ? extraNotes : '$summary\n$extraNotes';
+    }
+
+    return _normalizeNullableText(summary);
+  }
+
+  BikeSystemOverallStatus _mergeDerivedDiagnosisStatus(
+    BikeSystemOverallStatus current,
+    BikeSystemOverallStatus derived,
+  ) {
+    if (derived == BikeSystemOverallStatus.unknown) {
+      return current;
+    }
+    if (current == BikeSystemOverallStatus.unknown) {
+      return derived;
+    }
+    return _diagnosisStatusRank(derived) > _diagnosisStatusRank(current)
+        ? derived
+        : current;
+  }
+
+  int _diagnosisStatusRank(BikeSystemOverallStatus status) {
+    switch (status) {
+      case BikeSystemOverallStatus.unknown:
+        return 0;
+      case BikeSystemOverallStatus.ok:
+        return 1;
+      case BikeSystemOverallStatus.attention:
+        return 2;
+      case BikeSystemOverallStatus.critical:
+        return 3;
+    }
+  }
+
+  String? _upsertGuidedDiagnosisNote(
+    String? existingNotes, {
+    required String marker,
+    required String? content,
+  }) {
+    final retainedLines = <String>[];
+    for (final rawLine in (existingNotes ?? '').split('\n')) {
+      final line = rawLine.trimRight();
+      if (line.trim().isEmpty) continue;
+      if (line.startsWith(marker)) continue;
+      retainedLines.add(line);
+    }
+
+    final normalizedContent = _normalizeNullableText(content ?? '');
+    if (normalizedContent != null) {
+      retainedLines.add('$marker $normalizedContent');
+    }
+
+    if (retainedLines.isEmpty) {
+      return null;
+    }
+
+    return retainedLines.join('\n');
+  }
+
+  bool _hasGuidedDiagnosisNote(String? notes, String marker) {
+    return (notes ?? '').split('\n').any((line) => line.startsWith(marker));
+  }
+
+  void _applyWizardAnswersToDiagnosis({
+    required _JobPartItem item,
+    required ServiceWizardProfile? profile,
+    required Map<String, dynamic> answers,
+  }) {
+    if (profile == null) {
+      return;
+    }
+
+    switch (profile.serviceFamily) {
+      case 'brake':
+      case 'brakes':
+        _applyBrakeWizardAnswersToDiagnosis(
+          item: item,
+          profile: profile,
+          answers: answers,
+        );
+        return;
+      case 'drivetrain':
+        _applyDrivetrainWizardAnswersToDiagnosis(
+          profile: profile,
+          answers: answers,
+        );
+        return;
+      default:
+        return;
+    }
+  }
+
+  void _applyBrakeWizardAnswersToDiagnosis({
+    required _JobPartItem item,
+    required ServiceWizardProfile profile,
+    required Map<String, dynamic> answers,
+  }) {
+    final currentTab = _currentBikeTab;
+    if (currentTab == null || currentTab.isGeneralTab) {
+      return;
+    }
+
+    final targets = _resolveBrakeDiagnosisTargets(item.location, answers);
+    if (targets.isEmpty) {
+      return;
+    }
+
+    final questionsByKey = {
+      for (final question in profile.questions) question.key: question,
+    };
+    final noteParts = <String>[];
+    var derivedStatus = BikeSystemOverallStatus.unknown;
+
+    void addSelectAnswer(
+      String key,
+      Map<String, BikeSystemOverallStatus> statusMap,
+    ) {
+      final rawValue = answers[key]?.toString();
+      if (rawValue == null || rawValue.isEmpty) {
+        return;
+      }
+
+      final question = questionsByKey[key];
+      final resolvedLabel = question != null
+          ? ServiceWizardService.resolveLabel(question, rawValue)
+          : rawValue;
+      noteParts.add('${question?.label ?? key}: $resolvedLabel');
+
+      final candidateStatus =
+          statusMap[rawValue] ?? BikeSystemOverallStatus.unknown;
+      if (_diagnosisStatusRank(candidateStatus) >
+          _diagnosisStatusRank(derivedStatus)) {
+        derivedStatus = candidateStatus;
+      }
+    }
+
+    void addMultiSelectAnswer(
+      String key,
+      BikeSystemOverallStatus derivedFromAnySelection,
+    ) {
+      final rawValues =
+          (answers[key] as List?)?.map((value) => value.toString()).toList();
+      if (rawValues == null || rawValues.isEmpty) {
+        return;
+      }
+
+      final question = questionsByKey[key];
+      final resolvedLabels = rawValues.map((rawValue) {
+        return question != null
+            ? ServiceWizardService.resolveLabel(question, rawValue)
+            : rawValue;
+      }).join(', ');
+      noteParts.add('${question?.label ?? key}: $resolvedLabels');
+
+      if (_diagnosisStatusRank(derivedFromAnySelection) >
+          _diagnosisStatusRank(derivedStatus)) {
+        derivedStatus = derivedFromAnySelection;
+      }
+    }
+
+    addSelectAnswer('pad_condition', {
+      'ok': BikeSystemOverallStatus.ok,
+      'worn': BikeSystemOverallStatus.attention,
+      'critical': BikeSystemOverallStatus.critical,
+      'replace': BikeSystemOverallStatus.critical,
+    });
+    addSelectAnswer('rotor_condition', {
+      'ok': BikeSystemOverallStatus.ok,
+      'glazed': BikeSystemOverallStatus.attention,
+      'warped': BikeSystemOverallStatus.critical,
+      'replace': BikeSystemOverallStatus.critical,
+    });
+    addSelectAnswer('contamination_level', {
+      'none': BikeSystemOverallStatus.ok,
+      'light': BikeSystemOverallStatus.attention,
+      'moderate': BikeSystemOverallStatus.attention,
+      'severe': BikeSystemOverallStatus.critical,
+    });
+    addMultiSelectAnswer('symptom', BikeSystemOverallStatus.attention);
+
+    final freeNotes =
+        _normalizeNullableText(answers['_notes']?.toString() ?? '');
+    if (freeNotes != null) {
+      noteParts.add('Observación: $freeNotes');
+    }
+
+    final marker = '[Servicio guiado: ${profile.name}]';
+    final noteContent = noteParts.isEmpty ? null : noteParts.join(' · ');
+    if (derivedStatus == BikeSystemOverallStatus.unknown &&
+        noteContent == null) {
+      final hasExistingGuidedNote = targets.any((target) {
+        final notes = target == BikeMemoryLocation.front
+            ? currentTab.diagnosisSheet.frontBrake.notes
+            : currentTab.diagnosisSheet.rearBrake.notes;
+        return _hasGuidedDiagnosisNote(notes, marker);
+      });
+      if (!hasExistingGuidedNote) {
+        return;
+      }
+    }
+
+    BrakeDiagnosisSheet applyToSheet(BrakeDiagnosisSheet sheet) {
+      final mergedNotes = _upsertGuidedDiagnosisNote(
+        sheet.notes,
+        marker: marker,
+        content: noteContent,
+      );
+      return sheet.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.overallStatus,
+          derivedStatus,
+        ),
+        notes: mergedNotes,
+        clearNotes: mergedNotes == null,
+      );
+    }
+
+    _updateCurrentDiagnosisSheet(
+      (current) => current.copyWith(
+        frontBrake: targets.contains(BikeMemoryLocation.front)
+            ? applyToSheet(current.frontBrake)
+            : current.frontBrake,
+        rearBrake: targets.contains(BikeMemoryLocation.rear)
+            ? applyToSheet(current.rearBrake)
+            : current.rearBrake,
+      ),
+      refresh: false,
+    );
+  }
+
+  Set<BikeMemoryLocation> _resolveBrakeDiagnosisTargets(
+    BikeMemoryLocation location,
+    Map<String, dynamic> answers,
+  ) {
+    if (location == BikeMemoryLocation.front) {
+      return {BikeMemoryLocation.front};
+    }
+    if (location == BikeMemoryLocation.rear) {
+      return {BikeMemoryLocation.rear};
+    }
+
+    switch (answers['which_wheel']?.toString()) {
+      case 'front':
+        return {BikeMemoryLocation.front};
+      case 'rear':
+        return {BikeMemoryLocation.rear};
+      case 'both':
+        return {BikeMemoryLocation.front, BikeMemoryLocation.rear};
+      default:
+        switch (answers['position']?.toString()) {
+          case 'front':
+            return {BikeMemoryLocation.front};
+          case 'rear':
+            return {BikeMemoryLocation.rear};
+          case 'both':
+            return {BikeMemoryLocation.front, BikeMemoryLocation.rear};
+          default:
+            return {};
+        }
+    }
+  }
+
+  void _applyDrivetrainWizardAnswersToDiagnosis({
+    required ServiceWizardProfile profile,
+    required Map<String, dynamic> answers,
+  }) {
+    final currentTab = _currentBikeTab;
+    if (currentTab == null || currentTab.isGeneralTab) {
+      return;
+    }
+
+    final questionsByKey = {
+      for (final question in profile.questions) question.key: question,
+    };
+    final noteParts = <String>[];
+    var derivedStatus = BikeSystemOverallStatus.unknown;
+
+    void addSelectAnswer(
+      String key,
+      Map<String, BikeSystemOverallStatus> statusMap,
+    ) {
+      final rawValue = answers[key]?.toString();
+      if (rawValue == null || rawValue.isEmpty) {
+        return;
+      }
+
+      final question = questionsByKey[key];
+      final resolvedLabel = question != null
+          ? ServiceWizardService.resolveLabel(question, rawValue)
+          : rawValue;
+      noteParts.add('${question?.label ?? key}: $resolvedLabel');
+
+      final candidateStatus =
+          statusMap[rawValue] ?? BikeSystemOverallStatus.unknown;
+      if (_diagnosisStatusRank(candidateStatus) >
+          _diagnosisStatusRank(derivedStatus)) {
+        derivedStatus = candidateStatus;
+      }
+    }
+
+    addSelectAnswer('chain_wear', {
+      'ok': BikeSystemOverallStatus.ok,
+      'worn': BikeSystemOverallStatus.attention,
+      'replace': BikeSystemOverallStatus.critical,
+    });
+    addSelectAnswer('cable_condition', {
+      'ok': BikeSystemOverallStatus.ok,
+      'frayed': BikeSystemOverallStatus.attention,
+      'replace': BikeSystemOverallStatus.ok,
+    });
+
+    final freeNotes =
+        _normalizeNullableText(answers['_notes']?.toString() ?? '');
+    if (freeNotes != null) {
+      noteParts.add('Observación: $freeNotes');
+    }
+
+    final marker = '[Servicio guiado: ${profile.name}]';
+    final noteContent = noteParts.isEmpty ? null : noteParts.join(' · ');
+    if (derivedStatus == BikeSystemOverallStatus.unknown &&
+        noteContent == null &&
+        !_hasGuidedDiagnosisNote(
+            currentTab.diagnosisSheet.drivetrain.notes, marker)) {
+      return;
+    }
+
+    _updateCurrentDiagnosisSheet(
+      (current) {
+        final mergedNotes = _upsertGuidedDiagnosisNote(
+          current.drivetrain.notes,
+          marker: marker,
+          content: noteContent,
+        );
+        return current.copyWith(
+          drivetrain: current.drivetrain.copyWith(
+            overallStatus: _mergeDerivedDiagnosisStatus(
+              current.drivetrain.overallStatus,
+              derivedStatus,
+            ),
+            notes: mergedNotes,
+            clearNotes: mergedNotes == null,
+          ),
+        );
+      },
+      refresh: false,
+    );
+  }
+
   void _insertDiagnosisSnippet(
       TextEditingController controller, String snippet) {
     final value = controller.value;
@@ -3351,8 +3849,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color:
-                            theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                        color: theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -3755,7 +4253,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 children: [
                   Expanded(
                     child: TextFormField(
-                      key: ValueKey('diag_chain_wear_${currentTab.tabId}'),
+                      key: ValueKey(
+                        'diag_chain_wear_${currentTab.tabId}_${diagnosisSheet.drivetrain.chainWearPercent?.toString() ?? 'empty'}',
+                      ),
                       initialValue: diagnosisSheet.drivetrain.chainWearPercent
                           ?.toString(),
                       decoration: const InputDecoration(
@@ -3782,7 +4282,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
-                      key: ValueKey('diag_cassette_${currentTab.tabId}'),
+                      key: ValueKey(
+                        'diag_cassette_${currentTab.tabId}_${diagnosisSheet.drivetrain.cassetteCondition ?? 'empty'}',
+                      ),
                       initialValue: diagnosisSheet.drivetrain.cassetteCondition,
                       decoration: const InputDecoration(
                         labelText: 'Estado cassette',
@@ -3808,7 +4310,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                key: ValueKey('diag_drive_notes_${currentTab.tabId}'),
+                key: ValueKey(
+                  'diag_drive_notes_${currentTab.tabId}_${diagnosisSheet.drivetrain.notes ?? 'empty'}',
+                ),
                 initialValue: diagnosisSheet.drivetrain.notes,
                 decoration: const InputDecoration(
                   labelText: 'Notas transmisión',
@@ -3948,6 +4452,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<BikeSystemOverallStatus>(
+            key: ValueKey('diag_status_${title}_${status.dbValue}'),
             initialValue: status,
             decoration: const InputDecoration(
               labelText: 'Estado general',
@@ -3986,7 +4491,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           children: [
             Expanded(
               child: TextFormField(
-                key: ValueKey('diag_${prefix}_pad_${currentTab.tabId}'),
+                key: ValueKey(
+                  'diag_${prefix}_pad_${currentTab.tabId}_${brakeSheet.padWearPercent?.toString() ?? 'empty'}',
+                ),
                 initialValue: brakeSheet.padWearPercent?.toString(),
                 decoration: InputDecoration(
                   labelText: 'Desgaste pastillas $title (%)',
@@ -4009,7 +4516,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             const SizedBox(width: 12),
             Expanded(
               child: TextFormField(
-                key: ValueKey('diag_${prefix}_rotor_${currentTab.tabId}'),
+                key: ValueKey(
+                  'diag_${prefix}_rotor_${currentTab.tabId}_${brakeSheet.rotorThicknessMm?.toString() ?? 'empty'}',
+                ),
                 initialValue: brakeSheet.rotorThicknessMm?.toString(),
                 decoration: InputDecoration(
                   labelText: 'Grosor rotor $title (mm)',
@@ -4033,7 +4542,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ),
         const SizedBox(height: 12),
         TextFormField(
-          key: ValueKey('diag_${prefix}_notes_${currentTab.tabId}'),
+          key: ValueKey(
+            'diag_${prefix}_notes_${currentTab.tabId}_${brakeSheet.notes ?? 'empty'}',
+          ),
           initialValue: brakeSheet.notes,
           decoration: InputDecoration(
             labelText: 'Notas freno $title',
@@ -4823,7 +5334,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                                color: colorScheme.primary.withValues(alpha: 0.2),
+                                color:
+                                    colorScheme.primary.withValues(alpha: 0.2),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2))
                           ]
@@ -5492,7 +6004,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           });
         }
       },
-      onEditWizard: item.product?.isService == true
+      onEditWizard: item.isServiceItem && item.product != null
           ? () => _editServiceWizard(itemIndex)
           : null,
       onTap: () {
@@ -5516,23 +6028,55 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     if (!mounted) return;
 
+    final helperText = _serviceWizardHelperText(profile, item.location);
+    final hiddenQuestionKeys =
+        _hiddenWizardQuestionKeys(profile, item.location);
+
     final result = await showServiceWizardDialog(
       context,
       productName: item.product!.name,
       productIsService: true,
       profile: profile,
       initialAnswers: item.wizardAnswers,
+      helperText: helperText,
+      hiddenQuestionKeys: hiddenQuestionKeys,
     );
 
     if (result != null && mounted) {
+      final normalizedLocation =
+          _resolveWizardLocation(item.location, result.answers);
+      final persistedSummary = _buildPersistedWizardSummary(
+        profile,
+        result.answers,
+        result.summary,
+      );
+      final updatedItem = item.copyWith(
+        notes: persistedSummary,
+        wizardAnswers: result.answers.isNotEmpty ? result.answers : null,
+        wizardProfile: profile,
+        location: normalizedLocation,
+      );
+      final syncFeedback = _serviceWizardSyncFeedback(
+        profile,
+        updatedItem,
+        result.answers,
+      );
+
       setState(() {
-        _currentPartItems[itemIndex] = item.copyWith(
-          notes: result.summary.isNotEmpty ? result.summary : null,
-          wizardAnswers: result.answers.isNotEmpty ? result.answers : null,
-          wizardProfile: profile,
+        _currentPartItems[itemIndex] = updatedItem;
+        _applyWizardAnswersToDiagnosis(
+          item: updatedItem,
+          profile: profile,
+          answers: result.answers,
         );
         _selectedServiceIndex = itemIndex;
       });
+
+      if (syncFeedback != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(syncFeedback)),
+        );
+      }
     }
   }
 
@@ -5603,7 +6147,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     child: Container(
                       decoration: BoxDecoration(
                         border: Border.all(
-                            color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+                            color: theme.colorScheme.outline
+                                .withValues(alpha: 0.2)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -5744,8 +6289,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           Divider(
                               height: 1,
                               thickness: 1,
-                              color:
-                                  theme.colorScheme.outline.withValues(alpha: 0.2)),
+                              color: theme.colorScheme.outline
+                                  .withValues(alpha: 0.2)),
 
                           // Labor items
                           Column(
@@ -6177,8 +6722,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color:
-                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -6199,8 +6744,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color:
-                  theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -6420,9 +6965,39 @@ class _PartItemRowState extends State<_PartItemRow> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (item.product?.isService == true) ...[
-                  _ServiceLineBadge(item: item),
-                  const SizedBox(height: 6),
+                if (item.isServiceItem) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _ServiceLineBadge(item: item),
+                      if (widget.onEditWizard != null)
+                        TextButton.icon(
+                          onPressed: widget.onEditWizard,
+                          icon: Icon(
+                            item.hasWizardAnswers
+                                ? Icons.edit_outlined
+                                : Icons.tune,
+                            size: 16,
+                          ),
+                          label: Text(
+                            item.hasWizardAnswers
+                                ? 'Editar servicio'
+                                : 'Configurar',
+                          ),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                 ],
                 SmartProductField(
                   initialData: ProductFieldData(
@@ -6441,35 +7016,59 @@ class _PartItemRowState extends State<_PartItemRow> {
                       // Clear product
                       widget.onChanged(item.copyWith(
                         clearProduct: true,
+                        clearWizard: true,
                         name: '',
                         isCatalogProduct: true,
+                        isServiceItem: false,
+                        location: BikeMemoryLocation.none,
                         notes: '',
                       ));
                     } else if (selection.isCatalogProduct &&
                         selection.product != null) {
+                      final isSameProduct =
+                          item.product?.id == selection.product!.id;
+                      final isServiceItem = selection.product!.isService;
+
                       // Catalog product
                       widget.onChanged(item.copyWith(
                         product: selection.product,
                         name: selection.productName ?? '',
                         isCatalogProduct: true,
+                        isServiceItem: isServiceItem,
                         // Only update price if it's a new selection, not a desc update
                         unitPrice: selection.price > 0
                             ? selection.price
                             : item.unitPrice,
-                        notes: selection.description,
+                        notes: selection.description ?? '',
+                        clearWizard: !isSameProduct,
+                        location: isServiceItem && isSameProduct
+                            ? item.location
+                            : BikeMemoryLocation.none,
                       ));
                     } else {
                       // Ad-hoc item
                       widget.onChanged(item.copyWith(
                         clearProduct: true,
+                        clearWizard: true,
                         name: selection.productName ?? '',
                         isCatalogProduct: false,
+                        isServiceItem: false,
                         unitPrice: item.unitPrice,
-                        notes: selection.description,
+                        location: BikeMemoryLocation.none,
+                        notes: selection.description ?? '',
                       ));
                     }
                   },
                 ),
+                if (item.isServiceItem) ...[
+                  const SizedBox(height: 8),
+                  _ServiceLocationSelector(
+                    value: item.location,
+                    onChanged: (location) {
+                      widget.onChanged(item.copyWith(location: location));
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -6549,8 +7148,10 @@ class _JobPartItem {
   Product? product; // Nullable for ad-hoc items
   String name; // For ad-hoc items
   bool isCatalogProduct;
+  bool isServiceItem;
   int quantity;
   double unitPrice;
+  BikeMemoryLocation location;
   String? notes;
 
   /// Answers captured from the service wizard (only for service products)
@@ -6564,8 +7165,10 @@ class _JobPartItem {
     this.product,
     required this.name,
     this.isCatalogProduct = true,
+    this.isServiceItem = false,
     required this.quantity,
     required this.unitPrice,
+    this.location = BikeMemoryLocation.none,
     this.notes,
     this.wizardAnswers,
     this.wizardProfile,
@@ -6581,8 +7184,10 @@ class _JobPartItem {
     Product? product,
     String? name,
     bool? isCatalogProduct,
+    bool? isServiceItem,
     int? quantity,
     double? unitPrice,
+    BikeMemoryLocation? location,
     String? notes,
     Map<String, dynamic>? wizardAnswers,
     ServiceWizardProfile? wizardProfile,
@@ -6594,8 +7199,10 @@ class _JobPartItem {
       product: clearProduct ? null : (product ?? this.product),
       name: name ?? this.name,
       isCatalogProduct: isCatalogProduct ?? this.isCatalogProduct,
+      isServiceItem: isServiceItem ?? this.isServiceItem,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
+      location: location ?? this.location,
       notes: notes ?? this.notes,
       wizardAnswers: clearWizard ? null : (wizardAnswers ?? this.wizardAnswers),
       wizardProfile: clearWizard ? null : (wizardProfile ?? this.wizardProfile),
@@ -6646,6 +7253,67 @@ class _ServiceLineBadge extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _ServiceLocationSelector extends StatelessWidget {
+  final BikeMemoryLocation value;
+  final ValueChanged<BikeMemoryLocation> onChanged;
+
+  const _ServiceLocationSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Widget buildChip(BikeMemoryLocation location, String label) {
+      final isSelected = value == location;
+      return ChoiceChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) {
+          if (!isSelected) {
+            onChanged(location);
+          }
+        },
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        labelStyle: theme.textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: isSelected
+              ? theme.colorScheme.onPrimaryContainer
+              : theme.colorScheme.onSurface,
+        ),
+        side: BorderSide(
+          color: isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.4)
+              : theme.colorScheme.outline.withValues(alpha: 0.35),
+        ),
+        backgroundColor: theme.colorScheme.surface,
+        selectedColor: theme.colorScheme.primaryContainer,
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          'Aplica a',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        buildChip(BikeMemoryLocation.none, 'Auto'),
+        buildChip(BikeMemoryLocation.front, 'Del.'),
+        buildChip(BikeMemoryLocation.rear, 'Tras.'),
       ],
     );
   }
@@ -7665,7 +8333,8 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
         // Table Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           child: Row(
             children: [
               Expanded(
@@ -7721,8 +8390,8 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
                     final customer = _customers[index];
                     return InkWell(
                       onTap: () => Navigator.of(context).pop(customer),
-                      hoverColor:
-                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      hoverColor: theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.3),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 12),
@@ -7962,19 +8631,21 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
           decoration: BoxDecoration(
             color: widget.isSelected
                 ? theme.colorScheme.surface
-                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                : theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             border: widget.isSelected
                 ? Border(
                     top: BorderSide(color: theme.colorScheme.primary, width: 3),
-                    left:
-                        BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
-                    right:
-                        BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
+                    left: BorderSide(
+                        color: theme.dividerColor.withValues(alpha: 0.5)),
+                    right: BorderSide(
+                        color: theme.dividerColor.withValues(alpha: 0.5)),
                   )
                 : Border(
                     bottom: BorderSide(
-                        color: theme.dividerColor.withValues(alpha: 0.5), width: 1),
+                        color: theme.dividerColor.withValues(alpha: 0.5),
+                        width: 1),
                   ),
           ),
           child: Row(
@@ -8021,7 +8692,8 @@ class _BrowserStyleBikeTabState extends State<_BrowserStyleBikeTab> {
                       size: 14,
                       color: _isHovered
                           ? theme.colorScheme.error
-                          : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          : theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.7),
                     ),
                   ),
                 ),
@@ -8130,7 +8802,8 @@ class _BikeTabButtonState extends State<_BikeTabButton> {
                       child: InkWell(
                         onTap: widget.onClose,
                         borderRadius: BorderRadius.circular(999),
-                        hoverColor: theme.colorScheme.error.withValues(alpha: 0.12),
+                        hoverColor:
+                            theme.colorScheme.error.withValues(alpha: 0.12),
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(

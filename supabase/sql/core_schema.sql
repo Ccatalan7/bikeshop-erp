@@ -12288,6 +12288,47 @@ $$;
 -- ============================================================
 -- BIKESHOP MODULE - Mechanic & Service Manager
 -- ============================================================
+--
+-- ⚠️ BIKE WORKSHOP ARCHITECTURE SAFEGUARD FOR AGENTS
+--
+-- Before changing any bike workshop schema in this file, read:
+-- 1. BIKE_WORKSHOP_MASTER_SCHEMA.md
+-- 2. .github/copilot-instructions.md
+--
+-- This module has already suffered from architecture drift caused by agents
+-- creating redundant or parallel structures without first understanding the
+-- current backbone.
+--
+-- These comments are anti-drift guardrails, not a ban on progressive
+-- improvement. If the current architecture really needs to evolve, improve it
+-- deliberately, verify the live system first, and update
+-- BIKE_WORKSHOP_MASTER_SCHEMA.md in the same task.
+--
+-- The intended upstream-to-downstream order is:
+-- - bikes.id = durable tenant bike identity
+-- - bike_profiles.catalog_bike_id = link to shared encyclopedia bike_catalog
+-- - bike_profiles.technical_profile.values = confirmed technical truth
+-- - mechanic_job_bikes.diagnosis_sheet_data = visit-specific structured findings
+-- - mechanic_job_items = executed work + target metadata
+-- - bike memory kernel tables = derived cross-visit outputs
+--
+-- Do NOT treat diagnosis or service wizard answers as the first source of truth.
+-- Do NOT create parallel bike truth stores outside bike_profiles.
+-- Do NOT create a second diagnosis store outside mechanic_job_bikes.diagnosis_sheet_data.
+-- Do NOT add redundant targeting columns if system_key/component_slot_key/location_key
+-- already express the target.
+-- Do NOT add new history summary tables if bike_system_states, bike_observations,
+-- bike_interventions, or bike_component_lifecycles already cover the job.
+-- Prefer extending the existing backbone over building a parallel one.
+--
+-- Before making changes, verify live production behavior using the documented
+-- service-role REST and direct psql access patterns in .github/copilot-instructions.md.
+-- This is required because live service profile mappings and question keys have
+-- previously differed from assumptions in code.
+--
+-- If you change the architecture in this section and do not update
+-- BIKE_WORKSHOP_MASTER_SCHEMA.md, the task is incomplete.
+--
 -- Complete bikeshop/workshop management system with:
 -- - Bike registration and tracking
 -- - Service jobs (pegas) with workflow management
@@ -13317,11 +13358,41 @@ begin
     alter table mechanic_job_items add column service_product_id uuid references products(id) on delete set null;
     raise notice '✅ Added service_product_id column to mechanic_job_items';
   end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'system_key') then
+    alter table mechanic_job_items add column system_key text;
+    raise notice '✅ Added system_key column to mechanic_job_items';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'component_slot_key') then
+    alter table mechanic_job_items add column component_slot_key text;
+    raise notice '✅ Added component_slot_key column to mechanic_job_items';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'location_key') then
+    alter table mechanic_job_items add column location_key text not null default 'none';
+    raise notice '✅ Added location_key column to mechanic_job_items';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'intervention_type') then
+    alter table mechanic_job_items add column intervention_type text;
+    raise notice '✅ Added intervention_type column to mechanic_job_items';
+  end if;
+
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'creates_lifecycle') then
+    alter table mechanic_job_items add column creates_lifecycle boolean not null default false;
+    raise notice '✅ Added creates_lifecycle column to mechanic_job_items';
+  end if;
   
   -- Add index for service lookups
   if not exists (select 1 from pg_indexes where tablename = 'mechanic_job_items' and indexname = 'idx_mechanic_job_items_service_product_id') then
     create index idx_mechanic_job_items_service_product_id on mechanic_job_items(service_product_id) where service_product_id is not null;
     raise notice '✅ Added index for service_product_id';
+  end if;
+
+  if not exists (select 1 from pg_indexes where tablename = 'mechanic_job_items' and indexname = 'idx_mechanic_job_items_system_location') then
+    create index idx_mechanic_job_items_system_location on mechanic_job_items(system_key, location_key) where system_key is not null;
+    raise notice '✅ Added index for system/location lookup';
   end if;
 end $$;
 
@@ -22560,8 +22631,10 @@ create or replace function public.get_next_document_number(
 ) returns text
 language plpgsql
 security definer
+set search_path = public
 as $$
 declare
+  v_actor_tenant_id uuid;
   v_next_number integer;
   v_max_existing integer := 0;
   v_prefix text;
@@ -22569,6 +22642,18 @@ declare
   v_column_name text;
   v_formatted_number text;
 begin
+  v_actor_tenant_id := public.user_tenant_id();
+
+  if auth.uid() is not null then
+    if v_actor_tenant_id is null then
+      raise exception 'Could not resolve tenant for authenticated user';
+    end if;
+
+    if p_tenant_id is null or p_tenant_id <> v_actor_tenant_id then
+      raise exception 'Cross-tenant document sequence access is not allowed';
+    end if;
+  end if;
+
   -- Default prefixes if not provided
   v_prefix := coalesce(p_prefix, case p_document_type
     when 'sales_invoice' then 'FV'
@@ -22654,8 +22739,10 @@ create or replace function public.preview_next_document_number(
 ) returns text
 language plpgsql
 security definer
+set search_path = public
 as $$
 declare
+  v_actor_tenant_id uuid;
   v_current_number integer;
   v_max_existing integer := 0;
   v_next_number integer;
@@ -22664,6 +22751,18 @@ declare
   v_column_name text;
   v_formatted_number text;
 begin
+  v_actor_tenant_id := public.user_tenant_id();
+
+  if auth.uid() is not null then
+    if v_actor_tenant_id is null then
+      raise exception 'Could not resolve tenant for authenticated user';
+    end if;
+
+    if p_tenant_id is null or p_tenant_id <> v_actor_tenant_id then
+      raise exception 'Cross-tenant document sequence access is not allowed';
+    end if;
+  end if;
+
   -- Default prefixes if not provided
   v_prefix := coalesce(p_prefix, case p_document_type
     when 'sales_invoice' then 'FV'

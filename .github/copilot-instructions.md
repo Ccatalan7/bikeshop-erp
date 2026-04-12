@@ -6,6 +6,93 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# 🚴 CRITICAL: BIKE WORKSHOP MASTER SCHEMA (ALWAYS UPDATE)
+
+**Canonical living document:** `BIKE_WORKSHOP_MASTER_SCHEMA.md`
+
+For ANY substantive work on the bike workshop architecture, agents MUST read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first.
+
+This includes changes to:
+- bike encyclopedia / `bike_catalog`
+- bike form dialog / bike creation flow
+- `bike_profiles`
+- `mechanic_job_bikes`
+- diagnosis sheet templates or fields
+- `mechanic_job_items` target metadata
+- service wizard profiles/questions/mappings
+- bike memory sync or derived kernel tables
+- bike record / technical history UI
+
+## The Backbone Starts Upstream
+
+The bike workshop architecture does **NOT** start at diagnosis or service wizard questions.
+
+It starts here:
+
+1. `bikes.id` = durable tenant bike identity
+2. `bike_profiles.catalog_bike_id` = link from that real bike to the shared encyclopedia model in `bike_catalog`
+3. `bike_profiles.technical_profile.values` = confirmed technical truth for that bike
+4. `mechanic_job_bikes.diagnosis_sheet_data` = visit-specific structured findings
+5. `mechanic_job_items` = executed actions and target metadata
+6. bike memory kernel tables = cross-visit derived outputs
+
+**This is the non-negotiable rule:** downstream diagnosis and service UI must consume upstream bike profile truth instead of repeatedly asking for the same technical facts.
+
+Examples:
+- If bike profile already knows brake type, wizard should not ask brake type again unless explicitly confirming/correcting it.
+- If the bike is rim-brake, rotor thickness fields should not appear in diagnosis.
+- If the bike is a known model like `Marlin 5 2025`, centralized profile data should irrigate downstream diagnosis and service flows.
+
+## Maintenance Protocol
+
+Whenever bike workshop implementation changes in a way that affects architecture, data flow, schema, UI gating, or sync behavior:
+
+1. Update `BIKE_WORKSHOP_MASTER_SCHEMA.md` in the same task.
+2. Update this section in `copilot-instructions.md` if the architectural rules or priorities changed.
+3. Document whether the change strengthens or weakens centralization around bike profile truth.
+
+If code changes in this area are shipped without updating the master schema and these instructions, the task is incomplete.
+
+## Mandatory Verification Before Changes
+
+Before editing bike workshop architecture, agents must verify the current real system state using the already-documented access methods in this file:
+
+- service-role REST inspection
+- direct `psql` inspection when exact SQL is needed
+
+At minimum, inspect the live shape of the relevant records for the target tenant before making architecture decisions, especially:
+
+- `bike_profiles`
+- `mechanic_job_bikes`
+- `mechanic_job_items`
+- `service_profiles`
+- `service_product_profile_mappings`
+- `service_profile_questions`
+
+This rule exists because live production mappings have already differed from assumptions in code.
+
+## Anti-Redundancy Rule
+
+Agents must not create redundant bike workshop structures without first proving the current layers are insufficient.
+
+This is a safeguard against drift, not a ban on progressive improvement.
+
+If an improvement really requires extending or evolving the current architecture, the agent should do it explicitly and update both `BIKE_WORKSHOP_MASTER_SCHEMA.md` and this section in the same task.
+
+Specifically, do NOT create:
+
+- a parallel bike truth store outside `bike_profiles`
+- a parallel diagnosis store outside `mechanic_job_bikes.diagnosis_sheet_data`
+- new targeting fields when `system_key`, `component_slot_key`, and `location_key` already cover the case
+- new cross-visit summary/history tables when the bike memory kernel already models the problem
+- wizard-based technical truth that bypasses upstream bike profile truth
+
+Search first in the schema and existing workshop files before adding anything new.
+
+Preferred rule: improve the backbone deliberately, do not build a second backbone beside it.
+
+---
+
 # 🗄️ SUPABASE PROJECT CONFIGURATION
 
 **⚠️ NEVER GUESS THESE VALUES - THEY ARE DOCUMENTED HERE!**

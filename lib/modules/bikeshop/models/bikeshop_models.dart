@@ -3124,6 +3124,11 @@ class MechanicJobItem {
   final double totalPrice;
   final String? notes;
   final String itemType; // 'product' | 'service' | 'adhoc'
+  final String? systemKey;
+  final String? componentSlotKey;
+  final BikeMemoryLocation location;
+  final BikeInterventionType? interventionType;
+  final bool createsLifecycle;
   final DateTime createdAt;
 
   MechanicJobItem({
@@ -3140,6 +3145,11 @@ class MechanicJobItem {
     this.totalPrice = 0,
     this.notes,
     this.itemType = 'product',
+    this.systemKey,
+    this.componentSlotKey,
+    this.location = BikeMemoryLocation.none,
+    this.interventionType,
+    this.createsLifecycle = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -3158,6 +3168,15 @@ class MechanicJobItem {
       totalPrice: double.tryParse(json['total_price']?.toString() ?? '0') ?? 0,
       notes: json['notes'] as String?,
       itemType: json['item_type'] as String? ?? 'product',
+      systemKey: json['system_key']?.toString(),
+      componentSlotKey: json['component_slot_key']?.toString(),
+      location: BikeMemoryLocation.fromDbValue(json['location_key'] as String?),
+      interventionType: json['intervention_type'] != null
+          ? BikeInterventionType.fromDbValue(
+              json['intervention_type'] as String?,
+            )
+          : null,
+      createsLifecycle: json['creates_lifecycle'] as bool? ?? false,
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -3177,6 +3196,11 @@ class MechanicJobItem {
       'total_price': totalPrice,
       'notes': notes,
       'item_type': itemType,
+      'system_key': systemKey,
+      'component_slot_key': componentSlotKey,
+      'location_key': location.dbValue,
+      'intervention_type': interventionType?.dbValue,
+      'creates_lifecycle': createsLifecycle,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -3195,6 +3219,11 @@ class MechanicJobItem {
     double? totalPrice,
     String? notes,
     String? itemType,
+    String? systemKey,
+    String? componentSlotKey,
+    BikeMemoryLocation? location,
+    BikeInterventionType? interventionType,
+    bool? createsLifecycle,
   }) {
     return MechanicJobItem(
       id: id ?? this.id,
@@ -3210,6 +3239,11 @@ class MechanicJobItem {
       totalPrice: totalPrice ?? this.totalPrice,
       notes: notes ?? this.notes,
       itemType: itemType ?? this.itemType,
+      systemKey: systemKey ?? this.systemKey,
+      componentSlotKey: componentSlotKey ?? this.componentSlotKey,
+      location: location ?? this.location,
+      interventionType: interventionType ?? this.interventionType,
+      createsLifecycle: createsLifecycle ?? this.createsLifecycle,
     );
   }
 

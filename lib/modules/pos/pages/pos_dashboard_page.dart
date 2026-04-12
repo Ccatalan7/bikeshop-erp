@@ -16,7 +16,6 @@ import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/widgets/search_bar_widget.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
@@ -414,551 +413,272 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isWide = MediaQuery.of(context).size.width > 900;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth > 900;
 
     return SafeArea(
       child: Column(
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Punto de Venta',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                // Scanner toggle button
-                // Scanner is globally active, no toggle needed
-                /*
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.qr_code_scanner, color: Colors.green),
-                  tooltip: 'Escáner Activo',
-                ),
-                */
-                const SizedBox(width: 8),
-                Consumer<POSService>(
-                  builder: (context, posService, child) {
-                    return Row(
-                      children: [
-                        Icon(Icons.person, color: theme.colorScheme.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          posService.selectedCustomer?.name ?? 'Caja',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(width: 16),
-                        Chip(
-                          avatar: const Icon(Icons.shopping_cart, size: 18),
-                          label: Text(
-                            '\$${posService.cartTotal.toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          backgroundColor: theme.colorScheme.primaryContainer,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+          _POSHeaderBar(screenWidth: screenWidth),
           Expanded(
             child: isWide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Left: Product list OR invoice details (when paying invoice)
                       Expanded(
-                        flex: 2,
+                        flex: 8,
                         child: Consumer<POSService>(
                           builder: (context, posService, child) {
-                            // Show invoice details if in payment mode
                             if (posService.isInvoicePaymentMode &&
                                 posService.linkedInvoice != null) {
                               return _buildInvoiceDetailsView(
                                   theme, posService.linkedInvoice!);
                             }
-                            // Show normal product grid
-                            return Padding(
-                              padding: const EdgeInsets.only(
-                                  left: 16, right: 8, bottom: 16),
-                              child: Column(
-                                children: [
-                                  // Search bar
-                                  SearchBarWidget(
-                                    controller: _searchController,
-                                    hintText: 'Buscar productos...',
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Filters
-                                  Consumer<InventoryService>(
-                                    builder:
-                                        (context, inventoryService, child) {
-                                      final categoryOptions =
-                                          _getCategoryOptions(
-                                              inventoryService.products);
-                                      final optionsByKey = {
-                                        for (final option in categoryOptions)
-                                          option.key: option,
-                                      };
-                                      return Row(
-                                        children: [
-                                          FilterChip(
-                                            label: const Text('Todos'),
-                                            selected: _selectedCategoryKey ==
-                                                    null &&
-                                                _selectedProductType == null,
-                                            onSelected: (_) {
-                                              setState(() {
-                                                _selectedCategoryKey = null;
-                                                _selectedCategoryMatchers =
-                                                    const <String>{};
-                                                _selectedProductType = null;
-                                              });
-                                            },
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: DropdownButtonFormField<
-                                                ProductType?>(
-                                              initialValue:
-                                                  _selectedProductType,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Tipo',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                              items: const [
-                                                DropdownMenuItem<ProductType?>(
-                                                  value: null,
-                                                  child:
-                                                      Text('Todos los tipos'),
-                                                ),
-                                                DropdownMenuItem<ProductType?>(
-                                                  value: ProductType.product,
-                                                  child: Text('Productos'),
-                                                ),
-                                                DropdownMenuItem<ProductType?>(
-                                                  value: ProductType.service,
-                                                  child: Text('Servicios'),
-                                                ),
-                                              ],
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  _selectedProductType = value;
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: DropdownButtonFormField<
-                                                String?>(
-                                              initialValue:
-                                                  _selectedCategoryKey,
-                                              decoration: InputDecoration(
-                                                labelText: 'Categorías',
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                suffixIcon: _isLoadingCategories
-                                                    ? const Padding(
-                                                        padding:
-                                                            EdgeInsets.all(12),
-                                                        child: SizedBox(
-                                                          width: 16,
-                                                          height: 16,
-                                                          child:
-                                                              CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                          ),
-                                                        ),
-                                                      )
-                                                    : null,
-                                              ),
-                                              isExpanded: true,
-                                              items: [
-                                                const DropdownMenuItem<String?>(
-                                                  value: null,
-                                                  child: Text(
-                                                      'Todas las categorías'),
-                                                ),
-                                                ...categoryOptions.map(
-                                                  (option) =>
-                                                      DropdownMenuItem<String?>(
-                                                    value: option.key,
-                                                    child: Text(option.label),
-                                                  ),
-                                                ),
-                                              ],
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  _selectedCategoryKey = value;
-                                                  _selectedCategoryMatchers =
-                                                      value != null
-                                                          ? (optionsByKey[value]
-                                                                  ?.matchers ??
-                                                              const <String>{})
-                                                          : const <String>{};
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Products grid
-                                  Expanded(
-                                    child: Consumer<InventoryService>(
-                                      builder:
-                                          (context, inventoryService, child) {
-                                        final products =
-                                            inventoryService.products;
-                                        final filteredProducts =
-                                            _getFilteredProducts(
-                                          products,
-                                          categoryMatchers:
-                                              _selectedCategoryMatchers,
-                                        );
-                                        if (products.isEmpty) {
-                                          return const Center(
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.inventory_2_outlined,
-                                                  size: 100,
-                                                  color: Colors.grey,
-                                                ),
-                                                SizedBox(height: 16),
-                                                Text(
-                                                  'No hay productos disponibles',
-                                                  style: TextStyle(
-                                                      fontSize: 18,
-                                                      color: Colors.grey),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                        if (filteredProducts.isEmpty) {
-                                          return Center(
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.search_off,
-                                                  size: 100,
-                                                  color:
-                                                      theme.colorScheme.outline,
-                                                ),
-                                                const SizedBox(height: 16),
-                                                Text(
-                                                  'No se encontraron productos',
-                                                  style: theme
-                                                      .textTheme.headlineSmall
-                                                      ?.copyWith(
-                                                    color: theme.colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  'Intenta cambiar los filtros de búsqueda',
-                                                  style: theme
-                                                      .textTheme.bodyLarge
-                                                      ?.copyWith(
-                                                    color: theme.colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                        return GridView.builder(
-                                          padding: const EdgeInsets.all(8),
-                                          gridDelegate:
-                                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: 4,
-                                            childAspectRatio: 0.75,
-                                            crossAxisSpacing: 8,
-                                            mainAxisSpacing: 8,
-                                          ),
-                                          itemCount: filteredProducts.length,
-                                          itemBuilder: (context, index) {
-                                            final product =
-                                                filteredProducts[index];
-                                            return ProductTile(
-                                              product: product,
-                                              onTap: () => _addToCart(product),
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
+                            return _buildProductPanel(theme);
                           },
                         ),
                       ),
-                      // Right: Cashier/cart summary
-                      Container(
-                        width: 380,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          border: Border(
-                            left: BorderSide(
-                              color: theme.colorScheme.outline,
-                              width: 1,
+                      Expanded(
+                        flex: 4,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            border: Border(
+                              left: BorderSide(
+                                color: theme.colorScheme.outlineVariant
+                                    .withValues(alpha: 0.5),
+                              ),
                             ),
                           ),
+                          child: const _CashierPanel(),
                         ),
-                        child: const _CashierPanel(),
                       ),
                     ],
                   )
                 : Column(
                     children: [
-                      // Product list
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Column(
-                            children: [
-                              SearchBarWidget(
-                                controller: _searchController,
-                                hintText: 'Buscar productos...',
-                                onChanged: (value) {
-                                  setState(() {
-                                    _searchQuery = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              Consumer<InventoryService>(
-                                builder: (context, inventoryService, child) {
-                                  final categoryOptions = _getCategoryOptions(
-                                      inventoryService.products);
-                                  final optionsByKey = {
-                                    for (final option in categoryOptions)
-                                      option.key: option,
-                                  };
-                                  return Row(
-                                    children: [
-                                      FilterChip(
-                                        label: const Text('Todos'),
-                                        selected:
-                                            _selectedCategoryKey == null &&
-                                                _selectedProductType == null,
-                                        onSelected: (_) {
-                                          setState(() {
-                                            _selectedCategoryKey = null;
-                                            _selectedCategoryMatchers =
-                                                const <String>{};
-                                            _selectedProductType = null;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: DropdownButtonFormField<
-                                            ProductType?>(
-                                          initialValue: _selectedProductType,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Tipo',
-                                            border: OutlineInputBorder(),
-                                          ),
-                                          items: const [
-                                            DropdownMenuItem<ProductType?>(
-                                              value: null,
-                                              child: Text('Todos los tipos'),
-                                            ),
-                                            DropdownMenuItem<ProductType?>(
-                                              value: ProductType.product,
-                                              child: Text('Productos'),
-                                            ),
-                                            DropdownMenuItem<ProductType?>(
-                                              value: ProductType.service,
-                                              child: Text('Servicios'),
-                                            ),
-                                          ],
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _selectedProductType = value;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: DropdownButtonFormField<String?>(
-                                          initialValue: _selectedCategoryKey,
-                                          decoration: InputDecoration(
-                                            labelText: 'Categorías',
-                                            border: const OutlineInputBorder(),
-                                            suffixIcon: _isLoadingCategories
-                                                ? const Padding(
-                                                    padding: EdgeInsets.all(12),
-                                                    child: SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    ),
-                                                  )
-                                                : null,
-                                          ),
-                                          isExpanded: true,
-                                          items: [
-                                            const DropdownMenuItem<String?>(
-                                              value: null,
-                                              child:
-                                                  Text('Todas las categorías'),
-                                            ),
-                                            ...categoryOptions.map(
-                                              (option) =>
-                                                  DropdownMenuItem<String?>(
-                                                value: option.key,
-                                                child: Text(option.label),
-                                              ),
-                                            ),
-                                          ],
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _selectedCategoryKey = value;
-                                              _selectedCategoryMatchers =
-                                                  value != null
-                                                      ? (optionsByKey[value]
-                                                              ?.matchers ??
-                                                          const <String>{})
-                                                      : const <String>{};
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: Consumer<InventoryService>(
-                                  builder: (context, inventoryService, child) {
-                                    final products = inventoryService.products;
-                                    final filteredProducts =
-                                        _getFilteredProducts(
-                                      products,
-                                      categoryMatchers:
-                                          _selectedCategoryMatchers,
-                                    );
-                                    if (products.isEmpty) {
-                                      return const Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.inventory_2_outlined,
-                                              size: 100,
-                                              color: Colors.grey,
-                                            ),
-                                            SizedBox(height: 16),
-                                            Text(
-                                              'No hay productos disponibles',
-                                              style: TextStyle(
-                                                  fontSize: 18,
-                                                  color: Colors.grey),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    if (filteredProducts.isEmpty) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.search_off,
-                                              size: 100,
-                                              color: theme.colorScheme.outline,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'No se encontraron productos',
-                                              style: theme
-                                                  .textTheme.headlineSmall
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Intenta cambiar los filtros de búsqueda',
-                                              style: theme.textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    return GridView.builder(
-                                      padding: const EdgeInsets.all(8),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 3,
-                                        childAspectRatio: 0.75,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                      ),
-                                      itemCount: filteredProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = filteredProducts[index];
-                                        return ProductTile(
-                                          product: product,
-                                          onTap: () => _addToCart(product),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Mobile Cart Summary (Sticky Bottom)
-                      _MobileCartSummary(
-                        onTap: _showMobileCheckout,
-                      ),
+                      Expanded(child: _buildProductPanel(theme)),
+                      _MobileCartSummary(onTap: _showMobileCheckout),
                     ],
                   ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProductPanel(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Search + Filter toolbar ──────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                decoration: InputDecoration(
+                  hintText: 'Buscar producto, SKU, código de barras...',
+                  hintStyle: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.6),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: Icon(Icons.search_rounded,
+                      size: 20, color: theme.colorScheme.onSurfaceVariant),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.close,
+                              size: 18,
+                              color: theme.colorScheme.onSurfaceVariant),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                        color: theme.colorScheme.primary, width: 1.5),
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surface,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Consumer<InventoryService>(
+                builder: (context, inventoryService, child) {
+                  final categoryOptions =
+                      _getCategoryOptions(inventoryService.products);
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _FilterChipButton(
+                          label: 'Todos',
+                          isSelected: _selectedCategoryKey == null &&
+                              _selectedProductType == null,
+                          onTap: () => setState(() {
+                            _selectedCategoryKey = null;
+                            _selectedCategoryMatchers = const <String>{};
+                            _selectedProductType = null;
+                          }),
+                        ),
+                        const SizedBox(width: 6),
+                        _FilterChipButton(
+                          label: 'Productos',
+                          icon: Icons.inventory_2_outlined,
+                          isSelected:
+                              _selectedProductType == ProductType.product,
+                          onTap: () => setState(() {
+                            _selectedProductType =
+                                _selectedProductType == ProductType.product
+                                    ? null
+                                    : ProductType.product;
+                          }),
+                        ),
+                        const SizedBox(width: 6),
+                        _FilterChipButton(
+                          label: 'Servicios',
+                          icon: Icons.design_services_outlined,
+                          isSelected:
+                              _selectedProductType == ProductType.service,
+                          onTap: () => setState(() {
+                            _selectedProductType =
+                                _selectedProductType == ProductType.service
+                                    ? null
+                                    : ProductType.service;
+                          }),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Container(
+                            width: 1,
+                            height: 22,
+                            color: theme.colorScheme.outlineVariant
+                                .withValues(alpha: 0.5),
+                          ),
+                        ),
+                        ...categoryOptions.map(
+                          (option) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: _FilterChipButton(
+                              label: option.label,
+                              isSelected: _selectedCategoryKey == option.key,
+                              onTap: () => setState(() {
+                                if (_selectedCategoryKey == option.key) {
+                                  _selectedCategoryKey = null;
+                                  _selectedCategoryMatchers =
+                                      const <String>{};
+                                } else {
+                                  _selectedCategoryKey = option.key;
+                                  _selectedCategoryMatchers = option.matchers;
+                                }
+                              }),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        // ── Product Grid ────────────────────────────────────────────────
+        Expanded(
+          child: Consumer<InventoryService>(
+            builder: (context, inventoryService, child) {
+              final products = inventoryService.products;
+              final filteredProducts = _getFilteredProducts(
+                products,
+                categoryMatchers: _selectedCategoryMatchers,
+              );
+
+              if (products.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inventory_2_outlined,
+                          size: 72, color: theme.colorScheme.outlineVariant),
+                      const SizedBox(height: 16),
+                      Text('Sin productos',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                );
+              }
+              if (filteredProducts.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search_off_rounded,
+                          size: 72, color: theme.colorScheme.outlineVariant),
+                      const SizedBox(height: 16),
+                      Text('Sin resultados',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Prueba con otros filtros o términos',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 210,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: filteredProducts.length,
+                itemBuilder: (context, index) {
+                  final product = filteredProducts[index];
+                  return ProductTile(
+                    product: product,
+                    onTap: () => _addToCart(product),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1877,33 +1597,47 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Widget _buildInvoicePaymentForm(ThemeData theme, POSService posService) {
     final invoice = posService.linkedInvoice!;
-    final currencyFormat =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
+    return Column(
+      children: [
+        // ── Header (fixed top) ──────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          child: Row(
             children: [
-              Icon(Icons.payment, color: theme.colorScheme.primary, size: 28),
-              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                onPressed: () {
+                  posService.exitInvoicePaymentMode();
+                  setState(() => _showPendingInvoices = true);
+                },
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Procesar Pago',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      'Abonar a Factura',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     Text(
                       invoice.invoiceNumber,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -1911,189 +1645,198 @@ class _CashierPanelState extends State<_CashierPanel> {
               ),
             ],
           ),
-          const Divider(height: 32),
+        ),
 
-          // Customer info
-          Text('Cliente', style: theme.textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(
-            invoice.customerName ?? 'Sin nombre',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Financial summary
-          Container(
+        // ── Form Content (scrollable middle) ────────────────────────────
+        Expanded(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSummaryRow(
-                  theme,
-                  'Total Factura',
-                  currencyFormat.format(invoice.total),
-                ),
-                if (invoice.paidAmount > 0) ...[
-                  const SizedBox(height: 8),
-                  _buildSummaryRow(
-                    theme,
-                    'Pagado',
-                    currencyFormat.format(invoice.paidAmount),
-                    valueColor: Colors.green,
+                // Financial Info Box
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  const Divider(height: 20),
-                ],
-                _buildSummaryRow(
-                  theme,
-                  'Saldo a Pagar',
-                  currencyFormat.format(invoice.balance),
-                  isTotal: true,
-                  valueColor: Colors.red,
+                  child: Column(
+                    children: [
+                      _buildSummaryRow(theme, 'Cliente', invoice.customerName ?? 'Sin nombre', valueColor: theme.colorScheme.onSurface),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(height: 1),
+                      ),
+                      _buildSummaryRow(theme, 'Total Factura', currencyFormat.format(invoice.total), valueColor: theme.colorScheme.onSurface),
+                      if (invoice.paidAmount > 0) ...[
+                        const SizedBox(height: 6),
+                        _buildSummaryRow(theme, 'Pagado', currencyFormat.format(invoice.paidAmount), valueColor: theme.colorScheme.tertiary),
+                      ],
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Deuda',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              currencyFormat.format(invoice.balance),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Amount
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Monto a Pagar',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                        });
+                      },
+                      icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                      label: const Text('Completar Total'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _paymentAmountController,
+                  keyboardType: TextInputType.number,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    prefixText: '\$ ',
+                    prefixStyle: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 24),
+
+                // Payment Method Selector
+                Text(
+                  'Método de Pago',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Consumer<PaymentMethodService>(
+                  builder: (context, paymentMethodService, _) {
+                    final methods = paymentMethodService.paymentMethods;
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: methods.map((method) {
+                        final isSelected = _selectedPaymentMethodId == method.id;
+                        return FilterChip(
+                          showCheckmark: false,
+                          selected: isSelected,
+                          label: Text(
+                            method.name,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                          onSelected: (selected) {
+                            if (selected) setState(() => _selectedPaymentMethodId = method.id);
+                          },
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                // Reference
+                TextField(
+                  controller: _paymentReferenceController,
+                  decoration: InputDecoration(
+                    labelText: 'Referencia (Opcional)',
+                    hintText: 'Nº transferencia, cheque, etc.',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+        ),
 
-          // Payment method selector
-          Text(
-            'Método de Pago',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Consumer<PaymentMethodService>(
-            builder: (context, paymentMethodService, child) {
-              final paymentMethods = paymentMethodService.paymentMethods;
-              if (paymentMethods.isEmpty) {
-                return const Text('No hay métodos de pago disponibles');
-              }
-
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: paymentMethods.map((method) {
-                  final isSelected = _selectedPaymentMethodId == method.id;
-                  return FilterChip(
-                    selected: isSelected,
-                    label: Text(method.name),
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedPaymentMethodId = method.id;
-                        });
-                      }
-                    },
-                  );
-                }).toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-
-          // Amount input
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Monto a Pagar',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _paymentAmountController.text =
-                        invoice.balance.toStringAsFixed(0);
-                  });
-                },
-                child: const Text('Pagar Total'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _paymentAmountController,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: 'Monto en pesos',
-              prefix: const Text('\$ '),
-              helperText:
-                  'Ingrese solo números. Ej: ${invoice.balance.toStringAsFixed(0)}',
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_paymentAmountController.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear, size: 20),
-                      onPressed: () {
-                        _paymentAmountController.clear();
-                        setState(() {});
-                      },
-                    ),
-                ],
+        // ── Action Buttons (fixed bottom) ──────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: false),
-            textAlign: TextAlign.right,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-            onChanged: (value) {
-              // Trigger rebuild to show/hide clear button
-              setState(() {});
-            },
           ),
-          const SizedBox(height: 24),
-
-          // Payment reference (optional)
-          TextField(
-            controller: _paymentReferenceController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Referencia (opcional)',
-              hintText: 'Nº cheque, comprobante, etc.',
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    posService.exitInvoicePaymentMode();
-                    setState(() {
-                      _showPendingInvoices = true;
-                    });
-                  },
-                  child: const Text('Cancelar'),
-                ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: FilledButton.icon(
+              onPressed: _selectedPaymentMethodId != null && !_isProcessing
+                  ? () => _processInvoicePayment(posService, invoice)
+                  : null,
+              icon: _isProcessing
+                  ? Container(
+                      width: 20,
+                      height: 20,
+                      padding: const EdgeInsets.all(2),
+                      child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.payment_rounded, size: 20),
+              label: Text(
+                _isProcessing ? 'Procesando...' : 'Registrar Pago',
+                style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.5),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: FilledButton.icon(
-                  onPressed: _selectedPaymentMethodId != null
-                      ? () => _processInvoicePayment(posService, invoice)
-                      : null,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Procesar Pago'),
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2294,546 +2037,449 @@ class _CashierPanelState extends State<_CashierPanel> {
       return _buildInvoicePaymentForm(theme, posService);
     }
 
-    // Show normal cart view
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Resumen de Caja',
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
+    final hasItems = posService.cartItems.isNotEmpty;
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
-          // Inline ad-hoc item form (shows always)
-          if (_showAdHocForm) ...[
-            Card(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.edit_note,
-                          size: 20,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Nuevo Item Personalizado',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: _toggleAdHocForm,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _adHocDescriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción',
-                        hintText: 'Ej: Servicio de ajuste',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      autofocus: true,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _adHocPriceController,
-                            decoration: const InputDecoration(
-                              labelText: 'Precio',
-                              prefixText: '\$',
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _adHocQuantityController,
-                            decoration: const InputDecoration(
-                              labelText: 'Cant.',
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _addAdHocItem,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Agregar al Carrito'),
-                      ),
-                    ),
-                  ],
-                ),
+    return Column(
+      children: [
+        // ── Customer section (fixed top) ─────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
             ),
-            const SizedBox(height: 16),
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.person_outline_rounded,
+                      size: 15,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Cliente',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_isLoadingCustomers)
+                const SizedBox(
+                    height: 36, child: LinearProgressIndicator())
+              else
+                DropdownButtonFormField<Customer>(
+                  value: _selectedCustomer,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surface,
+                  ),
+                  isExpanded: true,
+                  hint: const Text('Cliente Genérico'),
+                  items: [
+                    const DropdownMenuItem<Customer>(
+                      value: null,
+                      child: Text('Cliente Genérico'),
+                    ),
+                    ..._filteredCustomers.map((customer) {
+                      return DropdownMenuItem<Customer>(
+                        value: customer,
+                        child: Text(
+                          customer.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
+                    if (_selectedCustomer != null &&
+                        !_filteredCustomers
+                            .any((c) => c.id == _selectedCustomer!.id))
+                      DropdownMenuItem<Customer>(
+                        value: _selectedCustomer,
+                        child: Text(_selectedCustomer!.name,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (customer) async {
+                    setState(() => _selectedCustomer = customer);
+                    context.read<POSService>().setCustomer(customer);
+                    if (customer != null) {
+                      await _checkPendingInvoices(customer);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
 
-          if (posService.cartItems.isNotEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+        // ── Cart items (scrollable middle) ───────────────────────────────
+        Expanded(
+          child: hasItems
+              ? ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: posService.cartItems.length +
+                      (_showAdHocForm ? 1 : 0) +
+                      1, // +1 for "add item" row
+                  itemBuilder: (context, index) {
+                    // Ad-hoc form at top when visible
+                    if (_showAdHocForm && index == 0) {
+                      return _buildAdHocFormInline(theme);
+                    }
+                    final itemIndex = _showAdHocForm ? index - 1 : index;
+                    // "Add custom item" button
+                    if (itemIndex == posService.cartItems.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 2),
+                        child: GestureDetector(
+                          onTap: _toggleAdHocForm,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: theme.colorScheme.outlineVariant
+                                    .withValues(alpha: 0.5),
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_circle_outline_rounded,
+                                    size: 16,
+                                    color: theme.colorScheme.primary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Agregar item personalizado',
+                                  style:
+                                      theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final item = posService.cartItems[itemIndex];
+                    return _buildCartItemRow(theme, posService, item);
+                  },
+                )
+              : _buildEmptyCart(theme),
+        ),
+
+        // ── Totals + payment + CTA (fixed bottom) ──────────────────────
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color:
+                    theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Totals area
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _totalRow(
+                      theme,
+                      label: 'Subtotal',
+                      value:
+                          currencyFormat.format(posService.cartNetAmount),
+                    ),
+                    if (posService.cartDiscountAmount > 0) ...[
+                      const SizedBox(height: 4),
+                      _totalRow(
+                        theme,
+                        label: 'Descuento',
+                        value:
+                            '-${currencyFormat.format(posService.cartDiscountAmount)}',
+                        valueColor: theme.colorScheme.error,
+                      ),
+                    ],
+                    if (posService.taxTreatment ==
+                        TaxTreatment.taxIncluded) ...[
+                      const SizedBox(height: 4),
+                      _totalRow(
+                        theme,
+                        label: 'IVA (19%)',
+                        value: currencyFormat
+                            .format(posService.cartTaxAmount),
+                      ),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(
+                        height: 1,
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.4),
+                      ),
+                    ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Productos (${posService.cartTotalItems})',
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            _showAdHocForm
-                                ? Icons.remove_circle_outline
-                                : Icons.add_circle_outline,
-                            size: 20,
+                          'TOTAL',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
                           ),
-                          tooltip: _showAdHocForm
-                              ? 'Cancelar'
-                              : 'Agregar item personalizado',
-                          onPressed: () => _toggleAdHocForm(),
-                          style: IconButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(32, 32),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        Text(
+                          currencyFormat.format(posService.cartTotal),
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: theme.colorScheme.primary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: posService.cartItems.length,
-                      separatorBuilder: (_, __) => Divider(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.1)),
-                      itemBuilder: (context, index) {
-                        final item = posService.cartItems[index];
-                        return Column(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                  ],
+                ),
+              ),
+
+              // Payment method selector
+              if (hasItems) ...[
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Consumer<PaymentMethodService>(
+                    builder: (context, paymentMethodService, _) {
+                      final methods = paymentMethodService.paymentMethods
+                          .where((m) => m.isActive)
+                          .toList();
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: methods.map((method) {
+                            final isSelected =
+                                posService.selectedPaymentMethod?.id ==
+                                    method.id;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: GestureDetector(
+                                onTap: () =>
+                                    posService.setPaymentMethod(method),
+                                child: AnimatedContainer(
+                                  duration:
+                                      const Duration(milliseconds: 160),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? theme.colorScheme.primaryContainer
+                                        : theme.colorScheme
+                                            .surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.outlineVariant
+                                              .withValues(alpha: 0.4),
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        item.displayName,
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w600),
+                                      Icon(
+                                        _getPaymentMethodIcon(method.code),
+                                        size: 15,
+                                        color: isSelected
+                                            ? theme.colorScheme
+                                                .onPrimaryContainer
+                                            : theme.colorScheme
+                                                .onSurfaceVariant,
                                       ),
-                                      if (item.product != null) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'SKU: ${item.product!.sku}',
-                                          style: theme.textTheme.bodySmall,
-                                        ),
-                                      ],
-                                      const SizedBox(height: 4),
+                                      const SizedBox(width: 6),
                                       Text(
-                                        '\$${item.unitPrice.toStringAsFixed(0)} c/u',
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
-                                          color: theme.colorScheme.primary,
+                                        method.name,
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: isSelected
+                                              ? theme.colorScheme
+                                                  .onPrimaryContainer
+                                              : theme.colorScheme
+                                                  .onSurfaceVariant,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '\$${item.subtotal.toStringAsFixed(0)}',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(
-                                              Icons.remove_circle_outline,
-                                              size: 20),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            if (item.quantity > 1) {
-                                              posService.updateCartItemQuantity(
-                                                  item.id, item.quantity - 1);
-                                            } else {
-                                              posService
-                                                  .removeFromCart(item.id);
-                                            }
-                                          },
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8),
-                                          child: Text(
-                                            '${item.quantity}',
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                              Icons.add_circle_outline,
-                                              size: 20),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            final stockQuantity =
-                                                item.product?.stockQuantity;
-                                            if (stockQuantity != null &&
-                                                item.quantity < stockQuantity) {
-                                              posService.updateCartItemQuantity(
-                                                  item.id, item.quantity + 1);
-                                            } else if (stockQuantity != null) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                      'Stock máximo: $stockQuantity'),
-                                                  duration: const Duration(
-                                                      seconds: 1),
-                                                ),
-                                              );
-                                            } else {
-                                              // Ad-hoc item (no stock limit)
-                                              posService.updateCartItemQuantity(
-                                                  item.id, item.quantity + 1);
-                                            }
-                                          },
-                                        ),
-                                        const SizedBox(width: 4),
-                                        IconButton(
-                                          icon: Icon(Icons.delete_outline,
-                                              size: 20,
-                                              color: theme.colorScheme.error),
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            posService.removeFromCart(item.id);
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (posService.cartItems.isNotEmpty)
-            const SizedBox(height: 16)
-          else
-            Card(
-              color: theme.colorScheme.surface,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.shopping_cart_outlined,
-                            color: theme.colorScheme.outline),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'El carrito está vacío. Selecciona productos para comenzar.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _toggleAdHocForm(),
-                          icon: Icon(
-                            _showAdHocForm
-                                ? Icons.remove_circle_outline
-                                : Icons.add_circle_outline,
-                            size: 18,
-                          ),
-                          label: Text(_showAdHocForm
-                              ? 'Cancelar'
-                              : 'Agregar Item Personalizado'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (posService.cartItems.isNotEmpty) const SizedBox(height: 16),
-
-          // Payment method selector (auto-sets tax treatment)
-          if (posService.cartItems.isNotEmpty) ...[
-            Text(
-              'Método de Pago',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Consumer<PaymentMethodService>(
-              builder: (context, paymentMethodService, _) {
-                final methods = paymentMethodService.paymentMethods
-                    .where((m) => m.isActive)
-                    .toList();
-
-                return DropdownButtonFormField<String>(
-                  initialValue: posService.selectedPaymentMethod?.id,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.payment),
-                    helperText:
-                        'El IVA se aplica automáticamente según el método',
-                  ),
-                  hint: const Text('Seleccionar método'),
-                  items: methods.map((method) {
-                    return DropdownMenuItem(
-                      value: method.id,
-                      child: Row(
-                        children: [
-                          Icon(_getPaymentMethodIcon(method.code), size: 20),
-                          const SizedBox(width: 8),
-                          Text(method.name),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (methodId) {
-                    if (methodId != null) {
-                      final method = methods.firstWhere(
-                        (m) => m.id == methodId,
                       );
-                      posService.setPaymentMethod(method);
-                    }
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Show subtotal and discount (before tax)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Subtotal:', style: theme.textTheme.bodyLarge),
-                      Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
-                    ],
+                    },
                   ),
-                  if (posService.cartDiscountAmount > 0) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Descuento:', style: theme.textTheme.bodyLarge),
-                        Text(
-                          '-\$${posService.cartDiscountAmount.toStringAsFixed(0)}',
-                          style: TextStyle(color: theme.colorScheme.error),
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // Show tax breakdown if tax is included
-                  if (posService.taxTreatment == TaxTreatment.taxIncluded) ...[
-                    const SizedBox(height: 8),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Neto:', style: theme.textTheme.bodyLarge),
-                        Text(
-                            '\$${(posService.cartTotal / 1.19).toStringAsFixed(0)}'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('IVA (19%):', style: theme.textTheme.bodyLarge),
-                        Text(
-                            '\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
-                      ],
-                    ),
-                  ],
-
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'TOTAL:',
-                        style: theme.textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '\$${posService.cartTotal.toStringAsFixed(0)}',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Cliente',
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _customerSearchController,
-            decoration: const InputDecoration(
-              labelText: 'Buscar cliente por nombre, RUT o email',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_isLoadingCustomers)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: LinearProgressIndicator(),
-            )
-          else ...[
-            if (_filteredCustomers.isEmpty && currentQuery.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'No se encontraron clientes para "$currentQuery"',
-                  style: theme.textTheme.bodyMedium,
                 ),
-              ),
-            DropdownButtonFormField<Customer>(
-              initialValue: _selectedCustomer,
-              decoration: const InputDecoration(
-                labelText: 'Seleccionar Cliente (Opcional)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem<Customer>(
-                  value: null,
-                  child: Text('Cliente Genérico'),
-                ),
-                ..._filteredCustomers.map((customer) {
-                  return DropdownMenuItem<Customer>(
-                    value: customer,
-                    child: Text(
-                        '${customer.name} - ${(customer.rut ?? customer.email ?? 'Sin RUT')}'),
-                  );
-                }),
-                if (_selectedCustomer != null &&
-                    !_filteredCustomers
-                        .any((c) => c.id == _selectedCustomer!.id))
-                  DropdownMenuItem<Customer>(
-                    value: _selectedCustomer,
-                    child: Text(
-                        '${_selectedCustomer!.name} - ${(_selectedCustomer!.rut ?? _selectedCustomer!.email ?? 'Sin RUT')}'),
-                  ),
               ],
-              onChanged: (customer) async {
-                setState(() {
-                  _selectedCustomer = customer;
-                });
-                context.read<POSService>().setCustomer(customer);
 
-                // Check for pending invoices when customer is selected
-                if (customer != null) {
-                  await _checkPendingInvoices(customer);
-                }
-              },
-            ),
-          ],
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: posService.hasItemsInCart ? _proceedToPayment : null,
-              icon: const Icon(Icons.payment),
-              label: const Text('Proceder al Pago'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              // Checkout button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: hasItems ? _proceedToPayment : null,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                    label: Text(
+                      hasItems
+                          ? 'Proceder al Pago'
+                          : 'Carrito vacío',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
               ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCartItemRow(
+      ThemeData theme, POSService posService, dynamic item) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          // Quantity controls
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant
+                    .withValues(alpha: 0.5),
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => posService.updateCartItemQuantity(
+                      item.id, item.quantity - 1),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    child: Icon(Icons.remove_rounded,
+                        size: 15,
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                Container(
+                  width: 32,
+                  height: 30,
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${item.quantity}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => posService.updateCartItemQuantity(
+                      item.id, item.quantity + 1),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    child: Icon(Icons.add_rounded,
+                        size: 15,
+                        color: theme.colorScheme.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Name
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name ?? item.description ?? '',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '\$${(item.price as double).toStringAsFixed(0)} c/u',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Line total
+          Text(
+            '\$${((item.price as double) * (item.quantity as int)).toStringAsFixed(0)}',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Remove
+          GestureDetector(
+            onTap: () => posService.removeFromCart(item.id),
+            child: Icon(
+              Icons.close_rounded,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant
+                  .withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -2841,192 +2487,461 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
-  Widget _buildPaymentView(ThemeData theme, POSService posService) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+  Widget _buildAdHocFormInline(ThemeData theme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.25),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _cancelPayment,
+              Text(
+                'Item Personalizado',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.primary,
+                ),
               ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _toggleAdHocForm,
+                child: Icon(Icons.close_rounded,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _adHocDescriptionController,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Descripción del item',
+              isDense: true,
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Expanded(
-                child: Text(
-                  'Procesar Pago',
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                flex: 2,
+                child: TextField(
+                  controller: _adHocPriceController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Precio',
+                    prefixText: '\$',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 9),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _adHocQuantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Cant.',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 9),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _addAdHocItem,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(44, 40),
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Icon(Icons.check_rounded, size: 20),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyCart(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                Icons.shopping_cart_outlined,
+                size: 36,
+                color: theme.colorScheme.onSurfaceVariant
+                    .withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Carrito vacío',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Toca un producto para agregar',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant
+                    .withValues(alpha: 0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: _toggleAdHocForm,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+              label: const Text('Agregar item personalizado'),
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _totalRow(ThemeData theme,
+      {required String label, required String value, Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: valueColor ?? theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildPaymentView(ThemeData theme, POSService posService) {
+    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    
+    return Column(
+      children: [
+        // ── Header (fixed top) ──────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(8, 14, 16, 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                onPressed: _cancelPayment,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Completar Pago',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Order Summary
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Resumen',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Subtotal:', style: theme.textTheme.bodyMedium),
-                      Text('\$${posService.cartNetAmount.toStringAsFixed(0)}'),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('IVA (19%):', style: theme.textTheme.bodyMedium),
-                      Text('\$${posService.cartTaxAmount.toStringAsFixed(0)}'),
-                    ],
-                  ),
-                  const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'TOTAL:',
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '\$${posService.cartTotal.toStringAsFixed(0)}',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Payment Method
-          Text(
-            'Método de Pago',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Consumer<PaymentMethodService>(
-            builder: (context, paymentMethodService, _) {
-              final methods = paymentMethodService.paymentMethods
-                  .where((m) => m.isActive)
-                  .toList();
+        ),
 
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: methods.map((method) {
-                  final isSelected = _selectedPaymentMethod?.id == method.id;
-                  return FilterChip(
-                    label: Text(method.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedPaymentMethod = method;
-                        // Auto-set amount for non-cash payments
-                        if (method.code != 'cash') {
-                          _amountReceived = posService.cartTotal;
-                          _amountController.text =
-                              posService.cartTotal.toStringAsFixed(0);
-                        }
-                      });
-                    },
-                    avatar: Icon(
-                      _getPaymentMethodIcon(method.code),
-                      size: 18,
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          // Amount Received (only for cash)
-          if (_selectedPaymentMethod?.code == 'cash') ...[
-            Text(
-              'Monto Recibido',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountController,
-              onChanged: (value) {
-                setState(() {
-                  _amountReceived = double.tryParse(value) ?? 0.0;
-                });
-              },
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Monto en efectivo',
-                prefixText: '\$',
-                border: const OutlineInputBorder(),
-                hintText: posService.cartTotal.toStringAsFixed(0),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_amountReceived >= posService.cartTotal)
-              Card(
-                color: theme.colorScheme.primaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // ── Scrollable Middle area ──────────────────────────────────────
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Highlighted Total Box
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
                     children: [
                       Text(
-                        'Vuelto:',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onPrimaryContainer,
+                        'Total a Pagar',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        '\$${(_amountReceived - posService.cartTotal).toStringAsFixed(0)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
+                        currencyFormat.format(posService.cartTotal),
+                        style: theme.textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1,
                           color: theme.colorScheme.onPrimaryContainer,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            const SizedBox(height: 16),
-          ],
-          // Confirm Payment Button
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isProcessing ? null : _processPayment,
-              icon: _isProcessing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check),
-              label: Text(_isProcessing ? 'Procesando...' : 'Confirmar Pago'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 24),
+
+                // Payment Method Selector
+                Text(
+                  'Método de Pago',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Consumer<PaymentMethodService>(
+                  builder: (context, paymentMethodService, _) {
+                    final methods = paymentMethodService.paymentMethods
+                        .where((m) => m.isActive)
+                        .toList();
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: methods.map((method) {
+                        final isSelected =
+                            _selectedPaymentMethod?.id == method.id;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedPaymentMethod = method;
+                              // Auto-set amount for non-cash
+                              if (method.code != 'cash') {
+                                _amountReceived = posService.cartTotal;
+                                _amountController.text =
+                                    posService.cartTotal.toStringAsFixed(0);
+                              } else {
+                                _amountReceived = 0;
+                                _amountController.clear();
+                              }
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.outlineVariant
+                                        .withValues(alpha: 0.4),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getPaymentMethodIcon(method.code),
+                                  size: 18,
+                                  color: isSelected
+                                      ? theme.colorScheme.onPrimary
+                                      : theme.colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  method.name,
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? theme.colorScheme.onPrimary
+                                        : theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (isSelected) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.check_circle_rounded,
+                                      size: 16,
+                                      color: theme.colorScheme.onPrimary),
+                                ]
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+                
+                const SizedBox(height: 32),
+
+                // Cash Amount input
+                if (_selectedPaymentMethod?.code == 'cash') ...[
+                  Text(
+                    'Monto Entregado',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _amountController,
+                    onChanged: (value) {
+                      setState(() {
+                        _amountReceived = double.tryParse(value)    ?? 0.0;
+                      });
+                    },
+                    keyboardType: TextInputType.number,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      prefixText: '\$ ',
+                      prefixStyle: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      hintText: posService.cartTotal.toStringAsFixed(0),
+                      hintStyle: theme.textTheme.headlineSmall?.copyWith(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Change calculation
+                  if (_amountReceived >= posService.cartTotal)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Vuelto a entregar',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSecondaryContainer,
+                            ),
+                          ),
+                          Text(
+                            currencyFormat.format(
+                                _amountReceived - posService.cartTotal),
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: theme.colorScheme.onSecondaryContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // ── Action Buttons (fixed bottom) ──────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
             ),
           ),
-        ],
-      ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: FilledButton.icon(
+              onPressed: (_selectedPaymentMethod != null &&
+                      _amountReceived >= posService.cartTotal &&
+                      !_isProcessing)
+                  ? _processPayment
+                  : null,
+              icon: _isProcessing
+                  ? Container(
+                      width: 24,
+                      height: 24,
+                      padding: const EdgeInsets.all(2),
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check_circle_rounded),
+              label: Text(
+                _isProcessing ? 'Procesando...' : 'Confirmar Venta',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3063,181 +2978,242 @@ class _CashierPanelState extends State<_CashierPanel> {
   }
 
   Widget _buildReceiptView(ThemeData theme, POSTransaction transaction) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Success Header
-          Card(
+    return Column(
+      children: [
+        // ── Header (fixed top) ──────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          decoration: BoxDecoration(
             color: theme.colorScheme.primaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.check_circle,
-                    size: 64,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '¡Venta Exitosa!',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  Text(
-                    'Transacción completada correctamente',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
-          const SizedBox(height: 16),
-          // Receipt Details
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'VINABIKE',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.check_circle_rounded,
+                size: 28,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '¡Venta Exitosa!',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Receipt Details (scrollable middle) ─────────────────────────
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const Center(
-                    child: Text(
-                      'Venta de Bicicletas y Accesorios',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  _buildReceiptRow('Recibo:',
-                      transaction.receiptNumber ?? transaction.id, theme),
-                  _buildReceiptRow(
-                    'Fecha:',
-                    '${transaction.createdAt.day.toString().padLeft(2, '0')}/${transaction.createdAt.month.toString().padLeft(2, '0')}/${transaction.createdAt.year} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
-                    theme,
-                  ),
-                  _buildReceiptRow(
-                    'Cliente:',
-                    transaction.customer?.name ?? 'Cliente Genérico',
-                    theme,
-                  ),
-                  const Divider(height: 24),
-                  // Items
-                  ...transaction.items.map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.displayName,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'VINABIKE',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Venta de Bicicletas y Accesorios',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          letterSpacing: 0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Divider(height: 1),
+                      ),
+                      _buildReceiptRow('Recibo Nº:', transaction.receiptNumber ?? transaction.id, theme),
+                      _buildReceiptRow(
+                        'Fecha:',
+                        '${transaction.createdAt.day.toString().padLeft(2, '0')}/${transaction.createdAt.month.toString().padLeft(2, '0')}/${transaction.createdAt.year} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
+                        theme,
+                      ),
+                      _buildReceiptRow(
+                        'Cliente:',
+                        transaction.customer?.name ?? 'Cliente Genérico',
+                        theme,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Divider(height: 1),
+                      ),
+                      // Items
+                      ...transaction.items.map((item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${item.quantity} x \$${item.unitPrice.toStringAsFixed(0)}',
-                                  style: theme.textTheme.bodySmall,
+                                  '${item.quantity}x',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.displayName,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        '\$${item.unitPrice.toStringAsFixed(0)} c/u',
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          color: theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 Text(
                                   '\$${item.subtotal.toStringAsFixed(0)}',
-                                  style: theme.textTheme.bodyMedium,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ],
                             ),
+                          )),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Divider(height: 1),
+                      ),
+                      _buildReceiptRow('Subtotal:', '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
+                      _buildReceiptRow('IVA (19%):', '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'TOTAL',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            Text(
+                              '\$${transaction.total.toStringAsFixed(0)}',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
                           ],
                         ),
-                      )),
-                  const Divider(height: 24),
-                  _buildReceiptRow('Subtotal:',
-                      '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
-                  _buildReceiptRow('IVA (19%):',
-                      '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
-                  const Divider(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+                      ),
+                      const SizedBox(height: 24),
+                      // Payment Info
+                      ...transaction.payments.map((payment) => _buildReceiptRow(
+                            'Pago (${payment.method.name})',
+                            '\$${payment.amount.toStringAsFixed(0)}',
+                            theme,
+                          )),
+                      const SizedBox(height: 32),
                       Text(
-                        'TOTAL:',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                        '¡Gracias por su compra!',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        '\$${transaction.total.toStringAsFixed(0)}',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+                        'Garantía 30 días con boleta',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
                   ),
-                  const Divider(height: 24),
-                  // Payment Info
-                  ...transaction.payments.map((payment) => _buildReceiptRow(
-                        payment.method.name,
-                        '\$${payment.amount.toStringAsFixed(0)}',
-                        theme,
-                      )),
-                  const SizedBox(height: 16),
-                  const Center(
-                    child: Text(
-                      '¡Gracias por su compra!',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                  const Center(
-                    child: Text(
-                      'Garantía 30 días',
-                      style: TextStyle(fontSize: 10),
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Action Buttons (fixed bottom) ──────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          // Actions
-          FilledButton.icon(
-            onPressed: _finishTransaction,
-            icon: const Icon(Icons.check),
-            label: const Text('Nueva Venta'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: FilledButton.icon(
+              onPressed: _finishTransaction,
+              icon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
+              label: const Text(
+                'Nueva Venta',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildReceiptRow(String label, String value, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: theme.textTheme.bodyMedium),
+          Text(
+            label, 
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant
+            ),
+          ),
           Text(
             value,
             style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -3316,6 +3292,192 @@ class _MobileCartSummary extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Premium POS Header Bar ─────────────────────────────────────────────────────
+
+class _POSHeaderBar extends StatelessWidget {
+  final double screenWidth;
+  const _POSHeaderBar({required this.screenWidth});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.point_of_sale_rounded,
+              size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Text(
+            'Punto de Venta',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const Spacer(),
+          Consumer<POSService>(
+            builder: (context, posService, _) {
+              final itemCount = posService.cartTotalItems;
+              final total = posService.cartTotal;
+              final customerName = posService.selectedCustomer?.name;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (customerName != null) ...[
+                    Icon(Icons.person_outline_rounded,
+                        size: 16,
+                        color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      customerName,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: itemCount > 0
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shopping_cart_rounded,
+                          size: 15,
+                          color: itemCount > 0
+                              ? theme.colorScheme.onPrimaryContainer
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          itemCount > 0
+                              ? '\$${total.toStringAsFixed(0)}'
+                              : 'Carrito vacío',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: itemCount > 0
+                                ? theme.colorScheme.onPrimaryContainer
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (itemCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$itemCount',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Modern Pill-Style Filter Chip ─────────────────────────────────────────────
+
+class _FilterChipButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterChipButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: icon != null ? 10 : 12,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

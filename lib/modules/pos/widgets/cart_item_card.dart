@@ -22,191 +22,230 @@ class CartItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            // Product image
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: theme.colorScheme.surfaceContainerHighest,
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Product image, nicely rounded
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                width: 1,
               ),
-              child: item.product?.imageUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: item.product!.imageUrl!,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 120,
-                        memCacheHeight: 120,
-                        placeholder: (context, url) => Container(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          child: const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          child: Icon(
-                            Icons.pedal_bike,
-                            size: 24,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Icon(
-                      item.isAdHoc ? Icons.edit_note : Icons.pedal_bike,
-                      size: 24,
-                    ),
             ),
-
-            const SizedBox(width: 12),
-
-            // Product details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Product name
-                  Text(
-                    item.displayName,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+            clipBehavior: Clip.antiAlias,
+            child: item.product?.imageUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: item.product!.imageUrl!,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 104,
+                    memCacheHeight: 104,
+                    placeholder: (context, url) => const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    errorWidget: (context, url, error) => Icon(
+                      Icons.pedal_bike,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                  )
+                : Icon(
+                    item.isAdHoc ? Icons.edit_note : Icons.pedal_bike,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
+          ),
 
-                  // SKU (only for regular products)
-                  if (item.product != null)
+          const SizedBox(width: 14),
+
+          // Product details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product name
+                Text(
+                  item.displayName,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                
+                const SizedBox(height: 4),
+
+                // SKU & Price per unit
+                Row(
+                  children: [
+                    if (item.product != null) ...[
+                      Text(
+                        item.product!.sku,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        ' • ',
+                        style: TextStyle(color: theme.colorScheme.outlineVariant),
+                      ),
+                    ],
                     Text(
-                      item.product!.sku,
+                      '\$${item.unitPrice.toStringAsFixed(0)}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.secondary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ],
+                ),
+              ],
+            ),
+          ),
 
-                  const SizedBox(height: 4),
+          const SizedBox(width: 8),
 
-                  // Price per unit
+          // Right Controls (Quantity, Total, Remove)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Total Price
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  if (item.discount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Text(
+                        '\$${item.subtotal.toStringAsFixed(0)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ),
                   Text(
-                    '\$${item.unitPrice.toStringAsFixed(0)} c/u',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.secondary,
+                    '\$${item.total.toStringAsFixed(0)}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.primary,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ],
               ),
-            ),
+              
+              const SizedBox(height: 6),
 
-            const SizedBox(width: 12),
-
-            // Quantity controls and total
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Quantity controls
-                if (showControls)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        onPressed: item.quantity > 1
-                            ? () => onQuantityChanged?.call(item.quantity - 1)
-                            : onRemove,
-                        icon: Icon(
-                          item.quantity > 1 ? Icons.remove : Icons.delete,
-                          size: 20,
-                        ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
+              // Controls
+              if (showControls)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                         ),
                       ),
-                      Container(
-                        width: 40,
-                        alignment: Alignment.center,
-                        child: Text(
-                          '${item.quantity}',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: item.quantity > 1
+                                ? () => onQuantityChanged?.call(item.quantity - 1)
+                                : null, // If qty 1, do nothing, rely on remove button
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.remove,
+                                size: 14,
+                                color: item.quantity > 1 
+                                  ? theme.colorScheme.onSurface 
+                                  : theme.disabledColor,
+                              ),
+                            ),
                           ),
-                        ),
+                          Container(
+                            width: 24,
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${item.quantity}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: (item.product?.stockQuantity ?? 999) > item.quantity
+                                ? () => onQuantityChanged?.call(item.quantity + 1)
+                                : null,
+                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.add,
+                                size: 14,
+                                color: (item.product?.stockQuantity ?? 999) > item.quantity
+                                    ? theme.colorScheme.onSurface
+                                    : theme.disabledColor,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        onPressed: (item.product?.stockQuantity ?? 999) > item.quantity
-                            ? () => onQuantityChanged?.call(item.quantity + 1)
-                            : null,
-                        icon: const Icon(Icons.add, size: 20),
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                          minimumSize: const Size(32, 32),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  Text(
-                    'Qty: ${item.quantity}',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-
-                const SizedBox(height: 8),
-
-                // Discount (if any)
-                if (item.discount > 0)
-                  Text(
-                    '-${item.discount.toStringAsFixed(0)}%',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.tertiary,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-
-                // Subtotal
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: onRemove,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 14,
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
                 Text(
-                  '\$${item.subtotal.toStringAsFixed(0)}',
+                  'Cant: ${item.quantity}',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    decoration:
-                        item.discount > 0 ? TextDecoration.lineThrough : null,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-
-                // Total (after discount)
-                if (item.discount > 0)
-                  Text(
-                    '\$${item.total.toStringAsFixed(0)}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-              ],
-            ),
-
-            // Remove button
-            if (showControls)
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.close),
-                style: IconButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
-                ),
-              ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

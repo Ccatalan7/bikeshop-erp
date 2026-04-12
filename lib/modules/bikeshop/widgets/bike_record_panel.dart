@@ -10,6 +10,7 @@ import '../services/bikeshop_service.dart';
 import 'bike_measurement_timeline.dart';
 
 part 'interactive_vector_bike.dart';
+
 class BikeRecordPanel extends StatefulWidget {
   final BikeRecordSnapshot snapshot;
   final String ownerName;
@@ -38,7 +39,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   late Future<_BikeRecordHistoryData> _historyFuture;
   String? _selectedDiagnosisSystemKey;
   bool _bikeExpanded = false;
-  
 
   @override
   void initState() {
@@ -73,12 +73,17 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         bikeshopService.getBikeEvents(bikeId),
         bikeshopService.getBikeObservations(bikeId),
         bikeshopService.getBikeSystemStates(bikeId),
+        bikeshopService.getBikeInterventions(bikeId),
+        bikeshopService.getBikeComponentLifecycles(bikeId),
       ]);
 
       return _BikeRecordHistoryData.fromRaw(
         events: (results[0] as List<BikeEvent>?) ?? const [],
         observations: (results[1] as List<BikeObservation>?) ?? const [],
         systemStates: (results[2] as List<BikeSystemState>?) ?? const [],
+        interventions: (results[3] as List<BikeIntervention>?) ?? const [],
+        componentLifecycles:
+            (results[4] as List<BikeComponentLifecycle>?) ?? const [],
       );
     } catch (_) {
       return const _BikeRecordHistoryData.empty();
@@ -113,8 +118,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // PRO HEADER (Cover + Avatar + Main actions)
-          if (!_bikeExpanded)
-            _buildCoverAndIdentity(theme, statusColor, bike),
+          if (!_bikeExpanded) _buildCoverAndIdentity(theme, statusColor, bike),
 
           // TAB BAR
           if (!_bikeExpanded)
@@ -136,8 +140,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ),
             ),
 
-          if (!_bikeExpanded)
-            const Divider(height: 1, thickness: 1),
+          if (!_bikeExpanded) const Divider(height: 1, thickness: 1),
 
           // CONTENT
           Expanded(
@@ -313,7 +316,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: statusColor.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -552,7 +556,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           children: [
-            if (history.hasDiagnosisMemory)
+            if (history.hasStructuredWorkbench)
               _buildDiagnosisWorkbench(theme, history)
             else
               _buildLegacyEventsSection(
@@ -560,7 +564,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 history.events,
                 expanded: true,
               ),
-            if (history.hasDiagnosisMemory && history.events.isNotEmpty) ...[
+            if (history.hasStructuredWorkbench &&
+                history.events.isNotEmpty) ...[
               const SizedBox(height: 18),
               _buildLegacyEventsSection(theme, history.events),
             ],
@@ -620,7 +625,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Mapa de Diagnóstico Pro',
+                          'Mapa Técnico Centralizado',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF1E293B),
@@ -628,7 +633,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Vista esquemática de la bicicleta, alertas e historiales de desgaste.',
+                          'Diagnóstico, trabajos ejecutados y componentes instalados alrededor del mismo modelo técnico.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.grey.shade500,
                             height: 1.4,
@@ -639,12 +644,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   ),
                   // Expand / collapse toggle
                   Tooltip(
-                    message: _bikeExpanded ? 'Vista dividida' : 'Vista completa',
+                    message:
+                        _bikeExpanded ? 'Vista dividida' : 'Vista completa',
                     child: InkWell(
-                      onTap: () => setState(() => _bikeExpanded = !_bikeExpanded),
+                      onTap: () =>
+                          setState(() => _bikeExpanded = !_bikeExpanded),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
                           color: _bikeExpanded
                               ? const Color(0xFF2563EB).withValues(alpha: 0.08)
@@ -696,7 +704,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   children: [
                     // AspectRatio(1.0) keeps it square — no gray side margins
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 480, maxHeight: 480),
+                      constraints:
+                          const BoxConstraints(maxWidth: 480, maxHeight: 480),
                       child: AspectRatio(
                         aspectRatio: 1.0,
                         child: bikeWidget,
@@ -704,7 +713,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     ),
                     const SizedBox(width: 24),
                     Expanded(
-                      child: _buildTelemetrySection(theme, activeSystem),
+                      child: _buildTelemetrySection(
+                        theme,
+                        history,
+                        activeSystemKey,
+                        activeSystem,
+                      ),
                     ),
                   ],
                 )
@@ -721,13 +735,23 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   child: bikeWidget,
                 ),
                 const SizedBox(height: 24),
-                _buildTelemetrySection(theme, activeSystem),
+                _buildTelemetrySection(
+                  theme,
+                  history,
+                  activeSystemKey,
+                  activeSystem,
+                ),
               ],
 
               // Show telemetry below when expanded in wide mode
               if (wideLayout && _bikeExpanded && activeSystem != null) ...[
                 const SizedBox(height: 24),
-                _buildTelemetrySection(theme, activeSystem),
+                _buildTelemetrySection(
+                  theme,
+                  history,
+                  activeSystemKey,
+                  activeSystem,
+                ),
               ],
             ],
           ),
@@ -738,45 +762,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   Widget _buildTelemetrySection(
     ThemeData theme,
+    _BikeRecordHistoryData history,
+    String? activeSystemKey,
     _BikeDiagnosisSystemView? activeSystem,
   ) {
-    if (activeSystem == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Text(
-            'Selecciona un componente en el diagrama para ver su progresión.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade500,
-            ),
-          ),
-        ),
-      );
-    }
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'TELEMETRÍA: ${activeSystem.displayName.toUpperCase()}',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF1E293B),
-            letterSpacing: 0.5,
-          ),
-        ),
+        _buildSystemExplorerCard(theme, history, activeSystemKey),
         const SizedBox(height: 16),
-        if (activeSystem.measurementSeries.isNotEmpty)
-          ...activeSystem.measurementSeries
-              .map((series) => _buildMeasurementTimelineRow(theme, series))
-        else
-          Text(
-            'Sin mediciones registradas para este sistema.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade500,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
+        _buildSystemDetailCard(theme, history, activeSystem),
       ],
     );
   }
@@ -786,7 +781,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     _BikeRecordHistoryData history,
     String? activeSystemKey,
   ) {
-    final latestDate = history.latestDiagnosisDate;
+    final latestDate = history.latestMemoryDate;
     final criticalCount = history.diagnosisSystems
         .where((system) =>
             system.overallStatus == BikeSystemOverallStatus.critical)
@@ -795,6 +790,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         .where((system) =>
             system.overallStatus == BikeSystemOverallStatus.attention)
         .length;
+    final selectedSystem = history.systemFor(activeSystemKey);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -821,7 +817,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Esquema Interactivo',
+                      'Memoria técnica',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -830,8 +826,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     const SizedBox(height: 4),
                     Text(
                       latestDate != null
-                          ? 'Última lectura: ${DateFormat('dd/MM/yyyy').format(latestDate)}'
-                          : 'Sin fecha de lectura registrada.',
+                          ? 'Última actualización: ${DateFormat('dd/MM/yyyy').format(latestDate)}'
+                          : 'Sin actualizaciones registradas.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.grey.shade400,
                       ),
@@ -839,9 +835,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   ],
                 ),
               ),
-              if (history.latestDiagnosisJobNumber != null)
+              if (history.latestMemoryJobNumber != null)
                 _buildReferencePill(
-                  label: history.latestDiagnosisJobNumber!,
+                  label: history.latestMemoryJobNumber!,
                   backgroundColor: const Color(0xFF1C2C45),
                   borderColor: const Color(0xFF263C5D),
                   foregroundColor: const Color(0xFF4C8DFF),
@@ -859,6 +855,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 borderColor: Colors.transparent,
                 foregroundColor: Colors.white,
               ),
+              if (history.interventionCount > 0)
+                _buildReferencePill(
+                  label:
+                      '${history.interventionCount} trabajo${history.interventionCount == 1 ? '' : 's'}',
+                  backgroundColor: Colors.teal.withValues(alpha: 0.15),
+                  borderColor: Colors.teal.withValues(alpha: 0.3),
+                  foregroundColor: Colors.tealAccent.shade100,
+                ),
+              if (history.installedLifecycleCount > 0)
+                _buildReferencePill(
+                  label:
+                      '${history.installedLifecycleCount} componente${history.installedLifecycleCount == 1 ? '' : 's'} activo${history.installedLifecycleCount == 1 ? '' : 's'}',
+                  backgroundColor: Colors.lightBlue.withValues(alpha: 0.15),
+                  borderColor: Colors.lightBlue.withValues(alpha: 0.3),
+                  foregroundColor: Colors.lightBlueAccent.shade100,
+                ),
               if (criticalCount > 0)
                 _buildReferencePill(
                   label:
@@ -874,10 +886,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   borderColor: Colors.orange.withValues(alpha: 0.3),
                   foregroundColor: Colors.orangeAccent,
                 ),
+              if (selectedSystem != null)
+                _buildReferencePill(
+                  label: 'Activo: ${selectedSystem.displayName}',
+                  backgroundColor: const Color(0xFF1C2C45),
+                  borderColor: const Color(0xFF263C5D),
+                  foregroundColor: const Color(0xFF93C5FD),
+                ),
             ],
           ),
           const SizedBox(height: 18),
-          // _buildBikeSchemaNavigator(theme, history, activeSystemKey),
           if (history.overviewNarrativeObservation?.summary != null &&
               history.overviewNarrativeObservation!.summary!
                   .trim()
@@ -913,8 +931,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
-
-
   Widget _buildSystemDetailCard(
     ThemeData theme,
     _BikeRecordHistoryData history,
@@ -940,7 +956,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             ),
             const SizedBox(height: 8),
             Text(
-              'Haz clic sobre un sistema del esquema para ver diagnósticos, mediciones y trabajos relacionados.',
+              'Haz clic sobre un sistema del esquema para ver diagnóstico, trabajos realizados y componentes que quedaron instalados.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.grey.shade400,
                 height: 1.45,
@@ -1041,6 +1057,27 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ),
             ),
           ],
+          if (system.currentStateSummary != null) ...[
+            const SizedBox(height: 20),
+            _buildMiniSectionLabel(theme, 'Estado actual'),
+            const SizedBox(height: 10),
+            _buildCurrentStateCard(theme, system, accentColor),
+          ],
+          if (system.installedComponents.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _buildMiniSectionLabel(theme, 'Componentes instalados'),
+            const SizedBox(height: 10),
+            ...system.installedComponents
+                .take(4)
+                .map((lifecycle) => _buildLifecycleCard(theme, lifecycle)),
+          ],
+          if (system.recentInterventions.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _buildMiniSectionLabel(theme, 'Trabajos aplicados'),
+            const SizedBox(height: 10),
+            ...system.recentInterventions.take(4).map(
+                (intervention) => _buildInterventionCard(theme, intervention)),
+          ],
           if (system.measurementSeries.isNotEmpty) ...[
             const SizedBox(height: 20),
             _buildMiniSectionLabel(theme, 'Mediciones'),
@@ -1050,8 +1087,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           ],
           if (system.contextEntries.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _buildMiniSectionLabel(
-                theme, 'Diagnósticos y trabajos relacionados'),
+            _buildMiniSectionLabel(theme, 'Diagnósticos y observaciones'),
             const SizedBox(height: 10),
             ...system.contextEntries
                 .map((entry) => _buildRelatedDiagnosisCard(theme, entry)),
@@ -1066,7 +1102,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       label,
       style: theme.textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
-        color: const Color(0xFF1E293B), // Slate 800
+        color: Colors.white70,
       ),
     );
   }
@@ -1210,6 +1246,267 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ],
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentStateCard(
+    ThemeData theme,
+    _BikeDiagnosisSystemView system,
+    Color accentColor,
+  ) {
+    final updatedAt = system.currentStateUpdatedAt;
+    final location = system.primaryLocation;
+    final sourceLabel = system.currentStateSourceLabel;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2330),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildReferencePill(
+                label: system.overallStatus.displayName,
+                backgroundColor: accentColor.withValues(alpha: 0.15),
+                borderColor: accentColor.withValues(alpha: 0.3),
+                foregroundColor: accentColor,
+              ),
+              if (location != BikeMemoryLocation.none)
+                _buildReferencePill(
+                  label: location.displayName,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+              if (sourceLabel != null && sourceLabel.isNotEmpty)
+                _buildReferencePill(
+                  label: sourceLabel,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+            ],
+          ),
+          if (system.currentStateSummary != null &&
+              system.currentStateSummary!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              system.currentStateSummary!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (updatedAt != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Actualizado el ${DateFormat('dd/MM/yyyy').format(updatedAt)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInterventionCard(
+    ThemeData theme,
+    BikeIntervention intervention,
+  ) {
+    final accentColor =
+        intervention.interventionType == BikeInterventionType.replacement
+            ? Colors.tealAccent.shade100
+            : Colors.blueAccent.shade100;
+    final jobNumber = intervention.payload['job_number']?.toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2330),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  intervention.title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              _buildReferencePill(
+                label: _formatInterventionTypeLabel(
+                  intervention.interventionType,
+                ),
+                backgroundColor: accentColor.withValues(alpha: 0.15),
+                borderColor: accentColor.withValues(alpha: 0.3),
+                foregroundColor: accentColor,
+              ),
+            ],
+          ),
+          if (intervention.summary != null &&
+              intervention.summary!.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              intervention.summary!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.grey.shade400,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildReferencePill(
+                label:
+                    DateFormat('dd/MM/yyyy').format(intervention.performedAt),
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                borderColor: Colors.white.withValues(alpha: 0.08),
+                foregroundColor: Colors.white,
+              ),
+              if (intervention.location != BikeMemoryLocation.none)
+                _buildReferencePill(
+                  label: intervention.location.displayName,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+              if (intervention.componentSlotKey != null &&
+                  intervention.componentSlotKey!.isNotEmpty)
+                _buildReferencePill(
+                  label: _formatComponentSlotLabel(
+                    intervention.componentSlotKey,
+                  ),
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+              if (jobNumber != null && jobNumber.isNotEmpty)
+                _buildReferencePill(
+                  label: jobNumber,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLifecycleCard(
+    ThemeData theme,
+    BikeComponentLifecycle lifecycle,
+  ) {
+    final accentColor =
+        lifecycle.status == BikeComponentLifecycleStatus.installed
+            ? Colors.tealAccent.shade100
+            : Colors.orangeAccent;
+    final jobNumber = lifecycle.payload['job_number']?.toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A2330),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  lifecycle.componentLabel,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              _buildReferencePill(
+                label: _formatLifecycleStatusLabel(lifecycle.status),
+                backgroundColor: accentColor.withValues(alpha: 0.15),
+                borderColor: accentColor.withValues(alpha: 0.3),
+                foregroundColor: accentColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (lifecycle.componentSlotKey.isNotEmpty)
+                _buildReferencePill(
+                  label: _formatComponentSlotLabel(lifecycle.componentSlotKey),
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+              if (lifecycle.location != BikeMemoryLocation.none)
+                _buildReferencePill(
+                  label: lifecycle.location.displayName,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+              _buildReferencePill(
+                label:
+                    'Instalado ${DateFormat('dd/MM/yyyy').format(lifecycle.installedAt)}',
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                borderColor: Colors.white.withValues(alpha: 0.08),
+                foregroundColor: Colors.white,
+              ),
+              if (jobNumber != null && jobNumber.isNotEmpty)
+                _buildReferencePill(
+                  label: jobNumber,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  borderColor: Colors.white.withValues(alpha: 0.08),
+                  foregroundColor: Colors.white,
+                ),
+            ],
+          ),
+          if (lifecycle.notes != null &&
+              lifecycle.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              lifecycle.notes!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.grey.shade400,
+                height: 1.45,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1401,17 +1698,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
-  String _formatObservationValue(double? value) {
-    if (value == null) return 'Sin dato';
-    if (value == value.roundToDouble()) {
-      return value.toStringAsFixed(0);
-    }
-    if (value.abs() >= 10) {
-      return value.toStringAsFixed(1);
-    }
-    return value.toStringAsFixed(2);
-  }
-
   String _formatSeverityLabel(BikeMemorySeverity? severity) {
     switch (severity) {
       case BikeMemorySeverity.critical:
@@ -1423,6 +1709,64 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       case null:
         return 'Dato';
     }
+  }
+
+  String _formatInterventionTypeLabel(BikeInterventionType type) {
+    switch (type) {
+      case BikeInterventionType.replacement:
+        return 'Reemplazo';
+      case BikeInterventionType.service:
+        return 'Servicio';
+      case BikeInterventionType.adjustment:
+        return 'Ajuste';
+      case BikeInterventionType.installation:
+        return 'Instalación';
+      case BikeInterventionType.removal:
+        return 'Retiro';
+      case BikeInterventionType.inspection:
+        return 'Inspección';
+    }
+  }
+
+  String _formatLifecycleStatusLabel(BikeComponentLifecycleStatus status) {
+    switch (status) {
+      case BikeComponentLifecycleStatus.installed:
+        return 'Activo';
+      case BikeComponentLifecycleStatus.removed:
+        return 'Retirado';
+      case BikeComponentLifecycleStatus.superseded:
+        return 'Reemplazado';
+    }
+  }
+
+  String _formatComponentSlotLabel(String? slotKey) {
+    if (slotKey == null || slotKey.isEmpty) return 'Sistema';
+    const labels = {
+      'chain': 'Cadena',
+      'cassette': 'Cassette',
+      'chainring': 'Plato',
+      'derailleur_hanger': 'Patilla',
+      'front_rotor': 'Rotor delantero',
+      'rear_rotor': 'Rotor trasero',
+      'rotor': 'Rotor',
+      'front_pads': 'Pastillas delanteras',
+      'rear_pads': 'Pastillas traseras',
+      'pads': 'Pastillas',
+      'brake_pad': 'Pastillas',
+      'front_tire': 'Neumático delantero',
+      'rear_tire': 'Neumático trasero',
+      'tire': 'Neumático',
+    };
+
+    final mapped = labels[slotKey];
+    if (mapped != null) return mapped;
+
+    return slotKey
+        .split('_')
+        .where((segment) => segment.isNotEmpty)
+        .map((segment) =>
+            '${segment[0].toUpperCase()}${segment.substring(1).toLowerCase()}')
+        .join(' ');
   }
 
   IconData _systemIconFor(String systemKey) {
@@ -1611,6 +1955,8 @@ class _BikeRecordHistoryData {
   final List<BikeEvent> events;
   final List<BikeObservation> diagnosisObservations;
   final List<BikeSystemState> diagnosisStates;
+  final List<BikeIntervention> interventions;
+  final List<BikeComponentLifecycle> componentLifecycles;
   final List<_BikeDiagnosisSystemView> diagnosisSystems;
   final BikeObservation? overviewNarrativeObservation;
 
@@ -1618,6 +1964,8 @@ class _BikeRecordHistoryData {
     required this.events,
     required this.diagnosisObservations,
     required this.diagnosisStates,
+    required this.interventions,
+    required this.componentLifecycles,
     required this.diagnosisSystems,
     required this.overviewNarrativeObservation,
   });
@@ -1626,6 +1974,8 @@ class _BikeRecordHistoryData {
       : events = const [],
         diagnosisObservations = const [],
         diagnosisStates = const [],
+        interventions = const [],
+        componentLifecycles = const [],
         diagnosisSystems = const [],
         overviewNarrativeObservation = null;
 
@@ -1633,6 +1983,8 @@ class _BikeRecordHistoryData {
     required List<BikeEvent> events,
     required List<BikeObservation> observations,
     required List<BikeSystemState> systemStates,
+    required List<BikeIntervention> interventions,
+    required List<BikeComponentLifecycle> componentLifecycles,
   }) {
     final filteredObservations = observations
         .where(
@@ -1644,20 +1996,18 @@ class _BikeRecordHistoryData {
         .toList()
       ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
 
-    final filteredStates = systemStates
-        .where(
-            (state) => state.payload['source']?.toString() == 'diagnosis_sheet')
-        .toList()
-      ..sort((a, b) {
-        final severityCompare = _statusRank(b.overallStatus)
-            .compareTo(_statusRank(a.overallStatus));
-        if (severityCompare != 0) return severityCompare;
-        final aTime =
-            a.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime =
-            b.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime);
-      });
+    final filteredStates =
+        systemStates.where((state) => state.systemKey != 'general').toList()
+          ..sort((a, b) {
+            final severityCompare = _statusRank(b.overallStatus)
+                .compareTo(_statusRank(a.overallStatus));
+            if (severityCompare != 0) return severityCompare;
+            final aTime =
+                a.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bTime =
+                b.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bTime.compareTo(aTime);
+          });
 
     final sortedEvents = List<BikeEvent>.from(events)
       ..sort((a, b) {
@@ -1665,6 +2015,23 @@ class _BikeRecordHistoryData {
         if (dateCompare != 0) return dateCompare;
         return b.createdAt.compareTo(a.createdAt);
       });
+
+    final sortedInterventions = List<BikeIntervention>.from(interventions)
+      ..sort((a, b) {
+        final dateCompare = b.performedAt.compareTo(a.performedAt);
+        if (dateCompare != 0) return dateCompare;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+    final sortedLifecycles =
+        List<BikeComponentLifecycle>.from(componentLifecycles)
+          ..sort((a, b) {
+            final aAnchor = a.removedAt ?? a.installedAt;
+            final bAnchor = b.removedAt ?? b.installedAt;
+            final dateCompare = bAnchor.compareTo(aAnchor);
+            if (dateCompare != 0) return dateCompare;
+            return b.createdAt.compareTo(a.createdAt);
+          });
 
     BikeObservation? overviewNarrativeObservation;
     for (final observation in filteredObservations) {
@@ -1679,21 +2046,43 @@ class _BikeRecordHistoryData {
         if (state.systemKey != 'general') state.systemKey,
       for (final observation in filteredObservations)
         if (observation.systemKey != 'general') observation.systemKey,
+      for (final intervention in sortedInterventions)
+        if (intervention.systemKey != 'general') intervention.systemKey,
+      for (final lifecycle in sortedLifecycles)
+        if (lifecycle.systemKey != 'general') lifecycle.systemKey,
     };
 
     final diagnosisSystems = systemKeys.map((systemKey) {
       final matchingState = filteredStates
           .where((state) => state.systemKey == systemKey)
           .toList();
+      matchingState.sort((a, b) {
+        final aTime =
+            a.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            b.lastReviewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final dateCompare = bTime.compareTo(aTime);
+        if (dateCompare != 0) return dateCompare;
+        return _statusRank(b.overallStatus)
+            .compareTo(_statusRank(a.overallStatus));
+      });
       final matchingObservations = filteredObservations
           .where((observation) => observation.systemKey == systemKey)
           .toList()
         ..sort((a, b) => b.observedAt.compareTo(a.observedAt));
+      final matchingInterventions = sortedInterventions
+          .where((intervention) => intervention.systemKey == systemKey)
+          .toList();
+      final matchingLifecycles = sortedLifecycles
+          .where((lifecycle) => lifecycle.systemKey == systemKey)
+          .toList();
 
       return _BikeDiagnosisSystemView(
         systemKey: systemKey,
         state: matchingState.isNotEmpty ? matchingState.first : null,
         observations: matchingObservations,
+        interventions: matchingInterventions,
+        componentLifecycles: matchingLifecycles,
       );
     }).toList()
       ..sort((a, b) {
@@ -1709,6 +2098,8 @@ class _BikeRecordHistoryData {
       events: sortedEvents,
       diagnosisObservations: filteredObservations,
       diagnosisStates: filteredStates,
+      interventions: sortedInterventions,
+      componentLifecycles: sortedLifecycles,
       diagnosisSystems: diagnosisSystems,
       overviewNarrativeObservation: overviewNarrativeObservation,
     );
@@ -1717,12 +2108,17 @@ class _BikeRecordHistoryData {
   bool get isEmpty =>
       events.isEmpty &&
       diagnosisObservations.isEmpty &&
-      diagnosisStates.isEmpty;
+      diagnosisStates.isEmpty &&
+      interventions.isEmpty &&
+      componentLifecycles.isEmpty;
 
-  bool get hasDiagnosisMemory =>
-      diagnosisSystems.isNotEmpty || overviewNarrativeObservation != null;
+  bool get hasStructuredWorkbench =>
+      diagnosisSystems.isNotEmpty ||
+      overviewNarrativeObservation != null ||
+      interventions.isNotEmpty ||
+      componentLifecycles.isNotEmpty;
 
-  DateTime? get latestDiagnosisDate {
+  DateTime? get latestMemoryDate {
     final observationDate = diagnosisObservations.isNotEmpty
         ? diagnosisObservations.first.observedAt
         : null;
@@ -1737,43 +2133,93 @@ class _BikeRecordHistoryData {
             return latest;
           })
         : null;
+    final interventionDate =
+        interventions.isNotEmpty ? interventions.first.performedAt : null;
+    final lifecycleDate = componentLifecycles.isNotEmpty
+        ? componentLifecycles
+            .map((lifecycle) => lifecycle.removedAt ?? lifecycle.installedAt)
+            .fold<DateTime?>(null, (latest, current) {
+            if (latest == null || current.isAfter(latest)) {
+              return current;
+            }
+            return latest;
+          })
+        : null;
 
-    if (observationDate == null) return stateDate;
-    if (stateDate == null) return observationDate;
-    return observationDate.isAfter(stateDate) ? observationDate : stateDate;
+    final candidates = <DateTime?>[
+      observationDate,
+      stateDate,
+      interventionDate,
+      lifecycleDate,
+    ].whereType<DateTime>().toList();
+
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) => b.compareTo(a));
+    return candidates.first;
   }
 
-  String? get latestDiagnosisJobNumber {
-    for (final system in diagnosisSystems) {
-      if (system.latestJobNumber != null) {
-        return system.latestJobNumber;
-      }
-    }
+  String? get latestMemoryJobNumber {
+    final candidates = <MapEntry<DateTime, String>>[];
 
     for (final observation in diagnosisObservations) {
       final jobNumber = observation.payload['job_number']?.toString();
       if (jobNumber != null && jobNumber.isNotEmpty) {
-        return jobNumber;
+        candidates.add(MapEntry(observation.observedAt, jobNumber));
       }
     }
 
     for (final state in diagnosisStates) {
       final jobNumber = state.payload['job_number']?.toString();
-      if (jobNumber != null && jobNumber.isNotEmpty) {
-        return jobNumber;
+      final reviewedAt = state.lastReviewedAt;
+      if (jobNumber != null && jobNumber.isNotEmpty && reviewedAt != null) {
+        candidates.add(MapEntry(reviewedAt, jobNumber));
       }
     }
 
-    return null;
+    for (final intervention in interventions) {
+      final jobNumber = intervention.payload['job_number']?.toString();
+      if (jobNumber != null && jobNumber.isNotEmpty) {
+        candidates.add(MapEntry(intervention.performedAt, jobNumber));
+      }
+    }
+
+    for (final lifecycle in componentLifecycles) {
+      final jobNumber = lifecycle.payload['job_number']?.toString();
+      if (jobNumber != null && jobNumber.isNotEmpty) {
+        candidates.add(
+          MapEntry(lifecycle.removedAt ?? lifecycle.installedAt, jobNumber),
+        );
+      }
+    }
+
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) => b.key.compareTo(a.key));
+    return candidates.first.value;
   }
+
+  int get interventionCount => interventions.length;
+
+  int get installedLifecycleCount => componentLifecycles
+      .where((lifecycle) =>
+          lifecycle.status == BikeComponentLifecycleStatus.installed)
+      .length;
+
+  String? get latestDiagnosisJobNumber {
+    return latestMemoryJobNumber;
+  }
+
+  DateTime? get latestDiagnosisDate {
+    return latestMemoryDate;
+  }
+
+  bool get hasDiagnosisMemory => hasStructuredWorkbench;
 
   String? resolveActiveSystemKey(String? preferred) {
     if (preferred != null &&
         diagnosisSystems.any((system) => system.systemKey == preferred)) {
       return preferred;
     }
-    // Do NOT auto-select first — return null so the workbench starts empty
-    // and only shows telemetry after the user explicitly clicks a pin.
+
     return null;
   }
 
@@ -1803,11 +2249,15 @@ class _BikeDiagnosisSystemView {
   final String systemKey;
   final BikeSystemState? state;
   final List<BikeObservation> observations;
+  final List<BikeIntervention> interventions;
+  final List<BikeComponentLifecycle> componentLifecycles;
 
   const _BikeDiagnosisSystemView({
     required this.systemKey,
     required this.state,
     required this.observations,
+    required this.interventions,
+    required this.componentLifecycles,
   });
 
   String get displayName {
@@ -1823,16 +2273,65 @@ class _BikeDiagnosisSystemView {
     return labels[systemKey] ?? systemKey;
   }
 
-  BikeSystemOverallStatus get overallStatus =>
-      state?.overallStatus ?? BikeSystemOverallStatus.unknown;
+  BikeSystemOverallStatus get overallStatus {
+    if (state != null) return state!.overallStatus;
+
+    for (final observation in assessmentObservations) {
+      final explicitStatus = observation.statusValue?.trim();
+      if (explicitStatus != null && explicitStatus.isNotEmpty) {
+        return BikeSystemOverallStatus.values.firstWhere(
+          (status) => status.dbValue == explicitStatus,
+          orElse: () => BikeSystemOverallStatus.unknown,
+        );
+      }
+
+      switch (observation.severity) {
+        case BikeMemorySeverity.critical:
+          return BikeSystemOverallStatus.critical;
+        case BikeMemorySeverity.warning:
+          return BikeSystemOverallStatus.attention;
+        case BikeMemorySeverity.info:
+          return BikeSystemOverallStatus.ok;
+        case null:
+          break;
+      }
+    }
+
+    if (interventions.isNotEmpty) {
+      return BikeSystemOverallStatus.ok;
+    }
+
+    return BikeSystemOverallStatus.unknown;
+  }
+
+  BikeObservation? get latestObservation =>
+      observations.isNotEmpty ? observations.first : null;
+
+  BikeIntervention? get latestIntervention =>
+      interventions.isNotEmpty ? interventions.first : null;
+
+  BikeComponentLifecycle? get latestLifecycle =>
+      componentLifecycles.isNotEmpty ? componentLifecycles.first : null;
+
+  BikeMemoryLocation get primaryLocation {
+    if (state != null) return state!.location;
+    if (latestIntervention != null) return latestIntervention!.location;
+    if (latestLifecycle != null) return latestLifecycle!.location;
+    if (latestObservation != null) return latestObservation!.location;
+    return BikeMemoryLocation.none;
+  }
 
   DateTime? get latestDate {
-    final observationDate =
-        observations.isNotEmpty ? observations.first.observedAt : null;
-    final stateDate = state?.lastReviewedAt;
-    if (observationDate == null) return stateDate;
-    if (stateDate == null) return observationDate;
-    return observationDate.isAfter(stateDate) ? observationDate : stateDate;
+    final candidates = <DateTime?>[
+      latestObservation?.observedAt,
+      state?.lastReviewedAt,
+      latestIntervention?.performedAt,
+      latestLifecycle?.removedAt ?? latestLifecycle?.installedAt,
+    ].whereType<DateTime>().toList();
+
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) => b.compareTo(a));
+    return candidates.first;
   }
 
   String get subheadline {
@@ -1842,19 +2341,47 @@ class _BikeDiagnosisSystemView {
         : 'sin fecha registrada';
     final jobNumber = latestJobNumber;
     if (jobNumber != null && jobNumber.isNotEmpty) {
-      return 'Último registro $dateText · $jobNumber';
+      return 'Último movimiento $dateText · $jobNumber';
     }
-    return 'Último registro $dateText';
+    return 'Último movimiento $dateText';
   }
 
   String? get latestJobNumber {
+    final candidates = <MapEntry<DateTime, String>>[];
+
     for (final observation in observations) {
       final jobNumber = observation.payload['job_number']?.toString();
       if (jobNumber != null && jobNumber.isNotEmpty) {
-        return jobNumber;
+        candidates.add(MapEntry(observation.observedAt, jobNumber));
       }
     }
-    return state?.payload['job_number']?.toString();
+
+    final stateJobNumber = state?.payload['job_number']?.toString();
+    if (stateJobNumber != null &&
+        stateJobNumber.isNotEmpty &&
+        state?.lastReviewedAt != null) {
+      candidates.add(MapEntry(state!.lastReviewedAt!, stateJobNumber));
+    }
+
+    for (final intervention in interventions) {
+      final jobNumber = intervention.payload['job_number']?.toString();
+      if (jobNumber != null && jobNumber.isNotEmpty) {
+        candidates.add(MapEntry(intervention.performedAt, jobNumber));
+      }
+    }
+
+    for (final lifecycle in componentLifecycles) {
+      final jobNumber = lifecycle.payload['job_number']?.toString();
+      if (jobNumber != null && jobNumber.isNotEmpty) {
+        candidates.add(
+          MapEntry(lifecycle.removedAt ?? lifecycle.installedAt, jobNumber),
+        );
+      }
+    }
+
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) => b.key.compareTo(a.key));
+    return candidates.first.value;
   }
 
   String? get primaryNarrative {
@@ -1865,7 +2392,76 @@ class _BikeDiagnosisSystemView {
       }
     }
     final note = state?.statusNote?.trim();
-    return (note == null || note.isEmpty) ? null : note;
+    if (note != null && note.isNotEmpty) return note;
+
+    final interventionSummary = latestIntervention?.summary?.trim();
+    if (interventionSummary != null && interventionSummary.isNotEmpty) {
+      return interventionSummary;
+    }
+
+    final interventionTitle = latestIntervention?.title.trim();
+    if (interventionTitle != null && interventionTitle.isNotEmpty) {
+      return interventionTitle;
+    }
+
+    final lifecycleNote = latestLifecycle?.notes?.trim();
+    if (lifecycleNote != null && lifecycleNote.isNotEmpty) {
+      return lifecycleNote;
+    }
+
+    return latestLifecycle?.componentLabel;
+  }
+
+  String? get currentStateSummary {
+    final note = state?.statusNote?.trim();
+    if (note != null && note.isNotEmpty) return note;
+
+    final interventionSummary = latestIntervention?.summary?.trim();
+    if (interventionSummary != null && interventionSummary.isNotEmpty) {
+      return interventionSummary;
+    }
+
+    final interventionTitle = latestIntervention?.title.trim();
+    if (interventionTitle != null && interventionTitle.isNotEmpty) {
+      return interventionTitle;
+    }
+
+    final latestLifecycleLabel = latestLifecycle?.componentLabel.trim();
+    if (latestLifecycleLabel != null && latestLifecycleLabel.isNotEmpty) {
+      return 'Componente activo: $latestLifecycleLabel';
+    }
+
+    return null;
+  }
+
+  String? get currentStateSourceLabel {
+    final derivedFrom = state?.payload['derived_from']?.toString();
+    if (derivedFrom == 'intervention') {
+      return 'Estado recalculado';
+    }
+
+    switch (state?.payload['source']?.toString()) {
+      case 'diagnosis_sheet':
+        return 'Diagnóstico estructurado';
+      case 'job_diagnosis_sync':
+        return 'Diagnóstico libre';
+      case 'job_item_sync':
+      case 'job_general_item_sync':
+        return 'Trabajo ejecutado';
+      default:
+        break;
+    }
+
+    if (latestIntervention != null) return 'Último trabajo';
+    if (latestObservation != null) return 'Último diagnóstico';
+    if (latestLifecycle != null) return 'Componente vigente';
+    return null;
+  }
+
+  DateTime? get currentStateUpdatedAt {
+    return state?.lastReviewedAt ??
+        latestIntervention?.performedAt ??
+        latestDate;
   }
 
   String? get latestMeasureLabel {
@@ -1886,6 +2482,16 @@ class _BikeDiagnosisSystemView {
 
   List<BikeObservation> get contextEntries =>
       assessmentObservations.take(4).toList();
+
+  List<BikeIntervention> get recentInterventions => List<BikeIntervention>.from(
+        interventions,
+      )..sort((a, b) => b.performedAt.compareTo(a.performedAt));
+
+  List<BikeComponentLifecycle> get installedComponents => componentLifecycles
+      .where((lifecycle) =>
+          lifecycle.status == BikeComponentLifecycleStatus.installed)
+      .toList()
+    ..sort((a, b) => b.installedAt.compareTo(a.installedAt));
 
   List<_BikeMeasurementSeries> get measurementSeries {
     final grouped = <String, List<BikeObservation>>{};
@@ -1951,4 +2557,3 @@ class _BikeMeasurementSeries {
   String get lastDateLabel =>
       DateFormat('dd/MM').format(points.last.observedAt);
 }
-
