@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
 import 'quick_access_expense_rail.dart';
@@ -12,6 +13,7 @@ import 'quick_task_panel.dart';
 /// Add new entries here to extend the toolbar with more tools.
 enum ToolbarTool {
   newJob,
+  kiosk,
   quickSale,
   expenses,
   purchases,
@@ -88,6 +90,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return 'Nueva Pega';
+      case ToolbarTool.kiosk:
+        return 'Kiosko RRHH';
       case ToolbarTool.quickSale:
         return 'Venta Rápida';
       case ToolbarTool.expenses:
@@ -105,6 +109,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return Icons.build_circle_outlined;
+      case ToolbarTool.kiosk:
+        return Icons.badge_outlined;
       case ToolbarTool.quickSale:
         return Icons.flash_on;
       case ToolbarTool.expenses:
@@ -122,6 +128,11 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return const SizedBox.shrink();
+      case ToolbarTool.kiosk:
+        return const KioskModePage(
+          embedded: true,
+          compact: true,
+        );
       case ToolbarTool.quickSale:
         return const QuickSalePanel();
       case ToolbarTool.expenses:

@@ -55,6 +55,18 @@ import '../../shared/widgets/safe_layout_builder.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'mega_menu.dart';
 
+/// Runtime routing mode for the public store shell.
+///
+/// The same store UI is embedded in two different apps:
+/// - Standalone public store (`main_store.dart`)
+/// - ERP/admin app preview/editor (`main.dart`)
+///
+/// Route normalization must behave differently between those modes,
+/// especially on native platforms where we cannot infer it from the host.
+class PublicStoreRuntimeConfig {
+  static bool isErpMounted = false;
+}
+
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
   final bool showEditorButton;
@@ -166,6 +178,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   // Guard to prevent scheduling multiple navigations in the same frame
   bool _pendingModeNavigation = false;
+  bool _isErpMountedStore() => PublicStoreRuntimeConfig.isErpMounted;
 
   // ------------------------------------------------------------------------
   // On-canvas inline editing: Footer navigation
@@ -1599,12 +1612,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           IconButton(
             onPressed: () {
               editProvider.exitEditMode();
-              // In the store-only app (web store domain + all native builds),
-              // the ERP route `/website` doesn't exist.
-              final isStoreContext = !kIsWeb || _isPublicStoreDomain();
-              context.go(isStoreContext
-                  ? _routeForPublicStore('/tienda')
-                  : '/website');
+              context.go(
+                _isErpMountedStore()
+                    ? '/website'
+                    : _routeForPublicStore('/tienda'),
+              );
             },
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             tooltip: 'Volver a Gestión de Sitio Web',
@@ -2918,16 +2930,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // - ERP-mounted store: Uri.base.path starts with /tienda
     final host = Uri.base.host.toLowerCase().split(':').first;
     final isLocalHost = host == 'localhost' || host == '127.0.0.1';
-    final isStoreOnlyLocal =
-        kIsWeb && isLocalHost && !Uri.base.path.startsWith('/tienda');
+    final isErpMountedStore = _isErpMountedStore();
+    final isStoreOnlyLocal = kIsWeb &&
+        isLocalHost &&
+        !isErpMountedStore &&
+        !Uri.base.path.startsWith('/tienda');
 
     // Mobile/desktop native apps are always running the public store entrypoint
     // (there is no ERP-mounted `/tienda/*` router on those platforms).
     // Therefore we must always produce clean public-store routes.
-    final isPublicDomain =
-        !kIsWeb || _isPublicStoreDomain() || isStoreOnlyLocal;
+    final isStandaloneStoreRuntime = _isPublicStoreDomain() ||
+        isStoreOnlyLocal ||
+        (!kIsWeb && !isErpMountedStore);
 
-    if (isPublicDomain) {
+    if (isStandaloneStoreRuntime) {
       // Convert legacy in-app routes under `/tienda` to clean public-store routes.
       if (path == '/tienda' || path == '/tienda/') {
         path = '/';

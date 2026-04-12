@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
@@ -9,7 +11,16 @@ import '../../../shared/widgets/branded_loading.dart';
 /// Kiosk Mode - Touch-friendly employee check-in/check-out interface
 /// Designed to be displayed full-screen on a tablet/monitor at the store entrance
 class KioskModePage extends StatefulWidget {
-  const KioskModePage({super.key});
+  final bool embedded;
+  final bool compact;
+  final VoidCallback? onClose;
+
+  const KioskModePage({
+    super.key,
+    this.embedded = false,
+    this.compact = false,
+    this.onClose,
+  });
 
   @override
   State<KioskModePage> createState() => _KioskModePageState();
@@ -20,6 +31,7 @@ class _KioskModePageState extends State<KioskModePage> {
   Map<String, bool> _checkedInStatus = {};
   bool _isLoading = true;
   String _searchQuery = '';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -27,10 +39,17 @@ class _KioskModePageState extends State<KioskModePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadEmployees();
     });
-    // Auto-refresh every minute to update checked-in status
-    Future.delayed(const Duration(minutes: 1), () {
-      if (mounted) _loadEmployees();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) {
+        _loadEmployees();
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadEmployees() async {
@@ -98,7 +117,7 @@ class _KioskModePageState extends State<KioskModePage> {
         if (employeeRecord.isEmpty) {
           // Attendance record not found (deleted manually) - clear cached status
           if (!mounted) return;
-          
+
           setState(() {
             _checkedInStatus.remove(employee.id);
           });
@@ -113,7 +132,7 @@ class _KioskModePageState extends State<KioskModePage> {
               duration: const Duration(seconds: 3),
             ),
           );
-          
+
           // Refresh to sync state with database
           await _loadEmployees();
           return;
@@ -227,18 +246,72 @@ class _KioskModePageState extends State<KioskModePage> {
     }).toList();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.grey[100]!;
-    final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+  void _handleClose() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+      return;
+    }
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: const Text('Registro de Asistencia'),
-        centerTitle: true,
-        actions: [
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    context.go('/hr/attendances');
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: const Text('Registro de Asistencia'),
+      centerTitle: true,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _loadEmployees,
+          tooltip: 'Actualizar',
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _handleClose,
+          tooltip: 'Salir del modo kiosko',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmbeddedHeader(Color cardBgColor, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: cardBgColor,
+        border: Border(
+          bottom: BorderSide(color: borderColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Modo Kiosko',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Registro rápido de entradas y salidas',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.7),
+                    ),
+              ),
+            ],
+          ),
+          const Spacer(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadEmployees,
@@ -246,83 +319,160 @@ class _KioskModePageState extends State<KioskModePage> {
           ),
           IconButton(
             icon: const Icon(Icons.close),
-            onPressed: () => Navigator.pop(context),
-            tooltip: 'Salir del modo kiosko',
+            onPressed: _handleClose,
+            tooltip: 'Cerrar kiosko',
           ),
         ],
       ),
-      body: Column(
+    );
+  }
+
+  Widget _buildSearchBar(Color cardBgColor, bool isDark) {
+    return Container(
+      padding: EdgeInsets.all(widget.compact ? 12 : 16),
+      color: cardBgColor,
+      child: TextField(
+        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+        decoration: InputDecoration(
+          hintText: 'Buscar empleado...',
+          hintStyle:
+              TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+          prefixIcon: Icon(
+            Icons.search,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          filled: true,
+          fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.grey[50],
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: widget.compact ? 10 : 14,
+          ),
+        ),
+        onChanged: (value) => setState(() => _searchQuery = value),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Search bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: cardBgColor,
-            child: TextField(
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-              decoration: InputDecoration(
-                hintText: 'Buscar empleado...',
-                hintStyle: TextStyle(
-                    color: isDark ? Colors.grey[500] : Colors.grey[600]),
-                prefixIcon: Icon(Icons.search,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.grey[50],
-              ),
-              onChanged: (value) => setState(() => _searchQuery = value),
+          Icon(
+            Icons.people_outline,
+            size: 80,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No hay empleados disponibles',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
             ),
           ),
-          // Employee grid
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _filteredEmployees.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.people_outline,
-                              size: 80,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No hay empleados disponibles',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4, // 4 columns instead of 3
-                          childAspectRatio: 0.85, // Taller/narrower cards
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: _filteredEmployees.length,
-                        itemBuilder: (context, index) {
-                          final employee = _filteredEmployees[index];
-                          final isCheckedIn =
-                              _checkedInStatus[employee.id] ?? false;
-                          return _EmployeeCard(
-                            employee: employee,
-                            isCheckedIn: isCheckedIn,
-                            onTap: () => _handleEmployeeTap(employee),
-                          );
-                        },
-                      ),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEmployeeList() {
+    if (_isLoading) {
+      return const Center(child: BrandedLoading());
+    }
+
+    if (_filteredEmployees.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    if (widget.compact) {
+      return ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: _filteredEmployees.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final employee = _filteredEmployees[index];
+          final isCheckedIn = _checkedInStatus[employee.id] ?? false;
+
+          return _CompactEmployeeTile(
+            employee: employee,
+            isCheckedIn: isCheckedIn,
+            onTap: () => _handleEmployeeTap(employee),
+          );
+        },
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 1400
+            ? 4
+            : constraints.maxWidth >= 1000
+                ? 3
+                : constraints.maxWidth >= 640
+                    ? 2
+                    : 1;
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: constraints.maxWidth >= 1000 ? 0.9 : 1.05,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: _filteredEmployees.length,
+          itemBuilder: (context, index) {
+            final employee = _filteredEmployees[index];
+            final isCheckedIn = _checkedInStatus[employee.id] ?? false;
+            return _EmployeeCard(
+              employee: employee,
+              isCheckedIn: isCheckedIn,
+              onTap: () => _handleEmployeeTap(employee),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(Color bgColor, Color cardBgColor, bool isDark) {
+    return Container(
+      color: bgColor,
+      child: Column(
+        children: [
+          _buildSearchBar(cardBgColor, isDark),
+          Expanded(child: _buildEmployeeList()),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.grey[100]!;
+    final cardBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF383838) : Colors.grey[300]!;
+
+    final body = _buildBody(bgColor, cardBgColor, isDark);
+
+    if (!widget.embedded) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        appBar: _buildAppBar(),
+        body: body,
+      );
+    }
+
+    return Column(
+      children: [
+        if (!widget.compact) _buildEmbeddedHeader(cardBgColor, borderColor),
+        Expanded(child: body),
+      ],
     );
   }
 }
@@ -551,6 +701,126 @@ class _ConfirmationDialog extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _CompactEmployeeTile extends StatelessWidget {
+  final Employee employee;
+  final bool isCheckedIn;
+  final VoidCallback onTap;
+
+  const _CompactEmployeeTile({
+    required this.employee,
+    required this.isCheckedIn,
+    required this.onTap,
+  });
+
+  Color _getAvatarColor() {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+    ];
+    return colors[employee.fullName.hashCode % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: isCheckedIn
+              ? Colors.green
+              : (isDark ? const Color(0xFF3A3A3A) : Colors.grey[300]!),
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: _getAvatarColor(),
+                child: employee.photoUrl != null
+                    ? ClipOval(
+                        child: Image.network(
+                          employee.photoUrl!,
+                          fit: BoxFit.cover,
+                          width: 44,
+                          height: 44,
+                        ),
+                      )
+                    : Text(
+                        employee.initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      employee.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      employee.jobTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: subtitleColor,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Icon(
+                    isCheckedIn ? Icons.logout : Icons.login,
+                    color: isCheckedIn ? Colors.green : Colors.blue,
+                    size: 20,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isCheckedIn ? 'Salir' : 'Entrar',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isCheckedIn ? Colors.green : Colors.blue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

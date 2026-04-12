@@ -396,6 +396,8 @@ Page<dynamic> _buildPageNoScroll(
 
 class PublicStoreRouter {
   static GoRouter createRouter() {
+    PublicStoreRuntimeConfig.isErpMounted = false;
+
     // IMPORTANT (Web): We use imperative navigation (`push`/`pop`) to guarantee
     // consistent forward/back behavior + transitions.
     // By default, go_router may NOT reflect imperative navigation in the URL,

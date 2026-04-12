@@ -246,6 +246,8 @@ class AppRouter {
     String? initialLocationOverride,
     bool forcePublicStoreHost = false,
   }) {
+    PublicStoreRuntimeConfig.isErpMounted = !forcePublicStoreHost;
+
     // For public store on web: DON'T override initialLocation
     // Let GoRouter read from the browser URL (important for MercadoPago redirects)
     // For ERP: Start at /login if not overridden
@@ -2233,7 +2235,9 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.KioskModePage(), // Full screen, no MainLayout
+            () => MainLayout(
+              child: erp.KioskModePage(embedded: true),
+            ),
           ),
         ),
         GoRoute(
