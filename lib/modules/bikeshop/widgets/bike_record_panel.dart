@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
+import 'bike_diagram_illustration.dart';
 import 'bike_measurement_timeline.dart';
 
 part 'interactive_vector_bike.dart';
@@ -587,6 +588,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     // Shared bike widget builder (avoids repetition)
     Widget bikeWidget = RepaintBoundary(
       child: _InteractiveVectorBike(
+        bike: widget.snapshot.bike,
         history: history,
         activeSystemKey: activeSystemKey,
         onSystemSelected: (key) {

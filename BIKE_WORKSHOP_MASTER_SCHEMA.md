@@ -383,6 +383,7 @@ Important meaning:
 - `technical_profile.values` = what the system currently believes is true for this bike
 - `technical_profile.sources` = where each technical fact came from
 - `technical_profile.confirmed` = whether the fact is confirmed or still suggestive
+- `bikes.bike_type` is the active visual platform selector for workshop diagrams; it now includes `mountain_hardtail` so the base identity form can distinguish hardtail from generic mountain/full-suspension flows without a second subtype field
 
 ### 4. Why this layer is the true base
 
@@ -402,8 +403,14 @@ Examples of the intended result:
 - if `technical_profile.values.brakeType = rim`, the structured brake diagnosis should not show rotor thickness
 - if `technical_profile.values.brakeType = hydraulic_disc`, a brake service wizard should not ask `Tipo de freno`
 - if `technical_profile.values.drivetrainSpeeds = 10`, a wizard should not ask the mechanic to re-declare drivetrain speed unless the fact is uncertain or unconfirmed
+- if `bikes.bike_type = mountain_hardtail`, workshop UI should render the hardtail diagram variant instead of the legacy full-suspension asset
+- if `bikes.bike_type = bmx`, the diagnosis UI should resolve BMX-specific pin placements while still writing to the same visit diagnosis sheet
 
 This is the centralization rule in practice.
+
+This change strengthens centralization because diagram selection now flows from the base bike identity record instead of storing visual subtype decisions inside diagnosis UI state or a parallel workshop table.
+
+As of 2026-04-13 cleanup, production `bike_profiles` no longer store `technical_profile.values.bikeStyle` and the Flutter runtime no longer reads that key as a fallback. Historical references to `bikeStyle` should remain only inside one-time migration SQL.
 
 ## Bike Profile Summary Layer
 
@@ -514,6 +521,15 @@ Target rule:
 
 - diagnosis template should be gated by bike profile technical truth
 - the template should not ask for or show fields that are impossible or irrelevant for that bike
+- the mechanic-facing structured diagnosis UI may be visual and diagram-driven, but it must still persist only into `mechanic_job_bikes.diagnosis_sheet_data`
+- diagram variant selection should come from `bikes.bike_type`; the active base type list now includes `mountain_hardtail` so the identity form can drive hardtail vs full-suspension visuals directly
+
+Current implementation direction:
+
+- the structured diagnosis editor can present drivetrain/front brake/rear brake through an interactive bike diagram
+- the visual diagram is a UI layer over the existing `basic_workshop_v1` diagnosis systems, not a new schema
+- rim-brake bikes hide rotor-thickness input based on upstream `technical_profile.values.brakeType`
+- the original `mtb_diagnostic_bg.png` full-suspension asset is the canonical MTB visual for `bike_type = mountain`; other variants must use real assets from the repo, not generated vector placeholders
 
 ## Executed Work Layer: `mechanic_job_items`
 

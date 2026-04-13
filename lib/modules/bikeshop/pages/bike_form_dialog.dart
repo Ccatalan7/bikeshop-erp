@@ -348,6 +348,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     switch (value) {
       case 'road':
         return BikeType.road;
+      case 'mountain_hardtail':
+        return BikeType.mountainHardtail;
       case 'mountain':
         return BikeType.mountain;
       case 'hybrid':

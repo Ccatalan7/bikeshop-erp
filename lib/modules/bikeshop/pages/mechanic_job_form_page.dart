@@ -30,6 +30,7 @@ import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
 import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'bike_form_dialog.dart';
+import '../widgets/bike_diagram_illustration.dart';
 
 // ============================================================
 // Per-Bike Data Container (Multi-bike support)
@@ -87,6 +88,41 @@ enum _JobWorkbenchTab { general, diagnosis, products }
 
 enum _DiagnosisWorkbenchTab { narrative, structured }
 
+class _StructuredDiagnosisSystemSpec {
+  final String systemKey;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+
+  const _StructuredDiagnosisSystemSpec({
+    required this.systemKey,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+  });
+}
+
+const List<_StructuredDiagnosisSystemSpec> _kStructuredDiagnosisSystems = [
+  _StructuredDiagnosisSystemSpec(
+    systemKey: 'drivetrain',
+    label: 'Transmisión',
+    subtitle: 'Cadena, cassette y tren motriz.',
+    icon: Icons.settings_input_component_outlined,
+  ),
+  _StructuredDiagnosisSystemSpec(
+    systemKey: 'front_brake',
+    label: 'Freno delantero',
+    subtitle: 'Pastillas, actuación y rotor delantero.',
+    icon: Icons.radio_button_checked,
+  ),
+  _StructuredDiagnosisSystemSpec(
+    systemKey: 'rear_brake',
+    label: 'Freno trasero',
+    subtitle: 'Pastillas, actuación y rotor trasero.',
+    icon: Icons.adjust,
+  ),
+];
+
 class MechanicJobFormPage extends StatefulWidget {
   final String? jobId; // Null for new job, ID for editing
   final String? customerId; // Pre-select customer if provided
@@ -137,6 +173,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   _JobWorkbenchTab _selectedWorkbenchTab = _JobWorkbenchTab.general;
   _DiagnosisWorkbenchTab _selectedDiagnosisWorkbenchTab =
       _DiagnosisWorkbenchTab.narrative;
+  String? _selectedStructuredDiagnosisSystemKey;
 
   /// Currently selected bike tab
   _BikeTabData? get _currentBikeTab =>
@@ -232,7 +269,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _estimatedDurationController.dispose();
     _subjectNotesController.dispose();
     _partAutocompleteFocus.dispose();
-    // Dispose all bike tab controllers
     for (final tab in _bikeTabs) {
       tab.dispose();
     }
@@ -250,8 +286,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
 
-      // 🚀 Cache-first hydration: paint with in-memory data immediately,
-      // then refresh in the background-critical path only as needed.
       if (mounted) {
         setState(() {
           if (customerService.hasCustomersCache && _customers.isEmpty) {
@@ -266,8 +300,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         });
       }
 
-      // Load data in parallel to speed up form opening
-      // Optimization: Fetch only a limited number initially, search will handle the rest
       final results = await Future.wait([
         customerService.getCustomers(limit: 50),
         inventoryService.searchProducts('', limit: 50),
@@ -279,11 +311,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       List<Product> products = results[1] as List<Product>;
       final subjects = results[3] as List<JobSubject>;
 
-      // If we have a specific customerId, ensure that customer is loaded.
-      // For edit mode, _loadExistingJob() will fetch the job once and load the customer,
-      // so avoid a second getJobById() here on the critical open path.
       final targetCustomerId = widget.customerId;
-
       if (targetCustomerId != null) {
         final hasCustomer = customers.any((c) => c.id == targetCustomerId);
         if (!hasCustomer) {
@@ -295,8 +323,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      // We still need service products for the "Service" dropdowns.
-      // If product cache is already hydrated, derive them locally and skip another fetch.
       final serviceProducts = inventoryService.hasLoaded
           ? inventoryService.products
               .where((p) => p.productType == ProductType.service)
@@ -313,26 +339,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _serviceProducts = serviceProducts;
           _customStatuses = customStatuses;
           _availableSubjects = subjects;
-          // Set default status to first "todo" phase status if available
           if (_customStatuses.isNotEmpty && _selectedCustomStatus == null) {
             _selectedCustomStatus = _customStatuses.firstWhere(
               (s) => s.phase == StatusPhase.todo,
               orElse: () => _customStatuses.first,
             );
           }
-          // Apply initial job type from query parameter (new jobs only)
           if (widget.initialJobType != null && widget.jobId == null) {
             _jobType = JobType.fromDbValue(widget.initialJobType!);
           }
         });
       }
 
-      // If editing, load existing job
       if (widget.jobId != null) {
         await _loadExistingJob();
       }
 
-      // If customer ID provided, pre-select customer
       if (widget.customerId != null && widget.jobId == null) {
         try {
           final customer = _customers.firstWhere(
@@ -340,7 +362,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           );
           await _selectCustomer(customer);
         } catch (_) {
-          // Fallback if not found (shouldn't happen with the logic above)
           if (_customers.isNotEmpty) {
             await _selectCustomer(_customers.first);
           }
@@ -4214,114 +4235,402 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   ) {
     final diagnosisSheet = currentTab.diagnosisSheet;
 
-    return Column(
-      children: [
-        _buildDiagnosisSystemCard(
+    final activeSystemKey = _resolveStructuredDiagnosisSystemKey(currentTab);
+    final activeSpec = _structuredDiagnosisSpecFor(activeSystemKey) ??
+        _kStructuredDiagnosisSystems.first;
+    final profile =
+        _selectedBike?.id == currentTab.bike?.id ? _selectedBikeProfile : null;
+    final bikeVariant = resolveBikeDiagramVariant(
+      bike: currentTab.bike,
+    );
+    final brakeType = profile?.technicalValues['brakeType']?.toString();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wideLayout = constraints.maxWidth >= 980;
+        final diagramPanel = _buildStructuredDiagnosisDiagramPanel(
           theme,
-          title: 'Transmisión',
-          subtitle: 'Cadena, cassette y estado general del tren motriz.',
-          status: diagnosisSheet.drivetrain.overallStatus,
-          statusTint: _diagnosisStatusColor(
-              theme, diagnosisSheet.drivetrain.overallStatus),
-          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
-            (current) => current.copyWith(
-              drivetrain: current.drivetrain.copyWith(overallStatus: status),
+          currentTab: currentTab,
+          activeSystemKey: activeSystemKey,
+          bikeVariant: bikeVariant,
+          brakeType: brakeType,
+        );
+        final inspectorPanel = _buildStructuredDiagnosisInspectorPanel(
+          theme,
+          currentTab: currentTab,
+          diagnosisSheet: diagnosisSheet,
+          activeSpec: activeSpec,
+          brakeType: brakeType,
+        );
+
+        if (wideLayout) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 5, child: diagramPanel),
+              const SizedBox(width: 18),
+              Expanded(flex: 4, child: inspectorPanel),
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            diagramPanel,
+            const SizedBox(height: 16),
+            inspectorPanel,
+          ],
+        );
+      },
+    );
+  }
+
+  String _resolveStructuredDiagnosisSystemKey(_BikeTabData currentTab) {
+    final preferred = _selectedStructuredDiagnosisSystemKey;
+    if (preferred != null && _structuredDiagnosisSpecFor(preferred) != null) {
+      return preferred;
+    }
+
+    String fallbackKey = _kStructuredDiagnosisSystems.first.systemKey;
+    var fallbackRank = -1;
+
+    for (final spec in _kStructuredDiagnosisSystems) {
+      final status = _structuredDiagnosisStatus(
+        currentTab.diagnosisSheet,
+        spec.systemKey,
+      );
+      final hasData = _structuredDiagnosisHasMeaningfulData(
+        currentTab.diagnosisSheet,
+        spec.systemKey,
+      );
+      final rank = _structuredDiagnosisStatusRank(status) + (hasData ? 1 : 0);
+      if (rank > fallbackRank) {
+        fallbackKey = spec.systemKey;
+        fallbackRank = rank;
+      }
+    }
+
+    return fallbackKey;
+  }
+
+  int _structuredDiagnosisStatusRank(BikeSystemOverallStatus status) {
+    switch (status) {
+      case BikeSystemOverallStatus.critical:
+        return 3;
+      case BikeSystemOverallStatus.attention:
+        return 2;
+      case BikeSystemOverallStatus.ok:
+        return 1;
+      case BikeSystemOverallStatus.unknown:
+        return 0;
+    }
+  }
+
+  _StructuredDiagnosisSystemSpec? _structuredDiagnosisSpecFor(String key) {
+    for (final spec in _kStructuredDiagnosisSystems) {
+      if (spec.systemKey == key) {
+        return spec;
+      }
+    }
+    return null;
+  }
+
+  BikeSystemOverallStatus _structuredDiagnosisStatus(
+    MechanicJobDiagnosisSheet sheet,
+    String systemKey,
+  ) {
+    switch (systemKey) {
+      case 'front_brake':
+        return sheet.frontBrake.overallStatus;
+      case 'rear_brake':
+        return sheet.rearBrake.overallStatus;
+      case 'drivetrain':
+      default:
+        return sheet.drivetrain.overallStatus;
+    }
+  }
+
+  bool _structuredDiagnosisHasMeaningfulData(
+    MechanicJobDiagnosisSheet sheet,
+    String systemKey,
+  ) {
+    switch (systemKey) {
+      case 'front_brake':
+        return sheet.frontBrake.hasMeaningfulData;
+      case 'rear_brake':
+        return sheet.rearBrake.hasMeaningfulData;
+      case 'drivetrain':
+      default:
+        return sheet.drivetrain.hasMeaningfulData;
+    }
+  }
+
+  Widget _buildStructuredDiagnosisDiagramPanel(
+    ThemeData theme, {
+    required _BikeTabData currentTab,
+    required String activeSystemKey,
+    required BikeDiagramVariant bikeVariant,
+    required String? brakeType,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mapa técnico interactivo',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          child: Column(
+          const SizedBox(height: 6),
+          Text(
+            'Selecciona un sistema sobre la bicicleta para editar el mismo diagnosis sheet de la visita.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          AspectRatio(
+            aspectRatio: 1,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final imageSize = constraints.biggest.shortestSide;
+                final offsetX = (constraints.maxWidth - imageSize) / 2;
+                final offsetY = (constraints.maxHeight - imageSize) / 2;
+
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: offsetX,
+                      top: offsetY,
+                      width: imageSize,
+                      height: imageSize,
+                      child: BikeDiagramIllustration(variant: bikeVariant),
+                    ),
+                    ..._kStructuredDiagnosisSystems.map((spec) {
+                      final placement = resolveBikeDiagramPinPlacement(
+                        variant: bikeVariant,
+                        systemKey: spec.systemKey,
+                      );
+                      if (placement == null) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final px = offsetX + placement.position.dx * imageSize;
+                      final py = offsetY + placement.position.dy * imageSize;
+                      final status = _structuredDiagnosisStatus(
+                        currentTab.diagnosisSheet,
+                        spec.systemKey,
+                      );
+
+                      return Positioned(
+                        left: px - 16,
+                        top: py - 16,
+                        child: _buildStructuredDiagnosisPin(
+                          theme,
+                          spec: spec,
+                          status: status,
+                          isSelected: activeSystemKey == spec.systemKey,
+                          labelRight: placement.labelRight,
+                          onTap: () {
+                            setState(() {
+                              _selectedStructuredDiagnosisSystemKey =
+                                  spec.systemKey;
+                            });
+                          },
+                        ),
+                      );
+                    }),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      key: ValueKey(
-                        'diag_chain_wear_${currentTab.tabId}_${diagnosisSheet.drivetrain.chainWearPercent?.toString() ?? 'empty'}',
-                      ),
-                      initialValue: diagnosisSheet.drivetrain.chainWearPercent
-                          ?.toString(),
-                      decoration: const InputDecoration(
-                        labelText: 'Desgaste cadena (%)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.straighten_outlined),
-                      ),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (value) {
-                        final parsed = _parseNullableDouble(value);
-                        _updateCurrentDiagnosisSheet(
-                          (current) => current.copyWith(
-                            drivetrain: current.drivetrain.copyWith(
-                              chainWearPercent: parsed,
-                              clearChainWearPercent: parsed == null,
-                            ),
-                          ),
-                          refresh: false,
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      key: ValueKey(
-                        'diag_cassette_${currentTab.tabId}_${diagnosisSheet.drivetrain.cassetteCondition ?? 'empty'}',
-                      ),
-                      initialValue: diagnosisSheet.drivetrain.cassetteCondition,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado cassette',
-                        border: OutlineInputBorder(),
-                        prefixIcon:
-                            Icon(Icons.settings_input_component_outlined),
-                      ),
-                      onChanged: (value) {
-                        final normalized = _normalizeNullableText(value);
-                        _updateCurrentDiagnosisSheet(
-                          (current) => current.copyWith(
-                            drivetrain: current.drivetrain.copyWith(
-                              cassetteCondition: normalized,
-                              clearCassetteCondition: normalized == null,
-                            ),
-                          ),
-                          refresh: false,
-                        );
-                      },
-                    ),
-                  ),
-                ],
+              _buildStructuredDiagnosisMetaChip(
+                theme,
+                icon: Icons.category_outlined,
+                label: bikeVariant.displayName,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                key: ValueKey(
-                  'diag_drive_notes_${currentTab.tabId}_${diagnosisSheet.drivetrain.notes ?? 'empty'}',
+              if (brakeType != null && brakeType.isNotEmpty)
+                _buildStructuredDiagnosisMetaChip(
+                  theme,
+                  icon: Icons.disc_full,
+                  label: 'Freno ${_formatBrakeType(brakeType)}',
                 ),
-                initialValue: diagnosisSheet.drivetrain.notes,
-                decoration: const InputDecoration(
-                  labelText: 'Notas transmisión',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
+              if (currentTab.bike?.wheelSize?.isNotEmpty == true)
+                _buildStructuredDiagnosisMetaChip(
+                  theme,
+                  icon: Icons.circle_outlined,
+                  label: 'Aro ${currentTab.bike!.wheelSize!}',
                 ),
-                maxLines: 3,
-                onChanged: (value) {
-                  final normalized = _normalizeNullableText(value);
-                  _updateCurrentDiagnosisSheet(
-                    (current) => current.copyWith(
-                      drivetrain: current.drivetrain.copyWith(
-                        notes: normalized,
-                        clearNotes: normalized == null,
-                      ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStructuredDiagnosisPin(
+    ThemeData theme, {
+    required _StructuredDiagnosisSystemSpec spec,
+    required BikeSystemOverallStatus status,
+    required bool isSelected,
+    required bool labelRight,
+    required VoidCallback onTap,
+  }) {
+    final tint = _diagnosisStatusColor(theme, status);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              if (isSelected)
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: tint.withValues(alpha: 0.18),
+                    border: Border.all(
+                      color: tint.withValues(alpha: 0.65),
+                      width: 1.5,
                     ),
-                    refresh: false,
-                  );
-                },
+                    boxShadow: [
+                      BoxShadow(
+                        color: tint.withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tint,
+                  boxShadow: [
+                    BoxShadow(
+                      color: tint.withValues(alpha: 0.45),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: labelRight ? 20 : null,
+                right: labelRight ? null : 20,
+                top: 2,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isSelected
+                          ? tint.withValues(alpha: 0.75)
+                          : theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(spec.icon, size: 14, color: tint),
+                      const SizedBox(width: 6),
+                      Text(
+                        spec.label,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        _buildDiagnosisSystemCard(
+      ),
+    );
+  }
+
+  Widget _buildStructuredDiagnosisMetaChip(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatBrakeType(String rawValue) {
+    switch (rawValue) {
+      case 'rim':
+        return 'llanta';
+      case 'mechanical_disc':
+        return 'disco mecánico';
+      case 'hydraulic_disc':
+        return 'disco hidráulico';
+      default:
+        return rawValue;
+    }
+  }
+
+  Widget _buildStructuredDiagnosisInspectorPanel(
+    ThemeData theme, {
+    required _BikeTabData currentTab,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required _StructuredDiagnosisSystemSpec activeSpec,
+    required String? brakeType,
+  }) {
+    switch (activeSpec.systemKey) {
+      case 'front_brake':
+        return _buildDiagnosisSystemCard(
           theme,
-          title: 'Freno delantero',
-          subtitle: 'Desgaste de pastillas, rotor y condición general.',
+          title: activeSpec.label,
+          subtitle: activeSpec.subtitle,
           status: diagnosisSheet.frontBrake.overallStatus,
           statusTint: _diagnosisStatusColor(
             theme,
@@ -4337,17 +4646,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             brakeSheet: diagnosisSheet.frontBrake,
             prefix: 'front',
             title: 'delantero',
+            showRotorThickness: brakeType != 'rim',
+            helperText: brakeType == 'rim'
+                ? 'La ficha técnica upstream marca esta bicicleta como freno de llanta, por eso no se solicita grosor de rotor.'
+                : null,
             update: (sheet) => _updateCurrentDiagnosisSheet(
               (current) => current.copyWith(frontBrake: sheet),
               refresh: false,
             ),
           ),
-        ),
-        const SizedBox(height: 14),
-        _buildDiagnosisSystemCard(
+        );
+      case 'rear_brake':
+        return _buildDiagnosisSystemCard(
           theme,
-          title: 'Freno trasero',
-          subtitle: 'Registro independiente del conjunto trasero.',
+          title: activeSpec.label,
+          subtitle: activeSpec.subtitle,
           status: diagnosisSheet.rearBrake.overallStatus,
           statusTint: _diagnosisStatusColor(
             theme,
@@ -4363,11 +4676,127 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             brakeSheet: diagnosisSheet.rearBrake,
             prefix: 'rear',
             title: 'trasero',
+            showRotorThickness: brakeType != 'rim',
+            helperText: brakeType == 'rim'
+                ? 'La ficha técnica upstream marca esta bicicleta como freno de llanta, por eso no se solicita grosor de rotor.'
+                : null,
             update: (sheet) => _updateCurrentDiagnosisSheet(
               (current) => current.copyWith(rearBrake: sheet),
               refresh: false,
             ),
           ),
+        );
+      case 'drivetrain':
+      default:
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.subtitle,
+          status: diagnosisSheet.drivetrain.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.drivetrain.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              drivetrain: current.drivetrain.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildDrivetrainDiagnosisFields(
+            currentTab,
+            drivetrainSheet: diagnosisSheet.drivetrain,
+          ),
+        );
+    }
+  }
+
+  Widget _buildDrivetrainDiagnosisFields(
+    _BikeTabData currentTab, {
+    required DrivetrainDiagnosisSheet drivetrainSheet,
+  }) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                  'diag_chain_wear_${currentTab.tabId}_${drivetrainSheet.chainWearPercent?.toString() ?? 'empty'}',
+                ),
+                initialValue: drivetrainSheet.chainWearPercent?.toString(),
+                decoration: const InputDecoration(
+                  labelText: 'Desgaste cadena (%)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.straighten_outlined),
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) {
+                  final parsed = _parseNullableDouble(value);
+                  _updateCurrentDiagnosisSheet(
+                    (current) => current.copyWith(
+                      drivetrain: current.drivetrain.copyWith(
+                        chainWearPercent: parsed,
+                        clearChainWearPercent: parsed == null,
+                      ),
+                    ),
+                    refresh: false,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                  'diag_cassette_${currentTab.tabId}_${drivetrainSheet.cassetteCondition ?? 'empty'}',
+                ),
+                initialValue: drivetrainSheet.cassetteCondition,
+                decoration: const InputDecoration(
+                  labelText: 'Estado cassette',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.settings_input_component_outlined),
+                ),
+                onChanged: (value) {
+                  final normalized = _normalizeNullableText(value);
+                  _updateCurrentDiagnosisSheet(
+                    (current) => current.copyWith(
+                      drivetrain: current.drivetrain.copyWith(
+                        cassetteCondition: normalized,
+                        clearCassetteCondition: normalized == null,
+                      ),
+                    ),
+                    refresh: false,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: ValueKey(
+            'diag_drive_notes_${currentTab.tabId}_${drivetrainSheet.notes ?? 'empty'}',
+          ),
+          initialValue: drivetrainSheet.notes,
+          decoration: const InputDecoration(
+            labelText: 'Notas transmisión',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            _updateCurrentDiagnosisSheet(
+              (current) => current.copyWith(
+                drivetrain: current.drivetrain.copyWith(
+                  notes: normalized,
+                  clearNotes: normalized == null,
+                ),
+              ),
+              refresh: false,
+            );
+          },
         ),
       ],
     );
@@ -4464,6 +4893,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     required BrakeDiagnosisSheet brakeSheet,
     required String prefix,
     required String title,
+    bool showRotorThickness = true,
+    String? helperText,
     required ValueChanged<BrakeDiagnosisSheet> update,
   }) {
     return Column(
@@ -4494,33 +4925,74 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 },
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextFormField(
-                key: ValueKey(
-                  'diag_${prefix}_rotor_${currentTab.tabId}_${brakeSheet.rotorThicknessMm?.toString() ?? 'empty'}',
+            if (showRotorThickness) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey(
+                    'diag_${prefix}_rotor_${currentTab.tabId}_${brakeSheet.rotorThicknessMm?.toString() ?? 'empty'}',
+                  ),
+                  initialValue: brakeSheet.rotorThicknessMm?.toString(),
+                  decoration: InputDecoration(
+                    labelText: 'Grosor rotor $title (mm)',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.straighten_outlined),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    final parsed = _parseNullableDouble(value);
+                    update(
+                      brakeSheet.copyWith(
+                        rotorThicknessMm: parsed,
+                        clearRotorThicknessMm: parsed == null,
+                      ),
+                    );
+                  },
                 ),
-                initialValue: brakeSheet.rotorThicknessMm?.toString(),
-                decoration: InputDecoration(
-                  labelText: 'Grosor rotor $title (mm)',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.straighten_outlined),
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (value) {
-                  final parsed = _parseNullableDouble(value);
-                  update(
-                    brakeSheet.copyWith(
-                      rotorThicknessMm: parsed,
-                      clearRotorThicknessMm: parsed == null,
-                    ),
-                  );
-                },
               ),
-            ),
+            ],
           ],
         ),
+        if (helperText != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .secondaryContainer
+                  .withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .secondary
+                    .withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    helperText,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         TextFormField(
           key: ValueKey(

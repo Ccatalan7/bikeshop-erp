@@ -43,6 +43,7 @@ DateTime? _parseDateNullable(dynamic value) {
 enum BikeType {
   road,
   mountain,
+  mountainHardtail,
   hybrid,
   electric,
   bmx,
@@ -57,6 +58,8 @@ enum BikeType {
         return 'Ruta';
       case BikeType.mountain:
         return 'Montaña';
+      case BikeType.mountainHardtail:
+        return 'MTB hardtail';
       case BikeType.hybrid:
         return 'Híbrida';
       case BikeType.electric:
@@ -71,6 +74,29 @@ enum BikeType {
         return 'Gravel';
       case BikeType.other:
         return 'Otra';
+    }
+  }
+
+  String get dbValue {
+    switch (this) {
+      case BikeType.mountainHardtail:
+        return 'mountain_hardtail';
+      default:
+        return name;
+    }
+  }
+
+  static BikeType? fromDbValue(String? value) {
+    if (value == null || value.isEmpty) return null;
+
+    switch (value) {
+      case 'mountain_hardtail':
+        return BikeType.mountainHardtail;
+      default:
+        return BikeType.values.firstWhere(
+          (type) => type.name == value,
+          orElse: () => BikeType.other,
+        );
     }
   }
 }
@@ -150,12 +176,7 @@ class Bike {
       color: json['color'] as String?,
       frameSize: json['frame_size'] as String?,
       wheelSize: json['wheel_size'] as String?,
-      bikeType: json['bike_type'] != null
-          ? BikeType.values.firstWhere(
-              (e) => e.toString().split('.').last == json['bike_type'],
-              orElse: () => BikeType.other,
-            )
-          : null,
+      bikeType: BikeType.fromDbValue(json['bike_type']?.toString()),
       frontHubSpacingMm: json['front_hub_spacing_mm'] != null
           ? double.tryParse(json['front_hub_spacing_mm'].toString())
           : null,
@@ -195,7 +216,7 @@ class Bike {
       'color': color,
       'frame_size': frameSize,
       'wheel_size': wheelSize,
-      'bike_type': bikeType?.toString().split('.').last,
+      'bike_type': bikeType?.dbValue,
       'front_hub_spacing_mm': frontHubSpacingMm,
       'rear_hub_spacing_mm': rearHubSpacingMm,
       'spoke_count': spokeCount,

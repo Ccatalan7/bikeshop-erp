@@ -8,36 +8,32 @@ part of 'bike_record_panel.dart';
 class _PinDef {
   final String systemKey;
   final String label;
-  final Offset position; // fractional (0-1, 0-1), image is 1:1 aspect
-  // Which side to show the label pill (true = right, false = left)
-  final bool labelRight;
 
   const _PinDef({
     required this.systemKey,
     required this.label,
-    required this.position,
-    this.labelRight = true,
   });
 }
 
 const _kPins = [
-  _PinDef(systemKey: 'cockpit',        label: 'Cockpit',       position: Offset(0.65, 0.22), labelRight: true),
-  _PinDef(systemKey: 'suspension',     label: 'Suspension',    position: Offset(0.72, 0.38), labelRight: true),
-  _PinDef(systemKey: 'brakes_front',   label: 'Freno Del.',    position: Offset(0.81, 0.55), labelRight: true),
-  _PinDef(systemKey: 'wheels',         label: 'Ruedas',        position: Offset(0.73, 0.68), labelRight: true),
-  _PinDef(systemKey: 'drivetrain',     label: 'Transmisión',   position: Offset(0.39, 0.56), labelRight: false),
-  _PinDef(systemKey: 'brakes_rear',    label: 'Freno Tras.',   position: Offset(0.22, 0.62), labelRight: false),
+  _PinDef(systemKey: 'cockpit', label: 'Cockpit'),
+  _PinDef(systemKey: 'suspension', label: 'Suspensión'),
+  _PinDef(systemKey: 'front_brake', label: 'Freno Del.'),
+  _PinDef(systemKey: 'wheels', label: 'Ruedas'),
+  _PinDef(systemKey: 'drivetrain', label: 'Transmisión'),
+  _PinDef(systemKey: 'rear_brake', label: 'Freno Tras.'),
 ];
 
 // ---------------------------------------------------------------------------
 
 class _InteractiveVectorBike extends StatefulWidget {
+  final Bike bike;
   final _BikeRecordHistoryData history;
   final String? activeSystemKey;
   final ValueChanged<String> onSystemSelected;
 
   const _InteractiveVectorBike({
-    super.key,
+    required this.bike,
     required this.history,
     this.activeSystemKey,
     required this.onSystemSelected,
@@ -89,7 +85,9 @@ class _InteractiveVectorBikeState extends State<_InteractiveVectorBike>
   }
 
   _BikeDiagnosisSystemView? _systemFor(String key) =>
-      widget.history.diagnosisSystems.where((s) => s.systemKey == key).firstOrNull;
+      widget.history.diagnosisSystems
+          .where((s) => s.systemKey == key)
+          .firstOrNull;
 
   @override
   Widget build(BuildContext context) {
@@ -98,96 +96,109 @@ class _InteractiveVectorBikeState extends State<_InteractiveVectorBike>
     // These are intentionally decoupled: hover ≠ selection.
     final selectedKey = widget.activeSystemKey;
     final hoveredSystem = _hoveredKey != null ? _systemFor(_hoveredKey!) : null;
+    final variant = resolveBikeDiagramVariant(
+      bike: widget.bike,
+    );
+    final hoveredPlacement = _hoveredKey == null
+        ? null
+        : resolveBikeDiagramPinPlacement(
+            variant: variant,
+            systemKey: _hoveredKey!,
+          );
 
     return LayoutBuilder(
       builder: (context, constraints) {
-          final imgSize = math.min(constraints.maxWidth, constraints.maxHeight);
-          final imgOffsetX = (constraints.maxWidth - imgSize) / 2;
-          final imgOffsetY = (constraints.maxHeight - imgSize) / 2;
+        final imgSize = math.min(constraints.maxWidth, constraints.maxHeight);
+        final imgOffsetX = (constraints.maxWidth - imgSize) / 2;
+        final imgOffsetY = (constraints.maxHeight - imgSize) / 2;
 
-          return Stack(
-            children: [
+        return Stack(
+          children: [
+            // ── Bike image ────────────────────────────────────────────────
+            Positioned(
+              left: imgOffsetX,
+              top: imgOffsetY,
+              width: imgSize,
+              height: imgSize,
+              child: BikeDiagramIllustration(variant: variant),
+            ),
 
-              // ── Bike image ────────────────────────────────────────────────
-              Positioned(
-                left: imgOffsetX,
-                top: imgOffsetY,
-                width: imgSize,
-                height: imgSize,
-                child: Image.asset(
-                  'assets/images/mtb_diagnostic_bg.png',
-                  fit: BoxFit.contain,
+            // ── Annotation pins ───────────────────────────────────────────
+            ..._kPins.map((pin) {
+              final placement = resolveBikeDiagramPinPlacement(
+                variant: variant,
+                systemKey: pin.systemKey,
+              );
+              if (placement == null) {
+                return const SizedBox.shrink();
+              }
+              final color = _pinColor(pin.systemKey);
+              final isHovered = _hoveredKey == pin.systemKey;
+              final isSelected = selectedKey == pin.systemKey;
+
+              final px = imgOffsetX + placement.position.dx * imgSize;
+              final py = imgOffsetY + placement.position.dy * imgSize;
+
+              return Positioned(
+                left: px - 12,
+                top: py - 12,
+                child: _AnnotationPin(
+                  label: pin.label,
+                  color: color,
+                  pulseAnim: _pulseAnim,
+                  isHovered: isHovered,
+                  isSelected: isSelected,
+                  labelRight: placement.labelRight,
+                  onHover: (v) =>
+                      setState(() => _hoveredKey = v ? pin.systemKey : null),
+                  onTap: () => widget.onSystemSelected(pin.systemKey),
                 ),
+              );
+            }),
+
+            // ── Hover popup card (only visible while hovering) ────────────
+            if (hoveredSystem != null && hoveredPlacement != null)
+              _DiagnosticPopupCard(
+                system: hoveredSystem,
+                color: _pinColor(_hoveredKey!),
+                constraints: constraints,
+                placement: hoveredPlacement,
+                imgOffsetX: imgOffsetX,
+                imgOffsetY: imgOffsetY,
+                imgSize: imgSize,
               ),
 
-              // ── Annotation pins ───────────────────────────────────────────
-              ..._kPins.map((pin) {
-                final color = _pinColor(pin.systemKey);
-                final isHovered = _hoveredKey == pin.systemKey;
-                final isSelected = selectedKey == pin.systemKey;
-
-                final px = imgOffsetX + pin.position.dx * imgSize;
-                final py = imgOffsetY + pin.position.dy * imgSize;
-
-                return Positioned(
-                  left: px - 12,
-                  top: py - 12,
-                  child: _AnnotationPin(
-                    label: pin.label,
-                    color: color,
-                    pulseAnim: _pulseAnim,
-                    isHovered: isHovered,
-                    isSelected: isSelected,
-                    labelRight: pin.labelRight,
-                    onHover: (v) => setState(() => _hoveredKey = v ? pin.systemKey : null),
-                    onTap: () => widget.onSystemSelected(pin.systemKey),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0x18FFFFFF), Colors.transparent],
                   ),
-                );
-              }),
-
-              // ── Hover popup card (only visible while hovering) ────────────
-              if (hoveredSystem != null && _hoveredKey != null)
-                _DiagnosticPopupCard(
-                  system: hoveredSystem,
-                  color: _pinColor(_hoveredKey!),
-                  constraints: constraints,
-                  pin: _kPins.firstWhere((p) => p.systemKey == _hoveredKey,
-                      orElse: () => _kPins.first),
-                  imgOffsetX: imgOffsetX,
-                  imgOffsetY: imgOffsetY,
-                  imgSize: imgSize,
                 ),
-
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Color(0x18FFFFFF), Colors.transparent],
-                    ),
+                child: Text(
+                  selectedKey == null
+                      ? 'Pasa el cursor para previsualizar · Haz clic para fijar'
+                      : 'Haz clic en otro componente para cambiar la vista',
+                  style: const TextStyle(
+                    color: Color(0xFFB0BEC5),
+                    fontSize: 10,
+                    letterSpacing: 0.3,
                   ),
-                  child: Text(
-                    selectedKey == null
-                        ? 'Pasa el cursor para previsualizar · Haz clic para fijar'
-                        : 'Haz clic en otro componente para cambiar la vista',
-                    style: const TextStyle(
-                      color: Color(0xFFB0BEC5),
-                      fontSize: 10,
-                      letterSpacing: 0.3,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
-            ],
-          );
-        },
-      );
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -242,7 +253,8 @@ class _AnnotationPin extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: color.withValues(alpha: (1 - pulseAnim.value) * 0.8),
+                          color: color.withValues(
+                              alpha: (1 - pulseAnim.value) * 0.8),
                           width: 1.5,
                         ),
                       ),
@@ -255,7 +267,8 @@ class _AnnotationPin extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: color.withValues(alpha: 0.20),
-                        border: Border.all(color: color.withValues(alpha: 0.6), width: 1.5),
+                        border: Border.all(
+                            color: color.withValues(alpha: 0.6), width: 1.5),
                         boxShadow: [
                           BoxShadow(
                             color: color.withValues(alpha: 0.5),
@@ -300,17 +313,29 @@ class _AnnotationPin extends StatelessWidget {
                     right: labelRight ? null : 18,
                     top: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: active ? color.withValues(alpha: 0.7) : const Color(0xFFCBD5E1),
+                          color: active
+                              ? color.withValues(alpha: 0.7)
+                              : const Color(0xFFCBD5E1),
                           width: 1,
                         ),
                         boxShadow: active
-                            ? [BoxShadow(color: color.withValues(alpha: 0.20), blurRadius: 8)]
-                            : [const BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 1))],
+                            ? [
+                                BoxShadow(
+                                    color: color.withValues(alpha: 0.20),
+                                    blurRadius: 8)
+                              ]
+                            : [
+                                const BoxShadow(
+                                    color: Color(0x14000000),
+                                    blurRadius: 4,
+                                    offset: Offset(0, 1))
+                              ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -327,9 +352,12 @@ class _AnnotationPin extends StatelessWidget {
                           Text(
                             label,
                             style: TextStyle(
-                              color: active ? const Color(0xFF1E293B) : const Color(0xFF475569),
+                              color: active
+                                  ? const Color(0xFF1E293B)
+                                  : const Color(0xFF475569),
                               fontSize: 10,
-                              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight:
+                                  active ? FontWeight.w700 : FontWeight.w500,
                               letterSpacing: 0.2,
                             ),
                           ),
@@ -354,7 +382,7 @@ class _DiagnosticPopupCard extends StatelessWidget {
   final _BikeDiagnosisSystemView system;
   final Color color;
   final BoxConstraints constraints;
-  final _PinDef pin;
+  final BikeDiagramPinPlacement placement;
   final double imgOffsetX;
   final double imgOffsetY;
   final double imgSize;
@@ -363,7 +391,7 @@ class _DiagnosticPopupCard extends StatelessWidget {
     required this.system,
     required this.color,
     required this.constraints,
-    required this.pin,
+    required this.placement,
     required this.imgOffsetX,
     required this.imgOffsetY,
     required this.imgSize,
@@ -374,10 +402,10 @@ class _DiagnosticPopupCard extends StatelessWidget {
     const cardW = 270.0;
     const cardH = 220.0;
 
-    final pinX = imgOffsetX + pin.position.dx * imgSize;
-    final pinY = imgOffsetY + pin.position.dy * imgSize;
+    final pinX = imgOffsetX + placement.position.dx * imgSize;
+    final pinY = imgOffsetY + placement.position.dy * imgSize;
 
-    double left = pin.labelRight ? pinX + 32 : pinX - cardW - 32;
+    double left = placement.labelRight ? pinX + 32 : pinX - cardW - 32;
     double top = pinY - 60;
 
     // Keep card within bounds
@@ -401,7 +429,8 @@ class _DiagnosticPopupCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.96),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
+                border:
+                    Border.all(color: color.withValues(alpha: 0.25), width: 1),
                 boxShadow: [
                   BoxShadow(
                     color: color.withValues(alpha: 0.10),
@@ -434,11 +463,13 @@ class _DiagnosticPopupCard extends StatelessWidget {
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: color.withValues(alpha: 0.35)),
+                          border:
+                              Border.all(color: color.withValues(alpha: 0.35)),
                         ),
                         child: Text(
                           system.overallStatus.displayName,

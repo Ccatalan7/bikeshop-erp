@@ -12353,7 +12353,7 @@ create table if not exists bikes (
   color text,
   frame_size text,
   wheel_size text,
-  bike_type text check (bike_type in ('road','mountain','hybrid','electric','bmx','folding','cruiser','gravel','other')),
+  bike_type text check (bike_type in ('road','mountain','mountain_hardtail','hybrid','electric','bmx','folding','cruiser','gravel','other')),
   front_hub_spacing_mm numeric(5,1), -- Front OLD: 100mm (road), 110mm (MTB Boost), etc.
   rear_hub_spacing_mm numeric(5,1), -- Rear OLD: 130mm, 135mm, 142mm, 148mm (Boost), etc.
   spoke_count integer check (spoke_count in (24, 28, 32, 36, 40)), -- Number of spokes per wheel
@@ -13121,6 +13121,11 @@ begin
     (p_tenant_id, 'Componente / Pieza suelta', 'General',     'build',          10)
   on conflict (tenant_id, name) do nothing;
 end; $$;
+
+alter table bikes drop constraint if exists bikes_bike_type_check;
+alter table bikes add constraint bikes_bike_type_check check (
+  bike_type in ('road','mountain','mountain_hardtail','hybrid','electric','bmx','folding','cruiser','gravel','other')
+);
 grant execute on function public.seed_job_subjects_for_tenant(uuid) to authenticated;
 
 -- seed existing tenants
