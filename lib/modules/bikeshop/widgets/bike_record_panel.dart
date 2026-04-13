@@ -795,16 +795,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF161E29), // Slightly lighter than the workbench
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -820,7 +814,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       'Memoria técnica',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -829,7 +823,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           ? 'Última actualización: ${DateFormat('dd/MM/yyyy').format(latestDate)}'
                           : 'Sin actualizaciones registradas.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade400,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -838,9 +832,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               if (history.latestMemoryJobNumber != null)
                 _buildReferencePill(
                   label: history.latestMemoryJobNumber!,
-                  backgroundColor: const Color(0xFF1C2C45),
-                  borderColor: const Color(0xFF263C5D),
-                  foregroundColor: const Color(0xFF4C8DFF),
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  borderColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  foregroundColor: theme.colorScheme.primary,
                 ),
             ],
           ),
@@ -851,9 +845,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             children: [
               _buildReferencePill(
                 label: '${history.diagnosisSystems.length} sistemas',
-                backgroundColor: Colors.white.withValues(alpha: 0.1),
-                borderColor: Colors.transparent,
-                foregroundColor: Colors.white,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                borderColor: theme.colorScheme.outlineVariant,
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
               ),
               if (history.interventionCount > 0)
                 _buildReferencePill(
@@ -889,9 +883,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               if (selectedSystem != null)
                 _buildReferencePill(
                   label: 'Activo: ${selectedSystem.displayName}',
-                  backgroundColor: const Color(0xFF1C2C45),
-                  borderColor: const Color(0xFF263C5D),
-                  foregroundColor: const Color(0xFF93C5FD),
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  borderColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  foregroundColor: theme.colorScheme.primary,
                 ),
             ],
           ),
@@ -905,7 +899,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               'Narrativa original de la orden',
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Colors.white70,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -913,14 +907,17 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.03),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
               child: Text(
                 history.overviewNarrativeObservation!.summary!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade400,
+                  color: theme.colorScheme.onSurfaceVariant,
                   height: 1.45,
                 ),
               ),
@@ -940,9 +937,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF161E29),
+          color: theme.colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -951,14 +949,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               'Selecciona un sistema',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: theme.colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Haz clic sobre un sistema del esquema para ver diagnóstico, trabajos realizados y componentes que quedaron instalados.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey.shade400,
+                color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
               ),
             ),
@@ -972,16 +970,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF161E29),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1013,7 +1005,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                             system.displayName,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -1029,7 +1021,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     Text(
                       system.subheadline,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade400,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1044,14 +1036,17 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.03),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
               child: Text(
                 system.primaryNarrative!,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
+                  color: theme.colorScheme.onSurfaceVariant,
                   height: 1.5,
                 ),
               ),
@@ -1102,7 +1097,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       label,
       style: theme.textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
-        color: Colors.white70,
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -1188,9 +1183,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2330),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1202,16 +1198,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   observation.title,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
               if (jobNumber != null && jobNumber.isNotEmpty)
                 _buildReferencePill(
                   label: jobNumber,
-                  backgroundColor: Colors.white.withValues(alpha: 0.1),
-                  borderColor: Colors.transparent,
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
             ],
           ),
@@ -1221,7 +1217,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 ? observation.summary!
                 : observation.statusValue ?? 'Sin resumen detallado.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade400,
+              color: theme.colorScheme.onSurfaceVariant,
               height: 1.45,
             ),
           ),
@@ -1231,7 +1227,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               Text(
                 DateFormat('dd/MM/yyyy').format(observation.observedAt),
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade500,
+                  color: theme.colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1264,9 +1260,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2330),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1284,16 +1281,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               if (location != BikeMemoryLocation.none)
                 _buildReferencePill(
                   label: location.displayName,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
               if (sourceLabel != null && sourceLabel.isNotEmpty)
                 _buildReferencePill(
                   label: sourceLabel,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
             ],
           ),
@@ -1303,7 +1300,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             Text(
               system.currentStateSummary!,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
+                color: theme.colorScheme.onSurface,
                 height: 1.45,
               ),
             ),
@@ -1313,7 +1310,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             Text(
               'Actualizado el ${DateFormat('dd/MM/yyyy').format(updatedAt)}',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.grey.shade500,
+                color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1337,9 +1334,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2330),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1352,7 +1350,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   intervention.title,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -1372,7 +1370,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             Text(
               intervention.summary!,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.grey.shade400,
+                color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
               ),
             ),
@@ -1385,16 +1383,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               _buildReferencePill(
                 label:
                     DateFormat('dd/MM/yyyy').format(intervention.performedAt),
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                borderColor: Colors.white.withValues(alpha: 0.08),
-                foregroundColor: Colors.white,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                borderColor: theme.colorScheme.outlineVariant,
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
               ),
               if (intervention.location != BikeMemoryLocation.none)
                 _buildReferencePill(
                   label: intervention.location.displayName,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
               if (intervention.componentSlotKey != null &&
                   intervention.componentSlotKey!.isNotEmpty)
@@ -1402,16 +1400,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   label: _formatComponentSlotLabel(
                     intervention.componentSlotKey,
                   ),
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
               if (jobNumber != null && jobNumber.isNotEmpty)
                 _buildReferencePill(
                   label: jobNumber,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
             ],
           ),
@@ -1434,9 +1432,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2330),
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1449,7 +1448,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   lifecycle.componentLabel,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -1469,30 +1468,30 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               if (lifecycle.componentSlotKey.isNotEmpty)
                 _buildReferencePill(
                   label: _formatComponentSlotLabel(lifecycle.componentSlotKey),
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
               if (lifecycle.location != BikeMemoryLocation.none)
                 _buildReferencePill(
                   label: lifecycle.location.displayName,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
               _buildReferencePill(
                 label:
                     'Instalado ${DateFormat('dd/MM/yyyy').format(lifecycle.installedAt)}',
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                borderColor: Colors.white.withValues(alpha: 0.08),
-                foregroundColor: Colors.white,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                borderColor: theme.colorScheme.outlineVariant,
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
               ),
               if (jobNumber != null && jobNumber.isNotEmpty)
                 _buildReferencePill(
                   label: jobNumber,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  borderColor: Colors.white.withValues(alpha: 0.08),
-                  foregroundColor: Colors.white,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  borderColor: theme.colorScheme.outlineVariant,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
                 ),
             ],
           ),
@@ -1502,7 +1501,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             Text(
               lifecycle.notes!,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.grey.shade400,
+                color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
               ),
             ),
@@ -1521,9 +1520,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Theme(
         data: theme.copyWith(dividerColor: Colors.transparent),
@@ -1535,7 +1535,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             expanded ? 'Historial de la bicicleta' : 'Eventos legacy',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
-              color: Colors.black87,
+              color: theme.colorScheme.onSurface,
             ),
           ),
           subtitle: Text(

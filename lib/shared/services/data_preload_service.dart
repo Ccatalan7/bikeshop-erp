@@ -11,6 +11,7 @@ import '../../modules/sales/services/sales_service.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/hr/services/hr_service.dart';
 import '../../modules/tasks/services/task_service.dart';
+import 'inventory_service.dart' as shared_inventory;
 
 /// DataPreloadService - Loads critical data immediately after authentication
 ///
@@ -40,6 +41,7 @@ class DataPreloadService extends ChangeNotifier {
   BikeshopService? _bikeshopService;
   CustomerService? _customerService;
   InventoryService? _inventoryService;
+  shared_inventory.InventoryService? _sharedInventoryService;
   CategoryService? _categoryService;
   BrandService? _brandService;
   SalesService? _salesService;
@@ -64,6 +66,7 @@ class DataPreloadService extends ChangeNotifier {
     required BikeshopService bikeshopService,
     required CustomerService customerService,
     required InventoryService inventoryService,
+    shared_inventory.InventoryService? sharedInventoryService,
     required CategoryService categoryService,
     required BrandService brandService,
     SalesService? salesService,
@@ -92,6 +95,7 @@ class DataPreloadService extends ChangeNotifier {
     _bikeshopService = bikeshopService;
     _customerService = customerService;
     _inventoryService = inventoryService;
+    _sharedInventoryService = sharedInventoryService;
     _categoryService = categoryService;
     _brandService = brandService;
     _salesService = salesService;
@@ -161,6 +165,7 @@ class DataPreloadService extends ChangeNotifier {
         _preloadCustomers(),
         // Inventory
         _preloadProducts(),
+        _preloadSharedProducts(),
         _preloadCategories(),
         _preloadBrands(),
         // Sales
@@ -252,6 +257,20 @@ class DataPreloadService extends ChangeNotifier {
     } catch (e) {
       if (!kReleaseMode) {
         debugPrint('⚠️ [Preload] Products failed: $e');
+      }
+    }
+  }
+
+  Future<void> _preloadSharedProducts() async {
+    try {
+      final products = await _sharedInventoryService?.getProducts();
+      if (!kReleaseMode) {
+        debugPrint(
+            '📦 [Preload] Shared POS Products: ${products?.length ?? 0} items');
+      }
+    } catch (e) {
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [Preload] Shared POS Products failed: $e');
       }
     }
   }

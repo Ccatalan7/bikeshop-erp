@@ -592,6 +592,7 @@ class VinabikeApp extends StatelessWidget {
               dataPreloadService.initialize(
                 bikeshopService: context.read<BikeshopService>(),
                 customerService: context.read<CustomerService>(),
+                sharedInventoryService: context.read<InventoryService>(),
                 inventoryService:
                     context.read<module_inventory.InventoryService>(),
                 categoryService: context.read<CategoryService>(),

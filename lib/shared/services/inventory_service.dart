@@ -12,12 +12,20 @@ class InventoryService extends ChangeNotifier {
 
   bool _isLoading = false;
   bool _hasLoaded = false;
+  Future<void>? _loadProductsFuture;
 
   RealtimeChannel? _stockMovementsChannel;
 
   InventoryService({DatabaseService? db}) : _db = db {
     // Don't await - fire and forget to avoid blocking constructor
     _setupStockMovementsRealtime();
+  }
+
+  @override
+  void notifyListeners() {
+    debugPrint(
+        '🔔 [InventoryService] notifyListeners() — ${_products.length} products, isLoading=$_isLoading');
+    super.notifyListeners();
   }
 
   List<Product> get products => List.unmodifiable(_products);
@@ -380,25 +388,85 @@ class InventoryService extends ChangeNotifier {
       return;
     }
 
-    if (_isLoading && !force) {
+    final activeLoad = _loadProductsFuture;
+    if (activeLoad != null) {
+      await activeLoad;
       return;
     }
 
+    final loadFuture = _loadProductsProgressively(force: force);
+    _loadProductsFuture = loadFuture;
+
+    try {
+      await loadFuture;
+    } finally {
+      if (identical(_loadProductsFuture, loadFuture)) {
+        _loadProductsFuture = null;
+      }
+    }
+  }
+
+  Future<void> _loadProductsProgressively({bool force = false}) async {
     _isLoading = true;
-    if (!_hasLoaded) {
+    if (!_hasLoaded && _products.isEmpty) {
       notifyListeners();
     }
 
     try {
-      // Fetch ALL products (uses pagination internally to bypass 1000 row limit)
-      final rawProducts = await _db.select('products', fetchAll: true);
-      final products = rawProducts.map(_productFromMap).toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      const batchSize = 80;
+      const batchesPerNotify = 4;
+      var offset = 0;
+      var pendingBatches = 0;
+      var notifiedDuringLoad = false;
 
-      _products
-        ..clear()
-        ..addAll(products);
+      while (true) {
+        final rawBatch = await _db!.selectWithPagination(
+          'products',
+          from: offset,
+          to: offset + batchSize - 1,
+          orderBy: 'name',
+        );
+
+        if (rawBatch.isEmpty) {
+          break;
+        }
+
+        final mappedBatch = rawBatch.map(_productFromMap).toList();
+
+        if (offset == 0) {
+          _products
+            ..clear()
+            ..addAll(mappedBatch);
+          notifyListeners();
+          notifiedDuringLoad = true;
+          pendingBatches = 0;
+        } else {
+          _products.addAll(mappedBatch);
+          pendingBatches += 1;
+
+          if (pendingBatches >= batchesPerNotify) {
+            notifyListeners();
+            notifiedDuringLoad = true;
+            pendingBatches = 0;
+          }
+        }
+
+        if (rawBatch.length < batchSize) {
+          break;
+        }
+
+        offset += batchSize;
+      }
+
+      if (force && _products.isEmpty) {
+        _products.clear();
+      }
+
       _hasLoaded = true;
+
+      if (!notifiedDuringLoad || pendingBatches > 0) {
+        notifyListeners();
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('InventoryService: Error loading products -> $e');

@@ -1,14 +1,16 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-
 import '../../../shared/models/product.dart';
 import '../../../shared/models/customer.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/models/payment_method.dart' as pm;
+import '../../../shared/widgets/branded_loading.dart';
 import '../../crm/services/customer_service.dart';
 import '../../inventory/models/category_models.dart' as inventory_models;
 import '../../inventory/services/category_service.dart';
@@ -19,6 +21,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
+import '../models/pos_cart_item.dart';
 import '../widgets/product_tile.dart';
 import '../models/payment_method.dart' as old_pm; // Old enum-based model
 import '../models/pos_transaction.dart';
@@ -40,6 +43,19 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   ProductType? _selectedProductType;
   StreamSubscription? _scanSubscription;
 
+  // Cart panel width (resizable)
+  static const double _cartMinWidth = 280.0;
+  static const double _cartMaxWidth = 600.0;
+  static const double _cartDefaultWidth = 380.0;
+  double _cartPanelWidth = _cartDefaultWidth;
+  static const String _cartWidthPrefKey = 'pos_cart_panel_width';
+
+  // ── Filtered products cache (never recomputed on cart/customer changes) ─
+  List<Product> _cachedFilteredProducts = const [];
+  bool _inventoryIsLoading = true;
+  bool _inventoryHasLoaded = false;
+  InventoryService? _inventoryServiceRef;
+
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
   final StringBuffer _scanBuffer = StringBuffer();
   Timer? _hwScanTimer;
@@ -51,6 +67,15 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   void initState() {
     super.initState();
     // Load products and payment methods when page loads
+    // Load persisted cart panel width
+    SharedPreferences.getInstance().then((prefs) {
+      final saved = prefs.getDouble(_cartWidthPrefKey);
+      if (saved != null && mounted) {
+        setState(
+            () => _cartPanelWidth = saved.clamp(_cartMinWidth, _cartMaxWidth));
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final inventoryService =
           Provider.of<InventoryService>(context, listen: false);
@@ -59,6 +84,15 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       final categoryService =
           Provider.of<CategoryService>(context, listen: false);
 
+      _inventoryServiceRef = inventoryService;
+      inventoryService.addListener(_onInventoryChanged);
+      // Seed cache from whatever is already preloaded
+      _inventoryIsLoading = inventoryService.isLoading;
+      _inventoryHasLoaded = inventoryService.hasLoaded;
+      _cachedFilteredProducts = _getFilteredProducts(
+        inventoryService.products,
+        categoryMatchers: const <String>{},
+      );
       inventoryService.getProducts();
       paymentMethodService.loadPaymentMethods();
       _loadCategories(categoryService);
@@ -80,6 +114,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
   @override
   void dispose() {
+    _inventoryServiceRef?.removeListener(_onInventoryChanged);
     _searchController.dispose();
     _scanSubscription?.cancel();
     HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
@@ -338,9 +373,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     Set<String> categoryMatchers = const <String>{},
   }) {
     return products.where((product) {
-      final matchesSearch = _searchQuery.isEmpty ||
-          product.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          product.sku.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch =
+          _searchQuery.isEmpty || _matchesTokenSearch(_searchQuery, product);
 
       final categoryKey = _categoryKeyFor(product);
       final normalizedLabel =
@@ -368,50 +402,125 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     }).toList();
   }
 
-  List<_CategoryOption> _getCategoryOptions(List<Product> products) {
-    final Map<String, _CategoryOption> options = {
-      for (final option in _serviceCategoryOptions) option.key: option,
-    };
+  String _normalizeText(String text) {
+    if (text.isEmpty) return text;
 
-    for (final product in products) {
-      final key = _categoryKeyFor(product);
-      final label = _categoryLabelFor(product);
-      final normalizedLabel = _normalizeCategoryName(label);
-      final productCategoryId = product.categoryId?.trim();
-      final categoryDisplayMatcher =
-          _normalizeCategoryName(product.category.displayName);
+    String normalized = text.toLowerCase();
+    normalized = normalized.replaceAll(RegExp(r'[áàäâ]'), 'a');
+    normalized = normalized.replaceAll(RegExp(r'[éèëê]'), 'e');
+    normalized = normalized.replaceAll(RegExp(r'[íìïî]'), 'i');
+    normalized = normalized.replaceAll(RegExp(r'[óòöô]'), 'o');
+    normalized = normalized.replaceAll(RegExp(r'[úùüû]'), 'u');
+    normalized = normalized.replaceAll(RegExp(r'[ñ]'), 'n');
+    normalized = normalized.replaceAll(RegExp(r'[ç]'), 'c');
+    return normalized;
+  }
 
-      final matchers = <String>[
-        if (productCategoryId != null && productCategoryId.isNotEmpty)
-          productCategoryId,
-        if (normalizedLabel != null) normalizedLabel,
-        product.category.name,
-        if (categoryDisplayMatcher != null) categoryDisplayMatcher,
-      ];
+  String _stemSearchTerm(String term) {
+    if (term.length <= 3) return term;
 
-      final existing = options[key];
-      if (existing != null) {
-        options[key] = _CategoryOption(
-          key: existing.key,
-          label: existing.label,
-          matchers: {...existing.matchers, ...matchers},
-        );
-      } else {
-        options[key] = _CategoryOption(
-          key: key,
-          label: label,
-          matchers: matchers,
-        );
+    if (term.endsWith('es')) {
+      if (term == 'mes' || term == 'tres') return term;
+      final beforeEs = term.substring(0, term.length - 2);
+      if (beforeEs.isNotEmpty) {
+        final lastChar = beforeEs[beforeEs.length - 1];
+        if ('ldrn'.contains(lastChar)) return beforeEs;
       }
     }
 
-    final list = options.values.toList()
-      ..sort((a, b) => a.label.compareTo(b.label));
-    return list;
+    if (term.endsWith('s')) {
+      if (term == 'cas' ||
+          term == 'dos' ||
+          term == 'mas' ||
+          term == 'las' ||
+          term == 'los' ||
+          term == 'sus') {
+        return term;
+      }
+      return term.substring(0, term.length - 1);
+    }
+
+    return term;
+  }
+
+  bool _matchesTokenSearch(String query, Product product) {
+    if (query.isEmpty) return true;
+
+    final rawTokens = query.toLowerCase().split(RegExp(r'\s+'));
+    final tokens = rawTokens
+        .map((token) => _stemSearchTerm(_normalizeText(token)))
+        .toList();
+
+    final searchableText = [
+      _normalizeText(product.name),
+      _normalizeText(product.sku),
+      _normalizeText(product.supplierCode ?? ''),
+      _normalizeText(product.brand ?? ''),
+      _normalizeText(product.model ?? ''),
+      _normalizeText(_categoryLabelFor(product)),
+    ].join(' ');
+
+    return tokens.every((token) {
+      if (RegExp(r'^\d+$').hasMatch(token)) {
+        return RegExp('(?:^|\\s|[^0-9])$token(?:\$|\\s|[^0-9])')
+            .hasMatch(searchableText);
+      }
+      return searchableText.contains(token);
+    });
+  }
+
+  bool get _hasActiveProductFilters =>
+      _searchQuery.isNotEmpty ||
+      _selectedCategoryKey != null ||
+      _selectedProductType != null;
+
+  void _onProductSearchChanged(String value) {
+    final svc = _inventoryServiceRef;
+    setState(() {
+      _searchQuery = value.trim();
+      if (svc != null) {
+        _cachedFilteredProducts = _getFilteredProducts(
+          svc.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+      }
+    });
+  }
+
+  void _resetProductFilters() {
+    final svc = _inventoryServiceRef;
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _selectedCategoryKey = null;
+      _selectedCategoryMatchers = const <String>{};
+      _selectedProductType = null;
+      if (svc != null) {
+        _cachedFilteredProducts = _getFilteredProducts(
+          svc.products,
+          categoryMatchers: const <String>{},
+        );
+      }
+    });
+  }
+
+  void _onInventoryChanged() {
+    if (!mounted) return;
+    final svc = _inventoryServiceRef;
+    if (svc == null) return;
+    setState(() {
+      _inventoryIsLoading = svc.isLoading;
+      _inventoryHasLoaded = svc.hasLoaded;
+      _cachedFilteredProducts = _getFilteredProducts(
+        svc.products,
+        categoryMatchers: _selectedCategoryMatchers,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🔴 [POS] _POSDashboardPageState.build() called');
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = screenWidth > 900;
@@ -427,30 +536,71 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                     children: [
                       Expanded(
                         flex: 8,
-                        child: Consumer<POSService>(
-                          builder: (context, posService, child) {
-                            if (posService.isInvoicePaymentMode &&
-                                posService.linkedInvoice != null) {
+                        child: Selector<POSService, (bool, Invoice?)>(
+                          selector: (_, svc) =>
+                              (svc.isInvoicePaymentMode, svc.linkedInvoice),
+                          builder: (context, invoiceState, child) {
+                            debugPrint(
+                                '🟡 [POS] Selector<POSService> builder called (isInvoiceMode=${invoiceState.$1})');
+                            final isInvoiceMode = invoiceState.$1;
+                            final linkedInvoice = invoiceState.$2;
+                            if (isInvoiceMode && linkedInvoice != null) {
                               return _buildInvoiceDetailsView(
-                                  theme, posService.linkedInvoice!);
+                                  theme, linkedInvoice);
                             }
                             return _buildProductPanel(theme);
                           },
                         ),
                       ),
-                      Expanded(
-                        flex: 4,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            border: Border(
-                              left: BorderSide(
-                                color: theme.colorScheme.outlineVariant
-                                    .withValues(alpha: 0.5),
+                      // ── Resizable cart pane ────────────────────────────
+                      // A thin 8px drag strip sits over the left border only.
+                      // The rest of the pane keeps the default cursor.
+                      SizedBox(
+                        width: _cartPanelWidth,
+                        child: Stack(
+                          children: [
+                            // Cart content (full width)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  border: Border(
+                                    left: BorderSide(
+                                      color: theme.colorScheme.outlineVariant
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ),
+                                child: const _CashierPanel(),
                               ),
                             ),
-                          ),
-                          child: const _CashierPanel(),
+                            // 8px drag strip on the left edge only
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 8,
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.resizeColumn,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onHorizontalDragUpdate: (details) {
+                                    setState(() {
+                                      _cartPanelWidth = (_cartPanelWidth -
+                                              details.delta.dx)
+                                          .clamp(_cartMinWidth, _cartMaxWidth);
+                                    });
+                                  },
+                                  onHorizontalDragEnd: (_) {
+                                    SharedPreferences.getInstance().then(
+                                      (prefs) => prefs.setDouble(
+                                          _cartWidthPrefKey, _cartPanelWidth),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -468,6 +618,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   }
 
   Widget _buildProductPanel(ThemeData theme) {
+    debugPrint('🟠 [POS] _buildProductPanel() called');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -485,200 +636,213 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _searchQuery = v),
-                decoration: InputDecoration(
-                  hintText: 'Buscar producto, SKU, código de barras...',
-                  hintStyle: TextStyle(
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.6),
-                    fontSize: 14,
+              Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                   ),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      size: 20, color: theme.colorScheme.onSurfaceVariant),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(Icons.close,
-                              size: 18,
-                              color: theme.colorScheme.onSurfaceVariant),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 11),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.5)),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onProductSearchChanged,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText:
+                        'Buscar por nombre, SKU, marca, modelo o categoría...',
+                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.7),
+                    ),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 12, right: 8),
+                      child: Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    prefixIconConstraints:
+                        const BoxConstraints(minWidth: 0, minHeight: 0),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close_rounded,
+                                size: 18,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            onPressed: _resetProductFilters,
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: InputBorder.none,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.5)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: theme.colorScheme.primary, width: 1.5),
-                  ),
-                  filled: true,
-                  fillColor: theme.colorScheme.surface,
                 ),
               ),
               const SizedBox(height: 10),
-              Consumer<InventoryService>(
-                builder: (context, inventoryService, child) {
-                  final categoryOptions =
-                      _getCategoryOptions(inventoryService.products);
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _FilterChipButton(
-                          label: 'Todos',
-                          isSelected: _selectedCategoryKey == null &&
-                              _selectedProductType == null,
-                          onTap: () => setState(() {
-                            _selectedCategoryKey = null;
-                            _selectedCategoryMatchers = const <String>{};
-                            _selectedProductType = null;
-                          }),
-                        ),
-                        const SizedBox(width: 6),
-                        _FilterChipButton(
-                          label: 'Productos',
-                          icon: Icons.inventory_2_outlined,
-                          isSelected:
-                              _selectedProductType == ProductType.product,
-                          onTap: () => setState(() {
-                            _selectedProductType =
-                                _selectedProductType == ProductType.product
-                                    ? null
-                                    : ProductType.product;
-                          }),
-                        ),
-                        const SizedBox(width: 6),
-                        _FilterChipButton(
-                          label: 'Servicios',
-                          icon: Icons.design_services_outlined,
-                          isSelected:
-                              _selectedProductType == ProductType.service,
-                          onTap: () => setState(() {
-                            _selectedProductType =
-                                _selectedProductType == ProductType.service
-                                    ? null
-                                    : ProductType.service;
-                          }),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Container(
-                            width: 1,
-                            height: 22,
-                            color: theme.colorScheme.outlineVariant
-                                .withValues(alpha: 0.5),
-                          ),
-                        ),
-                        ...categoryOptions.map(
-                          (option) => Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: _FilterChipButton(
-                              label: option.label,
-                              isSelected: _selectedCategoryKey == option.key,
-                              onTap: () => setState(() {
-                                if (_selectedCategoryKey == option.key) {
-                                  _selectedCategoryKey = null;
-                                  _selectedCategoryMatchers =
-                                      const <String>{};
-                                } else {
-                                  _selectedCategoryKey = option.key;
-                                  _selectedCategoryMatchers = option.matchers;
-                                }
-                              }),
+              Builder(
+                builder: (context) {
+                  final categoryOptions = _serviceCategoryOptions;
+                  final selectedCategory = _selectedCategoryKey == null
+                      ? null
+                      : _findCategoryOptionByKey(
+                          categoryOptions, _selectedCategoryKey!);
+
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _SearchableSelectorField<ProductType>(
+                        width: 150,
+                        hint: 'Tipo',
+                        allLabel: 'Tipo: Todos',
+                        value: _selectedProductType,
+                        items: ProductType.values,
+                        labelBuilder: (type) => type.displayName,
+                        onChanged: (value) {
+                          final svc = _inventoryServiceRef;
+                          setState(() {
+                            _selectedProductType = value;
+                            if (svc != null) {
+                              _cachedFilteredProducts = _getFilteredProducts(
+                                svc.products,
+                                categoryMatchers: _selectedCategoryMatchers,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      if (_isLoadingCategories && categoryOptions.isEmpty)
+                        Container(
+                          width: 190,
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant,
                             ),
                           ),
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            height: 2,
+                            child: LinearProgressIndicator(
+                              backgroundColor: Colors.transparent,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        )
+                      else
+                        _SearchableSelectorField<_CategoryOption>(
+                          width: 190,
+                          hint: 'Categoría',
+                          allLabel: 'Categoría: Todas',
+                          value: selectedCategory,
+                          items: categoryOptions,
+                          labelBuilder: (option) => option.label,
+                          onChanged: (value) {
+                            final svc = _inventoryServiceRef;
+                            setState(() {
+                              _selectedCategoryKey = value?.key;
+                              _selectedCategoryMatchers =
+                                  value?.matchers ?? const <String>{};
+                              if (svc != null) {
+                                _cachedFilteredProducts = _getFilteredProducts(
+                                  svc.products,
+                                  categoryMatchers:
+                                      value?.matchers ?? const <String>{},
+                                );
+                              }
+                            });
+                          },
                         ),
-                      ],
-                    ),
+                      if (_hasActiveProductFilters)
+                        TextButton.icon(
+                          onPressed: _resetProductFilters,
+                          icon: const Icon(Icons.close_rounded, size: 14),
+                          label: const Text('Limpiar'),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
             ],
           ),
         ),
-        // ── Product Grid ────────────────────────────────────────────────
+        // ── Product Grid (cached, not rebuilt on cart/customer changes) ──
         Expanded(
-          child: Consumer<InventoryService>(
-            builder: (context, inventoryService, child) {
-              final products = inventoryService.products;
-              final filteredProducts = _getFilteredProducts(
-                products,
-                categoryMatchers: _selectedCategoryMatchers,
-              );
-
-              if (products.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inventory_2_outlined,
-                          size: 72, color: theme.colorScheme.outlineVariant),
-                      const SizedBox(height: 16),
-                      Text('Sin productos',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                    ],
-                  ),
-                );
-              }
-              if (filteredProducts.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.search_off_rounded,
-                          size: 72, color: theme.colorScheme.outlineVariant),
-                      const SizedBox(height: 16),
-                      Text('Sin resultados',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Prueba con otros filtros o términos',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 210,
-                  childAspectRatio: 0.72,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: filteredProducts.length,
-                itemBuilder: (context, index) {
-                  final product = filteredProducts[index];
-                  return ProductTile(
-                    product: product,
-                    onTap: () => _addToCart(product),
-                  );
-                },
-              );
-            },
-          ),
+          child: _buildProductGrid(theme),
         ),
       ],
+    );
+  }
+
+  Widget _buildProductGrid(ThemeData theme) {
+    final allProducts = _inventoryServiceRef?.products ?? const [];
+
+    if (allProducts.isEmpty && (_inventoryIsLoading || !_inventoryHasLoaded)) {
+      return const Center(child: BrandedLoading());
+    }
+    if (allProducts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inventory_2_outlined,
+                size: 72, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            Text('Sin productos',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      );
+    }
+    if (_cachedFilteredProducts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 72, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            Text('Sin resultados',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            Text(
+              'Prueba con otros filtros o términos',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 220,
+        childAspectRatio: 0.68,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _cachedFilteredProducts.length,
+      itemBuilder: (context, index) {
+        final product = _cachedFilteredProducts[index];
+        return ProductTile(
+          key: ValueKey(product.id),
+          product: product,
+          onTap: () => _addToCart(product),
+        );
+      },
     );
   }
 
@@ -1035,10 +1199,7 @@ class _CashierPanel extends StatefulWidget {
 class _CashierPanelState extends State<_CashierPanel> {
   Customer? _selectedCustomer;
   List<Customer> _customers = [];
-  List<Customer> _filteredCustomers = [];
   bool _isLoadingCustomers = true;
-  final TextEditingController _customerSearchController =
-      TextEditingController();
 
   // Pending invoices state
   List<Invoice> _pendingInvoices = [];
@@ -1080,15 +1241,11 @@ class _CashierPanelState extends State<_CashierPanel> {
         _selectedCustomer = posService.selectedCustomer;
       });
     });
-    _customerSearchController.addListener(_onSearchChanged);
-    // ❌ DON'T initialize to hardcoded value - will be set from cart selection
     _loadCustomers();
   }
 
   @override
   void dispose() {
-    _customerSearchController.removeListener(_onSearchChanged);
-    _customerSearchController.dispose();
     _amountController.dispose();
     _adHocDescriptionController.dispose();
     _adHocPriceController.dispose();
@@ -1124,7 +1281,6 @@ class _CashierPanelState extends State<_CashierPanel> {
       if (mounted) {
         setState(() {
           _customers = customers;
-          _filteredCustomers = customers;
           _isLoadingCustomers = false;
         });
       }
@@ -1135,23 +1291,6 @@ class _CashierPanelState extends State<_CashierPanel> {
         });
       }
     }
-  }
-
-  void _onSearchChanged() {
-    final query = _customerSearchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredCustomers = _customers;
-      } else {
-        _filteredCustomers = _customers.where((customer) {
-          final nameMatch = customer.name.toLowerCase().contains(query);
-          final rutMatch = (customer.rut ?? '').toLowerCase().contains(query);
-          final emailMatch =
-              (customer.email ?? '').toLowerCase().contains(query);
-          return nameMatch || rutMatch || emailMatch;
-        }).toList();
-      }
-    });
   }
 
   void _toggleAdHocForm() {
@@ -1215,8 +1354,6 @@ class _CashierPanelState extends State<_CashierPanel> {
         _showPaymentView = true;
         _amountReceived = posService.cartTotal;
         _amountController.text = posService.cartTotal.toStringAsFixed(0);
-        // ✅ CRITICAL: Copy selected payment method from cart to payment view
-        _selectedPaymentMethod = posService.selectedPaymentMethod;
       });
     }
   }
@@ -1577,8 +1714,6 @@ class _CashierPanelState extends State<_CashierPanel> {
           });
         }
 
-        final currentQuery = _customerSearchController.text;
-
         // Show receipt view if transaction completed
         if (_showReceiptView && _completedTransaction != null) {
           return _buildReceiptView(theme, _completedTransaction!);
@@ -1590,14 +1725,15 @@ class _CashierPanelState extends State<_CashierPanel> {
         }
 
         // Show cart/checkout view
-        return _buildCartView(theme, posService, currentQuery);
+        return _buildCartView(theme, posService);
       },
     );
   }
 
   Widget _buildInvoicePaymentForm(ThemeData theme, POSService posService) {
     final invoice = posService.linkedInvoice!;
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
     return Column(
       children: [
@@ -1658,24 +1794,32 @@ class _CashierPanelState extends State<_CashierPanel> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    color: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
                     children: [
-                      _buildSummaryRow(theme, 'Cliente', invoice.customerName ?? 'Sin nombre', valueColor: theme.colorScheme.onSurface),
+                      _buildSummaryRow(theme, 'Cliente',
+                          invoice.customerName ?? 'Sin nombre',
+                          valueColor: theme.colorScheme.onSurface),
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Divider(height: 1),
                       ),
-                      _buildSummaryRow(theme, 'Total Factura', currencyFormat.format(invoice.total), valueColor: theme.colorScheme.onSurface),
+                      _buildSummaryRow(theme, 'Total Factura',
+                          currencyFormat.format(invoice.total),
+                          valueColor: theme.colorScheme.onSurface),
                       if (invoice.paidAmount > 0) ...[
                         const SizedBox(height: 6),
-                        _buildSummaryRow(theme, 'Pagado', currencyFormat.format(invoice.paidAmount), valueColor: theme.colorScheme.tertiary),
+                        _buildSummaryRow(theme, 'Pagado',
+                            currencyFormat.format(invoice.paidAmount),
+                            valueColor: theme.colorScheme.tertiary),
                       ],
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.errorContainer,
                           borderRadius: BorderRadius.circular(8),
@@ -1718,10 +1862,12 @@ class _CashierPanelState extends State<_CashierPanel> {
                     TextButton.icon(
                       onPressed: () {
                         setState(() {
-                          _paymentAmountController.text = invoice.balance.toStringAsFixed(0);
+                          _paymentAmountController.text =
+                              invoice.balance.toStringAsFixed(0);
                         });
                       },
-                      icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                      icon: const Icon(Icons.check_circle_outline_rounded,
+                          size: 16),
                       label: const Text('Completar Total'),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
@@ -1767,18 +1913,23 @@ class _CashierPanelState extends State<_CashierPanel> {
                       spacing: 8,
                       runSpacing: 8,
                       children: methods.map((method) {
-                        final isSelected = _selectedPaymentMethodId == method.id;
+                        final isSelected =
+                            _selectedPaymentMethodId == method.id;
                         return FilterChip(
                           showCheckmark: false,
                           selected: isSelected,
                           label: Text(
                             method.name,
                             style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                           onSelected: (selected) {
-                            if (selected) setState(() => _selectedPaymentMethodId = method.id);
+                            if (selected)
+                              setState(
+                                  () => _selectedPaymentMethodId = method.id);
                           },
                         );
                       }).toList(),
@@ -1826,12 +1977,14 @@ class _CashierPanelState extends State<_CashierPanel> {
                       width: 20,
                       height: 20,
                       padding: const EdgeInsets.all(2),
-                      child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: const CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.payment_rounded, size: 20),
               label: Text(
                 _isProcessing ? 'Procesando...' : 'Registrar Pago',
-                style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, letterSpacing: 0.5),
               ),
             ),
           ),
@@ -2025,8 +2178,7 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
-  Widget _buildCartView(
-      ThemeData theme, POSService posService, String currentQuery) {
+  Widget _buildCartView(ThemeData theme, POSService posService) {
     // Show pending invoices list if customer has pending invoices
     if (_showPendingInvoices) {
       return _buildPendingInvoicesView(theme, posService);
@@ -2038,7 +2190,8 @@ class _CashierPanelState extends State<_CashierPanel> {
     }
 
     final hasItems = posService.cartItems.isNotEmpty;
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
     return Column(
       children: [
@@ -2059,8 +2212,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               Row(
                 children: [
                   Icon(Icons.person_outline_rounded,
-                      size: 15,
-                      color: theme.colorScheme.onSurfaceVariant),
+                      size: 15, color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     'Cliente',
@@ -2074,57 +2226,12 @@ class _CashierPanelState extends State<_CashierPanel> {
               ),
               const SizedBox(height: 8),
               if (_isLoadingCustomers)
-                const SizedBox(
-                    height: 36, child: LinearProgressIndicator())
+                const SizedBox(height: 36, child: LinearProgressIndicator())
               else
-                DropdownButtonFormField<Customer>(
+                _CustomerSearchField(
+                  key: ValueKey(_selectedCustomer?.id ?? 'none'),
                   value: _selectedCustomer,
-                  isDense: true,
-                  decoration: InputDecoration(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.5),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.5),
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: theme.colorScheme.surface,
-                  ),
-                  isExpanded: true,
-                  hint: const Text('Cliente Genérico'),
-                  items: [
-                    const DropdownMenuItem<Customer>(
-                      value: null,
-                      child: Text('Cliente Genérico'),
-                    ),
-                    ..._filteredCustomers.map((customer) {
-                      return DropdownMenuItem<Customer>(
-                        value: customer,
-                        child: Text(
-                          customer.name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }),
-                    if (_selectedCustomer != null &&
-                        !_filteredCustomers
-                            .any((c) => c.id == _selectedCustomer!.id))
-                      DropdownMenuItem<Customer>(
-                        value: _selectedCustomer,
-                        child: Text(_selectedCustomer!.name,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
+                  customers: _customers,
                   onChanged: (customer) async {
                     setState(() => _selectedCustomer = customer);
                     context.read<POSService>().setCustomer(customer);
@@ -2172,13 +2279,11 @@ class _CashierPanelState extends State<_CashierPanel> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.add_circle_outline_rounded,
-                                    size: 16,
-                                    color: theme.colorScheme.primary),
+                                    size: 16, color: theme.colorScheme.primary),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Agregar item personalizado',
-                                  style:
-                                      theme.textTheme.labelMedium?.copyWith(
+                                  style: theme.textTheme.labelMedium?.copyWith(
                                     color: theme.colorScheme.primary,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -2202,8 +2307,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             color: theme.colorScheme.surface,
             border: Border(
               top: BorderSide(
-                color:
-                    theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
             ),
           ),
@@ -2219,8 +2323,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     _totalRow(
                       theme,
                       label: 'Subtotal',
-                      value:
-                          currencyFormat.format(posService.cartNetAmount),
+                      value: currencyFormat.format(posService.cartNetAmount),
                     ),
                     if (posService.cartDiscountAmount > 0) ...[
                       const SizedBox(height: 4),
@@ -2238,8 +2341,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                       _totalRow(
                         theme,
                         label: 'IVA (19%)',
-                        value: currencyFormat
-                            .format(posService.cartTaxAmount),
+                        value: currencyFormat.format(posService.cartTaxAmount),
                       ),
                     ],
                     Padding(
@@ -2274,86 +2376,6 @@ class _CashierPanelState extends State<_CashierPanel> {
                 ),
               ),
 
-              // Payment method selector
-              if (hasItems) ...[
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: Consumer<PaymentMethodService>(
-                    builder: (context, paymentMethodService, _) {
-                      final methods = paymentMethodService.paymentMethods
-                          .where((m) => m.isActive)
-                          .toList();
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: methods.map((method) {
-                            final isSelected =
-                                posService.selectedPaymentMethod?.id ==
-                                    method.id;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: GestureDetector(
-                                onTap: () =>
-                                    posService.setPaymentMethod(method),
-                                child: AnimatedContainer(
-                                  duration:
-                                      const Duration(milliseconds: 160),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? theme.colorScheme.primaryContainer
-                                        : theme.colorScheme
-                                            .surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.outlineVariant
-                                              .withValues(alpha: 0.4),
-                                      width: isSelected ? 1.5 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        _getPaymentMethodIcon(method.code),
-                                        size: 15,
-                                        color: isSelected
-                                            ? theme.colorScheme
-                                                .onPrimaryContainer
-                                            : theme.colorScheme
-                                                .onSurfaceVariant,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        method.name,
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                          fontWeight: isSelected
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color: isSelected
-                                              ? theme.colorScheme
-                                                  .onPrimaryContainer
-                                              : theme.colorScheme
-                                                  .onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-
               // Checkout button
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -2364,9 +2386,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     onPressed: hasItems ? _proceedToPayment : null,
                     icon: const Icon(Icons.arrow_forward_rounded, size: 20),
                     label: Text(
-                      hasItems
-                          ? 'Proceder al Pago'
-                          : 'Carrito vacío',
+                      hasItems ? 'Proceder al Pago' : 'Carrito vacío',
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
@@ -2383,17 +2403,56 @@ class _CashierPanelState extends State<_CashierPanel> {
   }
 
   Widget _buildCartItemRow(
-      ThemeData theme, POSService posService, dynamic item) {
+      ThemeData theme, POSService posService, POSCartItem item) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
+          _CartItemThumbnail(item: item),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.displayName,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (item.product?.sku.isNotEmpty == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'SKU: ${item.product!.sku}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '\$${item.unitPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} c/u',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
           // Quantity controls
           Container(
             decoration: BoxDecoration(
               border: Border.all(
-                color: theme.colorScheme.outlineVariant
-                    .withValues(alpha: 0.5),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -2408,8 +2467,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     height: 30,
                     alignment: Alignment.center,
                     child: Icon(Icons.remove_rounded,
-                        size: 15,
-                        color: theme.colorScheme.onSurfaceVariant),
+                        size: 15, color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
                 Container(
@@ -2431,32 +2489,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     height: 30,
                     alignment: Alignment.center,
                     child: Icon(Icons.add_rounded,
-                        size: 15,
-                        color: theme.colorScheme.primary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Name
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name ?? item.description ?? '',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '\$${(item.price as double).toStringAsFixed(0)} c/u',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                        size: 15, color: theme.colorScheme.primary),
                   ),
                 ),
               ],
@@ -2465,7 +2498,7 @@ class _CashierPanelState extends State<_CashierPanel> {
           const SizedBox(width: 8),
           // Line total
           Text(
-            '\$${((item.price as double) * (item.quantity as int)).toStringAsFixed(0)}',
+            '\$${item.total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
               color: theme.colorScheme.onSurface,
@@ -2478,8 +2511,7 @@ class _CashierPanelState extends State<_CashierPanel> {
             child: Icon(
               Icons.close_rounded,
               size: 16,
-              color: theme.colorScheme.onSurfaceVariant
-                  .withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -2514,8 +2546,7 @@ class _CashierPanelState extends State<_CashierPanel> {
               GestureDetector(
                 onTap: _toggleAdHocForm,
                 child: Icon(Icons.close_rounded,
-                    size: 18,
-                    color: theme.colorScheme.onSurfaceVariant),
+                    size: 18, color: theme.colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -2546,8 +2577,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     isDense: true,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 9),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   ),
                 ),
               ),
@@ -2561,8 +2592,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     isDense: true,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 9),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   ),
                 ),
               ),
@@ -2601,8 +2632,8 @@ class _CashierPanelState extends State<_CashierPanel> {
               child: Icon(
                 Icons.shopping_cart_outlined,
                 size: 36,
-                color: theme.colorScheme.onSurfaceVariant
-                    .withValues(alpha: 0.5),
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 16),
@@ -2617,8 +2648,8 @@ class _CashierPanelState extends State<_CashierPanel> {
             Text(
               'Toca un producto para agregar',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant
-                    .withValues(alpha: 0.7),
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -2660,10 +2691,10 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
-
   Widget _buildPaymentView(ThemeData theme, POSService posService) {
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-    
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
     return Column(
       children: [
         // ── Header (fixed top) ──────────────────────────────────────────
@@ -2707,9 +2738,11 @@ class _CashierPanelState extends State<_CashierPanel> {
                 // Highlighted Total Box
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    color: theme.colorScheme.primaryContainer
+                        .withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -2717,7 +2750,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                       Text(
                         'Total a Pagar',
                         style: theme.textTheme.labelLarge?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                          color: theme.colorScheme.onPrimaryContainer
+                              .withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -2822,7 +2856,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     );
                   },
                 ),
-                
+
                 const SizedBox(height: 32),
 
                 // Cash Amount input
@@ -2838,7 +2872,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     controller: _amountController,
                     onChanged: (value) {
                       setState(() {
-                        _amountReceived = double.tryParse(value)    ?? 0.0;
+                        _amountReceived = double.tryParse(value) ?? 0.0;
                       });
                     },
                     keyboardType: TextInputType.number,
@@ -2863,7 +2897,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Change calculation
                   if (_amountReceived >= posService.cartTotal)
                     Container(
@@ -2883,8 +2917,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                             ),
                           ),
                           Text(
-                            currencyFormat.format(
-                                _amountReceived - posService.cartTotal),
+                            currencyFormat
+                                .format(_amountReceived - posService.cartTotal),
                             style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w900,
                               color: theme.colorScheme.onSecondaryContainer,
@@ -3019,7 +3053,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                     color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.5),
                     ),
                   ),
                   child: Column(
@@ -3046,7 +3081,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                         padding: EdgeInsets.symmetric(vertical: 20),
                         child: Divider(height: 1),
                       ),
-                      _buildReceiptRow('Recibo Nº:', transaction.receiptNumber ?? transaction.id, theme),
+                      _buildReceiptRow('Recibo Nº:',
+                          transaction.receiptNumber ?? transaction.id, theme),
                       _buildReceiptRow(
                         'Fecha:',
                         '${transaction.createdAt.day.toString().padLeft(2, '0')}/${transaction.createdAt.month.toString().padLeft(2, '0')}/${transaction.createdAt.year} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
@@ -3077,18 +3113,22 @@ class _CashierPanelState extends State<_CashierPanel> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         item.displayName,
-                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       Text(
                                         '\$${item.unitPrice.toStringAsFixed(0)} c/u',
-                                        style: theme.textTheme.labelSmall?.copyWith(
-                                          color: theme.colorScheme.onSurfaceVariant,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
@@ -3107,11 +3147,18 @@ class _CashierPanelState extends State<_CashierPanel> {
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Divider(height: 1),
                       ),
-                      _buildReceiptRow('Subtotal:', '\$${transaction.subtotal.toStringAsFixed(0)}', theme),
-                      _buildReceiptRow('IVA (19%):', '\$${transaction.taxAmount.toStringAsFixed(0)}', theme),
+                      _buildReceiptRow(
+                          'Subtotal:',
+                          '\$${transaction.subtotal.toStringAsFixed(0)}',
+                          theme),
+                      _buildReceiptRow(
+                          'IVA (19%):',
+                          '\$${transaction.taxAmount.toStringAsFixed(0)}',
+                          theme),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(8),
@@ -3155,7 +3202,8 @@ class _CashierPanelState extends State<_CashierPanel> {
                       Text(
                         'Garantía 30 días con boleta',
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -3205,10 +3253,9 @@ class _CashierPanelState extends State<_CashierPanel> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label, 
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant
-            ),
+            label,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           Text(
             value,
@@ -3339,8 +3386,7 @@ class _POSHeaderBar extends StatelessWidget {
                 children: [
                   if (customerName != null) ...[
                     Icon(Icons.person_outline_rounded,
-                        size: 16,
-                        color: theme.colorScheme.onSurfaceVariant),
+                        size: 16, color: theme.colorScheme.onSurfaceVariant),
                     const SizedBox(width: 4),
                     Text(
                       customerName,
@@ -3352,8 +3398,8 @@ class _POSHeaderBar extends StatelessWidget {
                     const SizedBox(width: 16),
                   ],
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: itemCount > 0
                           ? theme.colorScheme.primaryContainer
@@ -3414,70 +3460,390 @@ class _POSHeaderBar extends StatelessWidget {
   }
 }
 
-// ── Modern Pill-Style Filter Chip ─────────────────────────────────────────────
+class _CustomerSearchField extends StatefulWidget {
+  final Customer? value;
+  final List<Customer> customers;
+  final Future<void> Function(Customer?) onChanged;
 
-class _FilterChipButton extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final bool isSelected;
-  final VoidCallback onTap;
+  const _CustomerSearchField({
+    super.key,
+    required this.value,
+    required this.customers,
+    required this.onChanged,
+  });
 
-  const _FilterChipButton({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-    this.icon,
+  @override
+  State<_CustomerSearchField> createState() => _CustomerSearchFieldState();
+}
+
+class _CustomerSearchFieldState extends State<_CustomerSearchField> {
+  late TextEditingController _textController;
+  final FocusNode _focusNode = FocusNode();
+
+  String _labelFor(Customer c) {
+    final parts = <String>[
+      if ((c.rut ?? '').trim().isNotEmpty) c.rut!.trim(),
+      if ((c.email ?? '').trim().isNotEmpty) c.email!.trim(),
+    ];
+    return parts.isEmpty ? c.name : '${c.name} • ${parts.join(' • ')}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(
+      text: widget.value == null ? '' : _labelFor(widget.value!),
+    );
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasValue = widget.value != null;
+
+    return RawAutocomplete<Customer>(
+      textEditingController: _textController,
+      focusNode: _focusNode,
+      displayStringForOption: _labelFor,
+      optionsBuilder: (textEditingValue) {
+        final query = textEditingValue.text.trim().toLowerCase();
+        final active = widget.customers.where((c) => c.isActive);
+        if (query.isEmpty) return active.take(50);
+        return active
+            .where((c) =>
+                c.name.toLowerCase().contains(query) ||
+                (c.rut ?? '').toLowerCase().contains(query) ||
+                (c.email ?? '').toLowerCase().contains(query))
+            .take(50);
+      },
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+        return Stack(
+          alignment: Alignment.centerRight,
+          children: [
+            TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: hasValue
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+                fontWeight: hasValue ? FontWeight.w600 : FontWeight.normal,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Cliente Genérico',
+                hintStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(left: 10, right: 6),
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    size: 16,
+                    color: hasValue
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 0, minHeight: 0),
+                suffixIcon: hasValue
+                    ? IconButton(
+                        icon: Icon(Icons.close_rounded,
+                            size: 16,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: () {
+                          textEditingController.clear();
+                          _focusNode.unfocus();
+                          widget.onChanged(null);
+                        },
+                      )
+                    : Icon(Icons.arrow_drop_down,
+                        size: 18, color: theme.colorScheme.onSurfaceVariant),
+                isDense: true,
+                filled: true,
+                fillColor: hasValue
+                    ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                    : Colors.transparent,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(21),
+                  borderSide: BorderSide(
+                      color: hasValue
+                          ? Colors.transparent
+                          : theme.colorScheme.outlineVariant),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(21),
+                  borderSide: BorderSide(
+                      color: hasValue
+                          ? Colors.transparent
+                          : theme.colorScheme.outlineVariant),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(21),
+                  borderSide:
+                      BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                shrinkWrap: true,
+                itemCount: options.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.person_off_outlined,
+                          size: 18, color: theme.colorScheme.primary),
+                      title: Text(
+                        'Cliente Genérico',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: () {
+                        _textController.clear();
+                        _focusNode.unfocus();
+                        widget.onChanged(null);
+                      },
+                    );
+                  }
+                  final customer = options.elementAt(index - 1);
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      customer.name,
+                      style: theme.textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: (customer.rut ?? '').isNotEmpty ||
+                            (customer.email ?? '').isNotEmpty
+                        ? Text(
+                            [
+                              if ((customer.rut ?? '').isNotEmpty)
+                                customer.rut!,
+                              if ((customer.email ?? '').isNotEmpty)
+                                customer.email!,
+                            ].join(' • '),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : null,
+                    onTap: () => onSelected(customer),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      onSelected: (customer) {
+        _textController.text = _labelFor(customer);
+        widget.onChanged(customer);
+      },
+    );
+  }
+}
+
+class _SearchableSelectorField<T> extends StatelessWidget {
+  final double width;
+  final double height;
+  final String hint;
+  final String allLabel;
+  final T? value;
+  final List<T> items;
+  final String Function(T) labelBuilder;
+  final ValueChanged<T?> onChanged;
+
+  const _SearchableSelectorField({
+    required this.width,
+    required this.hint,
+    required this.allLabel,
+    required this.value,
+    required this.items,
+    required this.labelBuilder,
+    required this.onChanged,
+    this.height = 36,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeInOut,
-        padding: EdgeInsets.symmetric(
-          horizontal: icon != null ? 10 : 12,
-          vertical: 6,
+    final hasValue = value != null;
+    final previewItems = items.take(4).map(labelBuilder).toList();
+    final previewText = previewItems.isEmpty
+        ? 'Sin opciones disponibles'
+        : '${items.length} opciones • ${previewItems.join(', ')}';
+
+    return Container(
+      width: width,
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: hasValue
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(height / 2),
+        border: Border.all(
+          color:
+              hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
         ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
+      ),
+      child: Tooltip(
+        message: previewText,
+        waitDuration: const Duration(milliseconds: 400),
+        child: DropdownMenu<T?>(
+          key: ValueKey('${hint}_${value.hashCode}_${items.length}'),
+          width: width,
+          initialSelection: value,
+          hintText: hint,
+          menuHeight: 300,
+          enableFilter: true,
+          requestFocusOnTap: true,
+          textStyle: theme.textTheme.bodySmall?.copyWith(
+            color: hasValue
                 ? theme.colorScheme.primary
-                : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-            width: 1,
+                : theme.colorScheme.onSurface,
+            fontWeight: hasValue ? FontWeight.w600 : FontWeight.normal,
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 14,
-                color: isSelected
-                    ? theme.colorScheme.onPrimary
-                    : theme.colorScheme.onSurfaceVariant,
+          inputDecorationTheme: InputDecorationTheme(
+            isDense: true,
+            contentPadding: const EdgeInsets.only(left: 12, right: 8),
+            border: InputBorder.none,
+            filled: true,
+            fillColor: Colors.transparent,
+            constraints: BoxConstraints(maxHeight: height),
+            hintStyle: theme.textTheme.bodySmall?.copyWith(
+              color: hasValue
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          trailingIcon: Icon(
+            Icons.arrow_drop_down,
+            size: 18,
+            color: hasValue
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          selectedTrailingIcon: Icon(
+            Icons.arrow_drop_up,
+            size: 18,
+            color: hasValue
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          dropdownMenuEntries: [
+            DropdownMenuEntry<T?>(
+              value: null,
+              label: allLabel,
+              style: ButtonStyle(
+                textStyle: WidgetStateProperty.all(
+                  theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
               ),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? theme.colorScheme.onPrimary
-                    : theme.colorScheme.onSurfaceVariant,
+            ),
+            ...items.map(
+              (item) => DropdownMenuEntry<T?>(
+                value: item,
+                label: labelBuilder(item),
+                style: ButtonStyle(
+                  textStyle: WidgetStateProperty.all(theme.textTheme.bodySmall),
+                ),
               ),
             ),
           ],
+          onSelected: onChanged,
         ),
       ),
     );
   }
 }
+
+class _CartItemThumbnail extends StatelessWidget {
+  final POSCartItem item;
+
+  const _CartItemThumbnail({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final product = item.product;
+    final imageUrl = product?.imageUrlOptimized?.trim().isNotEmpty == true
+        ? product!.imageUrlOptimized!.trim()
+        : product?.imageUrl?.trim();
+    final isService = product?.productType == ProductType.service;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 46,
+        height: 46,
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: imageUrl != null && imageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                errorWidget: (_, __, ___) => Icon(
+                  isService
+                      ? Icons.design_services
+                      : Icons.inventory_2_outlined,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            : Icon(
+                item.isAdHoc
+                    ? Icons.edit_note_rounded
+                    : isService
+                        ? Icons.design_services_outlined
+                        : Icons.inventory_2_outlined,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+      ),
+    );
+  }
+}
+
+// ─── Product card that cascades in (fall-down stagger animation) ─────────────

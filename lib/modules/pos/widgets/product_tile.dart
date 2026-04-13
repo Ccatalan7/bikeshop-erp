@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../shared/models/product.dart';
-import '../../../shared/widgets/hover_scale.dart';
+import '../../../shared/utils/chilean_utils.dart';
 
 class ProductTile extends StatelessWidget {
   final Product product;
@@ -23,90 +23,92 @@ class ProductTile extends StatelessWidget {
     final isService = product.productType == ProductType.service;
     final requiresStock = product.trackStock && !isService;
     final isOutOfStock = requiresStock && product.stockQuantity <= 0;
-    final isLowStock = requiresStock && product.stockQuantity <= 5 && !isOutOfStock;
+    final isLowStock = requiresStock &&
+        product.stockQuantity > 0 &&
+        product.stockQuantity <= 5;
+    final hasNoImage = product.imageUrl == null || product.imageUrl!.isEmpty;
 
-    return HoverScale(
-      enabled: !isOutOfStock && onTap != null,
-      hoverScale: 1.025,
-      child: GestureDetector(
-        onTap: isOutOfStock ? null : onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: isOutOfStock
-                ? theme.colorScheme.surfaceContainerLowest
-                : theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isOutOfStock
-                  ? theme.colorScheme.outlineVariant.withValues(alpha: 0.3)
-                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-              width: 1,
-            ),
-            boxShadow: isOutOfStock
-                ? null
-                : [
-                    BoxShadow(
-                      color: theme.colorScheme.shadow.withValues(alpha: 0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          clipBehavior: Clip.antiAlias,
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: isOutOfStock ? null : onTap,
+          hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+          highlightColor: theme.colorScheme.onSurface.withValues(alpha: 0.02),
+          splashColor: theme.colorScheme.onSurface.withValues(alpha: 0.06),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Image Area ──────────────────────────────────────────────
+              // ── Image Section ──────────────────────────────────────────
               if (showImage)
-                Expanded(
-                  flex: 11,
+                AspectRatio(
+                  aspectRatio: 1.33,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Background image / placeholder
                       Container(
-                        color: theme.colorScheme.surfaceContainerLowest,
-                        child: isOutOfStock
-                            ? ColorFiltered(
-                                colorFilter: const ColorFilter.matrix([
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0, 0, 0, 0.4, 0,
-                                ]),
-                                child: _imageOrPlaceholder(theme, isService),
-                              )
-                            : _imageOrPlaceholder(theme, isService),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.3),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: theme.colorScheme.outlineVariant
+                                  .withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: _imageOrPlaceholder(
+                            theme, isService, hasNoImage, isOutOfStock),
                       ),
-                      // Top-left: service badge
+                      // Service badge
                       if (isService)
                         Positioned(
-                          top: 7,
-                          left: 7,
+                          top: 8,
+                          left: 8,
                           child: _badge(
-                            context,
+                            theme,
                             label: 'Servicio',
                             bg: theme.colorScheme.secondaryContainer,
                             fg: theme.colorScheme.onSecondaryContainer,
                           ),
                         ),
-                      // Top-right: stock pill
+                      // Stock badge
                       if (showStock && !isService)
                         Positioned(
-                          top: 7,
-                          right: 7,
+                          top: 8,
+                          right: 8,
                           child: isOutOfStock
-                              ? _badge(context,
+                              ? _badge(
+                                  theme,
                                   label: 'Agotado',
-                                  icon: Icons.warning_amber_rounded,
                                   bg: theme.colorScheme.errorContainer,
-                                  fg: theme.colorScheme.onErrorContainer)
+                                  fg: theme.colorScheme.onErrorContainer,
+                                )
                               : _badge(
-                                  context,
+                                  theme,
                                   label: '${product.stockQuantity} un.',
                                   bg: isLowStock
                                       ? theme.colorScheme.errorContainer
-                                          .withValues(alpha: 0.85)
+                                          .withValues(alpha: 0.9)
                                       : theme.colorScheme.surface
                                           .withValues(alpha: 0.88),
                                   fg: isLowStock
@@ -114,69 +116,85 @@ class ProductTile extends StatelessWidget {
                                       : theme.colorScheme.onSurface,
                                 ),
                         ),
-                      // Bottom gradient overlay
-                      if (!isOutOfStock)
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: 36,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  theme.colorScheme.surface
-                                      .withValues(alpha: 0.55),
-                                  Colors.transparent,
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
 
-              // ── Info Area ──────────────────────────────────────────────
+              // ── Content Section ────────────────────────────────────────
               Expanded(
-                flex: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Product name
+                      // Brand • Category
                       Text(
-                        product.name,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                          color: isOutOfStock
-                              ? theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.38)
-                              : theme.colorScheme.onSurface,
+                        [
+                          if (product.brand != null &&
+                              product.brand!.isNotEmpty)
+                            product.brand!,
+                          product.categoryName ?? 'Sin categoría',
+                        ].join(' • ').toUpperCase(),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 10,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w600,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+
+                      // Product Name
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                            color: isOutOfStock
+                                ? theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.38)
+                                : theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+
+                      // SKU
+                      if (product.sku.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 8),
+                          child: Text(
+                            'SKU: ${product.sku}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.7),
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 8),
+
                       // Price row + add button
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
                             child: Text(
-                              '\$${_formatPrice(product.price)}',
+                              ChileanUtils.formatCurrency(product.price),
                               style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
+                                fontWeight: FontWeight.w800,
                                 color: isOutOfStock
                                     ? theme.colorScheme.onSurface
                                         .withValues(alpha: 0.38)
-                                    : theme.colorScheme.primary,
+                                    : theme.colorScheme.onSurface,
+                                fontSize: 15,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -184,11 +202,11 @@ class ProductTile extends StatelessWidget {
                           ),
                           if (!isOutOfStock)
                             Container(
-                              width: 28,
-                              height: 28,
+                              width: 30,
+                              height: 30,
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.primary,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: Icon(
                                 Icons.add_rounded,
@@ -209,11 +227,13 @@ class ProductTile extends StatelessWidget {
     );
   }
 
-  Widget _imageOrPlaceholder(ThemeData theme, bool isService) {
-    if (product.imageUrl != null) {
-      return CachedNetworkImage(
+  Widget _imageOrPlaceholder(
+      ThemeData theme, bool isService, bool hasNoImage, bool isOutOfStock) {
+    Widget img;
+    if (!hasNoImage) {
+      img = CachedNetworkImage(
         imageUrl: product.imageUrl!,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         memCacheWidth: 300,
         memCacheHeight: 300,
         placeholder: (_, __) => Center(
@@ -224,27 +244,53 @@ class ProductTile extends StatelessWidget {
         ),
         errorWidget: (_, __, ___) => _placeholder(theme, isService),
       );
+    } else {
+      img = _placeholder(theme, isService);
     }
-    return _placeholder(theme, isService);
+
+    if (isOutOfStock) {
+      return ColorFiltered(
+        colorFilter: const ColorFilter.matrix([
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.4,
+          0,
+        ]),
+        child: img,
+      );
+    }
+    return img;
   }
 
   Widget _placeholder(ThemeData theme, bool isService) {
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-      child: Center(
-        child: Icon(
-          isService ? Icons.miscellaneous_services_rounded : Icons.pedal_bike,
-          size: 40,
-          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-        ),
+    return Center(
+      child: Icon(
+        isService ? Icons.build_circle_outlined : Icons.inventory_2_outlined,
+        size: 36,
+        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
       ),
     );
   }
 
   Widget _badge(
-    BuildContext context, {
+    ThemeData theme, {
     required String label,
-    IconData? icon,
     required Color bg,
     required Color fg,
   }) {
@@ -252,46 +298,24 @@ class ProductTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.07),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 11, color: fg),
-            const SizedBox(width: 3),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: fg,
-              height: 1,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
       ),
     );
-  }
-
-  String _formatPrice(double price) {
-    // Format with thousands separator: 45000 → 45.000
-    final rounded = price.toStringAsFixed(0);
-    final buf = StringBuffer();
-    int count = 0;
-    for (int i = rounded.length - 1; i >= 0; i--) {
-      if (count > 0 && count % 3 == 0) buf.write('.');
-      buf.write(rounded[i]);
-      count++;
-    }
-    return buf.toString().split('').reversed.join();
   }
 }

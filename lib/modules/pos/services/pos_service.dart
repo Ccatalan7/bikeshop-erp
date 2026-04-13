@@ -44,6 +44,13 @@ class POSService extends ChangeNotifier {
         _paymentMethodService = paymentMethodService,
         _tenantService = tenantService;
 
+  @override
+  void notifyListeners() {
+    debugPrint(
+        '🔔 [POSService] notifyListeners() — stack: ${StackTrace.current.toString().split('\n').take(4).join(' | ')}');
+    super.notifyListeners();
+  }
+
   void updateDependencies({
     InventoryService? inventoryService,
     SalesService? salesService,
