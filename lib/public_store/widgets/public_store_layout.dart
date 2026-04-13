@@ -5451,12 +5451,38 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       internalHref = '/tienda';
     }
 
+    // Re-normalize the internal route against the current runtime.
+    // This is critical in preview/editor contexts where callers may pass a
+    // clean store route (`/`) while the ERP-mounted shell actually needs
+    // `/tienda`, or vice versa.
+    internalHref = _routeForPublicStore(internalHref);
+
     // Internal navigation
-    final isEditMode = context.read<WebsiteEditModeProvider>().isEditMode;
-    final hasQuery = internalHref.contains('?');
-    final target = isEditMode
-        ? (hasQuery ? '$internalHref&edit=true' : '$internalHref?edit=true')
-        : internalHref;
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final currentUri = GoRouterState.of(context).uri;
+    final isEditMode =
+        editProvider.isEditMode || currentUri.queryParameters['edit'] == 'true';
+    final isPreviewMode = !isEditMode &&
+        (editProvider.isPreviewMode ||
+            currentUri.queryParameters['preview'] == 'true');
+
+    final targetUri = Uri.tryParse(internalHref);
+    var target = internalHref;
+    if (targetUri != null && targetUri.scheme.isEmpty) {
+      final nextQuery = Map<String, String>.from(targetUri.queryParameters);
+      nextQuery.remove('edit');
+      nextQuery.remove('preview');
+
+      if (isEditMode) {
+        nextQuery['edit'] = 'true';
+      } else if (isPreviewMode) {
+        nextQuery['preview'] = 'true';
+      }
+
+      target = targetUri
+          .replace(queryParameters: nextQuery.isEmpty ? null : nextQuery)
+          .toString();
+    }
 
     // Avoid redundant navigation.
     final current = GoRouterState.of(context).uri.toString();
