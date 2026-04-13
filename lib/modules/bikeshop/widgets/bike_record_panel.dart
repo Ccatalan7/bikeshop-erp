@@ -146,6 +146,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           Expanded(
             child: TabBarView(
               controller: _tabController,
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildGeneralTab(theme),
                 _buildTechnicalSpecsTab(theme),

@@ -1325,25 +1325,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return double.tryParse(_discountController.text) ?? 0.0;
   }
 
-  double get _netAmount {
-    final afterDiscount = _subtotal - _discountAmount;
-    if (_taxTreatment == TaxTreatment.taxIncluded) {
-      // Tax included: net = total ÷ 1.19
-      return afterDiscount / 1.19;
-    } else {
-      // No tax: net = full amount
-      return afterDiscount;
-    }
-  }
-
-  double get _taxAmount {
-    if (_taxTreatment == TaxTreatment.noTax) {
-      return 0.0;
-    }
-    // Tax included: iva = total - net
-    return (_subtotal - _discountAmount) - _netAmount;
-  }
-
   double get _total {
     // Total is ALWAYS subtotal - discount (customer pays this)
     return _subtotal - _discountAmount;
@@ -6575,44 +6556,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ],
         ),
         const SizedBox(height: 16),
-        // Tax Treatment Dropdown
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Tratamiento de IVA:', style: TextStyle(fontSize: 16)),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<TaxTreatment>(
-              initialValue: _taxTreatment,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                isDense: true,
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: TaxTreatment.noTax,
-                  child: Text('Sin IVA'),
-                ),
-                DropdownMenuItem(
-                  value: TaxTreatment.taxIncluded,
-                  child: Text('IVA Incluido (19%)'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _taxTreatment = value);
-                }
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
-          _buildCostRow('Neto:', _netAmount, false),
-          const SizedBox(height: 8),
-          _buildCostRow('IVA (19%):', _taxAmount, false),
-        ],
         const Divider(thickness: 2),
         _buildCostRow('TOTAL:', _total, true, fontSize: 20),
       ],

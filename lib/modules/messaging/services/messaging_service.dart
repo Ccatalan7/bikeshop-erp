@@ -116,6 +116,92 @@ class MessagingService {
     }).toList();
   }
 
+  /// Fetch all conversations linked to a specific customer (via conversation_contexts)
+  Future<List<Conversation>> getConversationsForCustomer(
+      String customerId) async {
+    // Collect all conversation IDs related to this customer:
+    // 1. Direct: context_type='customer', context_id=customerId
+    // 2. Via their jobs: context_type='job', context_id IN customer's job IDs
+    // 3. Via their invoices: context_type='invoice', context_id IN customer's invoice IDs
+
+    // Fetch job IDs and invoice IDs for this customer in parallel, plus direct contexts
+    final results = await Future.wait([
+      // Direct customer contexts
+      _client
+          .from('conversation_contexts')
+          .select('conversation_id')
+          .eq('context_type', 'customer')
+          .eq('context_id', customerId),
+      // Job IDs for this customer
+      _client.from('mechanic_jobs').select('id').eq('customer_id', customerId),
+      // Invoice IDs for this customer
+      _client.from('sales_invoices').select('id').eq('customer_id', customerId),
+    ]);
+
+    final Set<String> ids = {};
+
+    // Add direct context conversation IDs
+    for (var row in results[0] as List) {
+      ids.add(row['conversation_id'] as String);
+    }
+
+    // Collect job IDs and invoice IDs
+    final jobIds = (results[1] as List).map((r) => r['id'] as String).toList();
+    final invoiceIds =
+        (results[2] as List).map((r) => r['id'] as String).toList();
+
+    // Fetch job-linked conversation IDs
+    if (jobIds.isNotEmpty) {
+      final jobContexts = await _client
+          .from('conversation_contexts')
+          .select('conversation_id')
+          .eq('context_type', 'job')
+          .inFilter('context_id', jobIds);
+      for (var row in jobContexts as List) {
+        ids.add(row['conversation_id'] as String);
+      }
+    }
+
+    // Fetch invoice-linked conversation IDs
+    if (invoiceIds.isNotEmpty) {
+      final invoiceContexts = await _client
+          .from('conversation_contexts')
+          .select('conversation_id')
+          .eq('context_type', 'invoice')
+          .inFilter('context_id', invoiceIds);
+      for (var row in invoiceContexts as List) {
+        ids.add(row['conversation_id'] as String);
+      }
+    }
+
+    if (ids.isEmpty) return [];
+
+    final data = await _client
+        .from('conversations')
+        .select(
+            '*, conversation_participants(user_id), conversation_contexts(*)')
+        .inFilter('id', ids.toList())
+        .order('last_message_at', ascending: false);
+
+    // Inject unread counts
+    final userId = currentUserId;
+    Map<String, int> unreadMap = {};
+    if (userId != null) {
+      final unreadResponse = await _client
+          .from('conversation_unread_counts')
+          .select('conversation_id, unread_count')
+          .eq('user_id', userId);
+      for (var row in unreadResponse) {
+        unreadMap[row['conversation_id']] = row['unread_count'] ?? 0;
+      }
+    }
+
+    return (data as List).map((json) {
+      json['unread_count'] = unreadMap[json['id']] ?? 0;
+      return Conversation.fromJson(json);
+    }).toList();
+  }
+
   /// Mark a conversation as read for the current user
   Future<void> markAsRead(String conversationId) async {
     final userId = currentUserId;

@@ -1430,6 +1430,7 @@ class AppRouter {
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             final initialTab = state.uri.queryParameters['tab'];
+            final initialBikeId = state.uri.queryParameters['bike_id'];
             return _buildDeferredPageWithNoTransition(
               context,
               state,
@@ -1437,6 +1438,7 @@ class AppRouter {
               () => erp.ClientLogbookPage(
                 customerId: id,
                 initialTab: initialTab,
+                initialBikeId: initialBikeId,
               ),
             );
           },

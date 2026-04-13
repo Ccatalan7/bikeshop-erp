@@ -11,11 +11,16 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../modules/crm/services/customer_service.dart';
+import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/bike_record_panel.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
+import '../../messaging/models/conversation.dart';
+import '../../messaging/services/messaging_service.dart';
+import '../../messaging/widgets/chat_window.dart';
 
 enum JobViewFilter { active, completed, all }
 
@@ -24,11 +29,13 @@ enum ClientBikePanelMode { none, record, creating, editing }
 class ClientLogbookPage extends StatefulWidget {
   final String customerId;
   final String? initialTab;
+  final String? initialBikeId;
 
   const ClientLogbookPage({
     super.key,
     required this.customerId,
     this.initialTab,
+    this.initialBikeId,
   });
 
   @override
@@ -41,9 +48,21 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   List<Bike> _bikes = [];
   List<MechanicJob> _jobs = [];
   List<MechanicJobTimeline> _timeline = [];
+  List<Invoice> _invoices = [];
   Loyalty? _loyalty;
   bool _isLoading = true;
+  bool _isLoadingInvoices = false;
+  bool _hasLoadedInvoices = false;
   String? _error;
+  String? _invoiceError;
+
+  // Chats tab
+  final MessagingService _messagingService = MessagingService();
+  List<Conversation> _chats = [];
+  Conversation? _selectedChat;
+  bool _isLoadingChats = false;
+  bool _hasLoadedChats = false;
+  String? _chatError;
 
   String? _selectedJobId;
   String? _selectedBikeId;
@@ -59,12 +78,16 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   final TextEditingController _jobSearchController = TextEditingController();
   final TextEditingController _timelineSearchController =
       TextEditingController();
+  final TextEditingController _invoiceSearchController =
+      TextEditingController();
   String _bikeSearchTerm = '';
   String _jobSearchTerm = '';
   String _timelineSearchTerm = '';
+  String _invoiceSearchTerm = '';
   String _bikeSortKey = 'recent';
   String _jobSortKey = 'arrival_desc';
   String _timelineSortKey = 'date_desc';
+  String _invoiceSortKey = 'date_desc';
   JobViewFilter _jobViewFilter = JobViewFilter.completed;
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
@@ -78,6 +101,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   bool _jobSortAsc = false;
   String? _timelineSortCol; // 'desc' | 'ref' | 'tech' | 'date'
   bool _timelineSortAsc = false;
+  String?
+      _invoiceSortCol; // 'number' | 'context' | 'date' | 'status' | 'total' | 'balance'
+  bool _invoiceSortAsc = false;
 
   // ── Column widths (bikes) ──
   double _bikeColSerial = 150;
@@ -96,6 +122,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   double _tlColRef = 150;
   double _tlColTech = 120;
   double _tlColDate = 130;
+  double _invoiceColNumber = 130;
+  double _invoiceColDate = 110;
+  double _invoiceColStatus = 122;
+  double _invoiceColTotal = 110;
+  double _invoiceColBalance = 110;
   Map<String, Bike> _bikeIndex = {};
   Map<String?, List<MechanicJob>> _jobsByBike = {};
   Map<String, MechanicJob> _jobIndex = {};
@@ -117,20 +148,37 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     'date_desc': 'Más recientes',
     'date_asc': 'Más antiguas',
   };
+  static const Map<String, String> _invoiceSortLabels = {
+    'date_desc': 'Más recientes',
+    'date_asc': 'Más antiguas',
+    'total_desc': 'Mayor total',
+    'total_asc': 'Menor total',
+    'balance_desc': 'Mayor saldo',
+    'balance_asc': 'Menor saldo',
+  };
 
   @override
   void initState() {
     super.initState();
-    // Resolve initial tab
-    int initialIndex = 0;
-    if (widget.initialTab == 'pegas') initialIndex = 1;
-    if (widget.initialTab == 'historial') initialIndex = 2;
-    _tabController =
-        TabController(length: 3, vsync: this, initialIndex: initialIndex);
+    final initialBikeId = widget.initialBikeId?.trim();
+    final initialIndex = _resolveTabIndex(
+      initialTab: widget.initialTab,
+      initialBikeId: initialBikeId,
+    );
+    if (initialBikeId != null && initialBikeId.isNotEmpty) {
+      _selectedBikeId = initialBikeId;
+      _bikePanelMode = ClientBikePanelMode.record;
+    }
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: initialIndex,
+    )..addListener(_handleTabChanged);
 
     _bikeSearchController.addListener(_handleBikeSearchChanged);
     _jobSearchController.addListener(_handleJobSearchChanged);
     _timelineSearchController.addListener(_handleTimelineSearchChanged);
+    _invoiceSearchController.addListener(_handleInvoiceSearchChanged);
 
     _headerScrollController.addListener(() {
       if (_bodyScrollController.hasClients &&
@@ -147,20 +195,152 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     });
 
     _loadData();
+    if (initialIndex == 3) {
+      unawaited(_loadInvoices());
+    }
+    if (initialIndex == 4) {
+      unawaited(_loadChats());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ClientLogbookPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.customerId != oldWidget.customerId) {
+      final nextBikeId = widget.initialBikeId?.trim();
+      final nextIndex = _resolveTabIndex(
+        initialTab: widget.initialTab,
+        initialBikeId: nextBikeId,
+      );
+
+      setState(() {
+        _customer = null;
+        _bikes = [];
+        _jobs = [];
+        _timeline = [];
+        _invoices = [];
+        _loyalty = null;
+        _selectedJobId = null;
+        _selectedBikeId =
+            nextBikeId != null && nextBikeId.isNotEmpty ? nextBikeId : null;
+        _bikePanelMode = _selectedBikeId != null
+            ? ClientBikePanelMode.record
+            : ClientBikePanelMode.none;
+        _selectedBikeRecordSnapshot = null;
+        _isLoadingSelectedBikeRecordSnapshot = false;
+        _bikeRecordLoadError = null;
+        _isLoading = true;
+        _isLoadingInvoices = false;
+        _hasLoadedInvoices = false;
+        _error = null;
+        _invoiceError = null;
+        _chats = [];
+        _selectedChat = null;
+        _isLoadingChats = false;
+        _hasLoadedChats = false;
+        _chatError = null;
+        _tabController.index = nextIndex;
+      });
+
+      unawaited(_loadData());
+      if (nextIndex == 3) {
+        unawaited(_loadInvoices());
+      }
+      if (nextIndex == 4) {
+        unawaited(_loadChats());
+      }
+      return;
+    }
+
+    final nextBikeId = widget.initialBikeId?.trim();
+    final previousBikeId = oldWidget.initialBikeId?.trim();
+    final nextTab = widget.initialTab;
+    final previousTab = oldWidget.initialTab;
+
+    if (nextBikeId != previousBikeId) {
+      if (nextBikeId != null && nextBikeId.isNotEmpty) {
+        setState(() {
+          _selectedBikeId = nextBikeId;
+          _bikePanelMode = ClientBikePanelMode.record;
+          _tabController.index = 0;
+        });
+        if (_bikeIndex.containsKey(nextBikeId)) {
+          unawaited(_loadSelectedBikeRecordSnapshot(nextBikeId));
+        }
+      } else if (previousBikeId != null && previousBikeId.isNotEmpty) {
+        _closeBikePane();
+      }
+    } else if (nextTab != previousTab) {
+      final nextIndex = _resolveTabIndex(
+        initialTab: nextTab,
+        initialBikeId: nextBikeId,
+      );
+      if (_tabController.index != nextIndex) {
+        _tabController.index = nextIndex;
+      }
+      if (nextIndex == 3 && !_hasLoadedInvoices && !_isLoadingInvoices) {
+        unawaited(_loadInvoices());
+      }
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChanged);
     _tabController.dispose();
     _headerScrollController.dispose();
     _bodyScrollController.dispose();
     _bikeSearchController.removeListener(_handleBikeSearchChanged);
     _jobSearchController.removeListener(_handleJobSearchChanged);
     _timelineSearchController.removeListener(_handleTimelineSearchChanged);
+    _invoiceSearchController.removeListener(_handleInvoiceSearchChanged);
     _bikeSearchController.dispose();
     _jobSearchController.dispose();
     _timelineSearchController.dispose();
+    _invoiceSearchController.dispose();
     super.dispose();
+  }
+
+  int _resolveTabIndex({String? initialTab, String? initialBikeId}) {
+    if (initialBikeId != null && initialBikeId.isNotEmpty) {
+      return 0;
+    }
+
+    switch (initialTab) {
+      case 'pegas':
+        return 1;
+      case 'historial':
+        return 2;
+      case 'facturas':
+      case 'invoices':
+        return 3;
+      case 'chats':
+        return 4;
+      default:
+        return 0;
+    }
+  }
+
+  void _handleTabChanged() {
+    if (_tabController.indexIsChanging) {
+      return;
+    }
+
+    if (_tabController.index == 3 &&
+        !_hasLoadedInvoices &&
+        !_isLoadingInvoices) {
+      unawaited(_loadInvoices());
+    }
+    if (_tabController.index == 4 && !_hasLoadedChats && !_isLoadingChats) {
+      unawaited(_loadChats());
+    }
+  }
+
+  void _handleInvoiceSearchChanged() {
+    setState(() {
+      _invoiceSearchTerm = _invoiceSearchController.text.trim();
+    });
   }
 
   void _handleBikeSearchChanged() {
@@ -258,8 +438,13 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       // Sort timeline by date descending (most recent first)
       allTimeline.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      final selectedBikeStillExists =
-          _selectedBikeId == null || bikeIndex.containsKey(_selectedBikeId);
+      final requestedBikeId = widget.initialBikeId?.trim();
+      final requestedBikeExists = requestedBikeId != null &&
+          requestedBikeId.isNotEmpty &&
+          bikeIndex.containsKey(requestedBikeId);
+      final selectedBikeStillExists = requestedBikeExists ||
+          _selectedBikeId == null ||
+          bikeIndex.containsKey(_selectedBikeId);
 
       setState(() {
         _customer = customer;
@@ -270,7 +455,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         _jobIndex = jobIndex;
         _timeline = allTimeline;
         _loyalty = loyalty;
-        if (!selectedBikeStillExists) {
+        if (requestedBikeExists) {
+          _selectedBikeId = requestedBikeId;
+          _bikePanelMode = ClientBikePanelMode.record;
+          _tabController.index = 0;
+        } else if (!selectedBikeStillExists) {
           _selectedBikeId = null;
           _bikePanelMode = ClientBikePanelMode.none;
           _selectedBikeRecordSnapshot = null;
@@ -279,13 +468,103 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         _isLoading = false;
       });
 
-      if (selectedBikeStillExists && _selectedBikeId != null) {
+      if ((requestedBikeExists || selectedBikeStillExists) &&
+          _selectedBikeId != null) {
         unawaited(_loadSelectedBikeRecordSnapshot(_selectedBikeId));
       }
+
+      // Eagerly load invoices so totalSpent stat is accurate on first render
+      unawaited(_loadInvoices());
     } catch (e) {
       setState(() {
         _error = 'Error al cargar datos: $e';
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadInvoices({bool forceRefresh = false}) async {
+    if (_isLoadingInvoices) {
+      return;
+    }
+
+    final salesService = context.read<SalesService>();
+
+    if (!forceRefresh && salesService.hasInvoicesCache) {
+      final cachedInvoices = salesService.cachedInvoices
+          .where((invoice) => invoice.customerId == widget.customerId)
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      if (mounted) {
+        setState(() {
+          _invoices = cachedInvoices;
+          _hasLoadedInvoices = true;
+          _invoiceError = null;
+        });
+      }
+    }
+
+    setState(() {
+      _isLoadingInvoices = true;
+      _invoiceError = null;
+    });
+
+    try {
+      final invoices = await salesService.getInvoicesForCustomer(
+        customerId: widget.customerId,
+        forceRefresh: forceRefresh,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _invoices = invoices;
+        _hasLoadedInvoices = true;
+        _isLoadingInvoices = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _invoiceError = 'No se pudieron cargar las facturas';
+        _isLoadingInvoices = false;
+        _hasLoadedInvoices = true;
+      });
+    }
+  }
+
+  Future<void> _loadChats({bool forceRefresh = false}) async {
+    if (_isLoadingChats && !forceRefresh) return;
+
+    setState(() {
+      _isLoadingChats = true;
+      _chatError = null;
+    });
+
+    try {
+      final chats = await _messagingService
+          .getConversationsForCustomer(widget.customerId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _chats = chats;
+        _hasLoadedChats = true;
+        _isLoadingChats = false;
+        if (_selectedChat == null && chats.isNotEmpty) {
+          _selectedChat = chats.first;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _chatError = 'No se pudieron cargar los chats';
+        _isLoadingChats = false;
+        _hasLoadedChats = true;
       });
     }
   }
@@ -457,6 +736,80 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     return result;
   }
 
+  List<Invoice> _getFilteredInvoices() {
+    final term = _invoiceSearchTerm.toLowerCase();
+    final filtered = _invoices.where((invoice) {
+      if (term.isEmpty) {
+        return true;
+      }
+
+      final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
+      final candidates = [
+        invoice.invoiceNumber,
+        invoice.reference,
+        invoice.jobNumber,
+        bikeName,
+        _invoiceStatusLabel(invoice.status),
+        _invoiceTypeLabel(invoice),
+      ];
+      return candidates.any(
+        (value) => value != null && value.toLowerCase().contains(term),
+      );
+    }).toList();
+
+    if (_invoiceSortCol != null) {
+      filtered.sort((a, b) {
+        int cmp;
+        switch (_invoiceSortCol!) {
+          case 'number':
+            cmp = a.invoiceNumber.compareTo(b.invoiceNumber);
+            break;
+          case 'context':
+            cmp = _invoiceContextSortValue(a)
+                .compareTo(_invoiceContextSortValue(b));
+            break;
+          case 'date':
+            cmp = a.date.compareTo(b.date);
+            break;
+          case 'status':
+            cmp = _invoiceStatusLabel(a.status)
+                .compareTo(_invoiceStatusLabel(b.status));
+            break;
+          case 'total':
+            cmp = a.total.compareTo(b.total);
+            break;
+          case 'balance':
+            cmp = a.balance.compareTo(b.balance);
+            break;
+          default:
+            cmp = 0;
+        }
+        return _invoiceSortAsc ? cmp : -cmp;
+      });
+      return filtered;
+    }
+
+    filtered.sort((a, b) {
+      switch (_invoiceSortKey) {
+        case 'date_asc':
+          return a.date.compareTo(b.date);
+        case 'total_desc':
+          return b.total.compareTo(a.total);
+        case 'total_asc':
+          return a.total.compareTo(b.total);
+        case 'balance_desc':
+          return b.balance.compareTo(a.balance);
+        case 'balance_asc':
+          return a.balance.compareTo(b.balance);
+        case 'date_desc':
+        default:
+          return b.date.compareTo(a.date);
+      }
+    });
+
+    return filtered;
+  }
+
   int _totalJobsForBike(String? bikeId) {
     if (bikeId == null) return 0;
     return _jobsByBike[bikeId]?.length ?? 0;
@@ -508,6 +861,18 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
   }
 
+  double _invoiceTableWidth(double viewportWidth) {
+    final fixedWidth = 4 +
+        _invoiceColNumber +
+        _invoiceColDate +
+        _invoiceColStatus +
+        _invoiceColTotal +
+        _invoiceColBalance +
+        44;
+    final desiredWidth = fixedWidth + 320;
+    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  }
+
   double _bikeNameColumnWidth(double tableWidth) {
     return tableWidth -
         (52 +
@@ -533,6 +898,17 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     return tableWidth - (52 + _tlColRef + _tlColTech + _tlColDate);
   }
 
+  double _invoiceContextColumnWidth(double tableWidth) {
+    return tableWidth -
+        (4 +
+            _invoiceColNumber +
+            _invoiceColDate +
+            _invoiceColStatus +
+            _invoiceColTotal +
+            _invoiceColBalance +
+            44);
+  }
+
   String _jobFilterLabel(JobViewFilter filter) {
     switch (filter) {
       case JobViewFilter.active:
@@ -542,6 +918,45 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       case JobViewFilter.all:
         return 'Todas';
     }
+  }
+
+  String _invoiceStatusLabel(InvoiceStatus status) {
+    switch (status) {
+      case InvoiceStatus.draft:
+        return 'Borrador';
+      case InvoiceStatus.sent:
+        return 'Enviada';
+      case InvoiceStatus.confirmed:
+        return 'Confirmada';
+      case InvoiceStatus.paid:
+        return 'Pagada';
+      case InvoiceStatus.overdue:
+        return 'Vencida';
+      case InvoiceStatus.cancelled:
+        return 'Anulada';
+    }
+  }
+
+  String _invoiceTypeLabel(Invoice invoice) {
+    switch (invoice.invoiceType) {
+      case 'pega':
+        return 'Taller';
+      case 'service':
+        return 'Servicio';
+      case 'sale':
+      default:
+        return 'Venta';
+    }
+  }
+
+  String _invoiceContextSortValue(Invoice invoice) {
+    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
+    return [
+      bikeName,
+      invoice.jobNumber,
+      invoice.reference,
+      _invoiceTypeLabel(invoice),
+    ].whereType<String>().join(' ').toLowerCase();
   }
 
   Bike _getBikeForJob(MechanicJob job) {
@@ -778,9 +1193,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         .length;
     final completedJobs =
         _jobs.where((j) => j.status == JobStatus.entregado).length;
-    final totalSpent = _jobs
-        .where((j) => j.status == JobStatus.entregado)
-        .fold(0.0, (sum, j) => sum + j.totalCost);
+    // Use invoice paid amounts when loaded (accurate); fall back to job costs otherwise
+    final totalSpent = _hasLoadedInvoices
+        ? _invoices.fold(0.0, (sum, inv) => sum + inv.paidAmount)
+        : _jobs
+            .where((j) => j.status == JobStatus.entregado)
+            .fold(0.0, (sum, j) => sum + j.totalCost);
 
     return Container(
       color: theme.scaffoldBackgroundColor,
@@ -1066,6 +1484,47 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                       ],
                     ),
                   ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Facturas'),
+                        if (_invoices.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(
+                            _invoices.length,
+                            highlight: _invoices.any(
+                              (invoice) =>
+                                  invoice.balance > 0.01 &&
+                                  invoice.status != InvoiceStatus.cancelled,
+                            ),
+                            highlightValue: _invoices
+                                .where((invoice) =>
+                                    invoice.balance > 0.01 &&
+                                    invoice.status != InvoiceStatus.cancelled)
+                                .length,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Chats'),
+                        if (_chats.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(
+                            _chats.length,
+                            highlight: _chats.any((c) => c.unreadCount > 0),
+                            highlightValue:
+                                _chats.where((c) => c.unreadCount > 0).length,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const Spacer(),
@@ -1108,6 +1567,23 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                       label: const Text('Nuevo Trabajo'),
                     );
                   }
+                  if (_tabController.index == 3) {
+                    return TextButton.icon(
+                      onPressed: () {
+                        context
+                            .push(
+                                '/sales/invoices/new?customer_id=${widget.customerId}')
+                            .then((_) {
+                          if (!mounted) {
+                            return;
+                          }
+                          unawaited(_loadInvoices(forceRefresh: true));
+                        });
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Nueva Factura'),
+                    );
+                  }
                   return const SizedBox.shrink();
                 },
               ),
@@ -1119,10 +1595,13 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         Expanded(
           child: TabBarView(
             controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildBikesTab(),
               _buildJobsTab(),
               _buildTimelineTab(),
+              _buildInvoicesTab(),
+              _buildChatsTab(),
             ],
           ),
         ),
@@ -1162,8 +1641,24 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 900;
+        if (!isDesktop && _bikePanelMode == ClientBikePanelMode.none) {
+          return _buildBikesList();
+        }
+
         final showRightPane =
             isDesktop && _bikePanelMode != ClientBikePanelMode.none;
+        if (!isDesktop && _bikePanelMode != ClientBikePanelMode.none) {
+          final selectedBike = _selectedBikeId != null
+              ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
+              : null;
+          return ColoredBox(
+            color: Colors.white,
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              body: _buildBikePaneBody(selectedBike),
+            ),
+          );
+        }
 
         if (!showRightPane) {
           return _buildBikesList();
@@ -1736,6 +2231,454 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     );
   }
 
+  Widget _buildInvoicesTab() {
+    final filteredInvoices = _getFilteredInvoices();
+    final pendingCount = _invoices
+        .where((invoice) =>
+            invoice.balance > 0.01 && invoice.status != InvoiceStatus.cancelled)
+        .length;
+    final paidCount = _invoices
+        .where((invoice) => invoice.status == InvoiceStatus.paid)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTabToolbar(
+          searchController: _invoiceSearchController,
+          searchHint: 'Buscar por número, referencia o bici…',
+          sortKey: _invoiceSortKey,
+          sortLabels: _invoiceSortLabels,
+          onSortChanged: (v) => setState(() => _invoiceSortKey = v),
+          statusText: !_hasLoadedInvoices
+              ? 'Cargando facturas…'
+              : filteredInvoices.length == _invoices.length
+                  ? '${_invoices.length} facturas'
+                  : '${filteredInvoices.length} de ${_invoices.length}',
+          trailing: _invoices.isEmpty
+              ? null
+              : Row(
+                  children: [
+                    _buildInvoiceSummaryChip(
+                      'Pendientes',
+                      pendingCount,
+                      Colors.orange,
+                    ),
+                    const SizedBox(width: 6),
+                    _buildInvoiceSummaryChip(
+                      'Pagadas',
+                      paidCount,
+                      Colors.green,
+                    ),
+                  ],
+                ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportWidth = _tableViewportWidth(constraints);
+            final tableWidth = _invoiceTableWidth(viewportWidth);
+
+            return Container(
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: SingleChildScrollView(
+                controller: _headerScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      _buildResizableHeader(
+                        label: 'N° FACTURA',
+                        colKey: 'number',
+                        width: _invoiceColNumber,
+                        sortCol: _invoiceSortCol,
+                        sortAsc: _invoiceSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _invoiceSortCol = col;
+                          _invoiceSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _invoiceColNumber =
+                            (_invoiceColNumber + d).clamp(90, 220)),
+                      ),
+                      SizedBox(
+                        width: _invoiceContextColumnWidth(tableWidth),
+                        child: _buildSortableHeader(
+                          'ORIGEN / BICI',
+                          'context',
+                          _invoiceSortCol,
+                          _invoiceSortAsc,
+                          (col, asc) => setState(() {
+                            _invoiceSortCol = col;
+                            _invoiceSortAsc = asc;
+                          }),
+                          leftPad: 12,
+                        ),
+                      ),
+                      _buildResizableHeader(
+                        label: 'FECHA',
+                        colKey: 'date',
+                        width: _invoiceColDate,
+                        sortCol: _invoiceSortCol,
+                        sortAsc: _invoiceSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _invoiceSortCol = col;
+                          _invoiceSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _invoiceColDate =
+                            (_invoiceColDate + d).clamp(80, 180)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'ESTADO',
+                        colKey: 'status',
+                        width: _invoiceColStatus,
+                        sortCol: _invoiceSortCol,
+                        sortAsc: _invoiceSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _invoiceSortCol = col;
+                          _invoiceSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _invoiceColStatus =
+                            (_invoiceColStatus + d).clamp(90, 200)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'TOTAL',
+                        colKey: 'total',
+                        width: _invoiceColTotal,
+                        sortCol: _invoiceSortCol,
+                        sortAsc: _invoiceSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _invoiceSortCol = col;
+                          _invoiceSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _invoiceColTotal =
+                            (_invoiceColTotal + d).clamp(80, 180)),
+                      ),
+                      _buildResizableHeader(
+                        label: 'SALDO',
+                        colKey: 'balance',
+                        width: _invoiceColBalance,
+                        sortCol: _invoiceSortCol,
+                        sortAsc: _invoiceSortAsc,
+                        onSort: (col, asc) => setState(() {
+                          _invoiceSortCol = col;
+                          _invoiceSortAsc = asc;
+                        }),
+                        onResize: (d) => setState(() => _invoiceColBalance =
+                            (_invoiceColBalance + d).clamp(80, 180)),
+                      ),
+                      const SizedBox(width: 44),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: _isLoadingInvoices && !_hasLoadedInvoices
+              ? const Center(
+                  child: BrandedLoading(
+                    size: 120,
+                    message: 'Cargando facturas…',
+                  ),
+                )
+              : _invoiceError != null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.receipt_long_outlined,
+                              size: 48, color: Colors.red[300]),
+                          const SizedBox(height: 12),
+                          Text(
+                            _invoiceError!,
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => _loadInvoices(forceRefresh: true),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : filteredInvoices.isEmpty
+                      ? _buildEmptyState(
+                          _invoices.isEmpty
+                              ? 'Sin facturas registradas'
+                              : 'Ninguna factura coincide',
+                          Icons.receipt_long_outlined,
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final viewportWidth =
+                                _tableViewportWidth(constraints);
+                            final tableWidth =
+                                _invoiceTableWidth(viewportWidth);
+
+                            return SingleChildScrollView(
+                              controller: _bodyScrollController,
+                              scrollDirection: Axis.horizontal,
+                              physics: const ClampingScrollPhysics(),
+                              child: SizedBox(
+                                width: tableWidth,
+                                child: ListView.builder(
+                                  itemCount: filteredInvoices.length,
+                                  itemBuilder: (_, i) => _buildInvoiceTableRow(
+                                    filteredInvoices[i],
+                                    i.isEven,
+                                    tableWidth,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // CHATS TAB
+  // ─────────────────────────────────────────────
+
+  Widget _buildChatsTab() {
+    if (_isLoadingChats) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_chatError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.red[300]),
+            const SizedBox(height: 12),
+            Text(
+              _chatError!,
+              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _loadChats(forceRefresh: true),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_chats.isEmpty) {
+      return _buildEmptyState(
+        'Sin conversaciones registradas',
+        Icons.chat_bubble_outline,
+      );
+    }
+
+    final theme = Theme.of(context);
+
+    // Single conversation: just show the chat directly, no list panel
+    if (_chats.length == 1) {
+      return ChatWindow(
+        key: ValueKey(_chats.first.id),
+        conversation: _chats.first,
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 640;
+
+        if (isWide) {
+          // Split: list on left, ChatWindow on right
+          return Row(
+            children: [
+              SizedBox(
+                width: 220,
+                child: ListView.builder(
+                  itemCount: _chats.length,
+                  itemBuilder: (_, i) =>
+                      _buildChatListItem(_chats[i], isWide: true),
+                ),
+              ),
+              VerticalDivider(width: 1, color: theme.dividerColor),
+              Expanded(
+                child: _selectedChat != null
+                    ? ChatWindow(
+                        key: ValueKey(_selectedChat!.id),
+                        conversation: _selectedChat!,
+                      )
+                    : Center(
+                        child: Text(
+                          'Selecciona una conversación',
+                          style:
+                              TextStyle(color: Colors.grey[500], fontSize: 13),
+                        ),
+                      ),
+              ),
+            ],
+          );
+        }
+
+        // Narrow: show selected chat or list
+        if (_selectedChat != null) {
+          return Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                color: theme.cardColor,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      onPressed: () => setState(() => _selectedChat = null),
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedChat!.title ?? 'Conversación',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ChatWindow(
+                  key: ValueKey(_selectedChat!.id),
+                  conversation: _selectedChat!,
+                ),
+              ),
+            ],
+          );
+        }
+
+        return ListView.builder(
+          itemCount: _chats.length,
+          itemBuilder: (_, i) => _buildChatListItem(_chats[i], isWide: false),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatListItem(Conversation chat, {required bool isWide}) {
+    final theme = Theme.of(context);
+    final isSelected = isWide && _selectedChat?.id == chat.id;
+    final hasUnread = chat.unreadCount > 0;
+    final lastAt = chat.lastMessageAt ?? chat.updatedAt;
+
+    final String subtitle = switch (chat.contextType) {
+      'job' => 'Trabajo técnico',
+      'invoice' => 'Factura',
+      'customer' => 'Cliente',
+      _ => chat.type == 'support' ? 'Soporte' : 'Interno',
+    };
+
+    return InkWell(
+      onTap: () => setState(() => _selectedChat = chat),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        color: isSelected ? theme.colorScheme.primary.withOpacity(0.08) : null,
+        child: Row(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  child: Icon(
+                    Icons.chat_bubble_outline,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                if (hasUnread)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.error,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        chat.unreadCount > 9 ? '9+' : '${chat.unreadCount}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    chat.title ?? 'Conversación',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                ],
+              ),
+            ),
+            Text(
+              _formatChatDate(lastAt),
+              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatChatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) {
+      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (diff.inDays == 1) {
+      return 'Ayer';
+    } else if (diff.inDays < 7) {
+      const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      return days[date.weekday - 1];
+    } else {
+      return '${date.day}/${date.month}';
+    }
+  }
+
   // ─────────────────────────────────────────────
   // SHARED TAB TOOLBAR
   // ─────────────────────────────────────────────
@@ -2001,6 +2944,241 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         ],
       ),
     );
+  }
+
+  Widget _buildInvoiceSummaryChip(String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvoiceTableRow(Invoice invoice, bool even, double tableWidth) {
+    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
+    final contextTitle =
+        bikeName ?? invoice.reference ?? _invoiceTypeLabel(invoice);
+    final detailParts = [
+      if (invoice.jobNumber != null && invoice.jobNumber!.isNotEmpty)
+        invoice.jobNumber!,
+      _invoiceTypeLabel(invoice),
+    ];
+    final amountFormatter =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
+    return Material(
+      color: even ? Colors.white : Colors.grey[50],
+      child: InkWell(
+        onTap: invoice.id == null ? null : () => _openInvoice(invoice),
+        child: SizedBox(
+          height: 56,
+          width: tableWidth,
+          child: Row(
+            children: [
+              const SizedBox(width: 4),
+              SizedBox(
+                width: _invoiceColNumber,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    invoice.invoiceNumber,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _invoiceContextColumnWidth(tableWidth),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        contextTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        detailParts.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _invoiceColDate,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    DateFormat('dd/MM/yy').format(invoice.date),
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[800]),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _invoiceColStatus,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildInvoiceStatusChip(invoice.status),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _invoiceColTotal,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    amountFormatter.format(invoice.total),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _invoiceColBalance,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    amountFormatter.format(invoice.balance),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: invoice.balance > 0.01
+                          ? Colors.orange[800]
+                          : Colors.green[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 44,
+                child: Icon(
+                  Icons.open_in_new,
+                  size: 16,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceStatusChip(InvoiceStatus status) {
+    late final Color bgColor;
+    late final Color textColor;
+
+    switch (status) {
+      case InvoiceStatus.draft:
+        bgColor = Colors.grey[200]!;
+        textColor = Colors.grey[700]!;
+        break;
+      case InvoiceStatus.sent:
+        bgColor = Colors.blue[100]!;
+        textColor = Colors.blue[800]!;
+        break;
+      case InvoiceStatus.confirmed:
+        bgColor = Colors.purple[100]!;
+        textColor = Colors.purple[800]!;
+        break;
+      case InvoiceStatus.paid:
+        bgColor = Colors.green[100]!;
+        textColor = Colors.green[800]!;
+        break;
+      case InvoiceStatus.overdue:
+        bgColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        break;
+      case InvoiceStatus.cancelled:
+        bgColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        _invoiceStatusLabel(status).toUpperCase(),
+        style: TextStyle(
+          color: textColor,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+
+  void _openInvoice(Invoice invoice) {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || invoiceId.isEmpty) {
+      return;
+    }
+
+    context.push('/sales/invoices/$invoiceId/edit').then((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadInvoices(forceRefresh: true));
+    });
   }
 
   Color _getLoyaltyColor(LoyaltyTier tier) {

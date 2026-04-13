@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
+import 'quick_bike_finder_panel.dart';
 import 'quick_access_expense_rail.dart';
 import 'quick_purchase_panel.dart';
 import 'quick_sale_panel.dart';
@@ -13,6 +14,7 @@ import 'quick_task_panel.dart';
 /// Add new entries here to extend the toolbar with more tools.
 enum ToolbarTool {
   newJob,
+  bikeFinder,
   kiosk,
   quickSale,
   expenses,
@@ -90,6 +92,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return 'Nueva Pega';
+      case ToolbarTool.bikeFinder:
+        return 'Buscador de Bicicletas';
       case ToolbarTool.kiosk:
         return 'Kiosko RRHH';
       case ToolbarTool.quickSale:
@@ -109,6 +113,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return Icons.build_circle_outlined;
+      case ToolbarTool.bikeFinder:
+        return Icons.pedal_bike_outlined;
       case ToolbarTool.kiosk:
         return Icons.badge_outlined;
       case ToolbarTool.quickSale:
@@ -128,6 +134,8 @@ class _RightToolbarState extends State<RightToolbar> {
     switch (tool) {
       case ToolbarTool.newJob:
         return const SizedBox.shrink();
+      case ToolbarTool.bikeFinder:
+        return const QuickBikeFinderPanel();
       case ToolbarTool.kiosk:
         return const KioskModePage(
           embedded: true,

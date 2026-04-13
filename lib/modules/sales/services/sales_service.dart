@@ -419,6 +419,47 @@ class SalesService extends ChangeNotifier {
     }).toList();
   }
 
+  Future<List<Invoice>> getInvoicesForCustomer({
+    required String customerId,
+    bool forceRefresh = false,
+  }) async {
+    List<Invoice> sortCustomerInvoices(Iterable<Invoice> source) {
+      final invoices = source
+          .where((invoice) => invoice.customerId == customerId)
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      return invoices;
+    }
+
+    if (!forceRefresh && _isCacheValid(_invoicesCacheTime)) {
+      return sortCustomerInvoices(_invoices);
+    }
+
+    try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        return [];
+      }
+
+      final response = await Supabase.instance.client
+          .from(_invoicesCollection)
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('customer_id', customerId)
+          .order('date', ascending: false);
+
+      if ((response as List).isEmpty) {
+        return [];
+      }
+
+      return response.map((data) => Invoice.fromJson(data)).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+    } catch (e) {
+      debugPrint('SalesService.getInvoicesForCustomer error: $e');
+      return [];
+    }
+  }
+
   /// Get pending invoices for a specific customer
   /// Returns invoices with status 'sent', 'confirmed' and balance > 0
   /// Used for POS invoice payment mode
