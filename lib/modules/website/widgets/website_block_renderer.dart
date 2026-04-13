@@ -2227,7 +2227,8 @@ class WebsiteBlockRenderer {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(20),
                                 child: Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
                                   child: imageUrl.isEmpty
                                       ? Center(
                                           child: Icon(
@@ -2476,7 +2477,8 @@ class WebsiteBlockRenderer {
                     decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                      border: Border.all(
+                          color: primaryColor.withValues(alpha: 0.2)),
                     ),
                     child: Column(
                       children: [
@@ -2705,7 +2707,8 @@ class WebsiteBlockRenderer {
                                 height: 200,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
-                                  color: theme.colorScheme.surfaceContainerHighest,
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
                                 ),
                                 child: Center(
                                   child: Icon(
@@ -2899,7 +2902,8 @@ class WebsiteBlockRenderer {
                           children: [
                             CircleAvatar(
                               radius: 48,
-                              backgroundColor: accentColor.withValues(alpha: 0.12),
+                              backgroundColor:
+                                  accentColor.withValues(alpha: 0.12),
                               backgroundImage: avatarUrl.isNotEmpty
                                   ? NetworkImage(avatarUrl)
                                   : null,
@@ -4233,8 +4237,8 @@ class _CategoryCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black,
-                        border:
-                            Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         ctaText.toUpperCase(),
@@ -4324,7 +4328,6 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   late Duration _interval;
   late Duration _transitionDuration;
   late _CarouselAnimation _animation;
-  late Duration _animationDuration;
   Timer? _timer;
 
   @override
@@ -4360,21 +4363,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     _showArrows = (widget.data['showArrows'] ?? true) == true;
     _interval =
         Duration(seconds: _parseInterval(widget.data['intervalSeconds']));
-
-    // Parse transition duration (default 600ms)
-    int durationMs = 600;
-    if (widget.data['transitionDuration'] != null) {
-      final val = widget.data['transitionDuration'];
-      if (val is num) {
-        durationMs = val.toInt();
-      } else if (val is String) {
-        durationMs = int.tryParse(val) ?? 600;
-      }
-    }
-    _transitionDuration = Duration(milliseconds: durationMs);
-    _animationDuration = Duration(
-        milliseconds:
-            (widget.data['animationDurationMs'] as num?)?.toInt() ?? 600);
+    _transitionDuration = _parseAnimationDuration(widget.data);
     _animation = _parseAnimation(widget.data['animation']);
 
     _restartTimer();
@@ -4813,6 +4802,20 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       }
     }
     return 5;
+  }
+
+  Duration _parseAnimationDuration(Map<String, dynamic> data) {
+    final raw = data['animationDurationMs'] ?? data['transitionDuration'];
+    if (raw is num) {
+      return Duration(milliseconds: max(1, raw.toInt()));
+    }
+    if (raw is String) {
+      final parsed = int.tryParse(raw);
+      if (parsed != null) {
+        return Duration(milliseconds: max(1, parsed));
+      }
+    }
+    return const Duration(milliseconds: 600);
   }
 
   _CarouselAnimation _parseAnimation(dynamic value) {
@@ -5452,7 +5455,8 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withValues(alpha: widget.overlayOpacity * 0.3),
+                      Colors.black
+                          .withValues(alpha: widget.overlayOpacity * 0.3),
                       Colors.black.withValues(alpha: widget.overlayOpacity),
                     ],
                   ),

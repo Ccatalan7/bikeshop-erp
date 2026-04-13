@@ -2278,8 +2278,14 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           min: 200,
           max: 2000,
           divisions: 18, // (2000-200)/100 = 18 steps of 100ms
-          onChanged: (v) => widget.provider.updateBlockData(
-              widget.blockId, 'animationDurationMs', v.toInt()),
+          onChanged: (v) => widget.provider.updateBlockDataMultiple(
+            widget.blockId,
+            {
+              'animationDurationMs': v.toInt(),
+              // Keep legacy field in sync until all persisted data is normalized.
+              'transitionDuration': v.toInt(),
+            },
+          ),
         ),
         const SizedBox(height: 12),
         _EditorDropdown(
@@ -6739,8 +6745,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline,
-                  color: Color(0xFF00A09D), size: 18),
+              Icon(Icons.info_outline, color: Color(0xFF00A09D), size: 18),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -6781,9 +6786,7 @@ class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
         const SizedBox(height: 16),
 
         // Category list
-        ..._rootCategories
-            .map((category) => _buildCategoryTile(category))
-            ,
+        ..._rootCategories.map((category) => _buildCategoryTile(category)),
       ],
     );
   }
@@ -8735,7 +8738,8 @@ class _CategoryGridBlockControls extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF00A09D).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
+            border: Border.all(
+                color: const Color(0xFF00A09D).withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [

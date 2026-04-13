@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
@@ -1011,6 +1013,16 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Configuration
     final showIndicators = (widget.data['showIndicators'] ?? true) == true;
     final showArrows = (widget.data['showArrows'] ?? true) == true;
+    final rawAnimationDuration =
+        widget.data['animationDurationMs'] ?? widget.data['transitionDuration'];
+    var animationDurationMs = 600;
+    if (rawAnimationDuration is num) {
+      animationDurationMs = rawAnimationDuration.toInt();
+    } else if (rawAnimationDuration is String) {
+      animationDurationMs = int.tryParse(rawAnimationDuration) ?? 600;
+    }
+    final animationDuration =
+        Duration(milliseconds: math.max(1, animationDurationMs));
 
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
     return ConstraintLayoutBuilder(
@@ -1032,6 +1044,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           bodySize: widget.bodySize,
           blockId: widget.blockId,
           blockHeight: blockHeight,
+          animationDuration: animationDuration,
           onSlideUpdated: (index, field, value) {
             debugPrint(
                 '🔄 [EditableCarousel] Slide update: index=$index, field=$field');
@@ -4142,6 +4155,7 @@ class _EditableCarouselWidget extends StatefulWidget {
   final double? bodySize;
   final String blockId;
   final double? blockHeight; // Custom height from resize handle
+  final Duration animationDuration;
   final void Function(int index, String field, dynamic value) onSlideUpdated;
   final void Function(String route)? onNavigate;
 
@@ -4157,6 +4171,7 @@ class _EditableCarouselWidget extends StatefulWidget {
     this.bodySize,
     required this.blockId,
     this.blockHeight,
+    required this.animationDuration,
     required this.onSlideUpdated,
     this.onNavigate,
   });
@@ -4217,7 +4232,7 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
             children: [
               // Current slide
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
+                duration: widget.animationDuration,
                 child: _buildEditableSlide(
                     context,
                     widget.slides[_currentIndex],
