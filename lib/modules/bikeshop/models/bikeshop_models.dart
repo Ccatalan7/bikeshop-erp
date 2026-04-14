@@ -50,6 +50,7 @@ enum BikeType {
   folding,
   cruiser,
   gravel,
+  paseo,
   other;
 
   String get displayName {
@@ -57,7 +58,7 @@ enum BikeType {
       case BikeType.road:
         return 'Ruta';
       case BikeType.mountain:
-        return 'Montaña';
+        return 'MTB doble suspensión';
       case BikeType.mountainHardtail:
         return 'MTB hardtail';
       case BikeType.hybrid:
@@ -72,6 +73,8 @@ enum BikeType {
         return 'Cruiser';
       case BikeType.gravel:
         return 'Gravel';
+      case BikeType.paseo:
+        return 'Paseo / Urbana';
       case BikeType.other:
         return 'Otra';
     }

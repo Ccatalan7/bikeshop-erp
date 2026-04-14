@@ -13124,7 +13124,7 @@ end; $$;
 
 alter table bikes drop constraint if exists bikes_bike_type_check;
 alter table bikes add constraint bikes_bike_type_check check (
-  bike_type in ('road','mountain','mountain_hardtail','hybrid','electric','bmx','folding','cruiser','gravel','other')
+  bike_type in ('road','mountain','mountain_hardtail','hybrid','electric','bmx','folding','cruiser','gravel','paseo','other')
 );
 grant execute on function public.seed_job_subjects_for_tenant(uuid) to authenticated;
 

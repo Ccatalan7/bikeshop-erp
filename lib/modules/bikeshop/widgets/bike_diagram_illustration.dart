@@ -8,6 +8,7 @@ enum BikeDiagramVariant {
   road,
   gravel,
   commuter,
+  paseo,
   fixie,
   bmx,
   electric,
@@ -26,6 +27,8 @@ extension BikeDiagramVariantX on BikeDiagramVariant {
         return 'Gravel / all-road';
       case BikeDiagramVariant.commuter:
         return 'Commuter / touring';
+      case BikeDiagramVariant.paseo:
+        return 'Paseo / urbana';
       case BikeDiagramVariant.fixie:
         return 'Fixie / track';
       case BikeDiagramVariant.bmx:
@@ -78,6 +81,8 @@ BikeDiagramVariant resolveBikeDiagramVariant({
     case BikeType.folding:
     case BikeType.cruiser:
       return BikeDiagramVariant.commuter;
+    case BikeType.paseo:
+      return BikeDiagramVariant.paseo;
     case BikeType.other:
     case null:
       return BikeDiagramVariant.fixie;
@@ -95,6 +100,7 @@ BikeDiagramPinPlacement? resolveBikeDiagramPinPlacement({
     BikeDiagramVariant.gravel => _roadPlacements,
     BikeDiagramVariant.fixie => _roadPlacements,
     BikeDiagramVariant.commuter => _commuterPlacements,
+    BikeDiagramVariant.paseo => _commuterPlacements,
     BikeDiagramVariant.electric => _commuterPlacements,
     BikeDiagramVariant.bmx => _bmxPlacements,
   };
@@ -107,33 +113,37 @@ const Map<BikeDiagramVariant, _BikeDiagramAssetSpec> _variantAssets = {
     padding: EdgeInsets.fromLTRB(12, 12, 12, 18),
   ),
   BikeDiagramVariant.mountainHardtail: _BikeDiagramAssetSpec(
-    assetPath: 'assets/icons/mtb_bike_v2.png',
-    flipX: true,
-    padding: EdgeInsets.all(22),
+    assetPath: 'assets/images/hardtail_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.road: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(10),
+    assetPath: 'assets/images/road_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.gravel: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(10),
+    assetPath: 'assets/images/gravel_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.commuter: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(10),
+    assetPath: 'assets/images/commuter_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
+  ),
+  BikeDiagramVariant.paseo: _BikeDiagramAssetSpec(
+    assetPath: 'assets/images/paseo_diagnostic_bg.png',
+    flipX: true,
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.fixie: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(10),
+    assetPath: 'assets/images/fixie_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.bmx: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(14),
+    assetPath: 'assets/images/bmx_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
   BikeDiagramVariant.electric: _BikeDiagramAssetSpec(
-    assetPath: 'assets/images/wireframe_bike.png',
-    padding: EdgeInsets.all(10),
+    assetPath: 'assets/images/electric_diagnostic_bg.png',
+    padding: EdgeInsets.all(20),
   ),
 };
 
@@ -193,69 +203,81 @@ const Map<String, BikeDiagramPinPlacement> _hardtailPlacements = {
 
 const Map<String, BikeDiagramPinPlacement> _roadPlacements = {
   'cockpit': BikeDiagramPinPlacement(
-    position: Offset(0.73, 0.21),
+    position: Offset(0.75, 0.25),
+    labelRight: true,
+  ),
+  'suspension': BikeDiagramPinPlacement(
+    position: Offset(0.70, 0.45),
     labelRight: true,
   ),
   'front_brake': BikeDiagramPinPlacement(
-    position: Offset(0.81, 0.59),
+    position: Offset(0.80, 0.55),
     labelRight: true,
   ),
   'wheels': BikeDiagramPinPlacement(
-    position: Offset(0.72, 0.73),
+    position: Offset(0.80, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
-    position: Offset(0.46, 0.61),
+    position: Offset(0.40, 0.70),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
-    position: Offset(0.22, 0.67),
+    position: Offset(0.25, 0.65),
     labelRight: false,
   ),
 };
 
 const Map<String, BikeDiagramPinPlacement> _commuterPlacements = {
   'cockpit': BikeDiagramPinPlacement(
-    position: Offset(0.71, 0.24),
+    position: Offset(0.75, 0.25),
+    labelRight: true,
+  ),
+  'suspension': BikeDiagramPinPlacement(
+    position: Offset(0.70, 0.45),
     labelRight: true,
   ),
   'front_brake': BikeDiagramPinPlacement(
-    position: Offset(0.81, 0.60),
+    position: Offset(0.80, 0.60),
     labelRight: true,
   ),
   'wheels': BikeDiagramPinPlacement(
-    position: Offset(0.71, 0.74),
+    position: Offset(0.80, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
-    position: Offset(0.45, 0.63),
+    position: Offset(0.40, 0.70),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
-    position: Offset(0.22, 0.68),
+    position: Offset(0.25, 0.65),
     labelRight: false,
   ),
 };
 
 const Map<String, BikeDiagramPinPlacement> _bmxPlacements = {
   'cockpit': BikeDiagramPinPlacement(
-    position: Offset(0.67, 0.26),
+    position: Offset(0.70, 0.25),
+    labelRight: true,
+  ),
+  'suspension': BikeDiagramPinPlacement(
+    position: Offset(0.65, 0.45),
     labelRight: true,
   ),
   'front_brake': BikeDiagramPinPlacement(
-    position: Offset(0.78, 0.62),
+    position: Offset(0.80, 0.60),
     labelRight: true,
   ),
   'wheels': BikeDiagramPinPlacement(
-    position: Offset(0.69, 0.76),
+    position: Offset(0.75, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
-    position: Offset(0.47, 0.63),
+    position: Offset(0.45, 0.70),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
-    position: Offset(0.27, 0.69),
+    position: Offset(0.25, 0.60),
     labelRight: false,
   ),
 };
