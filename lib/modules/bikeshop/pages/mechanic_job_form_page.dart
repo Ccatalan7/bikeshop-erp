@@ -172,7 +172,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   int _selectedBikeTabIndex = 0;
   _JobWorkbenchTab _selectedWorkbenchTab = _JobWorkbenchTab.general;
   _DiagnosisWorkbenchTab _selectedDiagnosisWorkbenchTab =
-      _DiagnosisWorkbenchTab.narrative;
+      _DiagnosisWorkbenchTab.structured;
   String? _selectedStructuredDiagnosisSystemKey;
 
   /// Currently selected bike tab
@@ -4016,18 +4016,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Expanded(
             child: _buildDiagnosisSubtabButton(
               theme: theme,
-              tab: _DiagnosisWorkbenchTab.narrative,
-              icon: Icons.edit_note_outlined,
-              label: 'Ficha narrativa',
+              tab: _DiagnosisWorkbenchTab.structured,
+              icon: Icons.account_tree_outlined,
+              label: 'Modelo estructurado',
             ),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: _buildDiagnosisSubtabButton(
               theme: theme,
-              tab: _DiagnosisWorkbenchTab.structured,
-              icon: Icons.account_tree_outlined,
-              label: 'Modelo estructurado',
+              tab: _DiagnosisWorkbenchTab.narrative,
+              icon: Icons.edit_note_outlined,
+              label: 'Ficha narrativa',
             ),
           ),
         ],
