@@ -1,7 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/brake_canonical_data.dart';
 import '../services/service_wizard_service.dart';
+import 'bikeshop_multi_select_picker_field.dart';
+
+class ServiceWizardContextChip {
+  final IconData icon;
+  final String label;
+
+  const ServiceWizardContextChip({
+    required this.icon,
+    required this.label,
+  });
+}
+
+class ServiceWizardContextSummary {
+  final String title;
+  final String? subtitle;
+  final List<ServiceWizardContextChip> chips;
+
+  const ServiceWizardContextSummary({
+    required this.title,
+    this.subtitle,
+    this.chips = const <ServiceWizardContextChip>[],
+  });
+}
+
+class ServiceWizardLockedSelection {
+  final String label;
+  final String valueLabel;
+
+  const ServiceWizardLockedSelection({
+    required this.label,
+    required this.valueLabel,
+  });
+}
+
+class ServiceWizardQuestionOverride {
+  final String? label;
+  final String? helperText;
+  final List<ServiceQuestionOption>? options;
+  final ServiceWizardLockedSelection? lockedSelection;
+  final bool preferDropdownInput;
+
+  const ServiceWizardQuestionOverride({
+    this.label,
+    this.helperText,
+    this.options,
+    this.lockedSelection,
+    this.preferDropdownInput = false,
+  });
+}
 
 /// Shows the service wizard dialog for a service product.
 /// Returns [ServiceWizardResult] with answers + summary, or null if skipped.
@@ -12,8 +62,12 @@ Future<ServiceWizardResult?> showServiceWizardDialog(
   required bool productIsService,
   ServiceWizardProfile? profile,
   Map<String, dynamic>? initialAnswers,
+  ServiceWizardContextSummary? contextSummary,
   String? helperText,
   Set<String> hiddenQuestionKeys = const <String>{},
+  Map<String, ServiceWizardQuestionOverride> questionOverrides =
+      const <String, ServiceWizardQuestionOverride>{},
+  Set<String> diagnosisLinkedQuestionKeys = const <String>{},
 }) {
   return showDialog<ServiceWizardResult>(
     context: context,
@@ -22,8 +76,11 @@ Future<ServiceWizardResult?> showServiceWizardDialog(
       productName: productName,
       profile: profile,
       initialAnswers: initialAnswers,
+      contextSummary: contextSummary,
       helperText: helperText,
       hiddenQuestionKeys: hiddenQuestionKeys,
+      questionOverrides: questionOverrides,
+      diagnosisLinkedQuestionKeys: diagnosisLinkedQuestionKeys,
     ),
   );
 }
@@ -32,15 +89,21 @@ class _ServiceWizardDialog extends StatefulWidget {
   final String productName;
   final ServiceWizardProfile? profile;
   final Map<String, dynamic>? initialAnswers;
+  final ServiceWizardContextSummary? contextSummary;
   final String? helperText;
   final Set<String> hiddenQuestionKeys;
+  final Map<String, ServiceWizardQuestionOverride> questionOverrides;
+  final Set<String> diagnosisLinkedQuestionKeys;
 
   const _ServiceWizardDialog({
     required this.productName,
     required this.profile,
     this.initialAnswers,
+    this.contextSummary,
     this.helperText,
     this.hiddenQuestionKeys = const <String>{},
+    this.questionOverrides = const <String, ServiceWizardQuestionOverride>{},
+    this.diagnosisLinkedQuestionKeys = const <String>{},
   });
 
   bool get isEditing => initialAnswers != null && initialAnswers!.isNotEmpty;
@@ -92,6 +155,69 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
         .toList();
   }
 
+  ServiceWizardQuestionOverride? _overrideFor(ServiceProfileQuestion q) {
+    return widget.questionOverrides[q.key];
+  }
+
+  String _questionLabel(ServiceProfileQuestion q) {
+    return _overrideFor(q)?.label ?? q.label;
+  }
+
+  List<ServiceQuestionOption> _questionOptions(ServiceProfileQuestion q) {
+    return _overrideFor(q)?.options ?? q.options;
+  }
+
+  bool _isDiagnosisLinked(ServiceProfileQuestion q) {
+    return widget.diagnosisLinkedQuestionKeys.contains(q.key);
+  }
+
+  bool _prefersDropdownInput(ServiceProfileQuestion q) {
+    return _overrideFor(q)?.preferDropdownInput == true ||
+        (_isDiagnosisLinked(q) &&
+            isDiagnosisLinkedBrakeQuestionKey(q.key) &&
+            (q.questionType == 'single_select' ||
+                q.questionType == 'multi_select'));
+  }
+
+  String _resolveQuestionValueLabel(ServiceProfileQuestion q, String rawValue) {
+    for (final option in _questionOptions(q)) {
+      if (option.value == rawValue) {
+        return option.label;
+      }
+    }
+    return ServiceWizardService.resolveLabel(q, rawValue);
+  }
+
+  String _buildSummary(List<ServiceProfileQuestion> questions) {
+    final parts = <String>[];
+    for (final q in questions) {
+      final value = _answers[q.key];
+      if (value == null || value.toString().isEmpty) {
+        continue;
+      }
+
+      final label = _questionLabel(q);
+      if (value is bool) {
+        parts.add('$label: ${value ? 'Sí' : 'No'}');
+        continue;
+      }
+
+      if (value is List) {
+        if (value.isEmpty) {
+          continue;
+        }
+        final resolvedLabels = value
+            .map((raw) => _resolveQuestionValueLabel(q, raw.toString()))
+            .join(', ');
+        parts.add('$label: $resolvedLabels');
+        continue;
+      }
+
+      parts.add('$label: ${_resolveQuestionValueLabel(q, value.toString())}');
+    }
+    return parts.join(' · ');
+  }
+
   void _confirm() {
     final answers = Map<String, dynamic>.from(_answers);
     if (_notesController.text.trim().isNotEmpty) {
@@ -99,7 +225,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     }
 
     final questions = _visibleQuestions;
-    String summary = ServiceWizardService.buildSummary(answers, questions);
+    String summary = _buildSummary(questions);
     if (answers['_notes'] != null) {
       final notes = answers['_notes'] as String;
       summary = summary.isEmpty ? notes : '$summary\n$notes';
@@ -135,6 +261,10 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.contextSummary != null) ...[
+                        _buildContextSummary(theme, widget.contextSummary!),
+                        const SizedBox(height: 16),
+                      ],
                       if (widget.helperText != null) ...[
                         _buildContextHint(theme, widget.helperText!),
                         const SizedBox(height: 16),
@@ -290,7 +420,117 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     );
   }
 
+  Widget _buildContextSummary(
+    ThemeData theme,
+    ServiceWizardContextSummary summary,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.directions_bike_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (summary.subtitle != null &&
+                        summary.subtitle!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        summary.subtitle!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (summary.chips.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Column(
+              children: summary.chips.map((chip) {
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          chip.icon,
+                          size: 14,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          chip.label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(growable: false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuestion(ThemeData theme, ServiceProfileQuestion q) {
+    final override = _overrideFor(q);
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
@@ -300,13 +540,40 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
             children: [
               Expanded(
                 child: Text(
-                  q.label,
+                  _questionLabel(q),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
+              if (_isDiagnosisLinked(q))
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.link_outlined,
+                        size: 12,
+                        color: theme.colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Diagnóstico',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (q.isRequired)
                 Text(' *',
                     style: TextStyle(
@@ -314,6 +581,20 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
                         fontWeight: FontWeight.bold)),
             ],
           ),
+          if (override?.lockedSelection != null) ...[
+            const SizedBox(height: 10),
+            _buildLockedSelectionField(theme, override!.lockedSelection!),
+          ],
+          if (override?.helperText != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              override!.helperText!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           _buildQuestionInput(theme, q),
         ],
@@ -321,7 +602,60 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     );
   }
 
+  Widget _buildLockedSelectionField(
+    ThemeData theme,
+    ServiceWizardLockedSelection lockedSelection,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  lockedSelection.label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  lockedSelection.valueLabel,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.arrow_drop_down_rounded,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuestionInput(ThemeData theme, ServiceProfileQuestion q) {
+    if (_prefersDropdownInput(q)) {
+      switch (q.questionType) {
+        case 'single_select':
+          return _buildSingleSelectDropdownInput(theme, q);
+        case 'multi_select':
+          return _buildMultiSelectDropdownInput(theme, q);
+      }
+    }
+
     switch (q.questionType) {
       case 'boolean':
         return _buildBooleanInput(theme, q);
@@ -392,10 +726,14 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
 
   Widget _buildSingleSelectInput(ThemeData theme, ServiceProfileQuestion q) {
     final selected = _answers[q.key] as String?;
+    final options = _questionOptions(q);
+    if (options.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: q.options.map((opt) {
+      children: options.map((opt) {
         final isSelected = selected == opt.value;
         return GestureDetector(
           onTap: () => setState(() => _answers[q.key] = opt.value),
@@ -438,12 +776,36 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     );
   }
 
+  Widget _buildSingleSelectDropdownInput(
+    ThemeData theme,
+    ServiceProfileQuestion q,
+  ) {
+    final selected = _answers[q.key] as String?;
+    final options = _questionOptions(q);
+    if (options.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return BikeshopSingleSelectDropdownField(
+      options: options,
+      value: selected,
+      hintText: 'Selecciona una opción',
+      onChanged: (value) {
+        setState(() => _answers[q.key] = value);
+      },
+    );
+  }
+
   Widget _buildMultiSelectInput(ThemeData theme, ServiceProfileQuestion q) {
     final selected = (_answers[q.key] as List?)?.cast<String>() ?? <String>[];
+    final options = _questionOptions(q);
+    if (options.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: q.options.map((opt) {
+      children: options.map((opt) {
         final isSelected = selected.contains(opt.value);
         return FilterChip(
           label: Text(opt.label),
@@ -467,6 +829,22 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildMultiSelectDropdownInput(
+    ThemeData theme,
+    ServiceProfileQuestion q,
+  ) {
+    final selected = (_answers[q.key] as List?)?.cast<String>() ?? <String>[];
+
+    return BikeshopMultiSelectPickerField(
+      options: _questionOptions(q),
+      selectedValues: selected,
+      dialogTitle: _questionLabel(q),
+      onChanged: (updatedValues) {
+        setState(() => _answers[q.key] = updatedValues);
+      },
     );
   }
 

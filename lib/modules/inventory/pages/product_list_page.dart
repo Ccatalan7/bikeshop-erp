@@ -22,6 +22,7 @@ import '../models/inventory_models.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../widgets/bulk_product_create_dialog.dart';
 import '../widgets/bulk_product_edit_dialog.dart';
 import '../widgets/product_movements_tab.dart';
 
@@ -590,6 +591,17 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  Future<void> _openBulkCreateWorkspace() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const BulkProductCreateDialog(),
+    );
+    if (result == true && mounted) {
+      _loadProducts(forceRefresh: true);
+    }
+  }
+
   Future<void> _openBulkEditWorkspace({bool useSelection = false}) async {
     final hasSelection = _selectedProductIds.isNotEmpty;
     final initialSource = useSelection && hasSelection
@@ -1137,6 +1149,14 @@ class _ProductListPageState extends State<ProductListPage> {
 
               _buildSecondaryActionButton(
                 theme: theme,
+                icon: Icons.add_box_outlined,
+                label: 'Creación masiva',
+                onPressed: _openBulkCreateWorkspace,
+              ),
+              const SizedBox(width: 10),
+
+              _buildSecondaryActionButton(
+                theme: theme,
                 icon: Icons.rule_folder_outlined,
                 label: 'Edición masiva',
                 onPressed: _openBulkEditWorkspace,
@@ -1280,6 +1300,13 @@ class _ProductListPageState extends State<ProductListPage> {
               Row(
                 children: [
                   // Scanner Toggle (Mobile Compact)
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.add_box_outlined, size: 20),
+                    onPressed: _openBulkCreateWorkspace,
+                    tooltip: 'Creación masiva',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 8),
                   IconButton.filledTonal(
                     icon: const Icon(Icons.rule_folder_outlined, size: 20),
                     onPressed: _openBulkEditWorkspace,

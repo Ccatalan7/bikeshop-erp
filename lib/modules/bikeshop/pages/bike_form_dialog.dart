@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'dart:typed_data';
 
+import '../config/brake_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/image_service.dart';
@@ -11,17 +12,40 @@ import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
 
-const Map<String, String> _brakeTypeOptions = {
-  'rim': 'Llanta',
-  'mechanical_disc': 'Disco mecanico',
-  'hydraulic_disc': 'Disco hidraulico',
-};
-
 const Map<String, String> _freehubTypeOptions = {
   'shimano_hg': 'Shimano HG',
   'microspline': 'Micro Spline',
   'sram_xd': 'SRAM XD',
   'campagnolo': 'Campagnolo',
+  'threaded_freewheel': 'Rueda libre roscada',
+  'bmx_driver': 'Driver BMX',
+  'fixed_threaded': 'Rosca fija / contratuerca',
+  'coaster_hub': 'Maza contrapedal',
+};
+
+const Map<String, String> _suspensionLayoutOptions = {
+  'rigid': 'Rigida',
+  'front_suspension': 'Suspension delantera',
+  'full_suspension': 'Doble suspension',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _valveTypeOptions = {
+  'presta': 'Presta',
+  'schrader': 'Schrader',
+  'dunlop': 'Dunlop',
+  'other': 'Otra',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bottomBracketFamilyOptions = {
+  'bsa_threaded': 'BSA roscado',
+  'pressfit': 'Pressfit',
+  'bb30_pf30': 'BB30 / PF30',
+  'mid': 'Mid / BMX',
+  'one_piece': 'One-piece',
+  'other': 'Otro',
+  'unknown': 'Desconocido',
 };
 
 const Map<String, String> _acquisitionConditionOptions = {
@@ -118,6 +142,71 @@ const List<String> _wheelSizeOptions = [
   'Otra'
 ];
 
+const List<int> _rotorSizeOptions = [140, 160, 180, 203, 220];
+const List<int> _frontChainringCountOptions = [1, 2, 3];
+const List<int> _rearCogCountOptions = [
+  1,
+  3,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14
+];
+const List<int> _frontHubSpacingOptions = [74, 100, 110, 135, 150];
+const List<int> _rearHubSpacingOptions = [
+  110,
+  120,
+  126,
+  130,
+  135,
+  142,
+  148,
+  150,
+  157,
+  170,
+  177,
+  190,
+  197,
+];
+const List<int> _spokeHoleOptions = [20, 24, 28, 32, 36, 40, 48];
+
+class _DrivetrainBreakdown {
+  final int frontChainringCount;
+  final int rearCogCount;
+
+  const _DrivetrainBreakdown({
+    required this.frontChainringCount,
+    required this.rearCogCount,
+  });
+
+  int get totalSpeeds => frontChainringCount * rearCogCount;
+
+  String get configValue {
+    if (frontChainringCount == 1 && rearCogCount == 1) {
+      return 'singlespeed';
+    }
+    return '${frontChainringCount}x$rearCogCount';
+  }
+}
+
+class _BikeTypeKernelDefaults {
+  final String? suspensionLayout;
+  final List<String>? allowedSuspensionLayouts;
+  final String? drivetrainConfig;
+
+  const _BikeTypeKernelDefaults({
+    this.suspensionLayout,
+    this.allowedSuspensionLayouts,
+    this.drivetrainConfig,
+  });
+}
+
 class BikeFormDialog extends StatefulWidget {
   final String customerId;
   final Bike? bike; // Null for new bike, existing bike for edit
@@ -150,11 +239,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   late TextEditingController _wheelSizeController;
   late TextEditingController _frontHubSpacingController;
   late TextEditingController _rearHubSpacingController;
-  late TextEditingController _spokeCountController;
-  late TextEditingController _frontRotorSizeController;
-  late TextEditingController _rearRotorSizeController;
-  late TextEditingController _drivetrainSpeedsController;
-  late TextEditingController _drivetrainConfigController;
+  late TextEditingController _frontSpokeHolesController;
+  late TextEditingController _rearSpokeHolesController;
   late TextEditingController _notesController;
 
   // Brand and model selection
@@ -171,7 +257,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Key _modelFieldKey =
       UniqueKey(); // Used to reset model field when brand changes
 
-  BikeType _selectedType = BikeType.mountain;
+  BikeType _selectedType = BikeType.other;
   DateTime? _purchaseDate;
   DateTime? _warrantyUntil;
 
@@ -186,8 +272,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   bool _isLoadingProfile = false;
   bool _isLoadingCatalogMatches = false;
 
+  String? _suspensionLayout;
   String? _brakeType;
+  String? _rimBrakeFamily;
   String? _freehubType;
+  String? _valveType;
+  String? _bottomBracketFamily;
+  int? _frontRotorSizeMm;
+  int? _rearRotorSizeMm;
+  int? _frontChainringCount;
+  int? _rearCogCount;
+  String? _legacyDrivetrainConfig;
+  int? _legacyDrivetrainSpeeds;
   String? _acquisitionCondition;
   String? _maintenanceHistory;
   String? _primaryUse;
@@ -219,12 +315,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         text: widget.bike?.frontHubSpacingMm?.toString() ?? '');
     _rearHubSpacingController = TextEditingController(
         text: widget.bike?.rearHubSpacingMm?.toString() ?? '');
-    _spokeCountController =
-        TextEditingController(text: widget.bike?.spokeCount?.toString() ?? '');
-    _frontRotorSizeController = TextEditingController();
-    _rearRotorSizeController = TextEditingController();
-    _drivetrainSpeedsController = TextEditingController();
-    _drivetrainConfigController = TextEditingController();
+    final spokeCountText = widget.bike?.spokeCount?.toString() ?? '';
+    _frontSpokeHolesController = TextEditingController(text: spokeCountText);
+    _rearSpokeHolesController = TextEditingController(text: spokeCountText);
     _notesController = TextEditingController(text: widget.bike?.notes);
 
     if (widget.bike != null) {
@@ -232,6 +325,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _purchaseDate = widget.bike!.purchaseDate;
       _warrantyUntil = widget.bike!.warrantyUntil;
       _imageUrls = List.from(widget.bike!.imageUrls);
+      _applyBikeTypeDefaults();
     }
 
     // Load brands and initialize selection
@@ -263,16 +357,34 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       setState(() {
         _existingProfile = profile;
         _selectedCatalogBike = catalogBike;
+        _suspensionLayout = technicalValues['suspensionLayout']?.toString();
         _brakeType = technicalValues['brakeType']?.toString();
+        _rimBrakeFamily = _brakeType == 'rim'
+            ? technicalValues['rimBrakeFamily']?.toString()
+            : null;
         _freehubType = technicalValues['freehubType']?.toString();
-        _frontRotorSizeController.text =
-            technicalValues['frontRotorSizeMm']?.toString() ?? '';
-        _rearRotorSizeController.text =
-            technicalValues['rearRotorSizeMm']?.toString() ?? '';
-        _drivetrainSpeedsController.text =
-            technicalValues['drivetrainSpeeds']?.toString() ?? '';
-        _drivetrainConfigController.text =
-            technicalValues['drivetrainConfig']?.toString() ?? '';
+        _valveType = technicalValues['valveType']?.toString();
+        _bottomBracketFamily =
+            technicalValues['bottomBracketFamily']?.toString();
+        _frontRotorSizeMm = !_isDiscBrakeType(_brakeType)
+            ? null
+            : _parseNullableIntValue(technicalValues['frontRotorSizeMm']);
+        _rearRotorSizeMm = !_isDiscBrakeType(_brakeType)
+            ? null
+            : _parseNullableIntValue(technicalValues['rearRotorSizeMm']);
+        _frontSpokeHolesController.text =
+            technicalValues['frontSpokeHoles']?.toString() ??
+                widget.bike?.spokeCount?.toString() ??
+                '';
+        _rearSpokeHolesController.text =
+            technicalValues['rearSpokeHoles']?.toString() ??
+                widget.bike?.spokeCount?.toString() ??
+                '';
+        _hydrateDrivetrainState(
+          configRaw: technicalValues['drivetrainConfig']?.toString(),
+          totalSpeeds:
+              _parseNullableIntValue(technicalValues['drivetrainSpeeds']),
+        );
         _acquisitionCondition =
             intakeValues['acquisitionCondition']?.toString();
         _maintenanceHistory =
@@ -289,6 +401,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _technicalConfirmed = profile.technicalConfirmed.map(
           (key, value) => MapEntry(key.toString(), value == true),
         );
+        _applyBikeTypeDefaults();
       });
     } catch (e) {
       debugPrint('Error loading bike profile: $e');
@@ -387,7 +500,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _rearHubSpacingController.text = entry.rearHubSpacingMm!.toString();
       }
       if (entry.spokeCount != null) {
-        _spokeCountController.text = entry.spokeCount!.toString();
+        _frontSpokeHolesController.text = entry.spokeCount!.toString();
+        _rearSpokeHolesController.text = entry.spokeCount!.toString();
+        _technicalSources['frontSpokeHoles'] = 'catalog';
+        _technicalConfirmed['frontSpokeHoles'] = false;
+        _technicalSources['rearSpokeHoles'] = 'catalog';
+        _technicalConfirmed['rearSpokeHoles'] = false;
       }
 
       if (entry.brakeType != null) {
@@ -395,33 +513,536 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _technicalSources['brakeType'] = 'catalog';
         _technicalConfirmed['brakeType'] = false;
       }
-      if (entry.brakeRotorSizeFrontMm != null) {
-        _frontRotorSizeController.text =
-            entry.brakeRotorSizeFrontMm!.toString();
+      if (_brakeType == 'rim') {
+        _frontRotorSizeMm = null;
+        _rearRotorSizeMm = null;
+        _technicalSources.remove('rimBrakeFamily');
+        _technicalConfirmed.remove('rimBrakeFamily');
+      } else if (_isDiscBrakeType(_brakeType) &&
+          entry.brakeRotorSizeFrontMm != null) {
+        _clearRimBrakeFamilyTechnicalValue();
+        _frontRotorSizeMm = entry.brakeRotorSizeFrontMm;
         _technicalSources['frontRotorSizeMm'] = 'catalog';
         _technicalConfirmed['frontRotorSizeMm'] = false;
+      } else {
+        _clearRotorSizeTechnicalValues();
+        _clearRimBrakeFamilyTechnicalValue();
       }
-      if (entry.brakeRotorSizeRearMm != null) {
-        _rearRotorSizeController.text = entry.brakeRotorSizeRearMm!.toString();
+      if (_isDiscBrakeType(_brakeType) && entry.brakeRotorSizeRearMm != null) {
+        _rearRotorSizeMm = entry.brakeRotorSizeRearMm;
         _technicalSources['rearRotorSizeMm'] = 'catalog';
         _technicalConfirmed['rearRotorSizeMm'] = false;
       }
-      if (entry.drivetrainSpeeds != null) {
-        _drivetrainSpeedsController.text = entry.drivetrainSpeeds!.toString();
-        _technicalSources['drivetrainSpeeds'] = 'catalog';
-        _technicalConfirmed['drivetrainSpeeds'] = false;
-      }
-      if (entry.drivetrainConfig != null) {
-        _drivetrainConfigController.text = entry.drivetrainConfig!;
+      if (entry.drivetrainConfig != null || entry.drivetrainSpeeds != null) {
+        _hydrateDrivetrainState(
+          configRaw: entry.drivetrainConfig,
+          totalSpeeds: entry.drivetrainSpeeds,
+        );
         _technicalSources['drivetrainConfig'] = 'catalog';
         _technicalConfirmed['drivetrainConfig'] = false;
+        _technicalSources['drivetrainSpeeds'] = 'catalog';
+        _technicalConfirmed['drivetrainSpeeds'] = false;
       }
       if (entry.freehubType != null) {
         _freehubType = entry.freehubType;
         _technicalSources['freehubType'] = 'catalog';
         _technicalConfirmed['freehubType'] = false;
       }
+
+      _applyBikeTypeDefaults();
     });
+  }
+
+  _BikeTypeKernelDefaults _kernelDefaultsForBikeType(BikeType type) {
+    switch (type) {
+      case BikeType.mountain:
+        return const _BikeTypeKernelDefaults(
+          suspensionLayout: 'full_suspension',
+        );
+      case BikeType.mountainHardtail:
+        return const _BikeTypeKernelDefaults(
+          suspensionLayout: 'front_suspension',
+          allowedSuspensionLayouts: ['front_suspension', 'rigid'],
+        );
+      case BikeType.road:
+      case BikeType.gravel:
+      case BikeType.hybrid:
+      case BikeType.folding:
+      case BikeType.cruiser:
+      case BikeType.paseo:
+        return const _BikeTypeKernelDefaults(
+          suspensionLayout: 'rigid',
+        );
+      case BikeType.bmx:
+        return const _BikeTypeKernelDefaults(
+          suspensionLayout: 'rigid',
+          allowedSuspensionLayouts: ['rigid'],
+          drivetrainConfig: 'singlespeed',
+        );
+      case BikeType.electric:
+      case BikeType.other:
+        return const _BikeTypeKernelDefaults();
+    }
+  }
+
+  bool _canReplaceBikeTypeSuggestion(String key, String currentValue) {
+    if (currentValue.trim().isEmpty) return true;
+    final source = _technicalSources[key];
+    final confirmed = _technicalConfirmed[key] == true;
+    return !confirmed && source == 'bike_type';
+  }
+
+  Map<String, String> _suspensionLayoutOptionsForBikeType(BikeType type) {
+    final allowed = _kernelDefaultsForBikeType(type).allowedSuspensionLayouts;
+    if (allowed == null || allowed.isEmpty) {
+      return _suspensionLayoutOptions;
+    }
+
+    return Map.fromEntries(
+      _suspensionLayoutOptions.entries.where(
+        (entry) => allowed.contains(entry.key),
+      ),
+    );
+  }
+
+  bool _isSuspensionLayoutAllowedForBikeType(BikeType type, String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return true;
+    }
+
+    final allowed = _kernelDefaultsForBikeType(type).allowedSuspensionLayouts;
+    if (allowed == null || allowed.isEmpty) {
+      return true;
+    }
+
+    return allowed.contains(value);
+  }
+
+  void _enforceBikeTypeTechnicalConstraints() {
+    final defaults = _kernelDefaultsForBikeType(_selectedType);
+    if (!_isSuspensionLayoutAllowedForBikeType(
+      _selectedType,
+      _suspensionLayout,
+    )) {
+      final fallbackValue = defaults.suspensionLayout ??
+          (defaults.allowedSuspensionLayouts?.isNotEmpty == true
+              ? defaults.allowedSuspensionLayouts!.first
+              : null);
+      _suspensionLayout = fallbackValue;
+      if (fallbackValue == null) {
+        _technicalSources.remove('suspensionLayout');
+        _technicalConfirmed.remove('suspensionLayout');
+      } else {
+        _technicalSources['suspensionLayout'] = 'bike_type';
+        _technicalConfirmed['suspensionLayout'] = false;
+      }
+    }
+  }
+
+  void _applySuggestedTechnicalValue({
+    required String key,
+    required String? suggestedValue,
+    required String currentValue,
+    required ValueChanged<String?> apply,
+  }) {
+    final source = _technicalSources[key];
+    final confirmed = _technicalConfirmed[key] == true;
+    final normalizedCurrent = currentValue.trim();
+
+    if (suggestedValue == null || suggestedValue.isEmpty) {
+      if (!confirmed && source == 'bike_type' && normalizedCurrent.isNotEmpty) {
+        apply(null);
+        _technicalSources.remove(key);
+        _technicalConfirmed.remove(key);
+      }
+      return;
+    }
+
+    if (_canReplaceBikeTypeSuggestion(key, normalizedCurrent)) {
+      apply(suggestedValue);
+      _technicalSources[key] = 'bike_type';
+      _technicalConfirmed[key] = false;
+    }
+  }
+
+  void _applyBikeTypeDefaults() {
+    final defaults = _kernelDefaultsForBikeType(_selectedType);
+
+    _applySuggestedTechnicalValue(
+      key: 'suspensionLayout',
+      suggestedValue: defaults.suspensionLayout,
+      currentValue: _suspensionLayout?.trim() ?? '',
+      apply: (value) => _suspensionLayout = value,
+    );
+
+    _applySuggestedDrivetrainConfig(defaults.drivetrainConfig);
+
+    _enforceBikeTypeTechnicalConstraints();
+  }
+
+  void _clearRotorSizeTechnicalValues() {
+    _frontRotorSizeMm = null;
+    _rearRotorSizeMm = null;
+    _technicalSources.remove('frontRotorSizeMm');
+    _technicalConfirmed.remove('frontRotorSizeMm');
+    _technicalSources.remove('rearRotorSizeMm');
+    _technicalConfirmed.remove('rearRotorSizeMm');
+  }
+
+  void _clearRimBrakeFamilyTechnicalValue() {
+    _rimBrakeFamily = null;
+    _technicalSources.remove('rimBrakeFamily');
+    _technicalConfirmed.remove('rimBrakeFamily');
+  }
+
+  void _handleBikeTypeChanged(BikeType value) {
+    setState(() {
+      _selectedType = value;
+      _applyBikeTypeDefaults();
+    });
+  }
+
+  void _handleBrakeTypeChanged(String? value) {
+    setState(() {
+      _brakeType = value;
+      _markTechnicalFieldManual('brakeType');
+      if (value == 'rim') {
+        _clearRotorSizeTechnicalValues();
+      } else if (_isDiscBrakeType(value)) {
+        _clearRimBrakeFamilyTechnicalValue();
+      } else {
+        _clearRotorSizeTechnicalValues();
+        _clearRimBrakeFamilyTechnicalValue();
+      }
+    });
+  }
+
+  int? _parseNullableIntText(String rawValue) {
+    final normalized = rawValue.trim();
+    if (normalized.isEmpty) return null;
+    return int.tryParse(normalized);
+  }
+
+  int? _parseNullableIntValue(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString().trim());
+  }
+
+  _DrivetrainBreakdown? _parseDrivetrainBreakdown({
+    String? configRaw,
+    int? totalSpeeds,
+  }) {
+    final normalized = configRaw?.trim().toLowerCase().replaceAll(' ', '');
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    if (normalized == 'singlespeed' ||
+        normalized == 'single_speed' ||
+        normalized == 'single-speed' ||
+        normalized.contains('fixie')) {
+      return const _DrivetrainBreakdown(
+        frontChainringCount: 1,
+        rearCogCount: 1,
+      );
+    }
+
+    final fullMatch = RegExp(r'^(\d+)x(\d+)$').firstMatch(normalized);
+    if (fullMatch != null) {
+      return _DrivetrainBreakdown(
+        frontChainringCount: int.parse(fullMatch.group(1)!),
+        rearCogCount: int.parse(fullMatch.group(2)!),
+      );
+    }
+
+    final partialMatch = RegExp(r'^(\d+)x$').firstMatch(normalized);
+    if (partialMatch != null && totalSpeeds != null) {
+      final frontCount = int.parse(partialMatch.group(1)!);
+      if (frontCount > 0 && totalSpeeds % frontCount == 0) {
+        return _DrivetrainBreakdown(
+          frontChainringCount: frontCount,
+          rearCogCount: totalSpeeds ~/ frontCount,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  void _hydrateDrivetrainState({
+    String? configRaw,
+    int? totalSpeeds,
+  }) {
+    final parsed = _parseDrivetrainBreakdown(
+      configRaw: configRaw,
+      totalSpeeds: totalSpeeds,
+    );
+
+    _frontChainringCount = parsed?.frontChainringCount;
+    _rearCogCount = parsed?.rearCogCount;
+    _legacyDrivetrainConfig = parsed == null
+        ? (configRaw?.trim().isEmpty ?? true ? null : configRaw?.trim())
+        : null;
+    _legacyDrivetrainSpeeds = parsed == null ? totalSpeeds : null;
+  }
+
+  _DrivetrainBreakdown? get _currentDrivetrainBreakdown {
+    if (_frontChainringCount == null || _rearCogCount == null) {
+      return null;
+    }
+
+    return _DrivetrainBreakdown(
+      frontChainringCount: _frontChainringCount!,
+      rearCogCount: _rearCogCount!,
+    );
+  }
+
+  String? get _effectiveDrivetrainConfig {
+    return _currentDrivetrainBreakdown?.configValue ??
+        (_legacyDrivetrainConfig?.trim().isEmpty ?? true
+            ? null
+            : _legacyDrivetrainConfig?.trim());
+  }
+
+  int? get _effectiveDrivetrainSpeeds {
+    return _currentDrivetrainBreakdown?.totalSpeeds ?? _legacyDrivetrainSpeeds;
+  }
+
+  void _setDrivetrainTechnicalSource(
+    String source, {
+    required bool confirmed,
+  }) {
+    _technicalSources['drivetrainConfig'] = source;
+    _technicalConfirmed['drivetrainConfig'] = confirmed;
+    _technicalSources['drivetrainSpeeds'] = source;
+    _technicalConfirmed['drivetrainSpeeds'] = confirmed;
+  }
+
+  void _clearDrivetrainTechnicalSource() {
+    _technicalSources.remove('drivetrainConfig');
+    _technicalConfirmed.remove('drivetrainConfig');
+    _technicalSources.remove('drivetrainSpeeds');
+    _technicalConfirmed.remove('drivetrainSpeeds');
+  }
+
+  bool _canReplaceDrivetrainSuggestion() {
+    final currentConfig = _effectiveDrivetrainConfig?.trim() ?? '';
+    final currentSpeeds = _effectiveDrivetrainSpeeds;
+    if (currentConfig.isEmpty && currentSpeeds == null) {
+      return true;
+    }
+
+    final source = _technicalSources['drivetrainConfig'] ??
+        _technicalSources['drivetrainSpeeds'];
+    final confirmed = _technicalConfirmed['drivetrainConfig'] == true ||
+        _technicalConfirmed['drivetrainSpeeds'] == true;
+    return !confirmed && source == 'bike_type';
+  }
+
+  void _applySuggestedDrivetrainConfig(String? suggestedValue) {
+    if (suggestedValue == null || suggestedValue.isEmpty) {
+      if (_canReplaceDrivetrainSuggestion()) {
+        _frontChainringCount = null;
+        _rearCogCount = null;
+        _legacyDrivetrainConfig = null;
+        _legacyDrivetrainSpeeds = null;
+        _clearDrivetrainTechnicalSource();
+      }
+      return;
+    }
+
+    if (!_canReplaceDrivetrainSuggestion()) {
+      return;
+    }
+
+    _hydrateDrivetrainState(configRaw: suggestedValue);
+    _setDrivetrainTechnicalSource('bike_type', confirmed: false);
+  }
+
+  void _commitDrivetrainBreakdownEdit() {
+    if (_currentDrivetrainBreakdown != null) {
+      _legacyDrivetrainConfig = null;
+      _legacyDrivetrainSpeeds = null;
+      _setDrivetrainTechnicalSource('mechanic', confirmed: true);
+      return;
+    }
+
+    if (_legacyDrivetrainConfig == null && _legacyDrivetrainSpeeds == null) {
+      _clearDrivetrainTechnicalSource();
+    }
+  }
+
+  void _handleFrontChainringCountChanged(int? value) {
+    setState(() {
+      _frontChainringCount = value;
+      _commitDrivetrainBreakdownEdit();
+    });
+  }
+
+  void _handleRearCogCountChanged(int? value) {
+    setState(() {
+      _rearCogCount = value;
+      _commitDrivetrainBreakdownEdit();
+    });
+  }
+
+  List<int> _resolvedRotorSizeOptions(int? currentValue) {
+    return _resolvedIntOptions(_rotorSizeOptions, currentValue);
+  }
+
+  List<int> _resolvedIntOptions(List<int> defaults, int? currentValue) {
+    final values = {
+      ...defaults,
+      if (currentValue != null) currentValue,
+    }.toList()
+      ..sort();
+    return values;
+  }
+
+  int? _parseNullableWholeNumberText(String rawValue) {
+    final normalized = rawValue.trim();
+    if (normalized.isEmpty) return null;
+    final numericValue = double.tryParse(normalized);
+    if (numericValue == null) return null;
+    return numericValue.round();
+  }
+
+  int? _deriveBikeSpokeCount() {
+    final front = _parseNullableIntText(_frontSpokeHolesController.text);
+    final rear = _parseNullableIntText(_rearSpokeHolesController.text);
+    if (front != null && rear != null && front == rear) {
+      return front;
+    }
+    return front ?? rear;
+  }
+
+  bool get _hasBrakeTypeSelection =>
+      _brakeType != null && _brakeType!.trim().isNotEmpty;
+
+  bool _isDiscBrakeType(String? rawValue) {
+    return rawValue == 'mechanical_disc' || rawValue == 'hydraulic_disc';
+  }
+
+  bool get _showRimBrakeFamilyField => _brakeType == 'rim';
+
+  bool get _showRotorSizeFields => _isDiscBrakeType(_brakeType);
+
+  String? _formatRimBrakeFamily(String? rawValue) {
+    if (rawValue == null || rawValue.trim().isEmpty) {
+      return null;
+    }
+    return kRimBrakeFamilyOptions[rawValue] ?? rawValue;
+  }
+
+  String _technicalKernelHint() {
+    switch (_selectedType) {
+      case BikeType.mountain:
+        return 'La plataforma MTB doble suspension se toma como baseline. Si es hardtail, cambia el tipo para que downstream no asuma shock trasero.';
+      case BikeType.mountainHardtail:
+        return 'La plataforma hardtail sesga la bicicleta a suspension delantera y evita tratarla como doble suspension.';
+      case BikeType.road:
+      case BikeType.gravel:
+      case BikeType.hybrid:
+      case BikeType.folding:
+      case BikeType.cruiser:
+      case BikeType.paseo:
+        return 'Esta familia sesga la bici a una base rigida. Confirma solo las excepciones reales.';
+      case BikeType.bmx:
+        return 'BMX se sesga a rigida y singlespeed. La transmisión se captura como platos x piñones, no como texto libre.';
+      case BikeType.electric:
+        return 'Electrica no simplifica la plataforma por si sola. Confirma la base fisica real antes de asumir suspension o transmision.';
+      case BikeType.other:
+        return 'En "Otra" captura solo el kernel base y deja el resto como desconocido hasta confirmar la plataforma real.';
+    }
+  }
+
+  String? _technicalConstraintHint() {
+    switch (_selectedType) {
+      case BikeType.mountainHardtail:
+        return 'Hardtail no puede quedar como doble suspensión. Solo se permiten rigida o suspension delantera.';
+      case BikeType.bmx:
+        return 'BMX se restringe a rigida y singlespeed para evitar combinaciones tecnicas imposibles en el intake base.';
+      default:
+        return null;
+    }
+  }
+
+  String? _brakeConstraintHint() {
+    if (!_hasBrakeTypeSelection) {
+      return 'Las medidas de rotor quedan bloqueadas hasta confirmar si el sistema es de llanta o disco.';
+    }
+    if (_brakeType == 'rim') {
+      final rimBrakeFamilyLabel = _formatRimBrakeFamily(_rimBrakeFamily);
+      if (rimBrakeFamilyLabel == null) {
+        return 'Ahora confirma qué familia de freno de llanta usa la bici: V-Brake, Cantilever, Caliper corto/largo, U-Brake u otro equivalente.';
+      }
+      return 'Se ocultan los rotores porque el sistema confirmado es freno de llanta ($rimBrakeFamilyLabel).';
+    }
+    if (!_isDiscBrakeType(_brakeType)) {
+      return 'Se ocultan rotores y familia de freno de llanta porque el sistema confirmado no usa ni rotor ni zapata de llanta directa.';
+    }
+    return null;
+  }
+
+  String _brakeKernelFooterText() {
+    if (!_hasBrakeTypeSelection) {
+      return 'Primero confirma el tipo de freno. Solo los sistemas de disco habilitan medidas de rotor y solo los de llanta habilitan la familia de freno de llanta.';
+    }
+
+    if (_showRimBrakeFamilyField) {
+      final rimBrakeFamilyLabel = _formatRimBrakeFamily(_rimBrakeFamily);
+      if (rimBrakeFamilyLabel == null) {
+        return 'Confirma la familia de freno de llanta para que el sistema no colapse V-Brake, Cantilever y Caliper de ruta en una sola categoría.';
+      }
+      return 'La ficha técnica ya distingue un freno de llanta $rimBrakeFamilyLabel, así que diagnóstico y servicio no deberían volver a adivinar ese sistema.';
+    }
+
+    if (!_isDiscBrakeType(_brakeType)) {
+      final brakeLabel = kBikeProfileBrakeTypeOptions[_brakeType] ??
+          _brakeType ??
+          'desconocido';
+      return 'La ficha técnica marca esta bicicleta como $brakeLabel. Por eso no se piden rotores ni familia de freno de llanta.';
+    }
+
+    return 'Los diámetros se eligen desde medidas estándar para poder enlazarlos con compatibilidad de rotor upstream.';
+  }
+
+  String _drivetrainKernelFooterText() {
+    final rearDriverNote = switch (_rearCogCount) {
+      1 =>
+        ' Con un solo piñón trasero, este campo se interpreta como driver o rueda libre singlespeed.',
+      null =>
+        ' El campo de driver trasero queda más preciso cuando confirmas cuántos piñones lleva atrás.',
+      _ =>
+        ' Con varios piñones traseros, este campo se interpreta como la familia de freehub del cassette.',
+    };
+
+    if (_currentDrivetrainBreakdown != null) {
+      return 'La configuración y las velocidades se derivan automáticamente desde platos x piñones para mantener compatibilidad real upstream.$rearDriverNote';
+    }
+
+    final legacyParts = <String>[];
+    if (_legacyDrivetrainConfig != null &&
+        _legacyDrivetrainConfig!.isNotEmpty) {
+      legacyParts.add(_legacyDrivetrainConfig!);
+    }
+    if (_legacyDrivetrainSpeeds != null) {
+      legacyParts.add('${_legacyDrivetrainSpeeds}v');
+    }
+
+    if (legacyParts.isNotEmpty) {
+      return 'El perfil heredado todavía guarda ${legacyParts.join(' · ')} sin desglose canónico. Confirma platos y piñones para que compatibilidad, diagnóstico y wizard no dependan de texto libre.$rearDriverNote';
+    }
+
+    return 'Confirma platos delanteros y piñones traseros. La multiplicación genera las velocidades totales y la configuración upstream.$rearDriverNote';
+  }
+
+  String get _rearDriverFieldLabel {
+    return _rearCogCount == 1
+        ? 'Driver / rueda libre'
+        : 'Driver / freehub trasero';
   }
 
   Future<void> _loadBrands() async {
@@ -682,11 +1303,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     _wheelSizeController.dispose();
     _frontHubSpacingController.dispose();
     _rearHubSpacingController.dispose();
-    _spokeCountController.dispose();
-    _frontRotorSizeController.dispose();
-    _rearRotorSizeController.dispose();
-    _drivetrainSpeedsController.dispose();
-    _drivetrainConfigController.dispose();
+    _frontSpokeHolesController.dispose();
+    _rearSpokeHolesController.dispose();
     _notesController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -694,12 +1312,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   bool _hasProfileData() {
     return _selectedCatalogBike != null ||
+        _suspensionLayout != null ||
         _brakeType != null ||
+        _rimBrakeFamily != null ||
         _freehubType != null ||
-        _frontRotorSizeController.text.trim().isNotEmpty ||
-        _rearRotorSizeController.text.trim().isNotEmpty ||
-        _drivetrainSpeedsController.text.trim().isNotEmpty ||
-        _drivetrainConfigController.text.trim().isNotEmpty ||
+        _valveType != null ||
+        _bottomBracketFamily != null ||
+        _frontSpokeHolesController.text.trim().isNotEmpty ||
+        _rearSpokeHolesController.text.trim().isNotEmpty ||
+        _frontRotorSizeMm != null ||
+        _rearRotorSizeMm != null ||
+        _effectiveDrivetrainSpeeds != null ||
+        (_effectiveDrivetrainConfig?.isNotEmpty ?? false) ||
         _acquisitionCondition != null ||
         _maintenanceHistory != null ||
         _primaryUse != null ||
@@ -729,17 +1353,27 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     };
 
     final technicalValues = <String, dynamic>{
+      if (_suspensionLayout != null) 'suspensionLayout': _suspensionLayout,
       if (_brakeType != null) 'brakeType': _brakeType,
+      if (_showRimBrakeFamilyField && _rimBrakeFamily != null)
+        'rimBrakeFamily': _rimBrakeFamily,
       if (_freehubType != null) 'freehubType': _freehubType,
-      if (_frontRotorSizeController.text.trim().isNotEmpty)
-        'frontRotorSizeMm': int.tryParse(_frontRotorSizeController.text.trim()),
-      if (_rearRotorSizeController.text.trim().isNotEmpty)
-        'rearRotorSizeMm': int.tryParse(_rearRotorSizeController.text.trim()),
-      if (_drivetrainSpeedsController.text.trim().isNotEmpty)
-        'drivetrainSpeeds':
-            int.tryParse(_drivetrainSpeedsController.text.trim()),
-      if (_drivetrainConfigController.text.trim().isNotEmpty)
-        'drivetrainConfig': _drivetrainConfigController.text.trim(),
+      if (_valveType != null) 'valveType': _valveType,
+      if (_bottomBracketFamily != null)
+        'bottomBracketFamily': _bottomBracketFamily,
+      if (_frontSpokeHolesController.text.trim().isNotEmpty)
+        'frontSpokeHoles': int.tryParse(_frontSpokeHolesController.text.trim()),
+      if (_rearSpokeHolesController.text.trim().isNotEmpty)
+        'rearSpokeHoles': int.tryParse(_rearSpokeHolesController.text.trim()),
+      if (_showRotorSizeFields && _frontRotorSizeMm != null)
+        'frontRotorSizeMm': _frontRotorSizeMm,
+      if (_showRotorSizeFields && _rearRotorSizeMm != null)
+        'rearRotorSizeMm': _rearRotorSizeMm,
+      if (_effectiveDrivetrainSpeeds != null)
+        'drivetrainSpeeds': _effectiveDrivetrainSpeeds,
+      if (_effectiveDrivetrainConfig != null &&
+          _effectiveDrivetrainConfig!.isNotEmpty)
+        'drivetrainConfig': _effectiveDrivetrainConfig,
     };
 
     final summarySnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
@@ -894,6 +1528,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         throw Exception('User does not have a tenant_id. Cannot create bike.');
       }
 
+      final derivedSpokeCount = _deriveBikeSpokeCount();
+
       final bike = Bike(
         id: widget.bike?.id,
         tenantId: tenantId,
@@ -922,9 +1558,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         rearHubSpacingMm: _rearHubSpacingController.text.trim().isEmpty
             ? null
             : double.tryParse(_rearHubSpacingController.text.trim()),
-        spokeCount: _spokeCountController.text.trim().isEmpty
-            ? null
-            : int.tryParse(_spokeCountController.text.trim()),
+        spokeCount: derivedSpokeCount,
         purchaseDate: _purchaseDate,
         warrantyUntil: _warrantyUntil,
         notes: _notesController.text.trim().isEmpty
@@ -1318,6 +1952,87 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     );
   }
 
+  Widget _buildTechnicalKernelGroup({
+    required String title,
+    required String description,
+    required IconData icon,
+    required List<Widget> fields,
+    double minItemWidth = 220,
+    String? footerText,
+  }) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildAdaptiveFields(fields, minItemWidth: minItemWidth),
+          if (footerText != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              footerText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildFrameSizeField() {
     return Autocomplete<String>(
       initialValue: TextEditingValue(text: _frameSizeController.text),
@@ -1354,36 +2069,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   Widget _buildWheelSizeField() {
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: _wheelSizeController.text),
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text.isEmpty) {
-          return _wheelSizeOptions;
-        }
-        return _wheelSizeOptions.where((String option) {
-          return option
-              .toLowerCase()
-              .contains(textEditingValue.text.toLowerCase());
+    final currentValue = _wheelSizeController.text.trim();
+    final resolvedOptions = {
+      ..._wheelSizeOptions,
+      if (currentValue.isNotEmpty) currentValue,
+    }.toList();
+
+    return _buildStringValueDropdown(
+      value: currentValue.isEmpty ? null : currentValue,
+      label: 'Aro',
+      icon: Icons.tire_repair_outlined,
+      options: resolvedOptions,
+      onChanged: (value) {
+        setState(() {
+          _wheelSizeController.text = value ?? '';
         });
-      },
-      onSelected: (String selection) {
-        _wheelSizeController.text = selection;
-      },
-      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-        if (controller.text != _wheelSizeController.text) {
-          controller.text = _wheelSizeController.text;
-        }
-        return TextFormField(
-          controller: controller,
-          focusNode: focusNode,
-          decoration: const InputDecoration(
-            labelText: 'Aro',
-            hintText: '29", 27.5", 700c...',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.tire_repair_outlined),
-          ),
-          onChanged: (val) => _wheelSizeController.text = val,
-        );
       },
     );
   }
@@ -1441,9 +2141,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
-                  setState(() {
-                    _selectedType = value;
-                  });
+                  _handleBikeTypeChanged(value);
                 }
               },
             ),
@@ -1493,115 +2191,329 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   Widget _buildTechnicalSection() {
+    final theme = Theme.of(context);
+    final suspensionField = _buildCodeDropdown(
+      value: _suspensionLayout,
+      label: 'Layout de suspension',
+      options: _suspensionLayoutOptionsForBikeType(_selectedType),
+      icon: Icons.timeline_outlined,
+      onChanged: (value) {
+        setState(() {
+          _suspensionLayout = value;
+          _markTechnicalFieldManual('suspensionLayout');
+        });
+      },
+    );
+
+    final brakeTypeField = _buildCodeDropdown(
+      value: _brakeType,
+      label: 'Tipo de freno',
+      options: kBikeProfileBrakeTypeOptions,
+      icon: Icons.disc_full,
+      onChanged: _handleBrakeTypeChanged,
+    );
+
+    final rimBrakeFamilyField = _buildCodeDropdown(
+      value: _rimBrakeFamily,
+      label: 'Familia freno de llanta',
+      options: kRimBrakeFamilyOptions,
+      icon: Icons.settings_input_component_outlined,
+      onChanged: (value) {
+        setState(() {
+          _rimBrakeFamily = value;
+          _markTechnicalFieldManual('rimBrakeFamily');
+        });
+      },
+    );
+
+    final frontRotorField = _buildIntDropdown(
+      value: _frontRotorSizeMm,
+      label: 'Rotor delantero',
+      icon: Icons.radio_button_checked,
+      unit: 'mm',
+      options: _resolvedRotorSizeOptions(_frontRotorSizeMm),
+      onChanged: (value) {
+        setState(() {
+          _frontRotorSizeMm = value;
+          _markTechnicalFieldManual('frontRotorSizeMm');
+        });
+      },
+    );
+
+    final rearRotorField = _buildIntDropdown(
+      value: _rearRotorSizeMm,
+      label: 'Rotor trasero',
+      icon: Icons.radio_button_checked,
+      unit: 'mm',
+      options: _resolvedRotorSizeOptions(_rearRotorSizeMm),
+      onChanged: (value) {
+        setState(() {
+          _rearRotorSizeMm = value;
+          _markTechnicalFieldManual('rearRotorSizeMm');
+        });
+      },
+    );
+
+    final frontChainringField = _buildIntDropdown(
+      value: _frontChainringCount,
+      label: 'Platos delanteros',
+      icon: Icons.tune_outlined,
+      options: _frontChainringCountOptions,
+      onChanged: _handleFrontChainringCountChanged,
+    );
+
+    final rearCogField = _buildIntDropdown(
+      value: _rearCogCount,
+      label: 'Piñones traseros',
+      icon: Icons.linear_scale_outlined,
+      options: _rearCogCountOptions,
+      onChanged: _handleRearCogCountChanged,
+    );
+
+    final drivetrainSpeedsField = _buildDerivedTechnicalField(
+      label: 'Velocidades totales',
+      icon: Icons.speed_outlined,
+      value: _effectiveDrivetrainSpeeds != null
+          ? '${_effectiveDrivetrainSpeeds}v'
+          : 'Pendiente',
+      supportingText: _currentDrivetrainBreakdown != null
+          ? 'Resultado de ${_frontChainringCount} × ${_rearCogCount}.'
+          : (_legacyDrivetrainSpeeds != null
+              ? 'Valor heredado. Confirma ambos selectores para recalcularlo.'
+              : 'Se calcula automáticamente desde el desglose delantero y trasero.'),
+    );
+
+    final drivetrainConfigField = _buildDerivedTechnicalField(
+      label: 'Configuración derivada',
+      icon: Icons.settings_input_component_outlined,
+      value: _effectiveDrivetrainConfig ?? 'Pendiente',
+      supportingText: _currentDrivetrainBreakdown != null
+          ? 'Se genera automáticamente desde platos x piñones.'
+          : (_legacyDrivetrainConfig != null &&
+                  _legacyDrivetrainConfig!.isNotEmpty
+              ? 'Valor heredado. Confirma ambos selectores para reemplazarlo.'
+              : 'Se calculará cuando confirmes ambos selectores.'),
+    );
+
+    final freehubField = _buildCodeDropdown(
+      value: _freehubType,
+      label: _rearDriverFieldLabel,
+      options: _freehubTypeOptions,
+      icon: Icons.hub_outlined,
+      onChanged: (value) {
+        setState(() {
+          _freehubType = value;
+          _markTechnicalFieldManual('freehubType');
+        });
+      },
+    );
+
+    final bottomBracketField = _buildCodeDropdown(
+      value: _bottomBracketFamily,
+      label: 'Familia pedalier / BB',
+      options: _bottomBracketFamilyOptions,
+      icon: Icons.settings_input_component_outlined,
+      onChanged: (value) {
+        setState(() {
+          _bottomBracketFamily = value;
+          _markTechnicalFieldManual('bottomBracketFamily');
+        });
+      },
+    );
+
+    final frontHubSpacingField = _buildIntDropdown(
+      value: _parseNullableWholeNumberText(_frontHubSpacingController.text),
+      label: 'Espaciado maza delantera',
+      icon: Icons.swap_horiz_outlined,
+      unit: 'mm',
+      options: _resolvedIntOptions(
+        _frontHubSpacingOptions,
+        _parseNullableWholeNumberText(_frontHubSpacingController.text),
+      ),
+      onChanged: (value) {
+        setState(() {
+          _frontHubSpacingController.text = value?.toString() ?? '';
+        });
+      },
+    );
+
+    final rearHubSpacingField = _buildIntDropdown(
+      value: _parseNullableWholeNumberText(_rearHubSpacingController.text),
+      label: 'Espaciado maza trasera',
+      icon: Icons.swap_horiz_outlined,
+      unit: 'mm',
+      options: _resolvedIntOptions(
+        _rearHubSpacingOptions,
+        _parseNullableWholeNumberText(_rearHubSpacingController.text),
+      ),
+      onChanged: (value) {
+        setState(() {
+          _rearHubSpacingController.text = value?.toString() ?? '';
+        });
+      },
+    );
+
+    final frontSpokeHolesField = _buildIntDropdown(
+      value: _parseNullableIntText(_frontSpokeHolesController.text),
+      label: 'Rayos delanteros',
+      icon: Icons.blur_on_outlined,
+      options: _resolvedIntOptions(
+        _spokeHoleOptions,
+        _parseNullableIntText(_frontSpokeHolesController.text),
+      ),
+      onChanged: (value) {
+        setState(() {
+          _frontSpokeHolesController.text = value?.toString() ?? '';
+          _markTechnicalFieldManual('frontSpokeHoles');
+        });
+      },
+    );
+
+    final rearSpokeHolesField = _buildIntDropdown(
+      value: _parseNullableIntText(_rearSpokeHolesController.text),
+      label: 'Rayos traseros',
+      icon: Icons.blur_on_outlined,
+      options: _resolvedIntOptions(
+        _spokeHoleOptions,
+        _parseNullableIntText(_rearSpokeHolesController.text),
+      ),
+      onChanged: (value) {
+        setState(() {
+          _rearSpokeHolesController.text = value?.toString() ?? '';
+          _markTechnicalFieldManual('rearSpokeHoles');
+        });
+      },
+    );
+
+    final valveTypeField = _buildCodeDropdown(
+      value: _valveType,
+      label: 'Tipo de valvula',
+      options: _valveTypeOptions,
+      icon: Icons.radio_button_checked,
+      onChanged: (value) {
+        setState(() {
+          _valveType = value;
+          _markTechnicalFieldManual('valveType');
+        });
+      },
+    );
+
     return _buildSectionCard(
       title: 'Línea base técnica',
       description:
-          'Solo los datos que realmente ayudan a servicio, compatibilidad y seguimiento.',
+          'Solo los datos que realmente ayudan a servicio, compatibilidad y seguimiento. Agrupados por los mismos sistemas que usan el perfil técnico, el diagnóstico y los wizards.',
       icon: Icons.tune,
-      child: _buildAdaptiveFields(
-        [
-          _buildCodeDropdown(
-            value: _brakeType,
-            label: 'Tipo de freno',
-            options: _brakeTypeOptions,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.rule_folder_outlined,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Reglas activas del tipo de bicicleta',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _technicalKernelHint(),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+                if (_brakeConstraintHint() != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _brakeConstraintHint()!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _buildTechnicalKernelGroup(
+            title: 'Suspensión',
+            description:
+                'Base estructural que define qué componentes y diagnósticos tienen sentido downstream.',
+            icon: Icons.timeline_outlined,
+            fields: [suspensionField],
+            minItemWidth: 260,
+            footerText: _technicalConstraintHint(),
+          ),
+          const SizedBox(height: 16),
+          _buildTechnicalKernelGroup(
+            title: 'Frenos',
+            description:
+                'Estos datos controlan preguntas de servicio, compatibilidad de rotor y visibilidad del diagnóstico de frenos.',
             icon: Icons.disc_full,
-            onChanged: (value) {
-              setState(() {
-                _brakeType = value;
-                _markTechnicalFieldManual('brakeType');
-              });
-            },
+            fields: [
+              brakeTypeField,
+              if (_showRimBrakeFamilyField) rimBrakeFamilyField,
+              if (_showRotorSizeFields) frontRotorField,
+              if (_showRotorSizeFields) rearRotorField,
+            ],
+            minItemWidth: 220,
+            footerText: _brakeKernelFooterText(),
           ),
-          TextFormField(
-            controller: _drivetrainSpeedsController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Velocidades',
-              hintText: '11',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.speed_outlined),
-            ),
-            onChanged: (_) => setState(
-              () => _markTechnicalFieldManual('drivetrainSpeeds'),
-            ),
+          const SizedBox(height: 16),
+          _buildTechnicalKernelGroup(
+            title: 'Transmisión',
+            description:
+                'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero.',
+            icon: Icons.settings_input_component_outlined,
+            fields: [
+              frontChainringField,
+              rearCogField,
+              drivetrainSpeedsField,
+              drivetrainConfigField,
+              freehubField,
+              bottomBracketField,
+            ],
+            minItemWidth: 220,
+            footerText: _drivetrainKernelFooterText(),
           ),
-          TextFormField(
-            controller: _drivetrainConfigController,
-            decoration: const InputDecoration(
-              labelText: 'Configuracion de transmision',
-              hintText: '1x11, 2x10...',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.settings_input_component_outlined),
-            ),
-            onChanged: (_) => setState(
-              () => _markTechnicalFieldManual('drivetrainConfig'),
-            ),
-          ),
-          _buildCodeDropdown(
-            value: _freehubType,
-            label: 'Freehub',
-            options: _freehubTypeOptions,
-            icon: Icons.hub_outlined,
-            onChanged: (value) {
-              setState(() {
-                _freehubType = value;
-                _markTechnicalFieldManual('freehubType');
-              });
-            },
-          ),
-          TextFormField(
-            controller: _frontRotorSizeController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Rotor delantero (mm)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.radio_button_checked),
-            ),
-            onChanged: (_) => setState(
-              () => _markTechnicalFieldManual('frontRotorSizeMm'),
-            ),
-          ),
-          TextFormField(
-            controller: _rearRotorSizeController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Rotor trasero (mm)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.radio_button_checked),
-            ),
-            onChanged: (_) => setState(
-              () => _markTechnicalFieldManual('rearRotorSizeMm'),
-            ),
-          ),
-          TextFormField(
-            controller: _frontHubSpacingController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Espaciado maza delantera (mm)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.swap_horiz_outlined),
-            ),
-          ),
-          TextFormField(
-            controller: _rearHubSpacingController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Espaciado maza trasera (mm)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.swap_horiz_outlined),
-            ),
-          ),
-          TextFormField(
-            controller: _spokeCountController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Cantidad de rayos',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.blur_on_outlined),
-            ),
+          const SizedBox(height: 16),
+          _buildTechnicalKernelGroup(
+            title: 'Ruedas y mazas',
+            description:
+                'Datos base para compatibilidad de ruedas, armado, rayado y válvulas.',
+            icon: Icons.tire_repair_outlined,
+            fields: [
+              frontHubSpacingField,
+              rearHubSpacingField,
+              frontSpokeHolesField,
+              rearSpokeHolesField,
+              valveTypeField,
+            ],
+            minItemWidth: 220,
           ),
         ],
-        minItemWidth: 220,
       ),
     );
   }
@@ -1861,6 +2773,102 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           )
           .toList(),
       onChanged: onChanged,
+    );
+  }
+
+  Widget _buildStringValueDropdown({
+    required String? value,
+    required String label,
+    required IconData icon,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon),
+      ),
+      items: options
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildIntDropdown({
+    required int? value,
+    required String label,
+    required IconData icon,
+    required List<int> options,
+    required ValueChanged<int?> onChanged,
+    String? unit,
+  }) {
+    return DropdownButtonFormField<int>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon),
+        suffixText: unit,
+      ),
+      items: options
+          .map(
+            (option) => DropdownMenuItem<int>(
+              value: option,
+              child: Text(unit == null ? '$option' : '$option $unit'),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildDerivedTechnicalField({
+    required String label,
+    required IconData icon,
+    required String value,
+    String? supportingText,
+  }) {
+    final theme = Theme.of(context);
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: value == 'Pendiente'
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+          if (supportingText != null && supportingText.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              supportingText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

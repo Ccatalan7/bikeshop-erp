@@ -8,12 +8,12 @@ class BikeCatalogEntry {
   final String modelName;
   final int modelYear;
   final String? bikeType; // road, mountain, hybrid, gravel, bmx, city
-  
+
   // Frame & Geometry
   final String? frameMaterial; // aluminum, carbon, steel, titanium
   final List<String>? frameSizeRange; // ['S', 'M', 'L']
   final String? wheelSize; // 700c, 29", 27.5", 26"
-  
+
   // Drivetrain
   final int? drivetrainSpeeds;
   final String? drivetrainConfig; // '1x11', '2x10', '3x8'
@@ -23,13 +23,14 @@ class BikeCatalogEntry {
   final String? cranksetModel;
   final String? rearDerailleurModel;
   final String? frontDerailleurModel;
-  
+
   // Braking
-  final String? brakeType; // rim, mechanical_disc, hydraulic_disc
+  final String?
+      brakeType; // rim, mechanical_disc, hydraulic_disc, roller_brake, drum_brake, coaster_brake, band_brake
   final String? brakeModel;
   final int? brakeRotorSizeFrontMm;
   final int? brakeRotorSizeRearMm;
-  
+
   // Wheels & Hubs
   final String? frontHubModel;
   final String? rearHubModel;
@@ -39,35 +40,35 @@ class BikeCatalogEntry {
   final String? rearAxleType; // QR, thru_12mm
   final String? freehubType; // shimano_hg, sram_xd, microspline
   final int? spokeCount;
-  
+
   // Tires
   final String? tireSizeFront;
   final String? tireSizeRear;
   final double? maxTireWidthMm;
-  
+
   // Cockpit
   final String? handlebarType; // drop, flat, riser
   final int? stemLengthMm;
   final double? seatpostDiameterMm;
-  
+
   // Additional Info
   final double? weightKg;
   final double? msrpUsd;
   final String? manufacturerUrl;
   final String? imageUrl;
-  
+
   // Full specs (raw JSON)
   final Map<String, dynamic>? fullSpecsJson;
-  
+
   // Data Quality
   final String dataSource; // bikebook, bike_index, manual
   final double? dataConfidence; // 0.0 to 1.0
   final String? externalId;
   final DateTime? lastVerifiedAt;
-  
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  
+
   BikeCatalogEntry({
     this.id,
     required this.brand,
@@ -115,13 +116,13 @@ class BikeCatalogEntry {
     this.createdAt,
     this.updatedAt,
   });
-  
+
   /// Display name: "Trek Marlin 5 (2024)"
   String get displayName => '$brand $modelName ($modelYear)';
-  
+
   /// Short name: "Trek Marlin 5"
   String get shortName => '$brand $modelName';
-  
+
   factory BikeCatalogEntry.fromJson(Map<String, dynamic> json) {
     return BikeCatalogEntry(
       id: json['id'] as String?,
@@ -130,7 +131,9 @@ class BikeCatalogEntry {
       modelYear: json['model_year'] as int,
       bikeType: json['bike_type'] as String?,
       frameMaterial: json['frame_material'] as String?,
-      frameSizeRange: (json['frame_size_range'] as List?)?.map((e) => e.toString()).toList(),
+      frameSizeRange: (json['frame_size_range'] as List?)
+          ?.map((e) => e.toString())
+          .toList(),
       wheelSize: json['wheel_size'] as String?,
       drivetrainSpeeds: json['drivetrain_speeds'] as int?,
       drivetrainConfig: json['drivetrain_config'] as String?,
@@ -177,7 +180,7 @@ class BikeCatalogEntry {
           : null,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
@@ -194,12 +197,16 @@ class BikeCatalogEntry {
       if (cassetteMaxTeeth != null) 'cassette_max_teeth': cassetteMaxTeeth,
       if (chainSpeeds != null) 'chain_speeds': chainSpeeds,
       if (cranksetModel != null) 'crankset_model': cranksetModel,
-      if (rearDerailleurModel != null) 'rear_derailleur_model': rearDerailleurModel,
-      if (frontDerailleurModel != null) 'front_derailleur_model': frontDerailleurModel,
+      if (rearDerailleurModel != null)
+        'rear_derailleur_model': rearDerailleurModel,
+      if (frontDerailleurModel != null)
+        'front_derailleur_model': frontDerailleurModel,
       if (brakeType != null) 'brake_type': brakeType,
       if (brakeModel != null) 'brake_model': brakeModel,
-      if (brakeRotorSizeFrontMm != null) 'brake_rotor_size_front_mm': brakeRotorSizeFrontMm,
-      if (brakeRotorSizeRearMm != null) 'brake_rotor_size_rear_mm': brakeRotorSizeRearMm,
+      if (brakeRotorSizeFrontMm != null)
+        'brake_rotor_size_front_mm': brakeRotorSizeFrontMm,
+      if (brakeRotorSizeRearMm != null)
+        'brake_rotor_size_rear_mm': brakeRotorSizeRearMm,
       if (frontHubModel != null) 'front_hub_model': frontHubModel,
       if (rearHubModel != null) 'rear_hub_model': rearHubModel,
       if (frontHubSpacingMm != null) 'front_hub_spacing_mm': frontHubSpacingMm,
@@ -213,7 +220,8 @@ class BikeCatalogEntry {
       if (maxTireWidthMm != null) 'max_tire_width_mm': maxTireWidthMm,
       if (handlebarType != null) 'handlebar_type': handlebarType,
       if (stemLengthMm != null) 'stem_length_mm': stemLengthMm,
-      if (seatpostDiameterMm != null) 'seatpost_diameter_mm': seatpostDiameterMm,
+      if (seatpostDiameterMm != null)
+        'seatpost_diameter_mm': seatpostDiameterMm,
       if (weightKg != null) 'weight_kg': weightKg,
       if (msrpUsd != null) 'msrp_usd': msrpUsd,
       if (manufacturerUrl != null) 'manufacturer_url': manufacturerUrl,
@@ -222,7 +230,8 @@ class BikeCatalogEntry {
       'data_source': dataSource,
       if (dataConfidence != null) 'data_confidence': dataConfidence,
       if (externalId != null) 'external_id': externalId,
-      if (lastVerifiedAt != null) 'last_verified_at': lastVerifiedAt!.toIso8601String(),
+      if (lastVerifiedAt != null)
+        'last_verified_at': lastVerifiedAt!.toIso8601String(),
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };

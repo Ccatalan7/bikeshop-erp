@@ -445,6 +445,21 @@ const Map<String, String> _bikeProfileBrakeTypeLabels = {
   'rim': 'Llanta',
   'mechanical_disc': 'Disco mecanico',
   'hydraulic_disc': 'Disco hidraulico',
+  'roller_brake': 'Roller brake',
+  'drum_brake': 'Tambor',
+  'coaster_brake': 'Contrapedal',
+  'band_brake': 'Banda',
+};
+
+const Map<String, String> _bikeProfileRimBrakeFamilyLabels = {
+  'v_brake': 'V-Brake',
+  'cantilever': 'Cantilever',
+  'road_caliper_short_reach': 'Caliper ruta corto',
+  'road_caliper_long_reach': 'Caliper ruta largo',
+  'u_brake': 'U-Brake',
+  'rod_brake': 'Freno de varilla',
+  'other': 'Otro',
+  'unknown': 'Desconocido',
 };
 
 const Map<String, String> _bikeProfileFreehubTypeLabels = {
@@ -452,6 +467,35 @@ const Map<String, String> _bikeProfileFreehubTypeLabels = {
   'microspline': 'Micro Spline',
   'sram_xd': 'SRAM XD',
   'campagnolo': 'Campagnolo',
+  'threaded_freewheel': 'Rueda libre roscada',
+  'bmx_driver': 'Driver BMX',
+  'fixed_threaded': 'Rosca fija / contratuerca',
+  'coaster_hub': 'Maza contrapedal',
+};
+
+const Map<String, String> _bikeProfileSuspensionLayoutLabels = {
+  'rigid': 'Rigida',
+  'front_suspension': 'Suspension delantera',
+  'full_suspension': 'Doble suspension',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bikeProfileValveTypeLabels = {
+  'presta': 'Presta',
+  'schrader': 'Schrader',
+  'dunlop': 'Dunlop',
+  'other': 'Otra',
+  'unknown': 'Desconocido',
+};
+
+const Map<String, String> _bikeProfileBottomBracketFamilyLabels = {
+  'bsa_threaded': 'BSA roscado',
+  'pressfit': 'Pressfit',
+  'bb30_pf30': 'BB30 / PF30',
+  'mid': 'Mid / BMX',
+  'one_piece': 'One-piece',
+  'other': 'Otro',
+  'unknown': 'Desconocido',
 };
 
 const Map<String, String> _bikeProfileMaintenanceLabels = {
@@ -498,6 +542,28 @@ String _formatBikeSpacing(num spacing) {
     return asDouble.toStringAsFixed(0);
   }
   return asDouble.toStringAsFixed(1);
+}
+
+String? _formatSpokeHighlight(dynamic frontValue, dynamic rearValue) {
+  final front = frontValue?.toString();
+  final rear = rearValue?.toString();
+
+  if ((front == null || front.isEmpty) && (rear == null || rear.isEmpty)) {
+    return null;
+  }
+
+  if (front != null && front.isNotEmpty && rear != null && rear.isNotEmpty) {
+    if (front == rear) {
+      return 'Rayos: $front';
+    }
+    return 'Rayos F/R: $front / $rear';
+  }
+
+  if (front != null && front.isNotEmpty) {
+    return 'Rayos delanteros: $front';
+  }
+
+  return 'Rayos traseros: $rear';
 }
 
 class BikeProfileSummaryBuilder {
@@ -548,9 +614,17 @@ class BikeProfileSummaryBuilder {
     required Map<String, dynamic> technicalValues,
   }) {
     final highlights = <String>[];
+    final suspensionLayout = _bikeProfileLabelFor(
+      _bikeProfileSuspensionLayoutLabels,
+      technicalValues['suspensionLayout'],
+    );
     final brake = _bikeProfileLabelFor(
       _bikeProfileBrakeTypeLabels,
       technicalValues['brakeType'],
+    );
+    final rimBrakeFamily = _bikeProfileLabelFor(
+      _bikeProfileRimBrakeFamilyLabels,
+      technicalValues['rimBrakeFamily'],
     );
     final freehub = _bikeProfileLabelFor(
       _bikeProfileFreehubTypeLabels,
@@ -559,15 +633,44 @@ class BikeProfileSummaryBuilder {
     final drivetrainSpeeds = technicalValues['drivetrainSpeeds']?.toString();
     final drivetrainConfig =
         technicalValues['drivetrainConfig']?.toString().trim();
+    final valveType = _bikeProfileLabelFor(
+      _bikeProfileValveTypeLabels,
+      technicalValues['valveType'],
+    );
+    final bottomBracketFamily = _bikeProfileLabelFor(
+      _bikeProfileBottomBracketFamilyLabels,
+      technicalValues['bottomBracketFamily'],
+    );
+    final spokeHighlight = _formatSpokeHighlight(
+      technicalValues['frontSpokeHoles'],
+      technicalValues['rearSpokeHoles'],
+    );
+
+    if (bike.bikeType != null) {
+      highlights.add('Plataforma: ${bike.bikeType!.displayName}');
+    }
+    if (suspensionLayout != null) {
+      highlights.add('Suspension: $suspensionLayout');
+    }
 
     if (brake != null) {
-      highlights.add('Frenos: $brake');
+      highlights.add(
+        technicalValues['brakeType']?.toString() == 'rim' &&
+                rimBrakeFamily != null
+            ? 'Frenos: $brake · $rimBrakeFamily'
+            : 'Frenos: $brake',
+      );
     }
     if (drivetrainSpeeds != null && drivetrainSpeeds.isNotEmpty) {
       highlights.add(
         drivetrainConfig != null && drivetrainConfig.isNotEmpty
             ? 'Transmision: $drivetrainConfig'
             : 'Transmision: ${drivetrainSpeeds}v',
+      );
+    }
+    if (bike.frontHubSpacingMm != null) {
+      highlights.add(
+        'Eje delantero: ${_formatBikeSpacing(bike.frontHubSpacingMm!)} mm',
       );
     }
     if (bike.rearHubSpacingMm != null) {
@@ -578,24 +681,47 @@ class BikeProfileSummaryBuilder {
     if (freehub != null) {
       highlights.add('Freehub: $freehub');
     }
-    if (bike.spokeCount != null) {
+    if (spokeHighlight != null) {
+      highlights.add(spokeHighlight);
+    } else if (bike.spokeCount != null) {
       highlights.add('Rayos: ${bike.spokeCount}');
+    }
+    if (valveType != null) {
+      highlights.add('Valvula: $valveType');
+    }
+    if (bottomBracketFamily != null) {
+      highlights.add('Pedalier: $bottomBracketFamily');
     }
 
     return highlights;
   }
 
-  static List<String> buildWarnings(Map<String, dynamic> technicalValues) {
+  static List<String> buildWarnings({
+    required Bike bike,
+    required Map<String, dynamic> technicalValues,
+  }) {
     final warnings = <String>[];
 
     final brakeType = technicalValues['brakeType']?.toString();
     if (brakeType == null || brakeType.isEmpty) {
       warnings.add('Falta confirmar tipo de freno');
+    } else if (brakeType == 'rim') {
+      final rimBrakeFamily = technicalValues['rimBrakeFamily']?.toString();
+      if (rimBrakeFamily == null || rimBrakeFamily.isEmpty) {
+        warnings.add('Falta confirmar familia de freno de llanta');
+      }
     }
 
     final drivetrainSpeeds = technicalValues['drivetrainSpeeds']?.toString();
     if (drivetrainSpeeds == null || drivetrainSpeeds.isEmpty) {
       warnings.add('Falta confirmar velocidad de transmision');
+    }
+
+    final suspensionLayout = technicalValues['suspensionLayout']?.toString();
+    if (bike.bikeType != null &&
+        bike.bikeType != BikeType.other &&
+        (suspensionLayout == null || suspensionLayout.isEmpty)) {
+      warnings.add('Falta confirmar configuracion de suspension');
     }
 
     return warnings;
@@ -616,7 +742,10 @@ class BikeProfileSummaryBuilder {
         bike: bike,
         technicalValues: technicalValues,
       ),
-      'warnings': buildWarnings(technicalValues),
+      'warnings': buildWarnings(
+        bike: bike,
+        technicalValues: technicalValues,
+      ),
       'lastConfirmedAt': confirmedAt.toIso8601String(),
     };
   }
@@ -3008,20 +3137,37 @@ class MechanicJobDiagnosisSheet {
 class DrivetrainDiagnosisSheet {
   final BikeSystemOverallStatus overallStatus;
   final double? chainWearPercent;
+  final String? chainLubricationStatus;
   final String? cassetteCondition;
+  final String? chainringCondition;
+  final String? rearDerailleurCondition;
+  final String? frontDerailleurCondition;
+  final String? shifterCondition;
   final String? notes;
 
   const DrivetrainDiagnosisSheet({
     this.overallStatus = BikeSystemOverallStatus.unknown,
     this.chainWearPercent,
+    this.chainLubricationStatus,
     this.cassetteCondition,
+    this.chainringCondition,
+    this.rearDerailleurCondition,
+    this.frontDerailleurCondition,
+    this.shifterCondition,
     this.notes,
   });
 
   bool get hasMeaningfulData =>
       overallStatus != BikeSystemOverallStatus.unknown ||
       chainWearPercent != null ||
+      (chainLubricationStatus != null && chainLubricationStatus!.isNotEmpty) ||
       (cassetteCondition != null && cassetteCondition!.isNotEmpty) ||
+      (chainringCondition != null && chainringCondition!.isNotEmpty) ||
+      (rearDerailleurCondition != null &&
+          rearDerailleurCondition!.isNotEmpty) ||
+      (frontDerailleurCondition != null &&
+          frontDerailleurCondition!.isNotEmpty) ||
+      (shifterCondition != null && shifterCondition!.isNotEmpty) ||
       (notes != null && notes!.trim().isNotEmpty);
 
   factory DrivetrainDiagnosisSheet.fromJson(Map<String, dynamic> json) {
@@ -3031,7 +3177,12 @@ class DrivetrainDiagnosisSheet {
       ),
       chainWearPercent:
           double.tryParse(json['chain_wear_percent']?.toString() ?? ''),
+      chainLubricationStatus: json['chain_lubrication_status']?.toString(),
       cassetteCondition: json['cassette_condition']?.toString(),
+      chainringCondition: json['chainring_condition']?.toString(),
+      rearDerailleurCondition: json['rear_derailleur_condition']?.toString(),
+      frontDerailleurCondition: json['front_derailleur_condition']?.toString(),
+      shifterCondition: json['shifter_condition']?.toString(),
       notes: json['notes']?.toString(),
     );
   }
@@ -3040,7 +3191,12 @@ class DrivetrainDiagnosisSheet {
     return {
       'overall_status': overallStatus.dbValue,
       'chain_wear_percent': chainWearPercent,
+      'chain_lubrication_status': chainLubricationStatus,
       'cassette_condition': cassetteCondition,
+      'chainring_condition': chainringCondition,
+      'rear_derailleur_condition': rearDerailleurCondition,
+      'front_derailleur_condition': frontDerailleurCondition,
+      'shifter_condition': shifterCondition,
       'notes': notes,
     };
   }
@@ -3049,8 +3205,18 @@ class DrivetrainDiagnosisSheet {
     BikeSystemOverallStatus? overallStatus,
     double? chainWearPercent,
     bool clearChainWearPercent = false,
+    String? chainLubricationStatus,
+    bool clearChainLubricationStatus = false,
     String? cassetteCondition,
     bool clearCassetteCondition = false,
+    String? chainringCondition,
+    bool clearChainringCondition = false,
+    String? rearDerailleurCondition,
+    bool clearRearDerailleurCondition = false,
+    String? frontDerailleurCondition,
+    bool clearFrontDerailleurCondition = false,
+    String? shifterCondition,
+    bool clearShifterCondition = false,
     String? notes,
     bool clearNotes = false,
   }) {
@@ -3059,9 +3225,24 @@ class DrivetrainDiagnosisSheet {
       chainWearPercent: clearChainWearPercent
           ? null
           : (chainWearPercent ?? this.chainWearPercent),
+      chainLubricationStatus: clearChainLubricationStatus
+          ? null
+          : (chainLubricationStatus ?? this.chainLubricationStatus),
       cassetteCondition: clearCassetteCondition
           ? null
           : (cassetteCondition ?? this.cassetteCondition),
+      chainringCondition: clearChainringCondition
+          ? null
+          : (chainringCondition ?? this.chainringCondition),
+      rearDerailleurCondition: clearRearDerailleurCondition
+          ? null
+          : (rearDerailleurCondition ?? this.rearDerailleurCondition),
+      frontDerailleurCondition: clearFrontDerailleurCondition
+          ? null
+          : (frontDerailleurCondition ?? this.frontDerailleurCondition),
+      shifterCondition: clearShifterCondition
+          ? null
+          : (shifterCondition ?? this.shifterCondition),
       notes: clearNotes ? null : (notes ?? this.notes),
     );
   }
@@ -3070,20 +3251,33 @@ class DrivetrainDiagnosisSheet {
 class BrakeDiagnosisSheet {
   final BikeSystemOverallStatus overallStatus;
   final double? padWearPercent;
+  final String? padContaminationStatus;
   final double? rotorThicknessMm;
+  final String? rotorTruenessStatus;
+  final String? rotorContaminationStatus;
+  final List<String> symptomKeys;
   final String? notes;
 
   const BrakeDiagnosisSheet({
     this.overallStatus = BikeSystemOverallStatus.unknown,
     this.padWearPercent,
+    this.padContaminationStatus,
     this.rotorThicknessMm,
+    this.rotorTruenessStatus,
+    this.rotorContaminationStatus,
+    this.symptomKeys = const [],
     this.notes,
   });
 
   bool get hasMeaningfulData =>
       overallStatus != BikeSystemOverallStatus.unknown ||
       padWearPercent != null ||
+      (padContaminationStatus != null && padContaminationStatus!.isNotEmpty) ||
       rotorThicknessMm != null ||
+      (rotorTruenessStatus != null && rotorTruenessStatus!.isNotEmpty) ||
+      (rotorContaminationStatus != null &&
+          rotorContaminationStatus!.isNotEmpty) ||
+      symptomKeys.isNotEmpty ||
       (notes != null && notes!.trim().isNotEmpty);
 
   factory BrakeDiagnosisSheet.fromJson(Map<String, dynamic> json) {
@@ -3093,8 +3287,17 @@ class BrakeDiagnosisSheet {
       ),
       padWearPercent:
           double.tryParse(json['pad_wear_percent']?.toString() ?? ''),
+      padContaminationStatus: json['pad_contamination_status']?.toString(),
       rotorThicknessMm:
           double.tryParse(json['rotor_thickness_mm']?.toString() ?? ''),
+      rotorTruenessStatus: json['rotor_trueness_status']?.toString(),
+      rotorContaminationStatus: json['rotor_contamination_status']?.toString(),
+      symptomKeys: (json['symptom_keys'] is List)
+          ? (json['symptom_keys'] as List)
+              .map((value) => value.toString().trim())
+              .where((value) => value.isNotEmpty)
+              .toList(growable: false)
+          : const [],
       notes: json['notes']?.toString(),
     );
   }
@@ -3103,7 +3306,11 @@ class BrakeDiagnosisSheet {
     return {
       'overall_status': overallStatus.dbValue,
       'pad_wear_percent': padWearPercent,
+      'pad_contamination_status': padContaminationStatus,
       'rotor_thickness_mm': rotorThicknessMm,
+      'rotor_trueness_status': rotorTruenessStatus,
+      'rotor_contamination_status': rotorContaminationStatus,
+      'symptom_keys': symptomKeys,
       'notes': notes,
     };
   }
@@ -3112,8 +3319,16 @@ class BrakeDiagnosisSheet {
     BikeSystemOverallStatus? overallStatus,
     double? padWearPercent,
     bool clearPadWearPercent = false,
+    String? padContaminationStatus,
+    bool clearPadContaminationStatus = false,
     double? rotorThicknessMm,
     bool clearRotorThicknessMm = false,
+    String? rotorTruenessStatus,
+    bool clearRotorTruenessStatus = false,
+    String? rotorContaminationStatus,
+    bool clearRotorContaminationStatus = false,
+    List<String>? symptomKeys,
+    bool clearSymptomKeys = false,
     String? notes,
     bool clearNotes = false,
   }) {
@@ -3121,9 +3336,20 @@ class BrakeDiagnosisSheet {
       overallStatus: overallStatus ?? this.overallStatus,
       padWearPercent:
           clearPadWearPercent ? null : (padWearPercent ?? this.padWearPercent),
+      padContaminationStatus: clearPadContaminationStatus
+          ? null
+          : (padContaminationStatus ?? this.padContaminationStatus),
       rotorThicknessMm: clearRotorThicknessMm
           ? null
           : (rotorThicknessMm ?? this.rotorThicknessMm),
+      rotorTruenessStatus: clearRotorTruenessStatus
+          ? null
+          : (rotorTruenessStatus ?? this.rotorTruenessStatus),
+      rotorContaminationStatus: clearRotorContaminationStatus
+          ? null
+          : (rotorContaminationStatus ?? this.rotorContaminationStatus),
+      symptomKeys:
+          clearSymptomKeys ? const [] : (symptomKeys ?? this.symptomKeys),
       notes: clearNotes ? null : (notes ?? this.notes),
     );
   }

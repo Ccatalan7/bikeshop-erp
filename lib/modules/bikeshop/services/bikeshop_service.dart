@@ -807,13 +807,39 @@ class BikeshopService extends ChangeNotifier {
     final noteParts = <String>[];
     if (section.chainWearPercent != null) {
       noteParts.add(
-        'Desgaste cadena ${section.chainWearPercent!.toStringAsFixed(1)}%',
+        'Cadena ${_formatChainWearGaugeSummary(section.chainWearPercent!)}',
       );
     }
-    if (section.cassetteCondition != null &&
-        section.cassetteCondition!.isNotEmpty) {
-      noteParts.add('Cassette ${section.cassetteCondition}');
-    }
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Lubricación cadena',
+      _diagnosisConditionLabel(section.chainLubricationStatus),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Cassette',
+      _diagnosisConditionLabel(section.cassetteCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Plato',
+      _diagnosisConditionLabel(section.chainringCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Cambio trasero',
+      _diagnosisConditionLabel(section.rearDerailleurCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Cambio delantero',
+      _diagnosisConditionLabel(section.frontDerailleurCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Shifter',
+      _diagnosisConditionLabel(section.shifterCondition),
+    );
     if (section.notes != null && section.notes!.trim().isNotEmpty) {
       noteParts.add(section.notes!.trim());
     }
@@ -922,6 +948,61 @@ class BikeshopService extends ChangeNotifier {
         ),
       );
     }
+
+    await _createDrivetrainConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      componentSlotKey: 'chain',
+      observationKey: 'chain_lubrication_status',
+      title: 'Estado lubricación de cadena',
+      statusValue: section.chainLubricationStatus,
+    );
+
+    await _createDrivetrainConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      componentSlotKey: 'chainring',
+      observationKey: 'chainring_condition',
+      title: 'Estado del plato',
+      statusValue: section.chainringCondition,
+    );
+
+    await _createDrivetrainConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      componentSlotKey: 'rear_derailleur',
+      observationKey: 'rear_derailleur_condition',
+      title: 'Estado cambio trasero',
+      statusValue: section.rearDerailleurCondition,
+    );
+
+    await _createDrivetrainConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      componentSlotKey: 'front_derailleur',
+      observationKey: 'front_derailleur_condition',
+      title: 'Estado cambio delantero',
+      statusValue: section.frontDerailleurCondition,
+    );
+
+    await _createDrivetrainConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      componentSlotKey: 'shifter',
+      observationKey: 'shifter_condition',
+      title: 'Estado shifter',
+      statusValue: section.shifterCondition,
+    );
   }
 
   Future<void> _syncBrakeDiagnosisSection({
@@ -942,9 +1023,29 @@ class BikeshopService extends ChangeNotifier {
         'Desgaste pastillas ${section.padWearPercent!.toStringAsFixed(1)}%',
       );
     }
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Contaminacion pastillas',
+      _diagnosisConditionLabel(section.padContaminationStatus),
+    );
     if (section.rotorThicknessMm != null) {
       noteParts.add(
         'Rotor ${section.rotorThicknessMm!.toStringAsFixed(2)} mm',
+      );
+    }
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Alineacion rotor',
+      _diagnosisConditionLabel(section.rotorTruenessStatus),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Contaminacion rotor',
+      _diagnosisConditionLabel(section.rotorContaminationStatus),
+    );
+    if (section.symptomKeys.isNotEmpty) {
+      noteParts.add(
+        'Sintomas ${section.symptomKeys.map(_diagnosisSymptomLabel).whereType<String>().join(', ')}',
       );
     }
     if (section.notes != null && section.notes!.trim().isNotEmpty) {
@@ -1024,6 +1125,19 @@ class BikeshopService extends ChangeNotifier {
       );
     }
 
+    await _createBrakeConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'brake_pad',
+      observationKey: 'pad_contamination_status',
+      title: 'Contaminacion de pastillas',
+      statusValue: section.padContaminationStatus,
+    );
+
     if (section.rotorThicknessMm != null) {
       await createBikeObservation(
         BikeObservation(
@@ -1050,6 +1164,140 @@ class BikeshopService extends ChangeNotifier {
         ),
       );
     }
+
+    await _createBrakeConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'rotor',
+      observationKey: 'rotor_trueness_status',
+      title: 'Alineacion del rotor',
+      statusValue: section.rotorTruenessStatus,
+    );
+
+    await _createBrakeConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'rotor',
+      observationKey: 'rotor_contamination_status',
+      title: 'Contaminacion del rotor',
+      statusValue: section.rotorContaminationStatus,
+    );
+
+    if (section.symptomKeys.isNotEmpty) {
+      final symptomLabels = section.symptomKeys
+          .map(_diagnosisSymptomLabel)
+          .whereType<String>()
+          .toList();
+      await createBikeObservation(
+        BikeObservation(
+          tenantId: job.tenantId,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          jobBikeId: jobBike.id,
+          systemKey: systemKey,
+          location: location,
+          observationKind: BikeObservationKind.conditionAssessment,
+          observationKey: 'brake_symptoms',
+          title: 'Sintomas del freno',
+          summary: symptomLabels.join(', '),
+          severity: BikeMemorySeverity.warning,
+          observedAt: observedAt,
+          source: 'job_diagnosis_sync',
+          sourceField: 'diagnosis_sheet',
+          payload: {
+            'job_number': job.jobNumber,
+            'template_key': diagnosisSheet.templateKey,
+            'symptom_keys': section.symptomKeys,
+          },
+        ),
+      );
+    }
+  }
+
+  Future<void> _createBrakeConditionObservation({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
+    required String systemKey,
+    required BikeMemoryLocation location,
+    required String componentSlotKey,
+    required String observationKey,
+    required String title,
+    required String? statusValue,
+  }) async {
+    if (statusValue == null || statusValue.trim().isEmpty) return;
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        componentSlotKey: componentSlotKey,
+        location: location,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: observationKey,
+        title: title,
+        statusValue: statusValue,
+        summary: _diagnosisConditionLabel(statusValue),
+        severity: _severityFromDiagnosisCondition(statusValue),
+        observedAt: observedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
+  }
+
+  Future<void> _createDrivetrainConditionObservation({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
+    required String componentSlotKey,
+    required String observationKey,
+    required String title,
+    required String? statusValue,
+  }) async {
+    if (statusValue == null || statusValue.trim().isEmpty) return;
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: 'drivetrain',
+        componentSlotKey: componentSlotKey,
+        location: BikeMemoryLocation.center,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: observationKey,
+        title: title,
+        statusValue: statusValue,
+        summary: _diagnosisConditionLabel(statusValue),
+        severity: _severityFromDiagnosisCondition(statusValue),
+        observedAt: observedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
   }
 
   BikeMemorySeverity? _severityFromSystemStatus(
@@ -1073,11 +1321,102 @@ class BikeshopService extends ChangeNotifier {
     return null;
   }
 
+  BikeMemorySeverity? _severityFromDiagnosisCondition(String? value) {
+    switch (value) {
+      case 'contaminated':
+      case 'replace':
+      case 'worn_out':
+      case 'failing':
+      case 'broken':
+        return BikeMemorySeverity.critical;
+      case 'dry':
+      case 'dirty':
+      case 'attention':
+      case 'worn':
+      case 'misaligned':
+      case 'slow':
+      case 'sticky':
+        return BikeMemorySeverity.warning;
+      default:
+        return null;
+    }
+  }
+
   BikeMemorySeverity? _severityFromRotorThickness(double? value) {
     if (value == null) return null;
     if (value <= 1.5) return BikeMemorySeverity.critical;
     if (value <= 1.7) return BikeMemorySeverity.warning;
     return null;
+  }
+
+  void _appendDiagnosisSummaryPart(
+    List<String> parts,
+    String label,
+    String? value,
+  ) {
+    if (value == null || value.trim().isEmpty) return;
+    parts.add('$label $value');
+  }
+
+  String _formatChainWearGaugeSummary(double storedPercent) {
+    final gaugeValue = storedPercent / 100;
+    return gaugeValue.toStringAsFixed(gaugeValue >= 1 ? 1 : 2);
+  }
+
+  String? _diagnosisConditionLabel(String? value) {
+    switch (value) {
+      case 'ok':
+        return 'OK';
+      case 'light':
+        return 'Leve';
+      case 'moderate':
+        return 'Moderado';
+      case 'replace':
+        return 'Reemplazar';
+      case 'dry':
+        return 'Seca';
+      case 'dirty':
+        return 'Sucio';
+      case 'contaminated':
+        return 'Contaminado';
+      case 'attention':
+        return 'Con atención';
+      case 'worn':
+        return 'Desgastado';
+      case 'worn_out':
+        return 'Muy desgastado';
+      case 'misaligned':
+        return 'Desalineado';
+      case 'failing':
+        return 'Con falla';
+      case 'slow':
+        return 'Lento';
+      case 'sticky':
+        return 'Pegado';
+      case 'broken':
+        return 'Roto';
+      default:
+        return null;
+    }
+  }
+
+  String? _diagnosisSymptomLabel(String key) {
+    switch (key) {
+      case 'noise':
+        return 'Ruido';
+      case 'vibration':
+        return 'Vibracion';
+      case 'rubbing':
+        return 'Roce constante';
+      case 'low_power':
+        return 'Poca potencia';
+      case 'spongy_lever':
+        return 'Maneta esponjosa';
+      case 'intermittent':
+        return 'Frenado intermitente';
+      default:
+        return null;
+    }
   }
 
   Future<void> _syncCompletedJobBikeItems({

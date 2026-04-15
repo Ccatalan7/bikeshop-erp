@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/brake_canonical_data.dart';
+
 /// A single question in the service wizard
 class ServiceProfileQuestion {
   final String id;
@@ -158,6 +160,14 @@ class ServiceWizardService {
     for (final opt in q.options) {
       if (opt.value == rawValue) return opt.label;
     }
-    return rawValue;
+
+    switch (q.key) {
+      case 'brake_type':
+        return kBrakeTypeDisplayLabels[rawValue] ?? rawValue;
+      case 'symptom':
+        return resolveBrakeSymptomLabel(rawValue) ?? rawValue;
+      default:
+        return rawValue;
+    }
   }
 }

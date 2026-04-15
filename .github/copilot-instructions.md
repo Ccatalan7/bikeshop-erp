@@ -15,6 +15,7 @@ For ANY substantive work on the bike workshop architecture, agents MUST read `BI
 This includes changes to:
 - bike encyclopedia / `bike_catalog`
 - bike form dialog / bike creation flow
+- bike creation wizard / intake wizard as the upstream data-entry layer
 - `bike_profiles`
 - `mechanic_job_bikes`
 - diagnosis sheet templates or fields
@@ -27,21 +28,128 @@ This includes changes to:
 
 The bike workshop architecture does **NOT** start at diagnosis or service wizard questions.
 
+The bike creation/edit wizard is part of the backbone.
+
+It is the upstream intake layer that writes the first canonical bike and bike-profile truth, not a disconnected convenience UI.
+
 It starts here:
 
 1. `bikes.id` = durable tenant bike identity
-2. `bike_profiles.catalog_bike_id` = link from that real bike to the shared encyclopedia model in `bike_catalog`
-3. `bike_profiles.technical_profile.values` = confirmed technical truth for that bike
-4. `mechanic_job_bikes.diagnosis_sheet_data` = visit-specific structured findings
-5. `mechanic_job_items` = executed actions and target metadata
-6. bike memory kernel tables = cross-visit derived outputs
+2. bike creation/edit wizard = upstream intake UI that must populate canonical bike truth
+3. `bike_profiles.catalog_bike_id` = link from that real bike to the shared encyclopedia model in `bike_catalog`
+4. `bike_profiles.technical_profile.values` = confirmed technical truth for that bike
+5. `mechanic_job_bikes.diagnosis_sheet_data` = visit-specific structured findings
+6. `mechanic_job_items` = executed actions and target metadata
+7. bike memory kernel tables = cross-visit derived outputs
 
 **This is the non-negotiable rule:** downstream diagnosis and service UI must consume upstream bike profile truth instead of repeatedly asking for the same technical facts.
 
 Examples:
 - If bike profile already knows brake type, wizard should not ask brake type again unless explicitly confirming/correcting it.
+- If the service row already knows Del./Tras., the wizard should not ask wheel/position again, and if the bike profile already resolves rotor size or rim-brake status for that target, the wizard should consume that upstream truth instead of re-asking it.
 - If the bike is rim-brake, rotor thickness fields should not appear in diagnosis.
 - If the bike is a known model like `Marlin 5 2025`, centralized profile data should irrigate downstream diagnosis and service flows.
+
+Diagnosis and service customization must follow the same backbone:
+- diagnosis is the shared visit-truth layer for component state
+- service wizards should be service-aware views over that same diagnosis target, plus a narrow set of service-execution-only fields
+- user-customized fields may propagate across wizards, product suggestions, bike profile promotion, or bike timeline automation only when mapped to a known semantic role from a controlled catalog
+- arbitrary local custom fields must remain diagnosis-only and must not silently affect the rest of the workflow
+
+Service taxonomy must follow the same backbone too:
+- structured services should not be modeled only as flat billable product names
+- use a small top-level system taxonomy first, then component slot, then service profile / operation
+- reuse the same canonical targeting vocabulary across services, diagnosis, products, and bike memory instead of inventing a second category model
+- treat weak product display categories like `category_name` as presentation/catalog metadata, not as the technical source of truth for workshop workflow
+
+## Mandatory Base Kernel First
+
+Bike workshop compatibility must be implemented in two layers:
+
+1. a **small mandatory base kernel** that unlocks common workshop decisions immediately
+2. a **larger extended detail layer** that can grow progressively over time
+
+Do **not** try to model the full component universe in the first pass.
+
+Do **not** create a second "simple" compatibility system beside the backbone.
+
+The mandatory base kernel is the set of upstream facts that bike creation/edit flow should actively fill, confirm, or explicitly leave unknown:
+
+- `bikes.bike_type`
+- `bikes.wheel_size`
+- `bikes.front_hub_spacing_mm`
+- `bikes.rear_hub_spacing_mm`
+- `bike_profiles.technical_profile.values.brakeType`
+- `bike_profiles.technical_profile.values.suspensionLayout`
+- `bike_profiles.technical_profile.values.drivetrainSpeeds`
+- `bike_profiles.technical_profile.values.drivetrainConfig`
+- `bike_profiles.technical_profile.values.freehubType`
+- `bike_profiles.technical_profile.values.frontSpokeHoles`
+- `bike_profiles.technical_profile.values.rearSpokeHoles`
+- `bike_profiles.technical_profile.values.valveType`
+- `bike_profiles.technical_profile.values.bottomBracketFamily`
+
+At the intake/UI layer, the bike form should actively capture these profile-side keys instead of leaving them implicit in freeform notes. If only a legacy single `spokeCount` is available, treat it as a fallback compatibility hint rather than the final front/rear spoke-hole model.
+
+At the intake/UI layer, canonical compatibility values should also be captured through the right control shape:
+- rotor diameters should come from standardized values, not arbitrary text
+- rotor inputs should remain hidden until `brakeType` is explicitly confirmed as a disc system
+- when `brakeType = rim`, the intake should capture a standardized `rimBrakeFamily` value instead of collapsing V-Brake, Cantilever, and road caliper systems into one generic label
+- special brake platforms like `roller_brake`, `drum_brake`, `coaster_brake`, and `band_brake` should stay explicit at the top brake-platform layer instead of being forced into fake rim/disc categories
+- default brake service profiles and seeded `service_profile_questions` must expose compatible vocabulary for those same brake platforms and rim subtypes; otherwise the wizard becomes a lossy downstream layer even when upstream bike profile truth is correct
+- diagnosis-linked wizard fields must reuse the same canonical vocabulary and labels as `mechanic_job_bikes.diagnosis_sheet_data`; brake symptom wording must not fork into a second synonym set just because a legacy service profile still exists
+- when the upstream bike profile already confirms the top-level brake platform, the wizard UI should lock that platform visually and ask only for the unresolved refinement that is still missing; a legacy rim bike may still need `rimBrakeFamily`, but the mechanic should not see the entire mixed brake-platform list vomited back into the flow
+- diagnosis-linked brake fields must be driven from one shared field-definition layer in code, including option labels and render style, so the bike intake, diagnosis sheet, and guided service wizard do not fork into separate local widget logic for the same centralized truth
+- when global brake service profiles drift back to legacy keys or wording, the schema seed and migration path must clean obsolete alias keys such as `position`, `includes_cable_housing`, `rotor_diameter`, `num_pistons`, or `deviation_severity` when the canonical meanings are already `which_wheel`, `rotor_size`, `piston_count`, and `damage_level`; keep real canonical brake fields like `pad_contaminated` instead of replacing them with local one-off synonyms
+- `drivetrainConfig` and `drivetrainSpeeds` should be derived from front-chainring count x rear-cog count when the mechanic is confirming drivetrain layout, not typed manually as free text
+- `freehubType` should be treated as the rear-driver family field, not as a cassette-only label, so singlespeed/BMX/fixed cases are not forced into the wrong vocabulary
+- wheel size, hub spacing, and spoke-hole counts should use standardized selectors where possible instead of open numeric/text entry by default
+
+Extended detail is allowed later, but it must enrich the same backbone instead of replacing or bypassing it.
+
+## Bike Type Must Gate Specs
+
+`bike_type` must drive more than the illustration.
+
+It must drive:
+
+- which technical fields are visible
+- which fields are hidden because they are impossible or irrelevant
+- which defaults are prefilled
+- which combinations require explicit confirmation
+
+Examples:
+
+- `mountain_hardtail` should suppress rear-shock-specific fields
+- BMX and fixie-like bikes should default to rigid / singlespeed-style expectations and suppress front-derailleur-specific fields
+- rim-brake bikes should suppress rotor-specific diagnosis fields
+
+At minimum, the intake form should apply bike-type defaults for `suspensionLayout`, BMX-style drivetrain bias, derive `drivetrainConfig` / `drivetrainSpeeds` from front x rear drivetrain counts, and hide rotor-size inputs when `brakeType = rim`.
+
+Do not leave bike creation as a single static technical block if the selected bike type already narrows the real compatibility space.
+
+## Product Compatibility Must Reuse Bike Keys
+
+The product spec engine must reuse the same canonical compatibility vocabulary as the bike profile.
+
+Do **not** create one set of compatibility keys for bikes and a different set for products.
+
+Phase-one matching should focus on high-leverage workshop categories such as:
+
+- rims
+- hubs
+- cassettes / freewheels
+- chains
+- bottom brackets
+- brake pads
+- rotors
+- complete brake sets
+
+Phase-one behavior should:
+
+- hard-block only obvious base incompatibilities
+- soft-warn when compatibility data is incomplete
+- prefer ranked suggestions over heavy validation when the dataset is still immature
 
 ## Maintenance Protocol
 
@@ -50,6 +158,26 @@ Whenever bike workshop implementation changes in a way that affects architecture
 1. Update `BIKE_WORKSHOP_MASTER_SCHEMA.md` in the same task.
 2. Update this section in `copilot-instructions.md` if the architectural rules or priorities changed.
 3. Document whether the change strengthens or weakens centralization around bike profile truth.
+
+## Whole-Backbone Inspection Rule
+
+Any substantive change to one bike-workshop layer must trigger an inspection of the rest of the backbone in the same task.
+
+Do not patch diagnosis, profile, wizard, catalog, item targeting, or bike-memory sync in isolation and then discover later that the other layers cannot represent the same concept.
+
+For any changed concept, inspect at minimum:
+
+1. `bike_catalog` / encyclopedia support for the concept.
+2. `bike_profiles.technical_profile.values` as durable upstream bike truth.
+3. `mechanic_job_bikes.diagnosis_sheet_data` as visit-specific structured truth.
+4. `service_profiles`, `service_profile_questions`, and wizard mappings for matching question/answer vocabulary.
+5. `service_product_profile_mappings` / `mechanic_job_items` so executed work targets the same system/component semantics.
+6. bike-memory sync + read models if the concept should survive across visits.
+
+If a diagnosis/service/profile/catalog change is made without checking the rest of that chain, the task is incomplete.
+
+Concrete example:
+- if hydraulic-brake purge semantics are added to diagnosis, inspect whether catalog truth, bike profile truth, wizard questions/options, service mappings/items, and bike-memory projection are all wired to the same centralized hydraulic-brake semantics.
 
 If code changes in this area are shipped without updating the master schema and these instructions, the task is incomplete.
 

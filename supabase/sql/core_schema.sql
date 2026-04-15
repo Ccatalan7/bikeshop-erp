@@ -22693,7 +22693,7 @@ begin
       v_column_name := 'job_number';
     when 'stock_adjustment' then
       v_table_name := 'stock_adjustments';
-      v_column_name := 'adjustment_number';
+      v_column_name := 'reference';
     when 'expense' then
       v_table_name := 'expenses';
       v_column_name := 'expense_number';
@@ -22802,7 +22802,7 @@ begin
       v_column_name := 'job_number';
     when 'stock_adjustment' then
       v_table_name := 'stock_adjustments';
-      v_column_name := 'adjustment_number';
+      v_column_name := 'reference';
     when 'expense' then
       v_table_name := 'expenses';
       v_column_name := 'expense_number';
@@ -24569,31 +24569,77 @@ values (
   null,
   'hydraulic_brake_bleed',
   'Sangrado de Freno Hidráulico',
-  'brakes',
+  'brake',
   'Purga y relleno de sistema de freno hidráulico',
   'Sangrado {{which_wheel}}, fluido {{fluid_type}}',
   'Sangrado {{which_wheel}} · Fluido: {{fluid_type}} · Pastillas: {{pad_condition}}'
 )
 on conflict (id) do nothing;
 
--- Questions for hydraulic_brake_bleed
-insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
-values
-  ('00000000-0001-0001-0000-000000000001', null, '00000000-0001-0000-0000-000000000001',
-   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
-   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas ruedas"}]'::jsonb),
-  ('00000000-0001-0001-0000-000000000002', null, '00000000-0001-0000-0000-000000000001',
-   'fluid_type', 'Tipo de fluido', 'single_select', true, 20,
-   '[{"value":"mineral","label":"Aceite mineral"},{"value":"dot3","label":"DOT 3"},{"value":"dot4","label":"DOT 4"},{"value":"dot51","label":"DOT 5.1"}]'::jsonb),
-  ('00000000-0001-0001-0000-000000000003', null, '00000000-0001-0000-0000-000000000001',
-   'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
-   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
-  ('00000000-0001-0001-0000-000000000004', null, '00000000-0001-0000-0000-000000000001',
-   'replace_pads', '¿Reemplazar pastillas?', 'boolean', false, 40, '[]'::jsonb),
-  ('00000000-0001-0001-0000-000000000005', null, '00000000-0001-0000-0000-000000000001',
-   'rotor_condition', 'Estado del disco/rotor', 'single_select', false, 50,
-   '[{"value":"ok","label":"Buen estado"},{"value":"glazed","label":"Cristalizado"},{"value":"warped","label":"Combado / deformado"},{"value":"replace","label":"Requiere reemplazo"}]'::jsonb)
-on conflict (id) do nothing;
+update service_profiles
+   set name = 'Sangrado de Freno Hidráulico',
+       service_family = 'brake',
+       description = 'Purga y relleno de sistema de freno hidráulico',
+       customer_summary_template = 'Sangrado {{which_wheel}}, fluido {{fluid_type}}',
+       mechanic_summary_template = 'Sangrado {{which_wheel}} · Fluido: {{fluid_type}} · Pastillas: {{pad_condition}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'hydraulic_brake_bleed';
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key = 'hydraulic_brake_bleed'
+  and spq.key in ('position', 'symptom_severity', 'hose_condition');
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0001-0001-0000-000000000001'::uuid, 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas ruedas"}]'::jsonb),
+    ('00000000-0001-0001-0000-000000000002'::uuid, 'fluid_type', 'Tipo de fluido', 'single_select', true, 20,
+     '[{"value":"mineral","label":"Aceite Mineral (Shimano / Magura / Tektro)"},{"value":"dot","label":"DOT 4 / 5.1 (SRAM / Hayes / Hope)"}]'::jsonb),
+    ('00000000-0001-0001-0000-000000000003'::uuid, 'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
+     '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
+    ('00000000-0001-0001-0000-000000000004'::uuid, 'replace_pads', '¿Reemplazar pastillas?', 'boolean', false, 40,
+     '[]'::jsonb),
+    ('00000000-0001-0001-0000-000000000006'::uuid, 'pad_contaminated', '¿Pastillas contaminadas con fluido?', 'boolean', false, 45,
+     '[]'::jsonb),
+    ('00000000-0001-0001-0000-000000000005'::uuid, 'rotor_condition', 'Estado del disco/rotor', 'single_select', false, 50,
+     '[{"value":"ok","label":"Buen estado"},{"value":"glazed","label":"Cristalizado"},{"value":"warped","label":"Combado / deformado"},{"value":"replace","label":"Requiere reemplazo"}]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'hydraulic_brake_bleed'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
 
 -- ============================================================
 -- Chain Cleaning & Lubrication
@@ -24680,89 +24726,257 @@ values (
   null,
   'piston_clean_and_reset',
   'Limpieza y Elongación de Pistones',
-  'brakes',
+  'brake',
   'Limpieza y elongación de pistones de freno hidráulico',
   'Pistones {{which_wheel}}, contaminación {{contamination_level}}',
   'Pistones {{which_wheel}} · Contaminación: {{contamination_level}} · Sellos: {{replace_seals}}'
 )
 on conflict (id) do nothing;
 
-insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
-values
-  ('00000000-0005-0001-0000-000000000001', null, '00000000-0005-0000-0000-000000000001',
-   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
-   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
-  ('00000000-0005-0001-0000-000000000002', null, '00000000-0005-0000-0000-000000000001',
-   'piston_count', 'Número de pistones', 'single_select', false, 20,
-   '[{"value":"2","label":"2 pistones"},{"value":"4","label":"4 pistones"}]'::jsonb),
-  ('00000000-0005-0001-0000-000000000003', null, '00000000-0005-0000-0000-000000000001',
-   'contamination_level', 'Nivel de contaminación', 'single_select', false, 30,
-   '[{"value":"none","label":"Sin contaminación"},{"value":"light","label":"Leve"},{"value":"moderate","label":"Moderada"},{"value":"severe","label":"Severa"}]'::jsonb),
-  ('00000000-0005-0001-0000-000000000004', null, '00000000-0005-0000-0000-000000000001',
-   'replace_seals', '¿Reemplazar sellos?', 'boolean', false, 40, '[]'::jsonb)
-on conflict (id) do nothing;
+update service_profiles
+   set name = 'Limpieza y Elongación de Pistones',
+       service_family = 'brake',
+       description = 'Limpieza y elongación de pistones de freno hidráulico',
+       customer_summary_template = 'Pistones {{which_wheel}}, contaminación {{contamination_level}}',
+       mechanic_summary_template = 'Pistones {{which_wheel}} · Contaminación: {{contamination_level}} · Sellos: {{replace_seals}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'piston_clean_and_reset';
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key = 'piston_clean_and_reset'
+  and spq.key in ('position', 'fluid_type', 'num_pistons');
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0005-0001-0000-000000000001'::uuid, 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0005-0001-0000-000000000002'::uuid, 'piston_count', 'Número de pistones', 'single_select', false, 20,
+     '[{"value":"2","label":"2 pistones"},{"value":"4","label":"4 pistones"}]'::jsonb),
+    ('00000000-0005-0001-0000-000000000003'::uuid, 'contamination_level', 'Nivel de contaminación', 'single_select', false, 30,
+     '[{"value":"none","label":"Sin contaminación"},{"value":"light","label":"Leve"},{"value":"moderate","label":"Moderada"},{"value":"severe","label":"Severa"}]'::jsonb),
+    ('00000000-0005-0001-0000-000000000004'::uuid, 'replace_seals', '¿Reemplazar sellos?', 'boolean', false, 40,
+     '[]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'piston_clean_and_reset'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
 
 -- ============================================================
 -- Brake Adjustment (Regulación de Freno)
 -- ============================================================
-insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
-values (
+insert into service_profiles (
+  id,
+  tenant_id,
+  key,
+  name,
+  service_family,
+  description,
+  customer_summary_template,
+  mechanic_summary_template
+)
+select
   '00000000-0006-0000-0000-000000000001',
   null,
   'brake_adjustment',
   'Regulación de Freno',
-  'brakes',
+  'brake',
   'Ajuste y regulación de frenos mecánicos o hidráulicos',
   'Regulación {{which_wheel}}, tipo {{brake_type}}',
-  'Regulación {{which_wheel}} · Tipo: {{brake_type}} · Fundas: {{includes_cable_housing}}'
-)
-on conflict (id) do nothing;
+  'Regulación {{which_wheel}} · Tipo: {{brake_type}} · Síntomas: {{symptom}}'
+where not exists (
+  select 1
+    from service_profiles
+   where tenant_id is null
+     and key = 'brake_adjustment'
+);
 
-insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
-values
-  ('00000000-0006-0001-0000-000000000001', null, '00000000-0006-0000-0000-000000000001',
-   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
-   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
-  ('00000000-0006-0001-0000-000000000002', null, '00000000-0006-0000-0000-000000000001',
-   'brake_type', 'Tipo de freno', 'single_select', true, 20,
-   '[{"value":"mech_disc","label":"Mecánico (disco)"},{"value":"rim","label":"Llanta (rim)"},{"value":"hydraulic","label":"Hidráulico"}]'::jsonb),
-  ('00000000-0006-0001-0000-000000000003', null, '00000000-0006-0000-0000-000000000001',
-   'includes_cable_housing', '¿Incluye fundas y piolas?', 'boolean', false, 30, '[]'::jsonb),
-  ('00000000-0006-0001-0000-000000000004', null, '00000000-0006-0000-0000-000000000001',
-   'pad_condition', 'Estado de las pastillas', 'single_select', false, 40,
-   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb)
-on conflict (id) do nothing;
+update service_profiles
+   set name = 'Regulación de Freno',
+       service_family = 'brake',
+       description = 'Ajuste y regulación de frenos mecánicos o hidráulicos',
+       customer_summary_template = 'Regulación {{which_wheel}}, tipo {{brake_type}}',
+       mechanic_summary_template = 'Regulación {{which_wheel}} · Tipo: {{brake_type}} · Síntomas: {{symptom}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'brake_adjustment';
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key = 'brake_adjustment'
+  and spq.key in ('position', 'includes_cable_housing');
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0006-0001-0000-000000000001'::uuid, 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0006-0001-0000-000000000002'::uuid, 'brake_type', 'Tipo de freno', 'single_select', true, 20,
+     '[{"value":"hydraulic_disc","label":"Hidráulico"},{"value":"mechanical_disc","label":"Disco mecánico"},{"value":"rim","label":"Llanta (rim)"},{"value":"v_brake","label":"V-Brake"},{"value":"cantilever","label":"Cantilever"},{"value":"road_caliper_short_reach","label":"Caliper corto / short reach"},{"value":"road_caliper_long_reach","label":"Caliper largo / long reach"},{"value":"roller_brake","label":"Roller brake"},{"value":"drum_brake","label":"Tambor"},{"value":"coaster_brake","label":"Contrapedal"},{"value":"band_brake","label":"Banda"}]'::jsonb),
+    ('00000000-0006-0001-0000-000000000003'::uuid, 'symptom', 'Síntomas observados', 'multi_select', false, 30,
+     '[{"value":"noise","label":"Ruido"},{"value":"vibration","label":"Vibración"},{"value":"rubbing","label":"Roce constante"},{"value":"low_power","label":"Poca potencia"},{"value":"spongy_lever","label":"Maneta esponjosa"},{"value":"intermittent","label":"Frenado intermitente"}]'::jsonb),
+    ('00000000-0006-0001-0000-000000000004'::uuid, 'pad_condition', 'Estado de las pastillas', 'single_select', false, 40,
+     '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
+    ('00000000-0006-0001-0000-000000000005'::uuid, 'rotor_condition', 'Condición del rotor', 'single_select', false, 50,
+     '[{"value":"ok","label":"Buen estado"},{"value":"glazed","label":"Sucio / contaminado"},{"value":"warped","label":"Desviado / roza"},{"value":"replace","label":"Reemplazar"}]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'brake_adjustment'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
 
 -- ============================================================
 -- General Brake Service (Mantención de Freno)
 -- ============================================================
-insert into service_profiles (id, tenant_id, key, name, service_family, description, customer_summary_template, mechanic_summary_template)
-values (
+insert into service_profiles (
+  id,
+  tenant_id,
+  key,
+  name,
+  service_family,
+  description,
+  customer_summary_template,
+  mechanic_summary_template
+)
+select
   '00000000-0007-0000-0000-000000000001',
   null,
   'brake_service_general',
   'Mantención de Freno',
-  'brakes',
+  'brake',
   'Mantención general del sistema de freno',
   'Mantención {{which_wheel}}, tipo {{brake_type}}',
-  'Mantención {{which_wheel}} · Tipo: {{brake_type}} · Pastillas: {{pad_condition}}'
-)
-on conflict (id) do nothing;
+  'Mantención {{which_wheel}} · Tipo: {{brake_type}} · Pastillas: {{pad_condition}} · Síntomas: {{symptom}}'
+where not exists (
+  select 1
+    from service_profiles
+   where tenant_id is null
+     and key = 'brake_service_general'
+);
 
-insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
-values
-  ('00000000-0007-0001-0000-000000000001', null, '00000000-0007-0000-0000-000000000001',
-   'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
-   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
-  ('00000000-0007-0001-0000-000000000002', null, '00000000-0007-0000-0000-000000000001',
-   'brake_type', 'Tipo de freno', 'single_select', true, 20,
-   '[{"value":"mech_disc","label":"Mecánico (disco)"},{"value":"rim","label":"Llanta (rim)"},{"value":"hydraulic","label":"Hidráulico"}]'::jsonb),
-  ('00000000-0007-0001-0000-000000000003', null, '00000000-0007-0000-0000-000000000001',
-   'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
-   '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
-  ('00000000-0007-0001-0000-000000000004', null, '00000000-0007-0000-0000-000000000001',
-   'fluid_check', '¿Revisar nivel de fluido hidráulico?', 'boolean', false, 40, '[]'::jsonb)
-on conflict (id) do nothing;
+update service_profiles
+   set name = 'Mantención de Freno',
+       service_family = 'brake',
+       description = 'Mantención general del sistema de freno',
+       customer_summary_template = 'Mantención {{which_wheel}}, tipo {{brake_type}}',
+       mechanic_summary_template = 'Mantención {{which_wheel}} · Tipo: {{brake_type}} · Pastillas: {{pad_condition}} · Síntomas: {{symptom}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'brake_service_general';
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key = 'brake_service_general'
+  and spq.key = 'position';
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0007-0001-0000-000000000001'::uuid, 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0007-0001-0000-000000000002'::uuid, 'brake_type', 'Tipo de freno', 'single_select', true, 20,
+     '[{"value":"hydraulic_disc","label":"Hidráulico"},{"value":"mechanical_disc","label":"Disco mecánico"},{"value":"rim","label":"Llanta (rim)"},{"value":"v_brake","label":"V-Brake"},{"value":"cantilever","label":"Cantilever"},{"value":"road_caliper_short_reach","label":"Caliper corto / short reach"},{"value":"road_caliper_long_reach","label":"Caliper largo / long reach"},{"value":"roller_brake","label":"Roller brake"},{"value":"drum_brake","label":"Tambor"},{"value":"coaster_brake","label":"Contrapedal"},{"value":"band_brake","label":"Banda"}]'::jsonb),
+    ('00000000-0007-0001-0000-000000000003'::uuid, 'pad_condition', 'Estado de las pastillas', 'single_select', false, 30,
+     '[{"value":"ok","label":"Buen estado"},{"value":"worn","label":"Desgastadas - reemplazar"},{"value":"critical","label":"Crítico - cambio urgente"}]'::jsonb),
+    ('00000000-0007-0001-0000-000000000004'::uuid, 'fluid_check', '¿Revisar nivel de fluido hidráulico?', 'boolean', false, 40,
+     '[]'::jsonb),
+    ('00000000-0007-0001-0000-000000000005'::uuid, 'symptom', 'Síntomas observados', 'multi_select', false, 50,
+     '[{"value":"noise","label":"Ruido"},{"value":"vibration","label":"Vibración"},{"value":"rubbing","label":"Roce constante"},{"value":"low_power","label":"Poca potencia"},{"value":"spongy_lever","label":"Maneta esponjosa"},{"value":"intermittent","label":"Frenado intermitente"}]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'brake_service_general'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
 
 -- ============================================================
 -- Rotor Truing (Centrado de Rotor)
@@ -24773,22 +24987,77 @@ values (
   null,
   'rotor_truing',
   'Centrado de Rotor',
-  'brakes',
+  'brake',
   'Centrado y ajuste de disco/rotor de freno',
   'Centrado rotor {{which_wheel}}',
   'Rotor {{which_wheel}} · Daño: {{damage_level}}'
 )
 on conflict (id) do nothing;
 
-insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
-values
-  ('00000000-0008-0001-0000-000000000001', null, '00000000-0008-0000-0000-000000000001',
-   'which_wheel', '¿Qué rueda?', 'single_select', true, 10,
-   '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
-  ('00000000-0008-0001-0000-000000000002', null, '00000000-0008-0000-0000-000000000001',
-   'rotor_size', 'Tamaño del rotor', 'single_select', false, 20,
-   '[{"value":"140","label":"140 mm"},{"value":"160","label":"160 mm"},{"value":"180","label":"180 mm"},{"value":"203","label":"203 mm"}]'::jsonb),
-  ('00000000-0008-0001-0000-000000000003', null, '00000000-0008-0000-0000-000000000001',
-   'damage_level', 'Nivel de daño del rotor', 'single_select', false, 30,
-   '[{"value":"minor","label":"Leve - centrado posible"},{"value":"moderate","label":"Moderado"},{"value":"severe","label":"Severo - puede requerir reemplazo"}]'::jsonb)
-on conflict (id) do nothing;
+update service_profiles
+   set name = 'Centrado de Rotor',
+       service_family = 'brake',
+       description = 'Centrado y ajuste de disco/rotor de freno',
+       customer_summary_template = 'Centrado rotor {{which_wheel}}',
+       mechanic_summary_template = 'Rotor {{which_wheel}} · Daño: {{damage_level}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'rotor_truing';
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key = 'rotor_truing'
+  and spq.key in ('position', 'rotor_diameter', 'deviation_severity');
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0008-0001-0000-000000000001'::uuid, 'which_wheel', '¿Qué rueda?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0008-0001-0000-000000000002'::uuid, 'rotor_size', 'Tamaño del rotor', 'single_select', false, 20,
+     '[{"value":"140","label":"140 mm"},{"value":"160","label":"160 mm"},{"value":"180","label":"180 mm"},{"value":"203","label":"203 mm"}]'::jsonb),
+    ('00000000-0008-0001-0000-000000000003'::uuid, 'damage_level', 'Nivel de daño del rotor', 'single_select', false, 30,
+     '[{"value":"minor","label":"Leve - centrado posible"},{"value":"moderate","label":"Moderado"},{"value":"severe","label":"Severo - puede requerir reemplazo"}]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'rotor_truing'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
+
+update service_profile_task_templates spt
+   set conditions_json = '[{"question_key":"damage_level","operator":"eq","value":"severe"}]'::jsonb,
+       updated_at = now()
+  from service_profiles sp
+ where sp.id = spt.service_profile_id
+   and sp.tenant_id is null
+   and sp.key = 'rotor_truing'
+   and spt.conditions_json::text like '%deviation_severity%';
