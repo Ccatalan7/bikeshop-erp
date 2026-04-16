@@ -123,12 +123,44 @@ typedef BikeSystemControllerOverlayBuilder = Widget? Function(
   BikeSystemControllerOverlayLayout layout,
 );
 
+/// ─────────────────────────────────────────────────────────────────────────
+/// BikeSystemController — single source of truth for the interactive bike map.
+///
+/// RULE: all behaviour of this widget lives HERE.
+/// Parents must NOT replicate or second-guess internal state.
+///
+/// Specifically:
+/// • The decision of WHEN to show an exploded detail view is internal.
+///   [_BikeSystemControllerState._explicitSystemKey] tracks whether the user
+///   actually tapped a pin in THIS widget. Parents have no visibility into that.
+///   DO NOT conditionally pass [onClearSelection] to control the detail view —
+///   that is the exact mistake that broke the bike-profile screen.
+///
+/// • [selectedSystemKey] is the externally-driven highlight (auto-resolved by
+///   the parent from status/data). It does NOT control the detail view.
+///
+/// • [onClearSelection] is a notification-only callback: the parent is told
+///   when the user navigated back so it can clear its own state. It NEVER
+///   gates the detail view — that is the widget's job.
+///
+/// Any future feature that affects the shared map must be implemented here
+/// and will automatically apply everywhere the widget is used.
+/// ─────────────────────────────────────────────────────────────────────────
 class BikeSystemController extends StatefulWidget {
   final Bike? bike;
   final BikeDiagramVariant? variant;
   final List<BikeSystemControllerEntry> entries;
+
+  /// Externally-driven highlight key (e.g. auto-resolved from job status).
+  /// This does NOT control whether the detail view shows — see [onClearSelection].
   final String? selectedSystemKey;
   final ValueChanged<String> onSystemSelected;
+
+  /// Called when the user taps "← Vista general" to exit the detail view.
+  /// Pass this unconditionally — the widget decides when to use it.
+  /// DO NOT make this conditional on whether the user explicitly tapped;
+  /// that tracking is done internally via [_explicitSystemKey].
+  final VoidCallback? onClearSelection;
   final String idleHintText;
   final String selectedHintText;
   final BikeSystemControllerOverlayBuilder? overlayBuilder;
@@ -139,6 +171,7 @@ class BikeSystemController extends StatefulWidget {
     required this.entries,
     required this.selectedSystemKey,
     required this.onSystemSelected,
+    this.onClearSelection,
     this.variant,
     this.idleHintText =
         'Pasa el cursor para previsualizar · Haz clic para fijar',
@@ -152,7 +185,20 @@ class BikeSystemController extends StatefulWidget {
 
 class _BikeSystemControllerState extends State<BikeSystemController>
     with TickerProviderStateMixin {
-  String? _hoveredSystemKey;
+  // Hover state lives in a ValueNotifier so that pin hovering never triggers
+  // a parent setState — that would recreate all MouseRegion widgets and cause
+  // a rapid ENTER/EXIT re-mount loop (flicker). Only the overlay rebuilds.
+  final ValueNotifier<String?> _hoveredKey = ValueNotifier(null);
+
+  // ── INTERNAL ONLY — do not expose or replicate in parent widgets ──────────
+  // This is the key the user EXPLICITLY tapped inside this widget.
+  // It is the sole gate for the exploded detail view.
+  // The parent's selectedSystemKey (auto-resolved from status/data) is ignored
+  // for this purpose so that pre-highlighted systems never auto-open the image.
+  // If you are ever tempted to move this outside, read the class doc first.
+  // ─────────────────────────────────────────────────────────────────────────
+  String? _explicitSystemKey;
+
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
@@ -169,7 +215,20 @@ class _BikeSystemControllerState extends State<BikeSystemController>
   }
 
   @override
+  void didUpdateWidget(BikeSystemController oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the parent changed selectedSystemKey to something OTHER than what the
+    // user just tapped here, treat it as an external navigation and clear the
+    // explicit selection so the detail view closes.
+    if (widget.selectedSystemKey != oldWidget.selectedSystemKey &&
+        widget.selectedSystemKey != _explicitSystemKey) {
+      _explicitSystemKey = null;
+    }
+  }
+
+  @override
   void dispose() {
+    _hoveredKey.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -202,23 +261,56 @@ class _BikeSystemControllerState extends State<BikeSystemController>
   @override
   Widget build(BuildContext context) {
     final selectedEntry = _entryFor(widget.selectedSystemKey);
-    final hoveredEntry = _entryFor(_hoveredSystemKey);
     final variant =
         widget.variant ?? resolveBikeDiagramVariant(bike: widget.bike);
-    final hoveredPlacement = hoveredEntry == null
-        ? null
-        : resolveBikeDiagramPinPlacement(
-            variant: variant,
-            systemKey: hoveredEntry.spec.systemKey,
-          );
 
+    // --- system detail view (exploded component image) ---
+    // Only show when the user EXPLICITLY tapped a pin (not auto-resolved by parent).
+    final detailAsset = _kSystemDetailAssets[_explicitSystemKey];
+    final detailLabel = _explicitSystemKey != null
+        ? bikeSystemControllerLabelFor(_explicitSystemKey!)
+        : '';
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: detailAsset != null
+          ? _SystemDetailView(
+              key: ValueKey('detail_$_explicitSystemKey'),
+              assetPath: detailAsset.assetPath,
+              flipX: detailAsset.flipX,
+              label: detailLabel,
+              onBack: () {
+                setState(() => _explicitSystemKey = null);
+                widget.onClearSelection?.call();
+              },
+            )
+          : _buildFullSchema(
+              context,
+              variant: variant,
+              selectedEntry: selectedEntry,
+            ),
+    );
+  }
+
+  Widget _buildFullSchema(
+    BuildContext context, {
+    required BikeDiagramVariant variant,
+    required BikeSystemControllerEntry? selectedEntry,
+  }) {
     return LayoutBuilder(
+      key: const ValueKey('full_schema'),
       builder: (context, constraints) {
         final imageSize = math.min(constraints.maxWidth, constraints.maxHeight);
         final imageOffsetX = (constraints.maxWidth - imageSize) / 2;
         final imageOffsetY = (constraints.maxHeight - imageSize) / 2;
 
-        return Stack(
+        final baseStack = Stack(
           children: [
             Positioned(
               left: imageOffsetX,
@@ -238,7 +330,6 @@ class _BikeSystemControllerState extends State<BikeSystemController>
 
               final px = imageOffsetX + placement.position.dx * imageSize;
               final py = imageOffsetY + placement.position.dy * imageSize;
-              final isHovered = _hoveredSystemKey == entry.spec.systemKey;
               final isSelected =
                   widget.selectedSystemKey == entry.spec.systemKey;
 
@@ -249,35 +340,27 @@ class _BikeSystemControllerState extends State<BikeSystemController>
                   label: entry.spec.label,
                   color: _statusColor(entry.status),
                   pulseAnimation: _pulseAnimation,
-                  isHovered: isHovered,
                   isSelected: isSelected,
                   labelRight: placement.labelRight,
                   selectable: entry.selectable,
-                  onHover: (value) => setState(
-                    () =>
-                        _hoveredSystemKey = value ? entry.spec.systemKey : null,
-                  ),
+                  onHoverChanged: (isHovered) {
+                    if (isHovered) {
+                      _hoveredKey.value = entry.spec.systemKey;
+                    } else if (_hoveredKey.value == entry.spec.systemKey) {
+                      _hoveredKey.value = null;
+                    }
+                  },
                   onTap: entry.selectable
-                      ? () => widget.onSystemSelected(entry.spec.systemKey)
+                      ? () {
+                          setState(() {
+                            _explicitSystemKey = entry.spec.systemKey;
+                          });
+                          widget.onSystemSelected(entry.spec.systemKey);
+                        }
                       : null,
                 ),
               );
             }),
-            if (hoveredEntry != null &&
-                hoveredPlacement != null &&
-                widget.overlayBuilder != null)
-              widget.overlayBuilder!(
-                    context,
-                    hoveredEntry,
-                    BikeSystemControllerOverlayLayout(
-                      constraints: constraints,
-                      placement: hoveredPlacement,
-                      imageOffsetX: imageOffsetX,
-                      imageOffsetY: imageOffsetY,
-                      imageSize: imageSize,
-                    ),
-                  ) ??
-                  const SizedBox.shrink(),
             Positioned(
               bottom: 0,
               left: 0,
@@ -307,50 +390,255 @@ class _BikeSystemControllerState extends State<BikeSystemController>
             ),
           ],
         );
+
+        if (widget.overlayBuilder == null) {
+          return baseStack;
+        }
+
+        return ValueListenableBuilder<String?>(
+          valueListenable: _hoveredKey,
+          child: baseStack,
+          builder: (context, hoveredSystemKey, child) {
+            final hoveredEntry = _entryFor(hoveredSystemKey);
+            final hoveredPlacement = hoveredEntry == null
+                ? null
+                : resolveBikeDiagramPinPlacement(
+                    variant: variant,
+                    systemKey: hoveredEntry.spec.systemKey,
+                  );
+            final overlay = hoveredEntry == null || hoveredPlacement == null
+                ? null
+                : widget.overlayBuilder!(
+                    context,
+                    hoveredEntry,
+                    BikeSystemControllerOverlayLayout(
+                      constraints: constraints,
+                      placement: hoveredPlacement,
+                      imageOffsetX: imageOffsetX,
+                      imageOffsetY: imageOffsetY,
+                      imageSize: imageSize,
+                    ),
+                  );
+
+            if (overlay == null) {
+              return child!;
+            }
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                child!,
+                overlay,
+              ],
+            );
+          },
+        );
       },
     );
   }
 }
 
-class _BikeSystemControllerPin extends StatelessWidget {
+// ---------------------------------------------------------------------------
+// Registry: which system keys have an exploded detail image
+// ---------------------------------------------------------------------------
+
+class _SystemDetailConfig {
+  final String assetPath;
+  final bool flipX;
+  const _SystemDetailConfig({required this.assetPath, this.flipX = false});
+}
+
+const Map<String, _SystemDetailConfig> _kSystemDetailAssets = {
+  'drivetrain':
+      _SystemDetailConfig(assetPath: 'assets/images/drivetrain_exploded.png'),
+  'suspension':
+      _SystemDetailConfig(assetPath: 'assets/images/suspension_exploded.png'),
+  'rear_brake':
+      _SystemDetailConfig(assetPath: 'assets/images/rear_brake_exploded.png'),
+  'front_brake': _SystemDetailConfig(
+      assetPath: 'assets/images/rear_brake_exploded.png', flipX: true),
+  // Uncomment as images are ready:
+  // 'cockpit': _SystemDetailConfig(assetPath: 'assets/images/cockpit_exploded.png'),
+  // 'wheels':  _SystemDetailConfig(assetPath: 'assets/images/wheels_exploded.png'),
+};
+
+// ---------------------------------------------------------------------------
+// Generic system exploded detail view
+// ---------------------------------------------------------------------------
+
+class _SystemDetailView extends StatelessWidget {
+  final String assetPath;
+  final bool flipX;
+  final String label;
+  final VoidCallback onBack;
+
+  const _SystemDetailView({
+    super.key,
+    required this.assetPath,
+    this.flipX = false,
+    required this.label,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Exploded system image
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 36, 12, 12),
+          child: Transform(
+            alignment: Alignment.center,
+            transform: flipX
+                ? (Matrix4.identity()..scale(-1.0, 1.0))
+                : Matrix4.identity(),
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        // Back chip — top-left
+        Positioned(
+          top: 8,
+          left: 8,
+          child: GestureDetector(
+            onTap: onBack,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFFCBD5E1),
+                    width: 1,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 10,
+                      color: Color(0xFF475569),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Vista general',
+                      style: TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // System label — bottom center
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0x18FFFFFF), Colors.transparent],
+              ),
+            ),
+            child: Text(
+              '$label — componentes',
+              style: const TextStyle(
+                color: Color(0xFFB0BEC5),
+                fontSize: 10,
+                letterSpacing: 0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BikeSystemControllerPin extends StatefulWidget {
   final String label;
   final Color color;
   final Animation<double> pulseAnimation;
-  final bool isHovered;
   final bool isSelected;
   final bool labelRight;
   final bool selectable;
-  final ValueChanged<bool> onHover;
+  final ValueChanged<bool> onHoverChanged;
   final VoidCallback? onTap;
 
   const _BikeSystemControllerPin({
     required this.label,
     required this.color,
     required this.pulseAnimation,
-    required this.isHovered,
     required this.isSelected,
     required this.labelRight,
     required this.selectable,
-    required this.onHover,
+    required this.onHoverChanged,
     required this.onTap,
   });
 
   @override
+  State<_BikeSystemControllerPin> createState() =>
+      _BikeSystemControllerPinState();
+}
+
+class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final active = isHovered || isSelected;
-    final effectiveColor = selectable ? color : color.withValues(alpha: 0.45);
+    final active = _isHovered || widget.isSelected;
+    final effectiveColor =
+        widget.selectable ? widget.color : widget.color.withValues(alpha: 0.45);
 
     return MouseRegion(
-      onEnter: (_) => onHover(true),
-      onExit: (_) => onHover(false),
-      cursor: selectable ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) {
+        if (!_isHovered) {
+          setState(() => _isHovered = true);
+        }
+        widget.onHoverChanged(true);
+      },
+      onExit: (_) {
+        if (_isHovered) {
+          setState(() => _isHovered = false);
+        }
+        widget.onHoverChanged(false);
+      },
+      cursor: widget.selectable
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: SizedBox(
           width: 24,
           height: 24,
           child: AnimatedBuilder(
-            animation: pulseAnimation,
+            animation: widget.pulseAnimation,
             builder: (context, _) {
               return Stack(
                 clipBehavior: Clip.none,
@@ -358,13 +646,13 @@ class _BikeSystemControllerPin extends StatelessWidget {
                 children: [
                   if (!active)
                     Container(
-                      width: 24 * pulseAnimation.value,
-                      height: 24 * pulseAnimation.value,
+                      width: 24 * widget.pulseAnimation.value,
+                      height: 24 * widget.pulseAnimation.value,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: effectiveColor.withValues(
-                            alpha: (1 - pulseAnimation.value) * 0.8,
+                            alpha: (1 - widget.pulseAnimation.value) * 0.8,
                           ),
                           width: 1.5,
                         ),
@@ -390,7 +678,7 @@ class _BikeSystemControllerPin extends StatelessWidget {
                         ],
                       ),
                     ),
-                  if (isSelected && !isHovered)
+                  if (widget.isSelected && !_isHovered)
                     Container(
                       width: 32,
                       height: 32,
@@ -422,8 +710,8 @@ class _BikeSystemControllerPin extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: labelRight ? 18 : null,
-                    right: labelRight ? null : 18,
+                    left: widget.labelRight ? 18 : null,
+                    right: widget.labelRight ? null : 18,
                     top: 2,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -467,7 +755,7 @@ class _BikeSystemControllerPin extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            label,
+                            widget.label,
                             style: TextStyle(
                               color: active
                                   ? const Color(0xFF1E293B)

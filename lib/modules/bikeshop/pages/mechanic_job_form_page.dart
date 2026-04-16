@@ -6654,6 +6654,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   _selectedStructuredDiagnosisSystemKey = systemKey;
                 });
               },
+              onClearSelection: () {
+                setState(() {
+                  _selectedStructuredDiagnosisSystemKey = null;
+                });
+              },
               idleHintText: 'Haz clic en un sistema para cambiar la vista.',
               selectedHintText:
                   'Haz clic en otro componente para cambiar la vista.',

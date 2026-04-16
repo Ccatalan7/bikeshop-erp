@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -591,6 +590,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         onSystemSelected: (key) {
           setState(() {
             _selectedDiagnosisSystemKey = key;
+          });
+        },
+        onClearSelection: () {
+          setState(() {
+            _selectedDiagnosisSystemKey = null;
           });
         },
         overlayBuilder: (context, entry, layout) {
@@ -2595,141 +2599,135 @@ class _DiagnosticPopupCard extends StatelessWidget {
       left: left,
       top: top,
       child: IgnorePointer(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              width: cardWidth,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.96),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: color.withValues(alpha: 0.25),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.10),
-                    blurRadius: 24,
-                    offset: const Offset(0, 4),
+        child: Container(
+          width: cardWidth,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: color.withValues(alpha: 0.25),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.10),
+                blurRadius: 24,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    system.displayName.toUpperCase(),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: color.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Text(
+                      system.overallStatus.displayName,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        system.displayName.toUpperCase(),
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: color.withValues(alpha: 0.35),
+              const SizedBox(height: 6),
+              Text(
+                system.subheadline,
+                style: const TextStyle(
+                  color: Color(0xFF1E293B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (system.primaryNarrative != null &&
+                  system.primaryNarrative!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  system.primaryNarrative!,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 10.5,
+                    height: 1.45,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              if (measurements.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(height: 1, color: const Color(0xFFE2E8F0)),
+                const SizedBox(height: 10),
+                ...measurements.map(
+                  (measurement) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            measurement.title,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 10,
+                            ),
                           ),
                         ),
-                        child: Text(
-                          system.overallStatus.displayName,
+                        Text(
+                          measurement.latestValueLabel,
                           style: TextStyle(
                             color: color,
-                            fontSize: 9,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    system.subheadline,
-                    style: const TextStyle(
-                      color: Color(0xFF1E293B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      ],
                     ),
                   ),
-                  if (system.primaryNarrative != null &&
-                      system.primaryNarrative!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      system.primaryNarrative!,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 10.5,
-                        height: 1.45,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (measurements.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(height: 1, color: const Color(0xFFE2E8F0)),
-                    const SizedBox(height: 10),
-                    ...measurements.map(
-                      (measurement) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                measurement.title,
-                                style: const TextStyle(
-                                  color: Color(0xFF64748B),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              measurement.latestValueLabel,
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (system.contextEntries.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Última: ${system.contextEntries.first.jobId ?? '—'}',
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 10,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                ),
+              ],
+              if (system.contextEntries.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Última: ${system.contextEntries.first.jobId ?? '—'}',
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 10,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

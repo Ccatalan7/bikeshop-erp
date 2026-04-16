@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
 
@@ -112,21 +112,44 @@ Read these exact files first, in this order:
 5. `lib/modules/bikeshop/services/bikeshop_service.dart`
 6. `lib/modules/bikeshop/pages/bike_form_dialog.dart`
 7. `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`
-8. `lib/modules/bikeshop/widgets/service_wizard_dialog.dart`
-9. `lib/modules/bikeshop/services/service_wizard_service.dart`
-10. `lib/modules/bikeshop/widgets/bike_record_panel.dart`
-11. `lib/shared/models/bike_catalog_models.dart`
-12. `lib/shared/services/bike_catalog_service.dart`
+8. `lib/modules/bikeshop/widgets/bike_system_controller.dart`
+9. `lib/modules/bikeshop/widgets/bike_record_panel.dart`
+10. `lib/modules/bikeshop/widgets/service_wizard_dialog.dart`
+11. `lib/modules/bikeshop/services/service_wizard_service.dart`
+12. `lib/modules/bikeshop/config/brake_canonical_data.dart`
+13. `lib/shared/models/bike_catalog_models.dart`
+14. `lib/shared/services/bike_catalog_service.dart`
 
 If the change touches historical context or prior implementation intent, also read:
 
 - `BIKE_WORKSHOP_CENTRAL_MEMORY_MODEL_2026-04-09.md`
 - `/memories/repo/bike-workshop-central-memory-kernel.md`
+- `/memories/repo/bike-workshop-component-intelligence-correction.md`
 - `/memories/repo/bike-workshop-diagnosis-sheet-layer.md`
 - `/memories/repo/bike-workshop-job-form-sync.md`
+- `/memories/repo/bike-workshop-memory-reconciliation.md`
+- `/memories/repo/bike-workshop-service-taxonomy-audit.md`
+- `/memories/repo/bike-workshop-service-wizard-profile-gating.md`
 - `/memories/repo/bike-workshop-v1-profile-layer.md`
+- `/memories/repo/bike-workshop-fresh-agent-handoff-2026-04-16.md`
 
-Do not skip the schema file and do not skip the current Flutter orchestration files.
+Do not skip the schema file, do not skip the current Flutter orchestration files, and do not skip the shared bike-system controller if the task touches diagnosis, bike history, or service flows.
+
+### Shared Controller Contract (Current Code-Side Rule)
+
+The shared bike map is no longer just a visual helper.
+
+`lib/modules/bikeshop/widgets/bike_system_controller.dart` is now a core backbone widget and must be treated as a single behavior authority.
+
+Fresh agents must preserve these exact rules unless they are deliberately redesigning the shared controller and documenting that redesign here:
+
+- `BikeSystemController` is the shared bike-system map/controller for mechanic-job diagnosis and bike record/history. Do not fork a second local bike map.
+- `selectedSystemKey` is the parent-driven highlight key only. It is not the gate for the exploded detail image.
+- the exploded detail image is gated internally by the controller's explicit user-tap state. Parents must not try to re-implement or second-guess that state.
+- `onClearSelection` is notification-only so the parent can clear its own selected key after the user exits the detail view. It must not be used to conditionally enable or disable the detail view.
+- hover preview state is intentionally internal to the controller: pin hover is local to each pin and overlay rendering is driven from an internal notifier. Do not lift hover state back into parent `setState`, or the `MouseRegion` rebuild loop / flicker bug returns.
+- the current shared registry exposes `cockpit`, `suspension`, `front_brake`, `wheels`, `drivetrain`, and `rear_brake` everywhere the controller is used.
+- only `drivetrain`, `front_brake`, and `rear_brake` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, and `wheels` intentionally route to explicit unavailable-system placeholders instead of a second reduced controller.
 
 ### Mandatory Live Verification Protocol
 
@@ -1137,9 +1160,12 @@ Important rule:
 - bike form now captures a broader v1 compatibility kernel upstream in `bike_profiles.technical_profile.values`, including `suspensionLayout`, front/rear spoke counts, `valveType`, and `bottomBracketFamily`
 - bike intake now applies type-driven defaults for `suspensionLayout` and BMX-style drivetrain bias, and hides rotor-size intake when `brakeType = rim`
 - structured diagnosis exists per bike via `mechanic_job_bikes.diagnosis_sheet_data`
+- the shared `BikeSystemController` + registry now drives both mechanic-job diagnosis and bike record/history instead of separate map implementations
+- unmodeled systems in the mechanic job form already render explicit unavailable-system cards instead of forking a second reduced controller
 - job items now carry first-class target metadata
 - bike memory kernel tables exist and are populated through sync
 - front/rear service targeting has moved to inline row metadata
+- brake wizard/profile alias cleanup is now centralized in `brake_canonical_data.dart` + `ServiceWizardService.normalizeProfile()` / `normalizeAnswersForProfile()` instead of screen-local normalization branches
 
 ### What is still incomplete or architecturally immature
 
@@ -1148,6 +1174,7 @@ Important rule:
 - diagnosis fields are still too sparse, too manual, and too note-heavy for a workshop-grade shared visit model
 - diagnosis and service flows do not yet run on a schema-driven semantic field system with typed controls and guided customization
 - bike profile is not yet the hard gating layer for diagnosis field visibility
+- only `drivetrain`, `front_brake`, and `rear_brake` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, and `wheels` are still intentional placeholders waiting for a real schema/editor pass
 - type-driven gating is stronger at intake now, but downstream service/product compatibility still does not fully consume the richer base kernel
 - brake/rim/disc-driven conditional forms are not yet fully implemented
 - bike record visibility is improved but still not the perfect read model of the kernel
@@ -1343,6 +1370,16 @@ Brake example:
 - then a rotor-truing service wizard edits the rotor-trueness slice of the same diagnosis target, while a rotor-decontamination service wizard edits the contamination slice of that same diagnosis target
 
 This strengthens centralization because diagnosis, service guidance, product suggestions, and bike memory all operate on one component-centric visit model instead of parallel questionnaires.
+
+## Next Session Priority Queue (2026-04-16)
+
+This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
+
+1. Validate the brake prototype against live production service profiles, question keys, mappings, and real visit data before expanding it further.
+2. Extend structured diagnosis deliberately to the remaining shared-controller systems (`cockpit`, `suspension`, `wheels`) only when there is a real schema/editor plan. Until then, keep the explicit unavailable-system placeholders and do not fork a second controller.
+3. Push upstream bike-profile truth deeper into more service families. Drivetrain is the next likely target, but do not guess on `1x`/`2x` behavior beyond what the live `derailleurs` multi-select template can actually represent.
+4. Start wiring product compatibility and product suggestions to the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
+5. Keep the bike record panel as a read-model consumer of bike memory kernel + shared controller behavior. Do not move hover/detail selection logic into parent widgets when extending the shared bike map.
 
 ## The Most Important Direction From Here
 

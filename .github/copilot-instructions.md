@@ -102,6 +102,7 @@ At the intake/UI layer, canonical compatibility values should also be captured t
 - when the upstream bike profile already confirms the top-level brake platform, the wizard UI should lock that platform visually and ask only for the unresolved refinement that is still missing; a legacy rim bike may still need `rimBrakeFamily`, but the mechanic should not see the entire mixed brake-platform list vomited back into the flow
 - diagnosis-linked brake fields must be driven from one shared field-definition layer in code, including option labels and render style, so the bike intake, diagnosis sheet, and guided service wizard do not fork into separate local widget logic for the same centralized truth
 - any bike-system map/controller used in diagnosis, bike record/history, bike profile, or future workshop UI must come from one shared code-side widget + registry; do not keep separate local pin/spec lists or duplicated bike-map implementations per screen
+- the shared `BikeSystemController` now owns exploded-detail gating and hover preview state internally; parent widgets must treat `selectedSystemKey` as highlight-only, treat `onClearSelection` as notification-only, and must not lift hover/detail state out of the controller or reintroduce parent-driven `MouseRegion` rebuild loops
 - if the current diagnosis template models fewer systems than the shared controller can display, keep one shared controller anyway and show explicit unavailable/placeholder inspector states for unmodeled systems instead of forking a reduced second controller
 - when global brake service profiles drift back to legacy keys or wording, the schema seed and migration path must clean obsolete alias keys such as `position`, `includes_cable_housing`, `rotor_diameter`, `num_pistons`, or `deviation_severity` when the canonical meanings are already `which_wheel`, `rotor_size`, `piston_count`, and `damage_level`; keep real canonical brake fields like `pad_contaminated` instead of replacing them with local one-off synonyms
 - `drivetrainConfig` and `drivetrainSpeeds` should be derived from front-chainring count x rear-cog count when the mechanic is confirming drivetrain layout, not typed manually as free text
@@ -221,6 +222,33 @@ Specifically, do NOT create:
 Search first in the schema and existing workshop files before adding anything new.
 
 Preferred rule: improve the backbone deliberately, do not build a second backbone beside it.
+
+## Fresh-Agent Continuity Snapshot (2026-04-16)
+
+For a fresh chat, the current code-side state is:
+
+- `lib/modules/bikeshop/widgets/bike_system_controller.dart` is now a backbone widget, not a local screen helper. It is the shared bike-system controller for mechanic-job diagnosis and bike record/history.
+- the current shared controller registry is `cockpit`, `suspension`, `front_brake`, `wheels`, `drivetrain`, and `rear_brake`.
+- only `drivetrain`, `front_brake`, and `rear_brake` currently have structured editable diagnosis inspectors in `mechanic_job_form_page.dart`; `cockpit`, `suspension`, and `wheels` intentionally render explicit unavailable-system placeholders instead of a second reduced controller.
+- `lib/modules/bikeshop/widgets/bike_record_panel.dart` already uses the same shared controller in read-model mode with hover overlay / telemetry; do not fork a second bike map for history.
+- brake canonical alias normalization now lives in `lib/modules/bikeshop/config/brake_canonical_data.dart` and `lib/modules/bikeshop/services/service_wizard_service.dart`, not in ad hoc page-local branches.
+
+Before continuing this implementation in a fresh chat, also read:
+
+- `lib/modules/bikeshop/widgets/bike_system_controller.dart`
+- `lib/modules/bikeshop/config/brake_canonical_data.dart`
+- `/memories/repo/bike-workshop-component-intelligence-correction.md`
+- `/memories/repo/bike-workshop-memory-reconciliation.md`
+- `/memories/repo/bike-workshop-service-taxonomy-audit.md`
+- `/memories/repo/bike-workshop-service-wizard-profile-gating.md`
+- `/memories/repo/bike-workshop-fresh-agent-handoff-2026-04-16.md`
+
+Immediate next queue:
+
+1. Validate the brake prototype against live production service profiles/questions/mappings before expanding it further.
+2. Extend structured diagnosis to remaining shared-controller systems only with a real schema/editor plan; until then, keep explicit unavailable placeholders and do not fork another controller.
+3. Push upstream bike-profile truth deeper into additional service families, with drivetrain as the next likely target but with caution around the live `derailleurs` multi-select template behavior.
+4. Start making product compatibility / suggestion flows consume the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
 
 ---
 
