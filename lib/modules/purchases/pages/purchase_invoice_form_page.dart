@@ -153,6 +153,23 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool get _canEditFields =>
       _status == PurchaseInvoiceStatus.draft && _isEditing;
 
+  double get _effectiveInvoiceBalance {
+    final loadedInvoice = _loadedInvoice;
+    if (loadedInvoice != null) {
+      final storedBalance = loadedInvoice.balance;
+      if (storedBalance.abs() <= 0.01) {
+        return 0;
+      }
+      return math.max(storedBalance, 0);
+    }
+
+    if (_total <= 0.01) {
+      return 0;
+    }
+
+    return _total;
+  }
+
   Future<void> _toggleScanner() async {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1940,7 +1957,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           }
         } else if (_status == PurchaseInvoiceStatus.received) {
           // Received workflow
-          final effectiveBalance = _total - (_loadedInvoice?.paidAmount ?? 0);
+          final effectiveBalance = _effectiveInvoiceBalance;
           final isPrepayment = _isPrepaymentModel;
 
           if (isPrepayment && effectiveBalance <= 0) {
@@ -2216,7 +2233,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+        border:
+            Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2397,7 +2415,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -2527,7 +2546,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               filled: true,
               fillColor: _canEditFields
                   ? null
-                  : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  : theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
             ),
             items: const [
               DropdownMenuItem(
@@ -2686,8 +2706,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color:
-                          theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: theme.colorScheme.primary.withValues(alpha: 0.3),
@@ -2956,7 +2976,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           // Header with Product Name and Delete Action
           Container(
             padding: const EdgeInsets.all(12),
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.3),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

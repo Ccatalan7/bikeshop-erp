@@ -114,6 +114,333 @@ class _StructuredDiagnosisComponentSpec {
   });
 }
 
+class _DiagnosisComponentSelectorStrip extends StatefulWidget {
+  const _DiagnosisComponentSelectorStrip({
+    super.key,
+    required this.specs,
+    required this.selectedComponentKey,
+    required this.statusForComponent,
+    required this.onSelected,
+    required this.colorForStatus,
+  });
+
+  final List<_StructuredDiagnosisComponentSpec> specs;
+  final String? selectedComponentKey;
+  final BikeSystemOverallStatus Function(String componentKey)
+      statusForComponent;
+  final ValueChanged<String> onSelected;
+  final Color Function(BikeSystemOverallStatus status) colorForStatus;
+
+  @override
+  State<_DiagnosisComponentSelectorStrip> createState() =>
+      _DiagnosisComponentSelectorStripState();
+}
+
+class _DiagnosisComponentSelectorStripState
+    extends State<_DiagnosisComponentSelectorStrip> {
+  static const double _desktopControlWidth = 32;
+  static const double _desktopScrollStep = 280;
+
+  final ScrollController _scrollController = ScrollController();
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_syncScrollAffordances);
+    _scheduleScrollAffordanceSync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DiagnosisComponentSelectorStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleScrollAffordanceSync();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_syncScrollAffordances);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleScrollAffordanceSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncScrollAffordances();
+      }
+    });
+  }
+
+  void _syncScrollAffordances() {
+    if (!_scrollController.hasClients) {
+      if (_canScrollLeft || _canScrollRight) {
+        setState(() {
+          _canScrollLeft = false;
+          _canScrollRight = false;
+        });
+      }
+      return;
+    }
+
+    final position = _scrollController.position;
+    final canScrollLeft = position.pixels > 8;
+    final canScrollRight = position.maxScrollExtent - position.pixels > 8;
+
+    if (canScrollLeft == _canScrollLeft && canScrollRight == _canScrollRight) {
+      return;
+    }
+
+    setState(() {
+      _canScrollLeft = canScrollLeft;
+      _canScrollRight = canScrollRight;
+    });
+  }
+
+  Future<void> _scrollBy(double delta) async {
+    if (!_scrollController.hasClients) return;
+
+    final target = (_scrollController.offset + delta)
+        .clamp(0.0, _scrollController.position.maxScrollExtent)
+        .toDouble();
+
+    if ((target - _scrollController.offset).abs() < 1) {
+      return;
+    }
+
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _buildDesktopScrollControl(
+    ThemeData theme, {
+    required bool isLeft,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    final surfaceColor =
+        theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.96);
+    final fadeStart = theme.colorScheme.surface.withValues(alpha: 0.72);
+    final fadeEnd = theme.colorScheme.surface.withValues(alpha: 0.0);
+
+    return Positioned(
+      left: isLeft ? 4 : null,
+      right: isLeft ? null : 4,
+      top: 0,
+      bottom: 0,
+      child: Container(
+        width: _desktopControlWidth,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: isLeft ? Alignment.centerLeft : Alignment.centerRight,
+            end: isLeft ? Alignment.centerRight : Alignment.centerLeft,
+            colors: [fadeStart, fadeEnd],
+          ),
+        ),
+        child: Tooltip(
+          message: tooltip,
+          child: IconButton(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            style: IconButton.styleFrom(
+              backgroundColor: surfaceColor,
+              foregroundColor: theme.colorScheme.onSurfaceVariant,
+              side: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.8),
+              ),
+              shape: const CircleBorder(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final platform = defaultTargetPlatform;
+    final isDesktop = MediaQuery.sizeOf(context).width > 720 &&
+        (platform == TargetPlatform.macOS ||
+            platform == TargetPlatform.windows ||
+            platform == TargetPlatform.linux);
+
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (_) {
+        _scheduleScrollAffordanceSync();
+        return false;
+      },
+      child: Stack(
+        children: [
+          ClipRect(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.hardEdge,
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 16, 4, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.specs.map((spec) {
+                    final status = widget.statusForComponent(spec.componentKey);
+                    final isSelected =
+                        spec.componentKey == widget.selectedComponentKey;
+                    final tint = widget.colorForStatus(status);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12, bottom: 4),
+                      child: InkWell(
+                        onTap: () => widget.onSelected(spec.componentKey),
+                        borderRadius: BorderRadius.circular(16),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 130,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? theme.colorScheme.primaryContainer
+                                    .withValues(alpha: 0.15)
+                                : theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outlineVariant
+                                      .withValues(alpha: 0.6),
+                              width: isSelected ? 2 : 1,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.1),
+                                      blurRadius: 10,
+                                      spreadRadius: 0,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                height: 100,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color:
+                                      theme.colorScheme.surfaceContainerLowest,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(14),
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(14),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Image.asset(
+                                      'assets/images/${spec.componentKey}_icon.png',
+                                      fit: BoxFit.contain,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        return Icon(
+                                          spec.icon,
+                                          color:
+                                              theme.colorScheme.outlineVariant,
+                                          size: 36,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const Divider(height: 1, thickness: 1),
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      spec.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style:
+                                          theme.textTheme.labelMedium?.copyWith(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                        color: isSelected
+                                            ? theme.colorScheme.onSurface
+                                            : theme
+                                                .colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: tint.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        status.displayName,
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
+                                          color: tint,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+          if (isDesktop && _canScrollLeft)
+            _buildDesktopScrollControl(
+              theme,
+              isLeft: true,
+              icon: Icons.chevron_left,
+              tooltip: 'Ver componentes anteriores',
+              onPressed: () => _scrollBy(-_desktopScrollStep),
+            ),
+          if (isDesktop && _canScrollRight)
+            _buildDesktopScrollControl(
+              theme,
+              isLeft: false,
+              icon: Icons.chevron_right,
+              tooltip: 'Ver componentes siguientes',
+              onPressed: () => _scrollBy(_desktopScrollStep),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 const List<_StructuredDiagnosisComponentSpec>
     _kStructuredDiagnosisComponentSpecs = [
   _StructuredDiagnosisComponentSpec(
@@ -6343,9 +6670,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 5, child: diagramPanel),
+              Expanded(flex: 4, child: diagramPanel),
               const SizedBox(width: 18),
-              Expanded(flex: 4, child: inspectorPanel),
+              Expanded(flex: 5, child: inspectorPanel),
             ],
           );
         }
@@ -6945,12 +7272,37 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           const SizedBox(height: 16),
         ],
         if (selectedComponentKey != null)
-          _buildDrivetrainComponentEditor(
-            currentTab,
-            drivetrainSheet: drivetrainSheet,
-            componentKey: selectedComponentKey,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Container(
+              key: ValueKey('editor_$selectedComponentKey'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withValues(alpha: 0.5),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _buildDrivetrainComponentEditor(
+                currentTab,
+                drivetrainSheet: drivetrainSheet,
+                componentKey: selectedComponentKey,
+              ),
+            ),
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 20),
         TextFormField(
           key: ValueKey(
             'diag_drive_notes_${currentTab.tabId}_${drivetrainSheet.notes ?? 'empty'}',
@@ -6987,57 +7339,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         statusForComponent,
     required ValueChanged<String> onSelected,
   }) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: specs.map((spec) {
-        final status = statusForComponent(spec.componentKey);
-        final isSelected = spec.componentKey == selectedComponentKey;
-        final tint = _diagnosisStatusColor(theme, status);
-
-        return InkWell(
-          onTap: () => onSelected(spec.componentKey),
-          borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 124,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? tint.withValues(alpha: 0.12)
-                  : theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? tint : theme.colorScheme.outlineVariant,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(spec.icon, color: tint, size: 22),
-                const SizedBox(height: 10),
-                Text(
-                  spec.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  status.displayName,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: tint,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+    return _DiagnosisComponentSelectorStrip(
+      key: ValueKey(
+          specs.isEmpty ? 'diag_components_empty' : specs.first.systemKey),
+      specs: specs,
+      selectedComponentKey: selectedComponentKey,
+      statusForComponent: statusForComponent,
+      onSelected: onSelected,
+      colorForStatus: (status) => _diagnosisStatusColor(theme, status),
     );
   }
 
@@ -7177,97 +7486,88 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   ) {
     final gaugeValue = _chainWearGaugeValue(drivetrainSheet.chainWearPercent);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Medición desgaste cadena',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Medición desgaste cadena',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _formatChainWearGauge(drivetrainSheet.chainWearPercent),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              if (drivetrainSheet.chainWearPercent != null) ...[
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () {
-                    _updateCurrentDiagnosisSheet(
-                      (current) => current.copyWith(
-                        drivetrain: current.drivetrain.copyWith(
-                          clearChainWearPercent: true,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Limpiar'),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Usa la medición tipo checker 0.0 a 1.0. El sistema la conserva internamente como porcentaje para compatibilidad con el modelo actual.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          Slider(
-            key: ValueKey(
-              'diag_chain_slider_${currentTab.tabId}_${drivetrainSheet.chainWearPercent?.toString() ?? 'empty'}',
             ),
-            value: gaugeValue,
-            min: 0.0,
-            max: 1.0,
-            divisions: 20,
-            label: gaugeValue.toStringAsFixed(2),
-            onChanged: (value) {
-              _updateCurrentDiagnosisSheet(
-                (current) => current.copyWith(
-                  drivetrain: current.drivetrain.copyWith(
-                    chainWearPercent: _chainWearPercentFromGauge(value),
-                  ),
-                ),
-              );
-            },
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('0.0', style: Theme.of(context).textTheme.bodySmall),
-              Text('0.5', style: Theme.of(context).textTheme.bodySmall),
-              Text('0.75', style: Theme.of(context).textTheme.bodySmall),
-              Text('1.0', style: Theme.of(context).textTheme.bodySmall),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primaryContainer
+                    .withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                _formatChainWearGauge(drivetrainSheet.chainWearPercent),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            if (drivetrainSheet.chainWearPercent != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  _updateCurrentDiagnosisSheet(
+                    (current) => current.copyWith(
+                      drivetrain: current.drivetrain.copyWith(
+                        clearChainWearPercent: true,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Limpiar'),
+              ),
             ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Usa la medición tipo checker 0.0 a 1.0. El sistema la conserva internamente como porcentaje para compatibilidad con el modelo actual.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        Slider(
+          key: ValueKey(
+            'diag_chain_slider_${currentTab.tabId}_${drivetrainSheet.chainWearPercent?.toString() ?? 'empty'}',
           ),
-        ],
-      ),
+          value: gaugeValue,
+          min: 0.0,
+          max: 1.0,
+          divisions: 20,
+          label: gaugeValue.toStringAsFixed(2),
+          onChanged: (value) {
+            _updateCurrentDiagnosisSheet(
+              (current) => current.copyWith(
+                drivetrain: current.drivetrain.copyWith(
+                  chainWearPercent: _chainWearPercentFromGauge(value),
+                ),
+              ),
+            );
+          },
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('0.0', style: Theme.of(context).textTheme.bodySmall),
+            Text('0.5', style: Theme.of(context).textTheme.bodySmall),
+            Text('0.75', style: Theme.of(context).textTheme.bodySmall),
+            Text('1.0', style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ],
     );
   }
 
@@ -7345,6 +7645,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     required Widget child,
   }) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
