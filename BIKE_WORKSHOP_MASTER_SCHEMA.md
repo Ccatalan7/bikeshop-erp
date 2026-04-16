@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-04-14
+Last updated: 2026-04-15
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
 
@@ -706,6 +706,9 @@ Key fields:
 Boundary rule:
 
 - visit narrative belongs here
+- AI-assisted or generated visit narrative must remain an editable projection of the structured diagnosis for that same visit; it must never become a second technical truth store beside `mechanic_job_bikes.diagnosis_sheet_data`
+- generated narrative must omit undefined fields instead of verbalizing placeholders like "sin definir" or "desconocido"
+- downstream customer documents such as the sales-invoice PDF appendix may render `mechanic_job_bikes.diagnosis`, but only as presentation text; they must not treat it as structured diagnosis input or a second workflow truth layer
 - long-term cross-visit technical truth does not
 
 ## Structured Diagnosis Layer
@@ -771,6 +774,10 @@ Current implementation direction:
 
 - the structured diagnosis editor can present drivetrain/front brake/rear brake through an interactive bike diagram
 - the visual diagram is a UI layer over the existing `basic_workshop_v1` diagnosis systems, not a new schema
+- the bike-system controller itself must be a shared code-side widget + registry across diagnosis, bike record/history, and any future bike-profile/service surfaces; labels, pins, iconography, placements, hover/selection behavior, and system ordering must not fork into separate local implementations per screen
+- context-specific panels may differ, but they must sit on top of the same shared controller instead of re-implementing the bike map locally
+- live inspection on 2026-04-15 confirmed that `mechanic_job_bikes.diagnosis_sheet_data` currently exposes only `drivetrain`, `front_brake`, `rear_brake`, and `template_key`, while `bike_system_states` / `mechanic_job_items` already use a broader downstream vocabulary including `wheels`, `front_wheel`, `rear_wheel`, and `brakes`
+- therefore the diagnosis UI may render the full shared controller, but only systems actually modeled by the active diagnosis template should expose structured visit editors; unmodeled systems must show an explicit placeholder state instead of a second controller or fake fields
 - drivetrain now has a first component-driven editor slice in the mechanic job form:
   - selectable component targets: `chain`, `cassette`, `chainring`, `rear_derailleur`, `front_derailleur`, `shifter`
   - typed component controls instead of raw free-text for the implemented slice

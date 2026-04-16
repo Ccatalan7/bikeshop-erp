@@ -1496,8 +1496,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               tooltip:
                   _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
               style: IconButton.styleFrom(
-                backgroundColor:
-                    _scannerEnabled ? Colors.green.withValues(alpha: 0.1) : null,
+                backgroundColor: _scannerEnabled
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : null,
               ),
             ),
           );
@@ -1550,8 +1551,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           // PDF Download Button (Always available in view mode if invoice exists)
           if (_loadedInvoice != null) {
             actionButtons.add(
-              IconButton(
-                onPressed: () => _downloadInvoicePDF(_loadedInvoice!),
+              PopupMenuButton<InvoicePdfExportMode>(
+                enabled: !_isGeneratingPdf,
+                tooltip: 'Exportar PDF',
+                onSelected: (mode) =>
+                    _downloadInvoicePDF(_loadedInvoice!, mode: mode),
+                itemBuilder: (context) => InvoicePdfExportMode.values
+                    .map(
+                      (mode) => PopupMenuItem<InvoicePdfExportMode>(
+                        value: mode,
+                        child: Text(mode.label),
+                      ),
+                    )
+                    .toList(growable: false),
                 icon: _isGeneratingPdf
                     ? const SizedBox(
                         width: 16,
@@ -1559,7 +1571,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.picture_as_pdf),
-                tooltip: 'Descargar PDF',
               ),
             );
             if (!isMobile) actionButtons.add(const SizedBox(width: 8));
@@ -2053,7 +2064,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -2567,8 +2579,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          top: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
+          top: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          bottom: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.1)),
         ),
       ),
       child: Row(
@@ -2622,8 +2636,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+              border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2907,9 +2921,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         margin: const EdgeInsets.only(top: 4),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
@@ -2921,7 +2937,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
             icon: Icon(Icons.pedal_bike,
                 size: 14,
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             items: const [],
             onChanged: null,
           ),
@@ -2936,7 +2953,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+        border:
+            Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
@@ -3147,7 +3165,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   decoration: BoxDecoration(
                     border: Border.all(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                        color:
+                            theme.colorScheme.outline.withValues(alpha: 0.3)),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text('%', style: TextStyle(fontSize: 12)),
@@ -3385,7 +3404,10 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
-  Future<void> _downloadInvoicePDF(Invoice _) async {
+  Future<void> _downloadInvoicePDF(
+    Invoice _, {
+    InvoicePdfExportMode mode = InvoicePdfExportMode.invoiceOnly,
+  }) async {
     if (_isGeneratingPdf) return;
 
     setState(() => _isGeneratingPdf = true);
@@ -3396,13 +3418,43 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       final resolvedBikeNames =
           await InvoicePdfGenerator.resolveBikeNames(context, currentInvoice);
 
-      final pdf = await _generateInvoicePDF(currentInvoice, resolvedBikeNames);
+      final diagnosisNarratives =
+          mode == InvoicePdfExportMode.invoiceWithDiagnosis
+              ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
+                  context,
+                  currentInvoice,
+                  resolvedBikeNames,
+                )
+              : const <InvoiceDiagnosisNarrative>[];
+
+      if (mode == InvoicePdfExportMode.invoiceWithDiagnosis &&
+          diagnosisNarratives.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Esta factura no tiene ficha narrativa disponible para exportar.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generateInvoicePDF(
+        currentInvoice,
+        resolvedBikeNames,
+        diagnosisNarratives: diagnosisNarratives,
+      );
       final bytes = await pdf.save();
 
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final initialDirectory =
+            await InvoicePdfGenerator.resolveDefaultSaveDirectory();
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar Factura PDF',
-          fileName: 'factura_${currentInvoice.invoiceNumber}.pdf',
+          fileName: mode.fileNameFor(currentInvoice.invoiceNumber),
+          initialDirectory: initialDirectory,
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -3421,7 +3473,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       } else {
         await Printing.sharePdf(
           bytes: bytes,
-          filename: 'factura_${currentInvoice.invoiceNumber}.pdf',
+          filename: mode.fileNameFor(currentInvoice.invoiceNumber),
         );
       }
     } catch (e) {
@@ -3441,12 +3493,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
-    Map<String, String> resolvedBikeNames,
-  ) {
+    Map<String, String> resolvedBikeNames, {
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) {
     return InvoicePdfGenerator.generateInvoicePDF(
       context,
       invoice,
       resolvedBikeNames,
+      diagnosisNarratives: diagnosisNarratives,
     );
   }
 }

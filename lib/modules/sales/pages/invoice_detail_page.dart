@@ -546,8 +546,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => _downloadInvoicePDF(invoice),
+          PopupMenuButton<InvoicePdfExportMode>(
+            enabled: !_isGeneratingPdf,
+            tooltip: 'Exportar PDF',
+            onSelected: (mode) => _downloadInvoicePDF(invoice, mode: mode),
+            itemBuilder: (context) => InvoicePdfExportMode.values
+                .map(
+                  (mode) => PopupMenuItem<InvoicePdfExportMode>(
+                    value: mode,
+                    child: Text(mode.label),
+                  ),
+                )
+                .toList(growable: false),
             icon: _isGeneratingPdf
                 ? const SizedBox(
                     width: 20,
@@ -555,7 +565,6 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.picture_as_pdf),
-            tooltip: 'Descargar PDF',
           ),
           if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
             Padding(
@@ -871,7 +880,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   bool _isGeneratingPdf = false;
 
-  Future<void> _downloadInvoicePDF(Invoice _) async {
+  Future<void> _downloadInvoicePDF(
+    Invoice _, {
+    InvoicePdfExportMode mode = InvoicePdfExportMode.invoiceOnly,
+  }) async {
     if (_isGeneratingPdf) return;
 
     setState(() => _isGeneratingPdf = true);
@@ -890,15 +902,45 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       final resolvedBikeNames =
           await InvoicePdfGenerator.resolveBikeNames(context, freshInvoice);
 
-      final pdf = await _generateInvoicePDF(freshInvoice, resolvedBikeNames);
+      final diagnosisNarratives =
+          mode == InvoicePdfExportMode.invoiceWithDiagnosis
+              ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
+                  context,
+                  freshInvoice,
+                  resolvedBikeNames,
+                )
+              : const <InvoiceDiagnosisNarrative>[];
+
+      if (mode == InvoicePdfExportMode.invoiceWithDiagnosis &&
+          diagnosisNarratives.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Esta factura no tiene ficha narrativa disponible para exportar.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generateInvoicePDF(
+        freshInvoice,
+        resolvedBikeNames,
+        diagnosisNarratives: diagnosisNarratives,
+      );
       final bytes = await pdf.save();
 
       // Platform-specific download
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
         // Desktop: Use Save As dialog
+        final initialDirectory =
+            await InvoicePdfGenerator.resolveDefaultSaveDirectory();
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar Factura PDF',
-          fileName: 'factura_${freshInvoice.invoiceNumber}.pdf',
+          fileName: mode.fileNameFor(freshInvoice.invoiceNumber),
+          initialDirectory: initialDirectory,
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -918,7 +960,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       } else {
         await Printing.sharePdf(
           bytes: bytes,
-          filename: 'factura_${freshInvoice.invoiceNumber}.pdf',
+          filename: mode.fileNameFor(freshInvoice.invoiceNumber),
         );
       }
     } catch (e) {
@@ -939,12 +981,15 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   // ignore: unused_element
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
-    Map<String, String> resolvedBikeNames,
-  ) {
+    Map<String, String> resolvedBikeNames, {
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) {
     return InvoicePdfGenerator.generateInvoicePDF(
       context,
       invoice,
       resolvedBikeNames,
+      diagnosisNarratives: diagnosisNarratives,
     );
   }
 }

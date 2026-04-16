@@ -718,7 +718,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    color: theme.textTheme.bodySmall?.color
+                        ?.withValues(alpha: 0.7),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -833,7 +834,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     const SizedBox(width: 8),
                     Text(
                       '•',
-                      style: TextStyle(color: theme.hintColor.withValues(alpha: 0.6)),
+                      style: TextStyle(
+                          color: theme.hintColor.withValues(alpha: 0.6)),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -1561,32 +1563,93 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     ),
                   ),
                   itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      enabled: false,
+                      height: 32,
+                      child: Text(
+                        'Descargar PDF',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                     const PopupMenuItem(
-                      value: 'download',
+                      value: 'download_invoice',
                       child: Row(
                         children: [
-                          Icon(Icons.download_outlined, size: 16),
+                          Icon(Icons.receipt_long_outlined, size: 16),
                           SizedBox(width: 8),
-                          Text('Descargar PDF', style: TextStyle(fontSize: 13)),
+                          Text('Factura', style: TextStyle(fontSize: 13)),
                         ],
                       ),
                     ),
                     const PopupMenuItem(
-                      value: 'print',
+                      value: 'download_invoice_diagnosis',
+                      child: Row(
+                        children: [
+                          Icon(Icons.download_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Factura + Diagnóstico',
+                              style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem<String>(
+                      enabled: false,
+                      height: 32,
+                      child: Text(
+                        'Imprimir',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'print_invoice',
                       child: Row(
                         children: [
                           Icon(Icons.print_outlined, size: 16),
                           SizedBox(width: 8),
-                          Text('Imprimir', style: TextStyle(fontSize: 13)),
+                          Text('Factura', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'print_invoice_diagnosis',
+                      child: Row(
+                        children: [
+                          Icon(Icons.print_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Factura + Diagnóstico',
+                              style: TextStyle(fontSize: 13)),
                         ],
                       ),
                     ),
                   ],
                   onSelected: (value) {
-                    if (value == 'download') {
-                      _downloadInvoicePDF(invoice);
-                    } else if (value == 'print') {
-                      _printInvoice(invoice);
+                    if (value == 'download_invoice') {
+                      _downloadInvoicePDF(
+                        invoice,
+                        mode: InvoicePdfExportMode.invoiceOnly,
+                      );
+                    } else if (value == 'download_invoice_diagnosis') {
+                      _downloadInvoicePDF(
+                        invoice,
+                        mode: InvoicePdfExportMode.invoiceWithDiagnosis,
+                      );
+                    } else if (value == 'print_invoice') {
+                      _printInvoice(
+                        invoice,
+                        mode: InvoicePdfExportMode.invoiceOnly,
+                      );
+                    } else if (value == 'print_invoice_diagnosis') {
+                      _printInvoice(
+                        invoice,
+                        mode: InvoicePdfExportMode.invoiceWithDiagnosis,
+                      );
                     }
                   },
                 ),
@@ -1644,7 +1707,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   bool _isGeneratingPdf = false;
 
-  Future<void> _downloadInvoicePDF(Invoice invoice) async {
+  Future<void> _downloadInvoicePDF(
+    Invoice invoice, {
+    InvoicePdfExportMode mode = InvoicePdfExportMode.invoiceOnly,
+  }) async {
     if (_isGeneratingPdf) return;
     setState(() => _isGeneratingPdf = true);
     try {
@@ -1654,12 +1720,42 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           .firstWhere((i) => i.id == invoice.id, orElse: () => invoice);
       if (!mounted) return;
       final resolvedBikeNames = await _resolveBikeNames(freshInvoice);
-      final pdf = await _generateInvoicePDF(freshInvoice, resolvedBikeNames);
+      final diagnosisNarratives =
+          mode == InvoicePdfExportMode.invoiceWithDiagnosis
+              ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
+                  context,
+                  freshInvoice,
+                  resolvedBikeNames,
+                )
+              : const <InvoiceDiagnosisNarrative>[];
+
+      if (mode == InvoicePdfExportMode.invoiceWithDiagnosis &&
+          diagnosisNarratives.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Esta factura no tiene ficha narrativa disponible para exportar.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generateInvoicePDF(
+        freshInvoice,
+        resolvedBikeNames,
+        diagnosisNarratives: diagnosisNarratives,
+      );
       final bytes = await pdf.save();
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final initialDirectory =
+            await InvoicePdfGenerator.resolveDefaultSaveDirectory();
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar Factura PDF',
-          fileName: 'factura_${freshInvoice.invoiceNumber}.pdf',
+          fileName: mode.fileNameFor(freshInvoice.invoiceNumber),
+          initialDirectory: initialDirectory,
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -1693,7 +1789,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     }
   }
 
-  Future<void> _printInvoice(Invoice invoice) async {
+  Future<void> _printInvoice(
+    Invoice invoice, {
+    InvoicePdfExportMode mode = InvoicePdfExportMode.invoiceOnly,
+  }) async {
     if (_isGeneratingPdf) return;
     setState(() => _isGeneratingPdf = true);
     try {
@@ -1703,10 +1802,37 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           .firstWhere((i) => i.id == invoice.id, orElse: () => invoice);
       if (!mounted) return;
       final resolvedBikeNames = await _resolveBikeNames(freshInvoice);
-      final pdf = await _generateInvoicePDF(freshInvoice, resolvedBikeNames);
+      final diagnosisNarratives =
+          mode == InvoicePdfExportMode.invoiceWithDiagnosis
+              ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
+                  context,
+                  freshInvoice,
+                  resolvedBikeNames,
+                )
+              : const <InvoiceDiagnosisNarrative>[];
+
+      if (mode == InvoicePdfExportMode.invoiceWithDiagnosis &&
+          diagnosisNarratives.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Esta factura no tiene ficha narrativa disponible para imprimir.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generateInvoicePDF(
+        freshInvoice,
+        resolvedBikeNames,
+        diagnosisNarratives: diagnosisNarratives,
+      );
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: 'factura_${freshInvoice.invoiceNumber}',
+        name: mode.documentNameFor(freshInvoice.invoiceNumber),
       );
     } catch (e) {
       debugPrint('Error printing PDF: $e');
@@ -1729,12 +1855,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
-    Map<String, String> resolvedBikeNames,
-  ) {
+    Map<String, String> resolvedBikeNames, {
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) {
     return InvoicePdfGenerator.generateInvoicePDF(
       context,
       invoice,
       resolvedBikeNames,
+      diagnosisNarratives: diagnosisNarratives,
     );
   }
 

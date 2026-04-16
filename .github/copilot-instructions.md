@@ -52,6 +52,7 @@ Examples:
 
 Diagnosis and service customization must follow the same backbone:
 - diagnosis is the shared visit-truth layer for component state
+- visit narrative may be AI-assisted, but only as an editable human-readable projection of the already-defined structured diagnosis for that visit; it must not become a parallel diagnosis truth store and it must omit undefined fields instead of narrating placeholders
 - service wizards should be service-aware views over that same diagnosis target, plus a narrow set of service-execution-only fields
 - user-customized fields may propagate across wizards, product suggestions, bike profile promotion, or bike timeline automation only when mapped to a known semantic role from a controlled catalog
 - arbitrary local custom fields must remain diagnosis-only and must not silently affect the rest of the workflow
@@ -100,6 +101,8 @@ At the intake/UI layer, canonical compatibility values should also be captured t
 - diagnosis-linked wizard fields must reuse the same canonical vocabulary and labels as `mechanic_job_bikes.diagnosis_sheet_data`; brake symptom wording must not fork into a second synonym set just because a legacy service profile still exists
 - when the upstream bike profile already confirms the top-level brake platform, the wizard UI should lock that platform visually and ask only for the unresolved refinement that is still missing; a legacy rim bike may still need `rimBrakeFamily`, but the mechanic should not see the entire mixed brake-platform list vomited back into the flow
 - diagnosis-linked brake fields must be driven from one shared field-definition layer in code, including option labels and render style, so the bike intake, diagnosis sheet, and guided service wizard do not fork into separate local widget logic for the same centralized truth
+- any bike-system map/controller used in diagnosis, bike record/history, bike profile, or future workshop UI must come from one shared code-side widget + registry; do not keep separate local pin/spec lists or duplicated bike-map implementations per screen
+- if the current diagnosis template models fewer systems than the shared controller can display, keep one shared controller anyway and show explicit unavailable/placeholder inspector states for unmodeled systems instead of forking a reduced second controller
 - when global brake service profiles drift back to legacy keys or wording, the schema seed and migration path must clean obsolete alias keys such as `position`, `includes_cable_housing`, `rotor_diameter`, `num_pistons`, or `deviation_severity` when the canonical meanings are already `which_wheel`, `rotor_size`, `piston_count`, and `damage_level`; keep real canonical brake fields like `pad_contaminated` instead of replacing them with local one-off synonyms
 - `drivetrainConfig` and `drivetrainSpeeds` should be derived from front-chainring count x rear-cog count when the mechanic is confirming drivetrain layout, not typed manually as free text
 - `freehubType` should be treated as the rear-driver family field, not as a cassette-only label, so singlespeed/BMX/fixed cases are not forced into the wrong vocabulary

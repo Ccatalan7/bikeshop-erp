@@ -1167,7 +1167,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
-  Future<void> _downloadInvoicePDF() async {
+  Future<void> _downloadInvoicePDF({
+    InvoicePdfExportMode mode = InvoicePdfExportMode.invoiceOnly,
+  }) async {
     if (_isGeneratingPdf || _loadedInvoice == null) return;
 
     setState(() => _isGeneratingPdf = true);
@@ -1185,14 +1187,44 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       final resolvedBikeNames =
           await InvoicePdfGenerator.resolveBikeNames(context, _loadedInvoice!);
 
-      final pdf = await _generateInvoicePDF(_loadedInvoice!, resolvedBikeNames);
+      final diagnosisNarratives =
+          mode == InvoicePdfExportMode.invoiceWithDiagnosis
+              ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
+                  context,
+                  _loadedInvoice!,
+                  resolvedBikeNames,
+                )
+              : const <InvoiceDiagnosisNarrative>[];
+
+      if (mode == InvoicePdfExportMode.invoiceWithDiagnosis &&
+          diagnosisNarratives.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Esta factura no tiene ficha narrativa disponible para exportar.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pdf = await _generateInvoicePDF(
+        _loadedInvoice!,
+        resolvedBikeNames,
+        diagnosisNarratives: diagnosisNarratives,
+      );
       final bytes = await pdf.save();
 
       // Platform-specific download
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final initialDirectory =
+            await InvoicePdfGenerator.resolveDefaultSaveDirectory();
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar Factura PDF',
-          fileName: 'factura_${_loadedInvoice!.invoiceNumber}.pdf',
+          fileName: mode.fileNameFor(_loadedInvoice!.invoiceNumber),
+          initialDirectory: initialDirectory,
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -1212,7 +1244,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       } else {
         await Printing.sharePdf(
           bytes: bytes,
-          filename: 'factura_${_loadedInvoice!.invoiceNumber}.pdf',
+          filename: mode.fileNameFor(_loadedInvoice!.invoiceNumber),
         );
       }
     } catch (e) {
@@ -1230,12 +1262,15 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   Future<pw.Document> _generateInvoicePDF(
     Invoice invoice,
-    Map<String, String> resolvedBikeNames,
-  ) {
+    Map<String, String> resolvedBikeNames, {
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) {
     return InvoicePdfGenerator.generateInvoicePDF(
       context,
       invoice,
       resolvedBikeNames,
+      diagnosisNarratives: diagnosisNarratives,
     );
   }
 
@@ -1493,8 +1528,18 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     // 0. DOWNLOAD BUTTON (If invoice exists)
     if (_loadedInvoice != null) {
       actionButtons.add(
-        IconButton(
-          onPressed: _downloadInvoicePDF,
+        PopupMenuButton<InvoicePdfExportMode>(
+          enabled: !_isGeneratingPdf,
+          tooltip: 'Exportar PDF',
+          onSelected: (mode) => _downloadInvoicePDF(mode: mode),
+          itemBuilder: (context) => InvoicePdfExportMode.values
+              .map(
+                (mode) => PopupMenuItem<InvoicePdfExportMode>(
+                  value: mode,
+                  child: Text(mode.label),
+                ),
+              )
+              .toList(growable: false),
           icon: _isGeneratingPdf
               ? const SizedBox(
                   width: 16,
@@ -1502,7 +1547,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.picture_as_pdf),
-          tooltip: 'Descargar PDF',
         ),
       );
       // Add divider/spacing
@@ -1752,7 +1796,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -1791,7 +1836,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           leading: widget.isCompact
               ? null
               : CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.15),
                   child: Icon(
                     Icons.person,
                     color: theme.colorScheme.primary,
@@ -1985,8 +2031,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          top: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
+          top: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          bottom: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.1)),
         ),
       ),
       child: Row(
@@ -2040,8 +2088,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+              border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2075,9 +2123,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         padding: const EdgeInsets.symmetric(horizontal: 8),
         margin: const EdgeInsets.only(top: 4),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
@@ -2089,7 +2139,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface),
             icon: Icon(Icons.pedal_bike,
                 size: 14,
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             items: const [],
             onChanged: null,
           ),
@@ -2104,7 +2155,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+        border:
+            Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(

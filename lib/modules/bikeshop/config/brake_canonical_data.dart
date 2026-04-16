@@ -72,18 +72,218 @@ const Map<String, String> kBrakeSymptomLabels = {
   'intermittent': 'Frenado intermitente',
 };
 
+const Map<String, String> kBrakeWheelOptions = {
+  'front': 'Delantera',
+  'rear': 'Trasera',
+  'both': 'Ambas ruedas',
+};
+
+const Map<String, String> kBrakeFluidTypeOptions = {
+  'mineral': 'Aceite Mineral (Shimano / Magura / Tektro)',
+  'dot': 'DOT 4 / 5.1 (SRAM / Hayes / Hope)',
+};
+
+const Map<String, String> kBrakeDamageLevelOptions = {
+  'minor': 'Leve - centrado posible',
+  'moderate': 'Moderado',
+  'severe': 'Severo - puede requerir reemplazo',
+};
+
+const Map<String, String> kBrakePistonCountOptions = {
+  '2': '2 pistones',
+  '4': '4 pistones',
+};
+
+const Map<String, String> kBrakeRotorSizeOptions = {
+  '140': '140 mm',
+  '160': '160 mm',
+  '180': '180 mm',
+  '203': '203 mm',
+};
+
+const Map<String, String> kBrakeQuestionKeyAliases = {
+  'position': 'which_wheel',
+  'num_pistons': 'piston_count',
+  'rotor_diameter': 'rotor_size',
+  'deviation_severity': 'damage_level',
+};
+
+const Set<String> kObsoleteBrakeWizardQuestionKeys = {
+  'includes_cable_housing',
+  'symptom_severity',
+  'hose_condition',
+};
+
 const Set<String> kDiagnosisLinkedBrakeWizardQuestionKeys = {
   'pad_condition',
   'pad_contaminated',
   'rotor_condition',
   'damage_level',
-  'deviation_severity',
   'contamination_level',
   'symptom',
 };
 
 bool isDiagnosisLinkedBrakeQuestionKey(String key) {
   return kDiagnosisLinkedBrakeWizardQuestionKeys.contains(key);
+}
+
+String canonicalBrakeQuestionKey(String rawKey) {
+  return kBrakeQuestionKeyAliases[rawKey] ?? rawKey;
+}
+
+bool isObsoleteBrakeWizardQuestionKey(String rawKey) {
+  return kObsoleteBrakeWizardQuestionKeys.contains(rawKey);
+}
+
+String? canonicalBrakeWheelValue(String? rawValue) {
+  switch (rawValue) {
+    case 'front':
+    case 'delantero':
+      return 'front';
+    case 'rear':
+    case 'trasero':
+      return 'rear';
+    case 'both':
+    case 'ambos':
+      return 'both';
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
+String? canonicalBrakeWheelValueFromAnswers(Map<String, dynamic> answers) {
+  return canonicalBrakeWheelValue(
+    answers['which_wheel']?.toString() ?? answers['position']?.toString(),
+  );
+}
+
+String? canonicalBrakeFluidTypeValue(String? rawValue) {
+  switch (rawValue) {
+    case 'mineral':
+      return 'mineral';
+    case 'dot':
+    case 'dot3':
+    case 'dot4':
+    case 'dot51':
+      return 'dot';
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
+String? canonicalBrakeDamageLevelValue(String? rawValue) {
+  switch (rawValue) {
+    case 'minor':
+    case 'leve':
+      return 'minor';
+    case 'moderate':
+    case 'moderado':
+      return 'moderate';
+    case 'severe':
+    case 'severo':
+      return 'severe';
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
+String? canonicalBrakePistonCountValue(String? rawValue) {
+  switch (rawValue) {
+    case '2':
+    case '4':
+      return rawValue;
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
+String? canonicalBrakeRotorSizeValue(String? rawValue) {
+  switch (rawValue) {
+    case '140':
+    case '160':
+    case '180':
+    case '203':
+      return rawValue;
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
+Map<String, dynamic> canonicalizeBrakeWizardAnswers(
+  Map<String, dynamic> rawAnswers,
+) {
+  final normalized = <String, dynamic>{};
+
+  void mergeEntry(
+    String rawKey,
+    dynamic rawValue, {
+    required bool isCanonicalSource,
+  }) {
+    if (rawKey == '_notes') {
+      if (_isMeaningfulBrakeAnswer(rawValue)) {
+        normalized[rawKey] = rawValue;
+      }
+      return;
+    }
+
+    if (isObsoleteBrakeWizardQuestionKey(rawKey)) {
+      return;
+    }
+
+    final normalizedKey = canonicalBrakeQuestionKey(rawKey);
+    final normalizedValue =
+        canonicalizeBrakeWizardAnswerValue(normalizedKey, rawValue);
+    if (!_isMeaningfulBrakeAnswer(normalizedValue)) {
+      return;
+    }
+
+    if (!normalized.containsKey(normalizedKey) || isCanonicalSource) {
+      normalized[normalizedKey] = normalizedValue;
+    }
+  }
+
+  for (final entry in rawAnswers.entries) {
+    if (entry.key == '_notes' ||
+        canonicalBrakeQuestionKey(entry.key) == entry.key) {
+      mergeEntry(entry.key, entry.value, isCanonicalSource: true);
+    }
+  }
+
+  for (final entry in rawAnswers.entries) {
+    if (entry.key != '_notes' &&
+        canonicalBrakeQuestionKey(entry.key) != entry.key) {
+      mergeEntry(entry.key, entry.value, isCanonicalSource: false);
+    }
+  }
+
+  return normalized;
+}
+
+dynamic canonicalizeBrakeWizardAnswerValue(String key, dynamic rawValue) {
+  switch (key) {
+    case 'which_wheel':
+      return canonicalBrakeWheelValue(rawValue?.toString());
+    case 'fluid_type':
+      return canonicalBrakeFluidTypeValue(rawValue?.toString());
+    case 'damage_level':
+      return canonicalBrakeDamageLevelValue(rawValue?.toString());
+    case 'piston_count':
+      return canonicalBrakePistonCountValue(rawValue?.toString());
+    case 'rotor_size':
+      return canonicalBrakeRotorSizeValue(rawValue?.toString());
+    case 'symptom':
+      if (rawValue is List) {
+        final normalized = canonicalizeBrakeSymptomKeys(
+          rawValue.map((value) => value.toString()),
+        );
+        return normalized.isEmpty ? null : normalized;
+      }
+
+      final normalized = canonicalBrakeSymptomKey(rawValue?.toString() ?? '');
+      return normalized == null ? null : <String>[normalized];
+    default:
+      return rawValue;
+  }
 }
 
 String? canonicalBrakeSymptomKey(String rawValue) {
@@ -132,4 +332,26 @@ String? resolveBrakeSymptomLabel(String rawValue) {
     return 'Desalineado';
   }
   return null;
+}
+
+String? _normalizeBrakeText(String? rawValue) {
+  if (rawValue == null) {
+    return null;
+  }
+
+  final normalized = rawValue.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+bool _isMeaningfulBrakeAnswer(dynamic value) {
+  if (value == null) {
+    return false;
+  }
+  if (value is String) {
+    return value.trim().isNotEmpty;
+  }
+  if (value is List) {
+    return value.isNotEmpty;
+  }
+  return true;
 }

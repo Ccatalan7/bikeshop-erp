@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
@@ -11,9 +12,58 @@ import '../../modules/settings/services/appearance_service.dart';
 import '../../shared/services/database_service.dart';
 import 'chilean_utils.dart';
 
+enum InvoicePdfExportMode {
+  invoiceOnly,
+  invoiceWithDiagnosis,
+}
+
+extension InvoicePdfExportModeX on InvoicePdfExportMode {
+  String get label {
+    switch (this) {
+      case InvoicePdfExportMode.invoiceOnly:
+        return 'Factura';
+      case InvoicePdfExportMode.invoiceWithDiagnosis:
+        return 'Factura + Diagnóstico';
+    }
+  }
+
+  String fileNameFor(String invoiceNumber) {
+    switch (this) {
+      case InvoicePdfExportMode.invoiceOnly:
+        return 'factura_$invoiceNumber.pdf';
+      case InvoicePdfExportMode.invoiceWithDiagnosis:
+        return 'factura_${invoiceNumber}_con_diagnostico.pdf';
+    }
+  }
+
+  String documentNameFor(String invoiceNumber) {
+    switch (this) {
+      case InvoicePdfExportMode.invoiceOnly:
+        return 'factura_$invoiceNumber';
+      case InvoicePdfExportMode.invoiceWithDiagnosis:
+        return 'factura_${invoiceNumber}_con_diagnostico';
+    }
+  }
+}
+
+class InvoiceDiagnosisNarrative {
+  const InvoiceDiagnosisNarrative({
+    required this.title,
+    required this.content,
+  });
+
+  final String title;
+  final String content;
+}
+
 class InvoicePdfGenerator {
   static Uint8List? _cachedLogoBytes;
   static String? _cachedLogoUrl;
+
+  static Future<String?> resolveDefaultSaveDirectory() async {
+    final downloadsDirectory = await getDownloadsDirectory();
+    return downloadsDirectory?.path;
+  }
 
   static Future<Map<String, String>> resolveBikeNames(
     BuildContext context,
@@ -91,11 +141,61 @@ class InvoicePdfGenerator {
     return resolvedBikeNames;
   }
 
-  static Future<pw.Document> generateInvoicePDF(
+  static Future<List<InvoiceDiagnosisNarrative>> resolveDiagnosisNarratives(
     BuildContext context,
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
   ) async {
+    final narratives = <InvoiceDiagnosisNarrative>[];
+
+    try {
+      final db = context.read<DatabaseService>();
+      final jobBikeIds = invoice.items
+          .where((item) => item.jobBikeId != null && item.jobBikeId!.isNotEmpty)
+          .map((item) => item.jobBikeId!)
+          .toSet()
+          .toList(growable: false);
+
+      final linkedJobId = await _resolveLinkedJobId(db, invoice, jobBikeIds);
+
+      if (jobBikeIds.isNotEmpty) {
+        narratives.addAll(
+          await _loadJobBikeNarratives(
+            db,
+            resolvedBikeNames,
+            filterJobBikeIds: jobBikeIds,
+          ),
+        );
+      } else if (linkedJobId != null) {
+        narratives.addAll(
+          await _loadJobBikeNarratives(
+            db,
+            resolvedBikeNames,
+            linkedJobId: linkedJobId,
+          ),
+        );
+      }
+
+      if (narratives.isEmpty && linkedJobId != null) {
+        final jobNarrative = await _loadJobLevelNarrative(db, linkedJobId);
+        if (jobNarrative != null) {
+          narratives.add(jobNarrative);
+        }
+      }
+    } catch (e) {
+      debugPrint('Could not resolve diagnosis narratives for PDF: $e');
+    }
+
+    return narratives;
+  }
+
+  static Future<pw.Document> generateInvoicePDF(
+    BuildContext context,
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames, {
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) async {
     final pdf = pw.Document();
     final logoImage = await _loadLogoImage(context);
 
@@ -113,6 +213,10 @@ class InvoicePdfGenerator {
           _buildItemsTable(invoice, resolvedBikeNames),
           pw.SizedBox(height: 18),
           _buildTotals(invoice),
+          if (diagnosisNarratives.isNotEmpty) ...[
+            pw.NewPage(),
+            ..._buildDiagnosisNarrativesSection(diagnosisNarratives),
+          ],
         ],
       ),
     );
@@ -144,6 +248,137 @@ class InvoicePdfGenerator {
       debugPrint('Error loading logo for PDF: $e');
       return null;
     }
+  }
+
+  static Future<String?> _resolveLinkedJobId(
+    DatabaseService db,
+    Invoice invoice,
+    List<String> jobBikeIds,
+  ) async {
+    if (invoice.id != null && invoice.id!.isNotEmpty) {
+      final jobDataList = await db.supabase
+          .from('mechanic_jobs')
+          .select('id')
+          .eq('invoice_id', invoice.id as Object)
+          .limit(1);
+
+      if (jobDataList.isNotEmpty) {
+        return jobDataList.first['id']?.toString();
+      }
+    }
+
+    if (jobBikeIds.isEmpty) {
+      return null;
+    }
+
+    final bikeData = await db.supabase
+        .from('mechanic_job_bikes')
+        .select('job_id')
+        .eq('id', jobBikeIds.first as Object)
+        .maybeSingle();
+
+    return bikeData?['job_id']?.toString();
+  }
+
+  static Future<List<InvoiceDiagnosisNarrative>> _loadJobBikeNarratives(
+    DatabaseService db,
+    Map<String, String> resolvedBikeNames, {
+    List<String>? filterJobBikeIds,
+    String? linkedJobId,
+  }) async {
+    dynamic query = db.supabase.from('mechanic_job_bikes').select('''
+          id,
+          job_id,
+          diagnosis,
+          bike:bikes(brand, model, year)
+        ''');
+
+    if (filterJobBikeIds != null && filterJobBikeIds.isNotEmpty) {
+      query = query.inFilter('id', filterJobBikeIds);
+    } else if (linkedJobId != null && linkedJobId.isNotEmpty) {
+      query = query.eq('job_id', linkedJobId);
+    } else {
+      return const <InvoiceDiagnosisNarrative>[];
+    }
+
+    final data = await query;
+    if (data is! List) {
+      return const <InvoiceDiagnosisNarrative>[];
+    }
+
+    final narratives = <InvoiceDiagnosisNarrative>[];
+    for (final row in data) {
+      if (row is! Map) continue;
+      final diagnosis = row['diagnosis']?.toString().trim();
+      if (diagnosis == null || diagnosis.isEmpty) continue;
+
+      final jobBikeId = row['id']?.toString();
+      final title = _resolveDiagnosisTitle(
+        row,
+        resolvedBikeNames[jobBikeId]?.trim(),
+      );
+
+      narratives.add(
+        InvoiceDiagnosisNarrative(
+          title: title,
+          content: diagnosis,
+        ),
+      );
+    }
+
+    return narratives;
+  }
+
+  static Future<InvoiceDiagnosisNarrative?> _loadJobLevelNarrative(
+    DatabaseService db,
+    String jobId,
+  ) async {
+    final jobData = await db.supabase
+        .from('mechanic_jobs')
+        .select('job_number, diagnosis')
+        .eq('id', jobId as Object)
+        .maybeSingle();
+
+    final diagnosis = jobData?['diagnosis']?.toString().trim();
+    if (diagnosis == null || diagnosis.isEmpty) {
+      return null;
+    }
+
+    final jobNumber = jobData?['job_number']?.toString().trim();
+    final title = (jobNumber != null && jobNumber.isNotEmpty)
+        ? 'Diagnóstico general $jobNumber'
+        : 'Diagnóstico general';
+
+    return InvoiceDiagnosisNarrative(
+      title: title,
+      content: diagnosis,
+    );
+  }
+
+  static String _resolveDiagnosisTitle(
+    Map row,
+    String? resolvedBikeName,
+  ) {
+    if (resolvedBikeName != null && resolvedBikeName.isNotEmpty) {
+      return resolvedBikeName;
+    }
+
+    final bikeMap = row['bike'];
+    if (bikeMap is Map) {
+      final parts = <String>[
+        if ((bikeMap['brand'] as String?)?.isNotEmpty == true)
+          bikeMap['brand'] as String,
+        if ((bikeMap['model'] as String?)?.isNotEmpty == true)
+          bikeMap['model'] as String,
+        if (bikeMap['year'] != null) bikeMap['year'].toString(),
+      ];
+
+      if (parts.isNotEmpty) {
+        return parts.join(' ');
+      }
+    }
+
+    return 'Bicicleta en servicio';
   }
 
   static pw.Widget _buildHeader(
@@ -534,6 +769,179 @@ class InvoicePdfGenerator {
         ),
       ],
     );
+  }
+
+  static List<pw.Widget> _buildDiagnosisNarrativesSection(
+    List<InvoiceDiagnosisNarrative> narratives,
+  ) {
+    return [
+      pw.Text(
+        'Ficha narrativa',
+        style: pw.TextStyle(
+          fontSize: 16,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColors.black,
+        ),
+      ),
+      pw.SizedBox(height: 6),
+      pw.Text(
+        'Se adjunta el diagnóstico narrativo asociado al servicio facturado.',
+        style: const pw.TextStyle(
+          fontSize: 9,
+          color: PdfColors.grey700,
+        ),
+      ),
+      pw.SizedBox(height: 16),
+      ...narratives.expand(
+        (narrative) => [
+          _buildDiagnosisNarrativeCard(narrative),
+          pw.SizedBox(height: 14),
+        ],
+      ),
+    ];
+  }
+
+  static pw.Widget _buildDiagnosisNarrativeCard(
+    InvoiceDiagnosisNarrative narrative,
+  ) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300, width: 0.6),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            _cleanPdfText(narrative.title),
+            style: pw.TextStyle(
+              fontSize: 11.5,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.blueGrey900,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          ..._buildNarrativeMarkdownBlocks(narrative.content),
+        ],
+      ),
+    );
+  }
+
+  static List<pw.Widget> _buildNarrativeMarkdownBlocks(String rawContent) {
+    final widgets = <pw.Widget>[];
+    final paragraphBuffer = StringBuffer();
+
+    void flushParagraph() {
+      final text = paragraphBuffer.toString().trim();
+      if (text.isEmpty) {
+        paragraphBuffer.clear();
+        return;
+      }
+
+      widgets.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.Text(
+            _cleanPdfText(text),
+            style: const pw.TextStyle(
+              fontSize: 9.4,
+              color: PdfColors.black,
+              lineSpacing: 2,
+            ),
+          ),
+        ),
+      );
+      paragraphBuffer.clear();
+    }
+
+    final normalized = rawContent.replaceAll('\r\n', '\n');
+    for (final rawLine in normalized.split('\n')) {
+      final line = rawLine.trim();
+
+      if (line.isEmpty) {
+        flushParagraph();
+        continue;
+      }
+
+      if (line.startsWith('### ') ||
+          line.startsWith('## ') ||
+          line.startsWith('# ')) {
+        flushParagraph();
+        final title = line.replaceFirst(RegExp(r'^#{1,3}\s+'), '').trim();
+        if (title.isNotEmpty) {
+          widgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 4, bottom: 6),
+              child: pw.Text(
+                _cleanPdfText(title),
+                style: pw.TextStyle(
+                  fontSize: 10.2,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
+              ),
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (line.startsWith('- ') || line.startsWith('• ')) {
+        flushParagraph();
+        final bulletText = line.substring(2).trim();
+        if (bulletText.isNotEmpty) {
+          widgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 6, left: 6),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    '• ',
+                    style: const pw.TextStyle(fontSize: 9.4),
+                  ),
+                  pw.Expanded(
+                    child: pw.Text(
+                      _cleanPdfText(bulletText),
+                      style: const pw.TextStyle(
+                        fontSize: 9.4,
+                        color: PdfColors.black,
+                        lineSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (paragraphBuffer.isNotEmpty) {
+        paragraphBuffer.write(' ');
+      }
+      paragraphBuffer.write(line);
+    }
+
+    flushParagraph();
+
+    if (widgets.isEmpty) {
+      widgets.add(
+        pw.Text(
+          _cleanPdfText(rawContent.trim()),
+          style: const pw.TextStyle(
+            fontSize: 9.4,
+            color: PdfColors.black,
+            lineSpacing: 2,
+          ),
+        ),
+      );
+    }
+
+    return widgets;
   }
 
   static pw.Widget _buildFooter(pw.Context context) {

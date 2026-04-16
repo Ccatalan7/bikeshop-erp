@@ -1,5 +1,4 @@
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,10 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
-import 'bike_diagram_illustration.dart';
+import 'bike_system_controller.dart';
 import 'bike_measurement_timeline.dart';
-
-part 'interactive_vector_bike.dart';
 
 class BikeRecordPanel extends StatefulWidget {
   final BikeRecordSnapshot snapshot;
@@ -584,17 +581,28 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     final activeSystemKey =
         history.resolveActiveSystemKey(_selectedDiagnosisSystemKey);
     final activeSystem = history.systemFor(activeSystemKey);
+    final controllerEntries = _buildHistoryControllerEntries(history);
 
-    // Shared bike widget builder (avoids repetition)
     Widget bikeWidget = RepaintBoundary(
-      child: _InteractiveVectorBike(
+      child: BikeSystemController(
         bike: widget.snapshot.bike,
-        history: history,
-        activeSystemKey: activeSystemKey,
+        entries: controllerEntries,
+        selectedSystemKey: activeSystemKey,
         onSystemSelected: (key) {
           setState(() {
             _selectedDiagnosisSystemKey = key;
           });
+        },
+        overlayBuilder: (context, entry, layout) {
+          final hoveredSystem = history.systemFor(entry.spec.systemKey);
+          if (hoveredSystem == null) {
+            return null;
+          }
+          return _DiagnosticPopupCard(
+            system: hoveredSystem,
+            color: _historySystemStatusColor(hoveredSystem.overallStatus),
+            layout: layout,
+          );
         },
       ),
     );
@@ -747,7 +755,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ],
 
               // Show telemetry below when expanded in wide mode
-              if (wideLayout && _bikeExpanded && activeSystem != null) ...[
+              if (wideLayout && _bikeExpanded && activeSystemKey != null) ...[
                 const SizedBox(height: 24),
                 _buildTelemetrySection(
                   theme,
@@ -763,6 +771,33 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
+  List<BikeSystemControllerEntry> _buildHistoryControllerEntries(
+    _BikeRecordHistoryData history,
+  ) {
+    return kBikeSystemControllerSpecs
+        .map(
+          (spec) => BikeSystemControllerEntry(
+            spec: spec,
+            status: history.systemFor(spec.systemKey)?.overallStatus ??
+                BikeSystemOverallStatus.unknown,
+          ),
+        )
+        .toList();
+  }
+
+  Color _historySystemStatusColor(BikeSystemOverallStatus status) {
+    switch (status) {
+      case BikeSystemOverallStatus.critical:
+        return const Color(0xFFFF4B4B);
+      case BikeSystemOverallStatus.attention:
+        return const Color(0xFFFFAB2E);
+      case BikeSystemOverallStatus.ok:
+        return const Color(0xFF3EFFD0);
+      case BikeSystemOverallStatus.unknown:
+        return const Color(0xFF94A3B8);
+    }
+  }
+
   Widget _buildTelemetrySection(
     ThemeData theme,
     _BikeRecordHistoryData history,
@@ -774,7 +809,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       children: [
         _buildSystemExplorerCard(theme, history, activeSystemKey),
         const SizedBox(height: 16),
-        _buildSystemDetailCard(theme, history, activeSystem),
+        _buildSystemDetailCard(theme, history, activeSystemKey, activeSystem),
       ],
     );
   }
@@ -794,6 +829,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             system.overallStatus == BikeSystemOverallStatus.attention)
         .length;
     final selectedSystem = history.systemFor(activeSystemKey);
+    final selectedSystemLabel = activeSystemKey == null
+        ? null
+        : bikeSystemControllerSpecFor(activeSystemKey)?.label ??
+            selectedSystem?.displayName;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -883,9 +922,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   borderColor: Colors.orange.withValues(alpha: 0.3),
                   foregroundColor: Colors.orangeAccent,
                 ),
-              if (selectedSystem != null)
+              if (selectedSystemLabel != null)
                 _buildReferencePill(
-                  label: 'Activo: ${selectedSystem.displayName}',
+                  label: 'Activo: $selectedSystemLabel',
                   backgroundColor: theme.colorScheme.primaryContainer,
                   borderColor: theme.colorScheme.primary.withValues(alpha: 0.3),
                   foregroundColor: theme.colorScheme.primary,
@@ -934,9 +973,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   Widget _buildSystemDetailCard(
     ThemeData theme,
     _BikeRecordHistoryData history,
+    String? activeSystemKey,
     _BikeDiagnosisSystemView? system,
   ) {
     if (system == null) {
+      final selectedLabel = activeSystemKey == null
+          ? null
+          : bikeSystemControllerSpecFor(activeSystemKey)?.label;
+      final selectedSpec = bikeSystemControllerSpecFor(activeSystemKey);
+
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -949,7 +994,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Selecciona un sistema',
+              selectedLabel ?? 'Selecciona un sistema',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: theme.colorScheme.onSurface,
@@ -957,7 +1002,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             ),
             const SizedBox(height: 8),
             Text(
-              'Haz clic sobre un sistema del esquema para ver diagnóstico, trabajos realizados y componentes que quedaron instalados.',
+              selectedLabel == null
+                  ? 'Haz clic sobre un sistema del esquema para ver diagnóstico, trabajos realizados y componentes que quedaron instalados.'
+                  : '${selectedSpec?.diagnosisSubtitle ?? 'Sistema sin detalle estructurado.'} Aún no existen observaciones, intervenciones ni memoria técnica suficiente para este sistema en el historial de esta bicicleta.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -2218,8 +2265,7 @@ class _BikeRecordHistoryData {
   bool get hasDiagnosisMemory => hasStructuredWorkbench;
 
   String? resolveActiveSystemKey(String? preferred) {
-    if (preferred != null &&
-        diagnosisSystems.any((system) => system.systemKey == preferred)) {
+    if (preferred != null && bikeSystemControllerSpecFor(preferred) != null) {
       return preferred;
     }
 
@@ -2264,16 +2310,7 @@ class _BikeDiagnosisSystemView {
   });
 
   String get displayName {
-    const labels = {
-      'drivetrain': 'Transmisión',
-      'front_brake': 'Freno delantero',
-      'rear_brake': 'Freno trasero',
-      'brakes': 'Frenos',
-      'front_wheel': 'Rueda delantera',
-      'rear_wheel': 'Rueda trasera',
-      'wheels': 'Ruedas',
-    };
-    return labels[systemKey] ?? systemKey;
+    return bikeSystemControllerLabelFor(systemKey);
   }
 
   BikeSystemOverallStatus get overallStatus {
@@ -2521,6 +2558,182 @@ class _BikeDiagnosisSystemView {
           b.points.last.observedAt.compareTo(a.points.last.observedAt));
 
     return series;
+  }
+}
+
+class _DiagnosticPopupCard extends StatelessWidget {
+  final _BikeDiagnosisSystemView system;
+  final Color color;
+  final BikeSystemControllerOverlayLayout layout;
+
+  const _DiagnosticPopupCard({
+    required this.system,
+    required this.color,
+    required this.layout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const cardWidth = 270.0;
+    const cardHeight = 220.0;
+
+    final pinX =
+        layout.imageOffsetX + layout.placement.position.dx * layout.imageSize;
+    final pinY =
+        layout.imageOffsetY + layout.placement.position.dy * layout.imageSize;
+
+    double left =
+        layout.placement.labelRight ? pinX + 32 : pinX - cardWidth - 32;
+    double top = pinY - 60;
+
+    left = left.clamp(8.0, layout.constraints.maxWidth - cardWidth - 8);
+    top = top.clamp(8.0, layout.constraints.maxHeight - cardHeight - 8);
+
+    final measurements = system.measurementSeries.take(2).toList();
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              width: cardWidth,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.10),
+                    blurRadius: 24,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        system.displayName.toUpperCase(),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(
+                          system.overallStatus.displayName,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    system.subheadline,
+                    style: const TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (system.primaryNarrative != null &&
+                      system.primaryNarrative!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      system.primaryNarrative!,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 10.5,
+                        height: 1.45,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (measurements.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(height: 1, color: const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 10),
+                    ...measurements.map(
+                      (measurement) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                measurement.title,
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              measurement.latestValueLabel,
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (system.contextEntries.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Última: ${system.contextEntries.first.jobId ?? '—'}',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 10,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -191,6 +191,27 @@ class AIAssistantService extends ChangeNotifier {
     );
   }
 
+  Future<String> generateOneShotText(
+    String prompt, {
+    String modelName = 'gemini-2.5-flash-lite',
+  }) async {
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey.isEmpty) {
+      throw StateError('GEMINI_API_KEY not configured');
+    }
+
+    final model = GenerativeModel(
+      model: modelName,
+      apiKey: apiKey,
+    );
+    final response = await model.generateContent([Content.text(prompt)]);
+    final text = response.text?.trim() ?? '';
+    if (text.isEmpty) {
+      throw StateError('Empty AI response');
+    }
+    return text;
+  }
+
   Future<AIAssistantResponse> sendMessage(
     String message, {
     List<MechanicJob>? jobs,
@@ -2532,7 +2553,8 @@ class AIAssistantService extends ChangeNotifier {
         }
 
         return {
-          'result': 'Internet search results for "$query":\n\n${snippets.join('\n\n')}'
+          'result':
+              'Internet search results for "$query":\n\n${snippets.join('\n\n')}'
         };
       } else {
         return {
