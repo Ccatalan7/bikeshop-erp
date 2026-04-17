@@ -50,6 +50,21 @@ Examples:
 - If the bike is rim-brake, rotor thickness fields should not appear in diagnosis.
 - If the bike is a known model like `Marlin 5 2025`, centralized profile data should irrigate downstream diagnosis and service flows.
 
+This rule is universal across workshop systems, not a brake-only exception.
+
+If a durable technical spec becomes important for products, services, diagnosis gating, or compatibility, that spec must grow through the same upstream backbone:
+
+- shared suggestion truth in `bike_catalog` when known globally
+- confirmed tenant-bike truth in `bike_profiles.technical_profile.values`
+- the same canonical compatibility key reused by products and services when matching depends on it
+- downstream diagnosis and service wizard behavior that consumes that truth instead of becoming the first place where it is stored
+
+Do not trap new durable specs in wizard-answer JSON, service-row notes, or diagnosis-only hacks.
+
+This applies to all systems: brakes, drivetrain, wheels, hubs, suspension, steering, tires, frame interfaces, e-bike systems, and future component families.
+
+The v1 kernel may stay intentionally small, but when richer detail is added later, bike profile truth, product compatibility, and service taxonomy must grow together through the same backbone.
+
 Diagnosis and service customization must follow the same backbone:
 - diagnosis is the shared visit-truth layer for component state
 - visit narrative may be AI-assisted, but only as an editable human-readable projection of the already-defined structured diagnosis for that visit; it must not become a parallel diagnosis truth store and it must omit undefined fields instead of narrating placeholders
@@ -62,6 +77,8 @@ Service taxonomy must follow the same backbone too:
 - use a small top-level system taxonomy first, then component slot, then service profile / operation
 - reuse the same canonical targeting vocabulary across services, diagnosis, products, and bike memory instead of inventing a second category model
 - treat weak product display categories like `category_name` as presentation/catalog metadata, not as the technical source of truth for workshop workflow
+- the service creation/edit form must treat `service_product_profile_mappings` as the primary workshop linkage for service rows; regular product categories may remain optional display metadata, but they must not be the main control that decides service semantics
+- when a service is linked to a `service_profile`, the form should expose that backbone explicitly at creation time: profile, target family / position mode, and concise client-facing summary guidance should be visible instead of staying hidden behind opaque mappings
 
 ## Mandatory Base Kernel First
 
@@ -104,9 +121,13 @@ At the intake/UI layer, canonical compatibility values should also be captured t
 - any bike-system map/controller used in diagnosis, bike record/history, bike profile, or future workshop UI must come from one shared code-side widget + registry; do not keep separate local pin/spec lists or duplicated bike-map implementations per screen
 - the shared `BikeSystemController` now owns exploded-detail gating and hover preview state internally; parent widgets must treat `selectedSystemKey` as highlight-only, treat `onClearSelection` as notification-only, and must not lift hover/detail state out of the controller or reintroduce parent-driven `MouseRegion` rebuild loops
 - if the current diagnosis template models fewer systems than the shared controller can display, keep one shared controller anyway and show explicit unavailable/placeholder inspector states for unmodeled systems instead of forking a reduced second controller
+- the bike creation/edit wizard technical step should reuse that same shared controller as its upstream system navigator; unresolved systems like `cockpit` should stay explicit placeholder states there too instead of spawning a second local bike-map implementation
 - when global brake service profiles drift back to legacy keys or wording, the schema seed and migration path must clean obsolete alias keys such as `position`, `includes_cable_housing`, `rotor_diameter`, `num_pistons`, or `deviation_severity` when the canonical meanings are already `which_wheel`, `rotor_size`, `piston_count`, and `damage_level`; keep real canonical brake fields like `pad_contaminated` instead of replacing them with local one-off synonyms
+- `include_housing` remains a legitimate execution-only field for cable-replacement flows; do not sweep it out together with the obsolete alias `includes_cable_housing`, but do force those profiles to use the same canonical `which_wheel` targeting key as the rest of the brake family
 - `drivetrainConfig` and `drivetrainSpeeds` should be derived from front-chainring count x rear-cog count when the mechanic is confirming drivetrain layout, not typed manually as free text
 - `freehubType` should be treated as the rear-driver family field, not as a cassette-only label, so singlespeed/BMX/fixed cases are not forced into the wrong vocabulary
+- `freehubType` must support an explicit `unknown` state in the intake UI instead of staying blank, because drivetrain compatibility and wizard routing need to distinguish “not yet confirmed” from “never reviewed”
+- the bike form must not let quick-save bypass drivetrain kernel review before the technical step; when the mechanic saves early with unresolved transmission basics, route them back into the technical section instead of silently persisting another empty drivetrain profile
 - wheel size, hub spacing, and spoke-hole counts should use standardized selectors where possible instead of open numeric/text entry by default
 
 Extended detail is allowed later, but it must enrich the same backbone instead of replacing or bypassing it.
@@ -231,7 +252,12 @@ For a fresh chat, the current code-side state is:
 - the current shared controller registry is `cockpit`, `suspension`, `front_brake`, `wheels`, `drivetrain`, and `rear_brake`.
 - only `drivetrain`, `front_brake`, and `rear_brake` currently have structured editable diagnosis inspectors in `mechanic_job_form_page.dart`; `cockpit`, `suspension`, and `wheels` intentionally render explicit unavailable-system placeholders instead of a second reduced controller.
 - `lib/modules/bikeshop/widgets/bike_record_panel.dart` already uses the same shared controller in read-model mode with hover overlay / telemetry; do not fork a second bike map for history.
+- `lib/modules/bikeshop/pages/bike_form_dialog.dart` now uses the same shared controller as the upstream technical-step navigator, with system-by-system profile panels and explicit placeholder handling for unmodeled intake systems such as `cockpit`.
 - brake canonical alias normalization now lives in `lib/modules/bikeshop/config/brake_canonical_data.dart` and `lib/modules/bikeshop/services/service_wizard_service.dart`, not in ad hoc page-local branches.
+- global drivetrain service profiles `chain_lube` and `derailleur_adjustment` now have explicit `service_profile_targets` rows with `target_family = drivetrain` and `target_position_mode = none`; do not reintroduce fake front/rear targeting for drivetrain-level services.
+- first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, but `derailleurs` prefill must still stay conservative until `drivetrainConfig` coverage improves.
+- `lib/modules/bikeshop/pages/bike_form_dialog.dart` now treats `freehubType` as an explicit review field with an `unknown` option, applies the safe BMX `bmx_driver` default upstream, and bounces early saves back into the technical step when drivetrain basics have not been reviewed yet.
+- `lib/modules/inventory/pages/product_form_page.dart` now gives `ProductType.service` a profile-first workflow form: regular product categories are suppressed, service codes can be generated as `SRV-<family>-<operation>-NNN`, and saving the form updates `service_product_profile_mappings` so the service catalog irrigates the workshop backbone directly instead of behaving like an almost-normal stock product.
 
 Before continuing this implementation in a fresh chat, also read:
 
@@ -247,7 +273,7 @@ Immediate next queue:
 
 1. Validate the brake prototype against live production service profiles/questions/mappings before expanding it further.
 2. Extend structured diagnosis to remaining shared-controller systems only with a real schema/editor plan; until then, keep explicit unavailable placeholders and do not fork another controller.
-3. Push upstream bike-profile truth deeper into additional service families, with drivetrain as the next likely target but with caution around the live `derailleurs` multi-select template behavior.
+3. Improve upstream `bike_profiles.technical_profile.values` coverage for drivetrain (`drivetrainConfig`, `freehubType`) now that the first drivetrain service mappings are live, with caution around the `derailleurs` multi-select template behavior.
 4. Start making product compatibility / suggestion flows consume the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
 
 ---

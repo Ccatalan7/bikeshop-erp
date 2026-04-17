@@ -24694,6 +24694,29 @@ values
 on conflict (id) do nothing;
 
 -- ============================================================
+-- Drivetrain service targets
+-- ============================================================
+insert into service_profile_targets (
+  tenant_id,
+  service_profile_id,
+  target_family,
+  target_position_mode,
+  target_rules
+)
+select null, sp.id, 'drivetrain', 'none', '{}'::jsonb
+from service_profiles sp
+where sp.tenant_id is null
+  and sp.key in ('chain_lube', 'derailleur_adjustment')
+  and not exists (
+    select 1
+      from service_profile_targets spt
+     where spt.tenant_id is null
+       and spt.service_profile_id = sp.id
+       and spt.target_family = 'drivetrain'
+       and spt.target_position_mode = 'none'
+  );
+
+-- ============================================================
 -- Wheel Truing
 -- ============================================================
 insert into service_profiles (id, tenant_id, key, name, service_family, description)
@@ -25061,3 +25084,69 @@ update service_profile_task_templates spt
    and sp.tenant_id is null
    and sp.key = 'rotor_truing'
    and spt.conditions_json::text like '%deviation_severity%';
+
+-- ============================================================
+-- Remaining legacy brake profiles (Caliper service / cable replace)
+-- ============================================================
+update service_profiles
+   set service_family = 'brake',
+       customer_summary_template = case
+         when key = 'caliper_service' then 'Servicio de cáliper {{which_wheel}}'
+         when key = 'brake_cable_replace_adjust' then 'Reemplazo cable y funda de freno {{which_wheel}}'
+         else customer_summary_template
+       end,
+       mechanic_summary_template = case
+         when key = 'caliper_service' then 'Servicio cáliper {{which_wheel}} — limpiar pistones, revisar sellos.'
+         when key = 'brake_cable_replace_adjust' then 'Reemplazar cable/funda freno {{which_wheel}}, regular ajuste final.'
+         else mechanic_summary_template
+       end,
+       updated_at = now()
+ where tenant_id is null
+   and key in ('caliper_service', 'brake_cable_replace_adjust');
+
+delete from service_profile_questions spq
+using service_profiles sp
+where sp.id = spq.service_profile_id
+  and sp.tenant_id is null
+  and sp.key in ('caliper_service', 'brake_cable_replace_adjust')
+  and spq.key = 'position';
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0090-0001-0000-000000000001'::uuid, 'caliper_service', 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0091-0001-0000-000000000001'::uuid, 'brake_cable_replace_adjust', 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb)
+) as seed(id, profile_key, key, label, question_type, is_required, sort_order, options_json)
+  on sp.key = seed.profile_key
+where sp.tenant_id is null
+  and sp.key in ('caliper_service', 'brake_cable_replace_adjust')
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();

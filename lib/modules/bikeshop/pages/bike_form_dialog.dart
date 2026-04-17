@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import '../config/brake_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
+import '../widgets/bike_diagram_illustration.dart';
+import '../widgets/bike_system_controller.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
@@ -21,6 +23,7 @@ const Map<String, String> _freehubTypeOptions = {
   'bmx_driver': 'Driver BMX',
   'fixed_threaded': 'Rosca fija / contratuerca',
   'coaster_hub': 'Maza contrapedal',
+  'unknown': 'Desconocido / sin confirmar',
 };
 
 const Map<String, String> _suspensionLayoutOptions = {
@@ -199,11 +202,13 @@ class _BikeTypeKernelDefaults {
   final String? suspensionLayout;
   final List<String>? allowedSuspensionLayouts;
   final String? drivetrainConfig;
+  final String? freehubType;
 
   const _BikeTypeKernelDefaults({
     this.suspensionLayout,
     this.allowedSuspensionLayouts,
     this.drivetrainConfig,
+    this.freehubType,
   });
 }
 
@@ -228,6 +233,8 @@ class BikeFormDialog extends StatefulWidget {
 }
 
 class _BikeFormDialogState extends State<BikeFormDialog> {
+  static const int _technicalStepIndex = 2;
+
   final _formKey = GlobalKey<FormState>();
   final BikeCatalogService _bikeCatalogService = BikeCatalogService();
 
@@ -297,6 +304,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   bool _isSaving = false;
   int _currentStep = 0;
+  String? _selectedTechnicalSystemKey;
   final PageController _pageController = PageController();
 
   @override
@@ -578,6 +586,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           suspensionLayout: 'rigid',
           allowedSuspensionLayouts: ['rigid'],
           drivetrainConfig: 'singlespeed',
+          freehubType: 'bmx_driver',
         );
       case BikeType.electric:
       case BikeType.other:
@@ -676,6 +685,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     );
 
     _applySuggestedDrivetrainConfig(defaults.drivetrainConfig);
+    _applySuggestedTechnicalValue(
+      key: 'freehubType',
+      suggestedValue: defaults.freehubType,
+      currentValue: _freehubType?.trim() ?? '',
+      apply: (value) => _freehubType = value,
+    );
 
     _enforceBikeTypeTechnicalConstraints();
   }
@@ -929,6 +944,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   bool get _showRotorSizeFields => _isDiscBrakeType(_brakeType);
 
+  bool get _hasExplicitFreehubSelection =>
+      _freehubType != null && _freehubType!.trim().isNotEmpty;
+
+  bool get _hasAnyDrivetrainTruth {
+    return _currentDrivetrainBreakdown != null ||
+        (_legacyDrivetrainConfig?.trim().isNotEmpty ?? false) ||
+        _legacyDrivetrainSpeeds != null;
+  }
+
   String? _formatRimBrakeFamily(String? rawValue) {
     if (rawValue == null || rawValue.trim().isEmpty) {
       return null;
@@ -950,7 +974,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       case BikeType.paseo:
         return 'Esta familia sesga la bici a una base rigida. Confirma solo las excepciones reales.';
       case BikeType.bmx:
-        return 'BMX se sesga a rigida y singlespeed. La transmisión se captura como platos x piñones, no como texto libre.';
+        return 'BMX se sesga a rigida, singlespeed y driver BMX. La transmisión se captura como platos x piñones, no como texto libre.';
       case BikeType.electric:
         return 'Electrica no simplifica la plataforma por si sola. Confirma la base fisica real antes de asumir suspension o transmision.';
       case BikeType.other:
@@ -1010,6 +1034,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   String _drivetrainKernelFooterText() {
+    final explicitRearDriverNote = !_hasExplicitFreehubSelection
+        ? ' No dejes el driver/freehub vacío: si todavía no se conoce, guárdalo explícitamente como Desconocido.'
+        : (_freehubType == 'unknown'
+            ? ' El driver/freehub quedó marcado explícitamente como desconocido hasta una confirmación posterior.'
+            : '');
+
     final rearDriverNote = switch (_rearCogCount) {
       1 =>
         ' Con un solo piñón trasero, este campo se interpreta como driver o rueda libre singlespeed.',
@@ -1020,7 +1050,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     };
 
     if (_currentDrivetrainBreakdown != null) {
-      return 'La configuración y las velocidades se derivan automáticamente desde platos x piñones para mantener compatibilidad real upstream.$rearDriverNote';
+      return 'La configuración y las velocidades se derivan automáticamente desde platos x piñones para mantener compatibilidad real upstream.$rearDriverNote$explicitRearDriverNote';
     }
 
     final legacyParts = <String>[];
@@ -1033,10 +1063,73 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
 
     if (legacyParts.isNotEmpty) {
-      return 'El perfil heredado todavía guarda ${legacyParts.join(' · ')} sin desglose canónico. Confirma platos y piñones para que compatibilidad, diagnóstico y wizard no dependan de texto libre.$rearDriverNote';
+      return 'El perfil heredado todavía guarda ${legacyParts.join(' · ')} sin desglose canónico. Confirma platos y piñones para que compatibilidad, diagnóstico y wizard no dependan de texto libre.$rearDriverNote$explicitRearDriverNote';
     }
 
-    return 'Confirma platos delanteros y piñones traseros. La multiplicación genera las velocidades totales y la configuración upstream.$rearDriverNote';
+    return 'Confirma platos delanteros y piñones traseros. La multiplicación genera las velocidades totales y la configuración upstream.$rearDriverNote$explicitRearDriverNote';
+  }
+
+  String? _drivetrainKernelAttentionText() {
+    final pending = <String>[];
+
+    if (!_hasAnyDrivetrainTruth) {
+      pending.add(
+        'La transmisión todavía no tiene un desglose upstream usable. Si conoces platos y piñones, confírmalos aquí para derivar la configuración canónica.',
+      );
+    }
+
+    if (!_hasExplicitFreehubSelection) {
+      pending.add(
+        'El driver/freehub trasero sigue vacío. Confírmalo ahora o márcalo como Desconocido para no perder esa ausencia de confirmación.',
+      );
+    }
+
+    if (pending.isEmpty) {
+      return null;
+    }
+
+    return pending.join(' ');
+  }
+
+  void _focusTechnicalStepWithMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    if (_currentStep != _technicalStepIndex) {
+      setState(() {
+        _currentStep = _technicalStepIndex;
+      });
+      _pageController.animateToPage(
+        _technicalStepIndex,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  bool _ensureTechnicalKernelReadyForSave() {
+    if (_currentStep < _technicalStepIndex && !_hasAnyDrivetrainTruth) {
+      _focusTechnicalStepWithMessage(
+        'Antes de guardar, revisa la Ficha Técnica y confirma la base de transmisión. Si conoces platos y piñones, ingrésalos para derivar la configuración upstream.',
+      );
+      return false;
+    }
+
+    if (!_hasExplicitFreehubSelection) {
+      _focusTechnicalStepWithMessage(
+        'Antes de guardar, confirma el driver/freehub trasero. Si aún no lo sabes, selecciónalo como Desconocido en la Ficha Técnica.',
+      );
+      return false;
+    }
+
+    return true;
   }
 
   String get _rearDriverFieldLabel {
@@ -1472,6 +1565,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Future<void> _saveBike() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (!_ensureTechnicalKernelReadyForSave()) {
       return;
     }
 
@@ -1958,6 +2055,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required IconData icon,
     required List<Widget> fields,
     double minItemWidth = 220,
+    String? attentionText,
     String? footerText,
   }) {
     final theme = Theme.of(context);
@@ -2015,6 +2113,41 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               ),
             ],
           ),
+          if (attentionText != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.orange.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_outlined,
+                    size: 18,
+                    color: Colors.orange.shade800,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      attentionText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _buildAdaptiveFields(fields, minItemWidth: minItemWidth),
           if (footerText != null) ...[
@@ -2126,25 +2259,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _buildFieldGroupHeader('Características Básicas'),
         _buildAdaptiveFields(
           [
-            DropdownButtonFormField<BikeType>(
-              initialValue: _selectedType,
-              decoration: const InputDecoration(
-                labelText: 'Tipo de bicicleta',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.category_outlined),
-              ),
-              items: BikeType.values.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(type.displayName),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  _handleBikeTypeChanged(value);
-                }
-              },
-            ),
             _buildFrameSizeField(),
             _buildWheelSizeField(),
             TextFormField(
@@ -2190,7 +2304,605 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     );
   }
 
-  Widget _buildTechnicalSection() {
+  Bike _buildTechnicalPreviewBike() {
+    final year = int.tryParse(_yearController.text.trim());
+    final frontSpacing = _parseNullableWholeNumberText(
+      _frontHubSpacingController.text,
+    );
+    final rearSpacing = _parseNullableWholeNumberText(
+      _rearHubSpacingController.text,
+    );
+    final frontSpokes = _parseNullableIntText(_frontSpokeHolesController.text);
+    final rearSpokes = _parseNullableIntText(_rearSpokeHolesController.text);
+    final resolvedSpokeCount =
+        frontSpokes != null && rearSpokes != null && frontSpokes == rearSpokes
+            ? frontSpokes
+            : widget.bike?.spokeCount;
+
+    return Bike(
+      id: widget.bike?.id,
+      tenantId: widget.bike?.tenantId ?? '',
+      customerId: widget.customerId,
+      brandId: _selectedBrand?.id ?? widget.bike?.brandId,
+      modelId: _selectedModel?.id ?? widget.bike?.modelId,
+      brand: _selectedBrand?.name ?? widget.bike?.brand,
+      model: _selectedModel?.name ?? widget.bike?.model,
+      year: year ?? widget.bike?.year,
+      serialNumber: _serialNumberController.text.trim().isEmpty
+          ? widget.bike?.serialNumber
+          : _serialNumberController.text.trim(),
+      color: _colorController.text.trim().isEmpty
+          ? widget.bike?.color
+          : _colorController.text.trim(),
+      frameSize: _frameSizeController.text.trim().isEmpty
+          ? widget.bike?.frameSize
+          : _frameSizeController.text.trim(),
+      wheelSize: _wheelSizeController.text.trim().isEmpty
+          ? widget.bike?.wheelSize
+          : _wheelSizeController.text.trim(),
+      bikeType: _selectedType,
+      frontHubSpacingMm:
+          frontSpacing?.toDouble() ?? widget.bike?.frontHubSpacingMm,
+      rearHubSpacingMm:
+          rearSpacing?.toDouble() ?? widget.bike?.rearHubSpacingMm,
+      spokeCount: resolvedSpokeCount,
+      imageUrl: widget.bike?.imageUrl,
+      imageUrls: widget.bike?.imageUrls ?? const [],
+    );
+  }
+
+  BikeSystemOverallStatus _statusFromCompleteness({
+    required int knownCount,
+    required int totalCount,
+  }) {
+    if (knownCount <= 0) {
+      return BikeSystemOverallStatus.critical;
+    }
+    if (knownCount < totalCount) {
+      return BikeSystemOverallStatus.attention;
+    }
+    return BikeSystemOverallStatus.ok;
+  }
+
+  BikeSystemOverallStatus _technicalBrakeSystemStatus({
+    required bool isFront,
+  }) {
+    final brakeTypeKnown = _brakeType != null && _brakeType!.isNotEmpty;
+    final rimFamilyResolved = _brakeType != 'rim' ||
+        (_rimBrakeFamily != null &&
+            _rimBrakeFamily!.isNotEmpty &&
+            _rimBrakeFamily != 'unknown');
+    final rotorResolved = !_isDiscBrakeType(_brakeType) ||
+        (isFront ? _frontRotorSizeMm != null : _rearRotorSizeMm != null);
+
+    final knownCount = [brakeTypeKnown, rimFamilyResolved, rotorResolved]
+        .where((value) => value)
+        .length;
+
+    return _statusFromCompleteness(knownCount: knownCount, totalCount: 3);
+  }
+
+  BikeSystemOverallStatus _technicalSystemStatus(String systemKey) {
+    switch (systemKey) {
+      case 'cockpit':
+        return BikeSystemOverallStatus.unknown;
+      case 'suspension':
+        return _statusFromCompleteness(
+          knownCount:
+              (_suspensionLayout != null && _suspensionLayout!.isNotEmpty)
+                  ? 1
+                  : 0,
+          totalCount: 1,
+        );
+      case 'front_brake':
+        return _technicalBrakeSystemStatus(isFront: true);
+      case 'rear_brake':
+        return _technicalBrakeSystemStatus(isFront: false);
+      case 'drivetrain':
+        final knownCount = [
+          _effectiveDrivetrainConfig != null &&
+              _effectiveDrivetrainConfig!.isNotEmpty,
+          _effectiveDrivetrainSpeeds != null,
+          _freehubType != null && _freehubType!.isNotEmpty,
+          _bottomBracketFamily != null && _bottomBracketFamily!.isNotEmpty,
+        ].where((value) => value).length;
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
+      case 'wheels':
+        final knownCount = [
+          _wheelSizeController.text.trim().isNotEmpty,
+          _parseNullableWholeNumberText(_frontHubSpacingController.text) !=
+              null,
+          _parseNullableWholeNumberText(_rearHubSpacingController.text) != null,
+          _parseNullableIntText(_frontSpokeHolesController.text) != null,
+          _parseNullableIntText(_rearSpokeHolesController.text) != null,
+          _valveType != null && _valveType!.isNotEmpty,
+        ].where((value) => value).length;
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 6);
+      default:
+        return BikeSystemOverallStatus.unknown;
+    }
+  }
+
+  String _activeTechnicalSystemKey() {
+    final selected = _selectedTechnicalSystemKey;
+    if (selected != null && selected.isNotEmpty) {
+      return selected;
+    }
+
+    const preferredOrder = <String>[
+      'suspension',
+      'front_brake',
+      'drivetrain',
+      'wheels',
+      'rear_brake',
+      'cockpit',
+    ];
+
+    for (final key in preferredOrder) {
+      if (_technicalSystemStatus(key) != BikeSystemOverallStatus.ok) {
+        return key;
+      }
+    }
+
+    return 'drivetrain';
+  }
+
+  Widget _buildTechnicalSchemaNavigator(
+    ThemeData theme, {
+    required String activeSystemKey,
+  }) {
+    final previewBike = _buildTechnicalPreviewBike();
+    final activeSpec = bikeSystemControllerSpecFor(activeSystemKey);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mapa técnico upstream',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'La misma navegación visual del diagnóstico ahora guía la ficha técnica upstream. Aquí eliges el sistema y completas la verdad duradera de la bici, no un hallazgo de una visita puntual.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          AspectRatio(
+            aspectRatio: 1,
+            child: BikeSystemController(
+              bike: previewBike,
+              entries: kBikeSystemControllerSpecs
+                  .map(
+                    (spec) => BikeSystemControllerEntry(
+                      spec: spec,
+                      status: _technicalSystemStatus(spec.systemKey),
+                    ),
+                  )
+                  .toList(growable: false),
+              selectedSystemKey: activeSystemKey,
+              onSystemSelected: (systemKey) {
+                setState(() {
+                  _selectedTechnicalSystemKey = systemKey;
+                });
+              },
+              idleHintText:
+                  'Haz clic en un sistema para editar su verdad upstream.',
+              selectedHintText:
+                  'La vista expandida usa el mismo backbone visual del taller.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.directions_bike_outlined,
+                      size: 15,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _selectedType.displayName,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_wheelSizeController.text.trim().isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.circle_outlined,
+                        size: 15,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Aro ${_wheelSizeController.text.trim()}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_brakeType != null && _brakeType!.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.disc_full,
+                        size: 15,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Freno ${_formatBrakeSystemDetail(_brakeType, _rimBrakeFamily)}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (activeSpec != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        activeSpec.icon,
+                        size: 15,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Sistema activo: ${activeSpec.label}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTechnicalPlaceholderCard(
+    ThemeData theme, {
+    required String title,
+    required String body,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatBrakeSystemDetail(String? brakeType, String? rimBrakeFamily) {
+    if (brakeType == null || brakeType.isEmpty) {
+      return 'sin confirmar';
+    }
+
+    if (brakeType == 'rim') {
+      final rimLabel = rimBrakeFamily == null || rimBrakeFamily.isEmpty
+          ? null
+          : kRimBrakeFamilyOptions[rimBrakeFamily] ?? rimBrakeFamily;
+      if (rimLabel != null && rimLabel.isNotEmpty) {
+        return 'de llanta ($rimLabel)';
+      }
+    }
+
+    return kBikeProfileBrakeTypeOptions[brakeType] ?? brakeType;
+  }
+
+  String _bikePreviewTitle(bool isEditing) {
+    if (_selectedCatalogBike != null) {
+      return _selectedCatalogBike!.shortName;
+    }
+
+    final identityParts = <String>[
+      if (_selectedBrand?.name.isNotEmpty == true) _selectedBrand!.name,
+      if (_selectedModel?.name.isNotEmpty == true) _selectedModel!.name,
+    ];
+
+    if (identityParts.isNotEmpty) {
+      return identityParts.join(' ');
+    }
+
+    return isEditing ? 'Editar bicicleta' : 'Nueva bicicleta';
+  }
+
+  String _bikePreviewSubtitle({required bool showTechnicalControls}) {
+    if (showTechnicalControls) {
+      final activeSpec =
+          bikeSystemControllerSpecFor(_activeTechnicalSystemKey());
+      final systemLabel = activeSpec?.label ?? 'ficha técnica';
+      return 'Usa el mapa para editar $systemLabel sin abandonar la vista general de la bici.';
+    }
+
+    if (_selectedCatalogBike != null) {
+      return 'Vista previa del modelo seleccionado en el catálogo compartido.';
+    }
+
+    return 'Vista previa visual. Los controles técnicos aparecen cuando abres Ficha Técnica.';
+  }
+
+  Uint8List? _resolvedPreviewImageBytes() {
+    if (_newImages.isEmpty) {
+      return null;
+    }
+    return _newImages.first.bytes;
+  }
+
+  String? _resolvedPreviewImageUrl() {
+    if (_imageUrls.isNotEmpty) {
+      return _imageUrls.first;
+    }
+    if (widget.bike?.imageUrl != null && widget.bike!.imageUrl!.isNotEmpty) {
+      return widget.bike!.imageUrl;
+    }
+    return _selectedCatalogBike?.imageUrl;
+  }
+
+  Widget _buildBikeTypePreviewDropdown() {
+    return DropdownButtonFormField<BikeType>(
+      value: _selectedType,
+      decoration: const InputDecoration(
+        labelText: 'Tipo de bicicleta',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.category_outlined),
+      ),
+      items: BikeType.values.map((type) {
+        return DropdownMenuItem(
+          value: type,
+          child: Text(type.displayName),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          _handleBikeTypeChanged(value);
+        }
+      },
+    );
+  }
+
+  Widget _buildStaticBikePreviewSurface(ThemeData theme) {
+    final previewBike = _buildTechnicalPreviewBike();
+    final previewImageBytes = _resolvedPreviewImageBytes();
+    final previewImageUrl = _resolvedPreviewImageUrl();
+    final variant = resolveBikeDiagramVariant(bike: previewBike);
+
+    Widget buildScaledPreview(Widget child, {double scale = 1.18}) {
+      return ClipRect(
+        child: Center(
+          child: Transform.scale(
+            scale: scale,
+            child: child,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: AspectRatio(
+        aspectRatio: 1.0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: ColoredBox(
+            color: theme.colorScheme.surfaceContainerLowest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: previewImageBytes != null
+                  ? buildScaledPreview(
+                      Image.memory(
+                        previewImageBytes,
+                        fit: BoxFit.contain,
+                      ),
+                      scale: 1.2,
+                    )
+                  : previewImageUrl != null && previewImageUrl.isNotEmpty
+                      ? buildScaledPreview(
+                          Image.network(
+                            previewImageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                BikeDiagramIllustration(variant: variant),
+                          ),
+                          scale: 1.2,
+                        )
+                      : buildScaledPreview(
+                          BikeDiagramIllustration(variant: variant),
+                          scale: 1.18,
+                        ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBikePreviewPane(
+    ThemeData theme, {
+    required bool isEditing,
+    required bool showTechnicalControls,
+  }) {
+    final activeSpec = bikeSystemControllerSpecFor(_activeTechnicalSystemKey());
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(
+          right: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.15),
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _bikePreviewTitle(isEditing),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              height: 1.05,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _bikePreviewSubtitle(showTechnicalControls: showTechnicalControls),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 18),
+          _buildBikeTypePreviewDropdown(),
+          const SizedBox(height: 18),
+          Expanded(
+            child: showTechnicalControls
+                ? _buildTechnicalSchemaNavigator(
+                    theme,
+                    activeSystemKey: _activeTechnicalSystemKey(),
+                  )
+                : _buildStaticBikePreviewSurface(theme),
+          ),
+          if (showTechnicalControls && activeSpec != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    activeSpec.icon,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Sistema activo: ${activeSpec.label}',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTechnicalSection({bool showInlineNavigator = true}) {
     final theme = Theme.of(context);
     final suspensionField = _buildCodeDropdown(
       value: _suspensionLayout,
@@ -2398,6 +3110,92 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       },
     );
 
+    final activeSystemKey = _activeTechnicalSystemKey();
+
+    final activeSystemCard = switch (activeSystemKey) {
+      'suspension' => _buildTechnicalKernelGroup(
+          title: 'Suspensión',
+          description:
+              'Base estructural que define qué componentes y diagnósticos tienen sentido downstream.',
+          icon: Icons.timeline_outlined,
+          fields: [suspensionField],
+          minItemWidth: 260,
+          footerText: _technicalConstraintHint(),
+        ),
+      'front_brake' => _buildTechnicalKernelGroup(
+          title: 'Freno delantero',
+          description:
+              'La plataforma/familia del freno es verdad upstream compartida. Este panel además fija el rotor delantero cuando aplica.',
+          icon: Icons.radio_button_checked,
+          fields: [
+            brakeTypeField,
+            if (_showRimBrakeFamilyField) rimBrakeFamilyField,
+            if (_showRotorSizeFields) frontRotorField,
+          ],
+          minItemWidth: 220,
+          footerText: _brakeKernelFooterText(),
+        ),
+      'rear_brake' => _buildTechnicalKernelGroup(
+          title: 'Freno trasero',
+          description:
+              'La plataforma/familia del freno es verdad upstream compartida. Este panel además fija el rotor trasero cuando aplica.',
+          icon: Icons.adjust,
+          fields: [
+            brakeTypeField,
+            if (_showRimBrakeFamilyField) rimBrakeFamilyField,
+            if (_showRotorSizeFields) rearRotorField,
+          ],
+          minItemWidth: 220,
+          footerText: _brakeKernelFooterText(),
+        ),
+      'drivetrain' => _buildTechnicalKernelGroup(
+          title: 'Transmisión',
+          description:
+              'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero.',
+          icon: Icons.settings_input_component_outlined,
+          attentionText: _drivetrainKernelAttentionText(),
+          fields: [
+            frontChainringField,
+            rearCogField,
+            drivetrainSpeedsField,
+            drivetrainConfigField,
+            freehubField,
+            bottomBracketField,
+          ],
+          minItemWidth: 220,
+          footerText: _drivetrainKernelFooterText(),
+        ),
+      'wheels' => _buildTechnicalKernelGroup(
+          title: 'Ruedas y mazas',
+          description:
+              'Datos base para compatibilidad de ruedas, armado, rayado, válvulas y ancho de mazas.',
+          icon: Icons.tire_repair_outlined,
+          fields: [
+            _buildWheelSizeField(),
+            frontHubSpacingField,
+            rearHubSpacingField,
+            frontSpokeHolesField,
+            rearSpokeHolesField,
+            valveTypeField,
+          ],
+          minItemWidth: 220,
+          footerText:
+              'Este sistema concentra compatibilidad de aro, mazas, rayado y válvula. Luego productos y servicios deben reutilizar estas mismas claves.',
+        ),
+      'cockpit' => _buildTechnicalPlaceholderCard(
+          theme,
+          title: 'Cockpit',
+          body:
+              'El shared bike map también navega este sistema aquí para mantener un backbone visual único, pero el kernel upstream todavía no define campos obligatorios para cockpit. Cuando headset, stem, handlebar o controles pasen a ser specs durables, este mismo panel será el lugar correcto para capturarlos.',
+        ),
+      _ => _buildTechnicalPlaceholderCard(
+          theme,
+          title: 'Sistema sin panel',
+          body:
+              'Este sistema todavía no tiene una ficha técnica upstream específica en el wizard de creación.',
+        ),
+    };
+
     return _buildSectionCard(
       title: 'Línea base técnica',
       description:
@@ -2457,62 +3255,68 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ),
           const SizedBox(height: 18),
-          _buildTechnicalKernelGroup(
-            title: 'Suspensión',
-            description:
-                'Base estructural que define qué componentes y diagnósticos tienen sentido downstream.',
-            icon: Icons.timeline_outlined,
-            fields: [suspensionField],
-            minItemWidth: 260,
-            footerText: _technicalConstraintHint(),
-          ),
-          const SizedBox(height: 16),
-          _buildTechnicalKernelGroup(
-            title: 'Frenos',
-            description:
-                'Estos datos controlan preguntas de servicio, compatibilidad de rotor y visibilidad del diagnóstico de frenos.',
-            icon: Icons.disc_full,
-            fields: [
-              brakeTypeField,
-              if (_showRimBrakeFamilyField) rimBrakeFamilyField,
-              if (_showRotorSizeFields) frontRotorField,
-              if (_showRotorSizeFields) rearRotorField,
-            ],
-            minItemWidth: 220,
-            footerText: _brakeKernelFooterText(),
-          ),
-          const SizedBox(height: 16),
-          _buildTechnicalKernelGroup(
-            title: 'Transmisión',
-            description:
-                'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero.',
-            icon: Icons.settings_input_component_outlined,
-            fields: [
-              frontChainringField,
-              rearCogField,
-              drivetrainSpeedsField,
-              drivetrainConfigField,
-              freehubField,
-              bottomBracketField,
-            ],
-            minItemWidth: 220,
-            footerText: _drivetrainKernelFooterText(),
-          ),
-          const SizedBox(height: 16),
-          _buildTechnicalKernelGroup(
-            title: 'Ruedas y mazas',
-            description:
-                'Datos base para compatibilidad de ruedas, armado, rayado y válvulas.',
-            icon: Icons.tire_repair_outlined,
-            fields: [
-              frontHubSpacingField,
-              rearHubSpacingField,
-              frontSpokeHolesField,
-              rearSpokeHolesField,
-              valveTypeField,
-            ],
-            minItemWidth: 220,
-          ),
+          if (showInlineNavigator) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Text(
+                'En esta vista el mapa técnico queda inline. En pantallas amplias se mueve al panel lateral para que no tengas que bajar cada vez que cambias de sistema.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildTechnicalSchemaNavigator(
+              theme,
+              activeSystemKey: activeSystemKey,
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.west_outlined,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'La navegación visual de la bici quedó en el panel izquierdo. Cambia de sistema ahí y este panel se actualiza sin sacarte del contexto.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          activeSystemCard,
         ],
       ),
     );
@@ -3036,6 +3840,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.bike != null;
     final theme = Theme.of(context);
+    final useDesktopPreviewShell = MediaQuery.sizeOf(context).width >= 1100;
 
     final steps = [
       {
@@ -3057,7 +3862,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       {
         'title': 'Ficha Técnica',
         'icon': Icons.tune,
-        'builder': () => _buildTechnicalSection(),
+        'builder': () => _buildTechnicalSection(
+              showInlineNavigator: !useDesktopPreviewShell,
+            ),
       },
       {
         'title': 'Notas y Fotos',
@@ -3066,157 +3873,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       },
     ];
 
-    Widget buildNavigationRail() {
+    Widget buildStepTabs({bool desktop = false}) {
       return Container(
-        width: 260,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest,
-          border: Border(
-            right: BorderSide(
-              color: theme.dividerColor.withValues(alpha: 0.15),
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      isEditing
-                          ? Icons.edit_outlined
-                          : Icons.add_circle_outline,
-                      color: theme.colorScheme.onPrimary,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    isEditing ? 'Editar bicicleta' : 'Nueva bicicleta',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      height: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Registro base y contexto estable.',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 36),
-            Expanded(
-              child: ListView.builder(
-                itemCount: steps.length,
-                itemBuilder: (context, index) {
-                  final isActive = _currentStep == index;
-                  final step = steps[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6, right: 16),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(32),
-                          bottomRight: Radius.circular(32),
-                        ),
-                        onTap: () {
-                          setState(() {
-                            _currentStep = index;
-                            _pageController.animateToPage(
-                              index,
-                              duration: const Duration(milliseconds: 350),
-                              curve: Curves.easeOutCubic,
-                            );
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 16),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: isActive
-                                    ? theme.colorScheme.primary
-                                    : Colors.transparent,
-                                width: 4,
-                              ),
-                            ),
-                            color: isActive
-                                ? theme.colorScheme.primary
-                                    .withValues(alpha: 0.08)
-                                : Colors.transparent,
-                            borderRadius: const BorderRadius.only(
-                              topRight: Radius.circular(32),
-                              bottomRight: Radius.circular(32),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                step['icon'] as IconData,
-                                size: 22,
-                                color: isActive
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  step['title'] as String,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: isActive
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isActive
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget buildStepTabs() {
-      // Mobile horizontal tabs equivalent if space is tight
-      return Container(
-        height: 64,
+        height: desktop ? 72 : 64,
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLowest,
           border: Border(
@@ -3243,7 +3902,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: desktop ? 24 : 20),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
@@ -3260,17 +3919,22 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      step['icon'] as IconData,
-                      size: 18,
-                      color: isActive
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
+                    if (!desktop) ...[
+                      Icon(
+                        step['icon'] as IconData,
+                        size: 18,
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     Text(
                       step['title'] as String,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: (desktop
+                              ? theme.textTheme.titleMedium
+                              : theme.textTheme.titleSmall)
+                          ?.copyWith(
                         fontWeight:
                             isActive ? FontWeight.w700 : FontWeight.w500,
                         color: isActive
@@ -3290,31 +3954,54 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     Widget content = LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 768;
+        final showDesktopPreviewPane = !isMobile && useDesktopPreviewShell;
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!isMobile) buildNavigationRail(),
+            if (showDesktopPreviewPane)
+              Expanded(
+                flex: 4,
+                child: _buildBikePreviewPane(
+                  theme,
+                  isEditing: isEditing,
+                  showTechnicalControls: _currentStep == _technicalStepIndex,
+                ),
+              ),
             Expanded(
+              flex: showDesktopPreviewPane ? 6 : 1,
               child: Column(
                 children: [
-                  if (!widget.isEmbedded && !isMobile)
-                    // Dialog close button for wide screens
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 16, right: 16),
-                        child: IconButton(
-                          icon: Icon(Icons.close,
-                              color: theme.colorScheme.onSurfaceVariant),
-                          onPressed: () {
-                            if (widget.isEmbedded) {
-                              widget.onCanceled?.call();
-                            } else {
-                              Navigator.of(context).pop();
-                            }
-                          },
-                        ),
+                  if (!isMobile)
+                    Container(
+                      padding: EdgeInsets.fromLTRB(
+                        showDesktopPreviewPane ? 24 : 32,
+                        12,
+                        12,
+                        0,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: buildStepTabs(desktop: true)),
+                          if (!widget.isEmbedded)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8, top: 6),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.close,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                onPressed: () {
+                                  if (widget.isEmbedded) {
+                                    widget.onCanceled?.call();
+                                  } else {
+                                    Navigator.of(context).pop();
+                                  }
+                                },
+                              ),
+                            ),
+                        ],
                       ),
                     ),
 
@@ -3352,7 +4039,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                 ),
                               ),
                             ),
-                            buildStepTabs(),
+                            buildStepTabs(desktop: false),
                           ],
                         ),
                       ],
@@ -3363,8 +4050,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   // Content Area
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(isMobile ? 24 : 48,
-                          isMobile ? 24 : 12, isMobile ? 24 : 48, 0),
+                      padding: EdgeInsets.fromLTRB(
+                        isMobile ? 24 : (showDesktopPreviewPane ? 24 : 40),
+                        isMobile ? 24 : 20,
+                        isMobile ? 24 : 36,
+                        0,
+                      ),
                       child: Form(
                         key: _formKey,
                         child: PageView.builder(
@@ -3559,7 +4250,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: Colors.transparent,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1100, maxHeight: 800),
+        constraints: const BoxConstraints(maxWidth: 1240, maxHeight: 860),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerLowest,

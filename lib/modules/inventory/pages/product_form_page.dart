@@ -28,6 +28,10 @@ import '../services/inventory_service.dart' as inventory_services;
 import '../widgets/set_configuration_widget.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
+import '../../bikeshop/config/brake_canonical_data.dart';
+import '../../bikeshop/models/bikeshop_models.dart';
+import '../../bikeshop/services/service_wizard_service.dart';
+import '../../bikeshop/widgets/service_wizard_dialog.dart';
 
 class ProductFormPage extends StatefulWidget {
   final String? productId;
@@ -77,6 +81,89 @@ class _StockAdjustmentDialogResult {
   final DateTime effectiveAt;
 }
 
+class _ServiceWorkflowProfile {
+  const _ServiceWorkflowProfile({
+    required this.id,
+    required this.key,
+    required this.name,
+    required this.serviceFamily,
+    this.description,
+    this.customerSummaryTemplate,
+    this.mechanicSummaryTemplate,
+    this.targetFamily,
+    this.targetPositionMode,
+  });
+
+  final String id;
+  final String key;
+  final String name;
+  final String serviceFamily;
+  final String? description;
+  final String? customerSummaryTemplate;
+  final String? mechanicSummaryTemplate;
+  final String? targetFamily;
+  final String? targetPositionMode;
+}
+
+class _WizardPreviewCustomerOption {
+  const _WizardPreviewCustomerOption({
+    required this.id,
+    required this.name,
+  });
+
+  final String id;
+  final String name;
+}
+
+class _ServiceWizardPreviewConfig {
+  const _ServiceWizardPreviewConfig({
+    required this.profile,
+    required this.initialAnswers,
+    required this.hiddenQuestionKeys,
+    required this.helperText,
+    this.contextSummary,
+    this.questionOverrides = const <String, ServiceWizardQuestionOverride>{},
+    this.diagnosisLinkedQuestionKeys = const <String>{},
+  });
+
+  final ServiceWizardProfile profile;
+  final Map<String, dynamic> initialAnswers;
+  final Set<String> hiddenQuestionKeys;
+  final String? helperText;
+  final ServiceWizardContextSummary? contextSummary;
+  final Map<String, ServiceWizardQuestionOverride> questionOverrides;
+  final Set<String> diagnosisLinkedQuestionKeys;
+}
+
+enum _ServiceWizardBackboneBucket {
+  upstreamTruth,
+  diagnosisTruth,
+  targetExecution,
+  reviewNeeded,
+}
+
+class _ServiceWizardQuestionSemantics {
+  const _ServiceWizardQuestionSemantics({
+    required this.bucket,
+    required this.summary,
+    required this.detail,
+  });
+
+  final _ServiceWizardBackboneBucket bucket;
+  final String summary;
+  final String detail;
+}
+
+final List<ServiceQuestionOption> _serviceWizardPreviewBrakeSymptomOptions =
+    kBrakeSymptomLabels.entries
+        .map(
+          (entry) => ServiceQuestionOption(
+            value: entry.key,
+            label: entry.value,
+          ),
+        )
+        .toList(growable: false);
+
 const List<_StockAdjustmentReasonOption> _stockAdjustmentReasonOptions = [
   _StockAdjustmentReasonOption(
     key: 'count',
@@ -116,7 +203,7 @@ const List<_StockAdjustmentReasonOption> _stockAdjustmentReasonOptions = [
 ];
 
 class _ProductFormPageState extends State<ProductFormPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   late inventory_services.InventoryService _inventoryService;
@@ -192,18 +279,32 @@ class _ProductFormPageState extends State<ProductFormPage>
   Map<String, dynamic> _specValues = {};
   bool _isLoadingSpecs = false;
 
+  List<_ServiceWorkflowProfile> _serviceProfiles = [];
+  bool _isLoadingServiceProfiles = false;
+  String? _selectedServiceProfileId;
+  final Map<String, ServiceWizardProfile> _serviceWizardProfileCache = {};
+  ServiceWizardProfile? _selectedServiceWizardProfile;
+  bool _isLoadingSelectedServiceWizardProfile = false;
+
+  List<_WizardPreviewCustomerOption> _wizardPreviewCustomers = [];
+  List<Bike> _wizardPreviewBikes = [];
+  String? _selectedWizardPreviewCustomerId;
+  String? _selectedWizardPreviewBikeId;
+  BikeProfile? _selectedWizardPreviewBikeProfile;
+  BikeMemoryLocation _selectedWizardPreviewLocation = BikeMemoryLocation.none;
+  ServiceWizardResult? _lastServiceWizardPreviewResult;
+  bool _isLoadingWizardPreviewCustomers = false;
+  bool _isLoadingWizardPreviewBikes = false;
+  bool _isLoadingWizardPreviewBikeProfile = false;
+
   late TabController _tabController;
+  final Set<TabController> _retiredTabControllers = <TabController>{};
   int _prevTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() => _prevTabIndex = _tabController.index);
-      }
-    });
+    _createTabController();
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
         listen: false);
@@ -221,6 +322,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _loadBrands();
     _loadCategories();
     _loadSuppliers();
+    unawaited(_loadServiceBackboneData());
 
     if (widget.productId != null) {
       _loadProduct();
@@ -240,7 +342,12 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
+    for (final controller in _retiredTabControllers.toList()) {
+      controller.dispose();
+    }
+    _retiredTabControllers.clear();
     _scanSubscription?.cancel();
     HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
     _hwScanTimer?.cancel();
@@ -260,6 +367,74 @@ class _ProductFormPageState extends State<ProductFormPage>
     _inventoryQtyController.dispose();
     _minStockController.dispose();
     super.dispose();
+  }
+
+  int get _tabCount => _isServiceForm ? 4 : 3;
+
+  void _createTabController({int initialIndex = 0}) {
+    _tabController = TabController(
+      length: _tabCount,
+      vsync: this,
+      initialIndex: initialIndex,
+    );
+    _prevTabIndex = initialIndex;
+    _tabController.addListener(_handleTabControllerChanged);
+  }
+
+  void _handleTabControllerChanged() {
+    if (_tabController.indexIsChanging) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _prevTabIndex = _tabController.index);
+    }
+
+    if (_isServiceForm && _tabController.index == 3) {
+      unawaited(_ensureServiceWizardPreviewSeedData());
+    }
+  }
+
+  void _disposeRetiredTabController(TabController controller) {
+    if (!_retiredTabControllers.remove(controller)) {
+      return;
+    }
+    controller.dispose();
+  }
+
+  void _scheduleRetiredTabControllerDisposal(TabController controller) {
+    _retiredTabControllers.add(controller);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _disposeRetiredTabController(controller);
+    });
+  }
+
+  void _syncTabControllerForCurrentMode() {
+    final desiredLength = _tabCount;
+    final previousController = _tabController;
+    if (previousController.length == desiredLength) {
+      return;
+    }
+
+    final currentIndex = previousController.index;
+    final safeIndex =
+        currentIndex >= desiredLength ? desiredLength - 1 : currentIndex;
+
+    previousController.removeListener(_handleTabControllerChanged);
+
+    final nextController = TabController(
+      length: desiredLength,
+      vsync: this,
+      initialIndex: safeIndex,
+    );
+    nextController.addListener(_handleTabControllerChanged);
+
+    setState(() {
+      _tabController = nextController;
+      _prevTabIndex = safeIndex;
+    });
+
+    _scheduleRetiredTabControllerDisposal(previousController);
   }
 
   bool _hardwareKeyHandler(KeyEvent event) {
@@ -364,7 +539,17 @@ class _ProductFormPageState extends State<ProductFormPage>
     );
 
     if (result != null) {
-      setState(() => _selectedCategoryId = result.id);
+      final categoryId = result.id;
+      if (categoryId == null || categoryId.isEmpty) {
+        return;
+      }
+      final categoryChanged = _selectedCategoryId != categoryId;
+      setState(() => _selectedCategoryId = categoryId);
+      if (categoryChanged) {
+        unawaited(
+          _loadSpecTemplate(categoryId, productId: _existingProduct?.id),
+        );
+      }
     }
   }
 
@@ -398,6 +583,75 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   bool get _usesAliExpressSkuSequence =>
       _inventoryService.isAliExpressSupplierName(_selectedSupplier?.name);
+
+  bool get _isServiceForm => _selectedProductType == ProductType.service;
+
+  _ServiceWorkflowProfile? get _selectedServiceProfile {
+    final selectedServiceProfileId = _selectedServiceProfileId;
+    if (selectedServiceProfileId == null || selectedServiceProfileId.isEmpty) {
+      return null;
+    }
+
+    for (final profile in _serviceProfiles) {
+      if (profile.id == selectedServiceProfileId) {
+        return profile;
+      }
+    }
+
+    return null;
+  }
+
+  String get _selectedServiceProfileLabel {
+    final profile = _selectedServiceProfile;
+    if (profile == null) {
+      return 'Sin perfil estructurado';
+    }
+
+    final family =
+        _serviceFamilyLabel(profile.targetFamily ?? profile.serviceFamily);
+    return '$family · ${profile.name}';
+  }
+
+  String get _defaultServiceClientDescription {
+    final profile = _selectedServiceProfile;
+    if (profile == null) {
+      return _nameController.text.trim();
+    }
+
+    final summarized = _resolveServiceTemplate(
+      profile.customerSummaryTemplate,
+      fallback: profile.description ?? profile.name,
+    );
+    return summarized.isEmpty ? profile.name : summarized;
+  }
+
+  String get _defaultServiceMechanicSummary {
+    final profile = _selectedServiceProfile;
+    if (profile == null) {
+      return _nameController.text.trim();
+    }
+
+    final summarized = _resolveServiceTemplate(
+      profile.mechanicSummaryTemplate,
+      fallback: profile.description ?? profile.name,
+    );
+    return summarized.isEmpty ? profile.name : summarized;
+  }
+
+  String get _defaultServiceWebsiteDescription {
+    final profile = _selectedServiceProfile;
+    final base = _defaultServiceClientDescription;
+    if (profile == null) {
+      return base;
+    }
+
+    final description = profile.description?.trim();
+    if (description == null || description.isEmpty) {
+      return base;
+    }
+
+    return '$base. $description';
+  }
 
   Future<void> _loadBrands() async {
     if (!mounted) return;
@@ -705,11 +959,22 @@ class _ProductFormPageState extends State<ProductFormPage>
         }
 
         // Load Ficha Técnica spec template and saved values
-        if (product.categoryId != null) {
+        if (product.productType != ProductType.service &&
+            product.categoryId != null) {
           _loadSpecTemplate(product.categoryId!, productId: product.id);
+        } else {
+          _specTemplate = null;
+          _specValues = {};
         }
 
         unawaited(_loadConversionStatus(product.id));
+        unawaited(
+          _loadServiceBackboneData(
+            productId: product.id,
+            tenantId: product.tenantId,
+          ),
+        );
+        _syncTabControllerForCurrentMode();
       }
     } catch (e) {
       if (!mounted) return;
@@ -739,6 +1004,648 @@ class _ProductFormPageState extends State<ProductFormPage>
       });
     } finally {
       if (mounted) setState(() => _isLoadingSpecs = false);
+    }
+  }
+
+  Future<void> _loadServiceBackboneData({
+    String? productId,
+    String? tenantId,
+  }) async {
+    final resolvedTenantId = tenantId ?? await TenantService().getTenantId();
+    if (resolvedTenantId == null) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingServiceProfiles = true);
+    }
+
+    try {
+      final client = Supabase.instance.client;
+      final rawProfiles = await client
+          .from('service_profiles')
+          .select(
+            'id, key, name, service_family, description, customer_summary_template, mechanic_summary_template',
+          )
+          .or('tenant_id.is.null,tenant_id.eq.$resolvedTenantId')
+          .eq('is_active', true)
+          .order('service_family')
+          .order('name');
+
+      final rawTargets = await client
+          .from('service_profile_targets')
+          .select('service_profile_id, target_family, target_position_mode')
+          .or('tenant_id.is.null,tenant_id.eq.$resolvedTenantId');
+
+      String? mappedProfileId = _selectedServiceProfileId;
+      if (productId != null && productId.isNotEmpty) {
+        final mapping = await client
+            .from('service_product_profile_mappings')
+            .select('service_profile_id')
+            .eq('tenant_id', resolvedTenantId)
+            .eq('product_id', productId)
+            .eq('status', 'active')
+            .maybeSingle();
+        mappedProfileId = mapping?['service_profile_id']?.toString();
+      }
+
+      final targetsByProfileId = <String, Map<String, dynamic>>{};
+      for (final raw in rawTargets as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final serviceProfileId = row['service_profile_id']?.toString();
+        if (serviceProfileId == null || serviceProfileId.isEmpty) {
+          continue;
+        }
+
+        targetsByProfileId.putIfAbsent(serviceProfileId, () => row);
+      }
+
+      final profiles = (rawProfiles as List)
+          .map((raw) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final profileId = row['id']?.toString() ?? '';
+            final targetRow = targetsByProfileId[profileId];
+            return _ServiceWorkflowProfile(
+              id: profileId,
+              key: row['key']?.toString() ?? '',
+              name: row['name']?.toString() ?? '',
+              serviceFamily: row['service_family']?.toString() ?? 'general',
+              description: row['description']?.toString(),
+              customerSummaryTemplate:
+                  row['customer_summary_template']?.toString(),
+              mechanicSummaryTemplate:
+                  row['mechanic_summary_template']?.toString(),
+              targetFamily: targetRow?['target_family']?.toString(),
+              targetPositionMode:
+                  targetRow?['target_position_mode']?.toString(),
+            );
+          })
+          .where((profile) => profile.id.isNotEmpty)
+          .toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _serviceProfiles = profiles;
+        if (mappedProfileId != null && mappedProfileId.isNotEmpty) {
+          _selectedServiceProfileId = mappedProfileId;
+        } else if (_selectedServiceProfileId != null &&
+            !_serviceProfiles.any(
+              (profile) => profile.id == _selectedServiceProfileId,
+            )) {
+          _selectedServiceProfileId = null;
+        }
+      });
+
+      _syncPreviewLocationForSelectedServiceProfile();
+      await _loadSelectedServiceWizardProfile();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cargando backbone de servicios: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingServiceProfiles = false);
+      }
+    }
+  }
+
+  Future<void> _loadSelectedServiceWizardProfile() async {
+    final workflowProfile = _selectedServiceProfile;
+    final profileId = workflowProfile?.id;
+    if (profileId == null || profileId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _selectedServiceWizardProfile = null;
+          _resetServiceWizardPreviewResult();
+        });
+      }
+      return;
+    }
+
+    final cached = _serviceWizardProfileCache[profileId];
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _selectedServiceWizardProfile = cached;
+          _resetServiceWizardPreviewResult();
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingSelectedServiceWizardProfile = true);
+    }
+
+    try {
+      final rawQuestions = await Supabase.instance.client
+          .from('service_profile_questions')
+          .select()
+          .eq('service_profile_id', profileId)
+          .order('sort_order');
+
+      final fullProfile = ServiceWizardService.normalizeProfile(
+        ServiceWizardProfile(
+          id: workflowProfile!.id,
+          name: workflowProfile.name,
+          serviceFamily: workflowProfile.serviceFamily,
+          customerSummaryTemplate: workflowProfile.customerSummaryTemplate,
+          questions: (rawQuestions as List)
+              .map(
+                (raw) => ServiceProfileQuestion.fromJson(
+                  Map<String, dynamic>.from(raw as Map),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      );
+
+      if (fullProfile == null) {
+        return;
+      }
+
+      _serviceWizardProfileCache[profileId] = fullProfile;
+      if (!mounted || _selectedServiceProfileId != profileId) {
+        return;
+      }
+
+      setState(() {
+        _selectedServiceWizardProfile = fullProfile;
+        _resetServiceWizardPreviewResult();
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cargando perfil completo del wizard: $e');
+      }
+    } finally {
+      if (mounted && _selectedServiceProfileId == profileId) {
+        setState(() => _isLoadingSelectedServiceWizardProfile = false);
+      }
+    }
+  }
+
+  Future<void> _ensureServiceWizardPreviewSeedData() async {
+    if (_wizardPreviewCustomers.isEmpty && !_isLoadingWizardPreviewCustomers) {
+      await _loadWizardPreviewCustomers();
+    }
+
+    if (_selectedServiceProfile != null &&
+        _selectedServiceWizardProfile == null &&
+        !_isLoadingSelectedServiceWizardProfile) {
+      await _loadSelectedServiceWizardProfile();
+    }
+  }
+
+  Future<void> _loadWizardPreviewCustomers() async {
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingWizardPreviewCustomers = true);
+    }
+
+    try {
+      final rawCustomers = await Supabase.instance.client
+          .from('customers')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('name');
+
+      final customers = (rawCustomers as List)
+          .map(
+            (raw) => Map<String, dynamic>.from(raw as Map),
+          )
+          .map(
+            (row) => _WizardPreviewCustomerOption(
+              id: row['id']?.toString() ?? '',
+              name: row['name']?.toString() ?? 'Cliente sin nombre',
+            ),
+          )
+          .where((customer) => customer.id.isNotEmpty)
+          .toList(growable: false);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _wizardPreviewCustomers = customers;
+        if (_selectedWizardPreviewCustomerId != null &&
+            !_wizardPreviewCustomers.any(
+              (customer) => customer.id == _selectedWizardPreviewCustomerId,
+            )) {
+          _selectedWizardPreviewCustomerId = null;
+          _wizardPreviewBikes = [];
+          _selectedWizardPreviewBikeId = null;
+          _selectedWizardPreviewBikeProfile = null;
+          _resetServiceWizardPreviewResult();
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cargando clientes para el tester del wizard: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingWizardPreviewCustomers = false);
+      }
+    }
+  }
+
+  Future<void> _loadWizardPreviewBikes(String? customerId) async {
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || customerId == null || customerId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _wizardPreviewBikes = [];
+          _selectedWizardPreviewBikeId = null;
+          _selectedWizardPreviewBikeProfile = null;
+          _resetServiceWizardPreviewResult();
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingWizardPreviewBikes = true);
+    }
+
+    try {
+      final rawBikes = await Supabase.instance.client
+          .from('bikes')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('customer_id', customerId)
+          .eq('is_active', true)
+          .order('created_at', ascending: false);
+
+      final bikes = (rawBikes as List)
+          .map(
+            (raw) => Bike.fromJson(Map<String, dynamic>.from(raw as Map)),
+          )
+          .toList(growable: false);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _wizardPreviewBikes = bikes;
+        if (_selectedWizardPreviewBikeId != null &&
+            !_wizardPreviewBikes.any(
+              (bike) => bike.id == _selectedWizardPreviewBikeId,
+            )) {
+          _selectedWizardPreviewBikeId = null;
+          _selectedWizardPreviewBikeProfile = null;
+          _resetServiceWizardPreviewResult();
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cargando bicicletas para el tester del wizard: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingWizardPreviewBikes = false);
+      }
+    }
+  }
+
+  Future<void> _loadWizardPreviewBikeProfile(String? bikeId) async {
+    if (bikeId == null || bikeId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _selectedWizardPreviewBikeProfile = null;
+          _resetServiceWizardPreviewResult();
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingWizardPreviewBikeProfile = true);
+    }
+
+    try {
+      final rawProfile = await Supabase.instance.client
+          .from('bike_profiles')
+          .select()
+          .eq('bike_id', bikeId)
+          .maybeSingle();
+
+      if (!mounted || _selectedWizardPreviewBikeId != bikeId) {
+        return;
+      }
+
+      setState(() {
+        _selectedWizardPreviewBikeProfile = rawProfile == null
+            ? null
+            : BikeProfile.fromJson(Map<String, dynamic>.from(rawProfile));
+        _resetServiceWizardPreviewResult();
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cargando ficha técnica de la bici del tester: $e');
+      }
+    } finally {
+      if (mounted && _selectedWizardPreviewBikeId == bikeId) {
+        setState(() => _isLoadingWizardPreviewBikeProfile = false);
+      }
+    }
+  }
+
+  void _handleWizardPreviewCustomerChanged(String? customerId) {
+    final normalizedId = customerId?.trim();
+    setState(() {
+      _selectedWizardPreviewCustomerId =
+          normalizedId == null || normalizedId.isEmpty ? null : normalizedId;
+      _wizardPreviewBikes = [];
+      _selectedWizardPreviewBikeId = null;
+      _selectedWizardPreviewBikeProfile = null;
+      _resetServiceWizardPreviewResult();
+    });
+
+    unawaited(_loadWizardPreviewBikes(_selectedWizardPreviewCustomerId));
+  }
+
+  void _handleWizardPreviewBikeChanged(String? bikeId) {
+    final normalizedId = bikeId?.trim();
+    setState(() {
+      _selectedWizardPreviewBikeId =
+          normalizedId == null || normalizedId.isEmpty ? null : normalizedId;
+      _selectedWizardPreviewBikeProfile = null;
+      _resetServiceWizardPreviewResult();
+    });
+
+    unawaited(_loadWizardPreviewBikeProfile(_selectedWizardPreviewBikeId));
+  }
+
+  void _handleWizardPreviewLocationChanged(BikeMemoryLocation location) {
+    if (_selectedWizardPreviewLocation == location) {
+      return;
+    }
+
+    setState(() {
+      _selectedWizardPreviewLocation = location;
+      _resetServiceWizardPreviewResult();
+    });
+  }
+
+  void _syncPreviewLocationForSelectedServiceProfile() {
+    if (_selectedServiceProfile?.targetPositionMode == 'front_rear') {
+      return;
+    }
+
+    _selectedWizardPreviewLocation = BikeMemoryLocation.none;
+  }
+
+  void _resetServiceWizardPreviewResult() {
+    _lastServiceWizardPreviewResult = null;
+  }
+
+  Future<void> _syncServiceProfileMapping({
+    required String tenantId,
+    required String productId,
+  }) async {
+    final client = Supabase.instance.client;
+    final selectedProfileId =
+        _isServiceForm ? _selectedServiceProfileId?.trim() : null;
+    final normalizedSelectedProfileId =
+        (selectedProfileId == null || selectedProfileId.isEmpty)
+            ? null
+            : selectedProfileId;
+
+    final activeRows = await client
+        .from('service_product_profile_mappings')
+        .select('id, service_profile_id')
+        .eq('tenant_id', tenantId)
+        .eq('product_id', productId)
+        .eq('status', 'active');
+
+    final activeMappings = (activeRows as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList(growable: false);
+
+    var hasActiveSelectedMapping = false;
+    for (final mapping in activeMappings) {
+      final mappingId = mapping['id']?.toString();
+      final mappingProfileId = mapping['service_profile_id']?.toString();
+      if (mappingId == null || mappingId.isEmpty) {
+        continue;
+      }
+
+      if (normalizedSelectedProfileId != null &&
+          mappingProfileId == normalizedSelectedProfileId) {
+        hasActiveSelectedMapping = true;
+        continue;
+      }
+
+      await client
+          .from('service_product_profile_mappings')
+          .update({'status': 'inactive'}).eq('id', mappingId);
+    }
+
+    if (normalizedSelectedProfileId == null || hasActiveSelectedMapping) {
+      return;
+    }
+
+    final existingInactive = await client
+        .from('service_product_profile_mappings')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('product_id', productId)
+        .eq('service_profile_id', normalizedSelectedProfileId)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    final inactiveId = existingInactive?['id']?.toString();
+    if (inactiveId != null && inactiveId.isNotEmpty) {
+      await client
+          .from('service_product_profile_mappings')
+          .update({'status': 'active'}).eq('id', inactiveId);
+      return;
+    }
+
+    await client.from('service_product_profile_mappings').insert({
+      'tenant_id': tenantId,
+      'product_id': productId,
+      'service_profile_id': normalizedSelectedProfileId,
+      'status': 'active',
+    });
+  }
+
+  String _resolveServiceTemplate(String? template, {String fallback = ''}) {
+    var text = template?.trim() ?? fallback.trim();
+    if (text.isEmpty) {
+      return '';
+    }
+
+    final targetPositionMode = _selectedServiceProfile?.targetPositionMode;
+    final replacements = <String, String>{
+      'which_wheel':
+          targetPositionMode == 'front_rear' ? 'delantero/trasero' : 'general',
+      'brake_type': 'según sistema',
+      'fluid_type': 'según sistema',
+      'damage_level': 'según diagnóstico',
+      'contamination_level': 'según diagnóstico',
+      'pad_condition': 'según revisión',
+      'symptom': 'según diagnóstico',
+      'replace_seals': 'según revisión',
+    };
+
+    replacements.forEach((key, value) {
+      text = text.replaceAll('{{$key}}', value);
+    });
+    text = text.replaceAll(RegExp(r'{{[^}]+}}'), '');
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+    text = text.replaceAll(RegExp(r'\s+,\s+'), ', ');
+    text = text.replaceAll(RegExp(r'\s+\.\s*'), '. ');
+    text = text.replaceAll(RegExp(r'\s+·\s+'), ' · ');
+    text = text.replaceAll(RegExp(r'\s+:\s+'), ': ');
+    text = text.replaceAll(RegExp(r'\s+/\s+'), '/');
+    text = text.trim();
+
+    if (text.endsWith(',')) {
+      text = text.substring(0, text.length - 1).trim();
+    }
+
+    return text;
+  }
+
+  String _serviceFamilyLabel(String? value) {
+    switch (value) {
+      case 'brake':
+        return 'Frenos';
+      case 'drivetrain':
+        return 'Transmisión';
+      case 'wheels':
+        return 'Ruedas';
+      case 'suspension':
+        return 'Suspensión';
+      case 'cockpit':
+        return 'Cockpit';
+      case 'general':
+      case 'none':
+      case null:
+      case '':
+        return 'General';
+      default:
+        return value.replaceAll('_', ' ');
+    }
+  }
+
+  String _servicePositionModeLabel(String? value) {
+    switch (value) {
+      case 'front_rear':
+        return 'Delantero / trasero';
+      case 'single':
+        return 'Un solo componente';
+      case 'none':
+      case null:
+      case '':
+        return 'Sin posición obligatoria';
+      default:
+        return value.replaceAll('_', ' ');
+    }
+  }
+
+  String _serviceFamilyCode(String? value) {
+    switch (value) {
+      case 'brake':
+        return 'BRK';
+      case 'drivetrain':
+        return 'DRT';
+      case 'wheels':
+        return 'WHL';
+      case 'suspension':
+        return 'SUS';
+      case 'cockpit':
+        return 'CKP';
+      default:
+        return 'GEN';
+    }
+  }
+
+  String _serviceOperationCode(String key) {
+    final parts = key
+        .split(RegExp(r'[_\-\s]+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) {
+      return 'GEN';
+    }
+
+    final code =
+        parts.take(3).map((part) => part.substring(0, 1).toUpperCase()).join();
+    return code.padRight(2, 'X');
+  }
+
+  String _buildServiceSkuPrefix([_ServiceWorkflowProfile? profile]) {
+    final currentProfile = profile ?? _selectedServiceProfile;
+    if (currentProfile == null) {
+      return 'SRV-GEN-GEN';
+    }
+
+    final familyCode = _serviceFamilyCode(
+        currentProfile.targetFamily ?? currentProfile.serviceFamily);
+    final operationCode = _serviceOperationCode(currentProfile.key);
+    return 'SRV-$familyCode-$operationCode';
+  }
+
+  bool _looksLikeGeneratedServiceSku(String sku) {
+    return RegExp(r'^SRV-[A-Z0-9]+-[A-Z0-9]+-\d{3}$')
+        .hasMatch(sku.trim().toUpperCase());
+  }
+
+  Future<void> _generateServiceSku({bool autoTriggered = false}) async {
+    if (mounted) {
+      setState(() => _isGeneratingSku = true);
+    }
+
+    try {
+      final prefix = _buildServiceSkuPrefix();
+      final products = await _inventoryService.getProducts(forceRefresh: true);
+      final pattern = RegExp('^${RegExp.escape(prefix)}-(\\d{3})\$');
+      var maxSequence = 0;
+
+      for (final product in products) {
+        if (product.productType != ProductType.service) {
+          continue;
+        }
+
+        final match = pattern.firstMatch(product.sku.trim().toUpperCase());
+        if (match == null) {
+          continue;
+        }
+
+        final sequence = int.tryParse(match.group(1) ?? '0') ?? 0;
+        if (sequence > maxSequence) {
+          maxSequence = sequence;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _skuController.text =
+            '$prefix-${(maxSequence + 1).toString().padLeft(3, '0')}';
+      });
+    } catch (e) {
+      if (!mounted || autoTriggered) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo generar el código del servicio: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingSku = false);
+      }
     }
   }
 
@@ -883,6 +1790,11 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   Future<void> _generateSku({bool autoTriggered = false}) async {
+    if (_isServiceForm) {
+      await _generateServiceSku(autoTriggered: autoTriggered);
+      return;
+    }
+
     if (_usesAliExpressSkuSequence) {
       await _generateAliExpressSku(autoTriggered: autoTriggered);
       return;
@@ -1758,7 +2670,8 @@ class _ProductFormPageState extends State<ProductFormPage>
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _canRestoreOriginalState
@@ -1948,7 +2861,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -1963,7 +2877,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -2130,6 +3045,10 @@ class _ProductFormPageState extends State<ProductFormPage>
       _selectedProductType = value;
       if (value == ProductType.service) {
         _selectedPurchaseTreatment = PurchaseTreatment.inventory;
+        _selectedCategoryId = null;
+        _specTemplate = null;
+        _specValues = {};
+        _isGoogleMerchant = false;
         _inventoryQtyController.text = '0';
         _minStockController.text = '0';
       } else if (_selectedPurchaseTreatment ==
@@ -2140,7 +3059,773 @@ class _ProductFormPageState extends State<ProductFormPage>
           _minStockController.text.trim() == '0') {
         _minStockController.text = '1';
       }
+
+      if (value != ProductType.service) {
+        _resetServiceWizardPreviewResult();
+      }
     });
+
+    _syncTabControllerForCurrentMode();
+
+    if (value == ProductType.service) {
+      if (_serviceProfiles.isEmpty && !_isLoadingServiceProfiles) {
+        unawaited(_loadServiceBackboneData());
+      }
+      if (_selectedServiceProfile != null &&
+          _descriptionController.text.trim().isEmpty) {
+        _descriptionController.text = _defaultServiceClientDescription;
+      }
+      if (_skuController.text.trim().isEmpty) {
+        unawaited(_generateSku(autoTriggered: true));
+      }
+      unawaited(_ensureServiceWizardPreviewSeedData());
+    }
+  }
+
+  void _handleServiceProfileChanged(String? value) {
+    final normalizedValue = value?.trim();
+    final nextValue = (normalizedValue == null || normalizedValue.isEmpty)
+        ? null
+        : normalizedValue;
+    final currentSku = _skuController.text.trim();
+    final shouldRefreshSku =
+        currentSku.isEmpty || _looksLikeGeneratedServiceSku(currentSku);
+
+    setState(() => _selectedServiceProfileId = nextValue);
+    _syncPreviewLocationForSelectedServiceProfile();
+    _resetServiceWizardPreviewResult();
+
+    if (_descriptionController.text.trim().isEmpty) {
+      _descriptionController.text = _defaultServiceClientDescription;
+    }
+    if (_websiteDescriptionController.text.trim().isEmpty) {
+      _websiteDescriptionController.text = _defaultServiceWebsiteDescription;
+    }
+    if (shouldRefreshSku) {
+      unawaited(_generateSku(autoTriggered: true));
+    }
+
+    unawaited(_loadSelectedServiceWizardProfile());
+  }
+
+  void _applySuggestedServiceDescription() {
+    final suggestion = _defaultServiceClientDescription;
+    if (suggestion.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _descriptionController.text = suggestion;
+    });
+  }
+
+  void _applySuggestedWebsiteDescription() {
+    final suggestion = _defaultServiceWebsiteDescription;
+    if (suggestion.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _websiteDescriptionController.text = suggestion;
+    });
+  }
+
+  _WizardPreviewCustomerOption? get _selectedWizardPreviewCustomer {
+    final selectedId = _selectedWizardPreviewCustomerId;
+    if (selectedId == null || selectedId.isEmpty) {
+      return null;
+    }
+
+    for (final customer in _wizardPreviewCustomers) {
+      if (customer.id == selectedId) {
+        return customer;
+      }
+    }
+
+    return null;
+  }
+
+  Bike? get _selectedWizardPreviewBike {
+    final selectedId = _selectedWizardPreviewBikeId;
+    if (selectedId == null || selectedId.isEmpty) {
+      return null;
+    }
+
+    for (final bike in _wizardPreviewBikes) {
+      if (bike.id == selectedId) {
+        return bike;
+      }
+    }
+
+    return null;
+  }
+
+  String? _normalizeNullableText(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _isBrakeServiceFamily(String? family) {
+    return family == 'brake' || family == 'brakes';
+  }
+
+  bool _isDiscBrakeType(String? rawValue) {
+    return rawValue == 'mechanical_disc' || rawValue == 'hydraulic_disc';
+  }
+
+  String _formatBrakeType(String rawValue) {
+    switch (rawValue) {
+      case 'rim':
+        return 'llanta';
+      case 'mechanical_disc':
+        return 'disco mecánico';
+      case 'hydraulic_disc':
+        return 'disco hidráulico';
+      case 'roller_brake':
+        return 'roller brake';
+      case 'drum_brake':
+        return 'tambor';
+      case 'coaster_brake':
+        return 'contrapedal';
+      case 'band_brake':
+        return 'banda';
+      default:
+        return rawValue;
+    }
+  }
+
+  String? _formatRimBrakeFamily(String? rawValue) {
+    switch (rawValue) {
+      case 'v_brake':
+        return 'V-Brake';
+      case 'cantilever':
+        return 'Cantilever';
+      case 'road_caliper_short_reach':
+        return 'caliper ruta corto';
+      case 'road_caliper_long_reach':
+        return 'caliper ruta largo';
+      case 'u_brake':
+        return 'U-Brake';
+      case 'rod_brake':
+        return 'freno de varilla';
+      case 'other':
+        return 'otro sistema de llanta';
+      case 'unknown':
+        return 'familia de llanta no confirmada';
+      default:
+        return rawValue;
+    }
+  }
+
+  String _formatBrakeSystemDetail(
+    String? rawBrakeType,
+    String? rawRimBrakeFamily,
+  ) {
+    if (rawBrakeType == null || rawBrakeType.isEmpty) {
+      return 'desconocido';
+    }
+
+    if (rawBrakeType == 'rim') {
+      final rimBrakeFamily = _formatRimBrakeFamily(rawRimBrakeFamily);
+      if (rimBrakeFamily != null && rimBrakeFamily.isNotEmpty) {
+        return 'de llanta ($rimBrakeFamily)';
+      }
+    }
+
+    return _formatBrakeType(rawBrakeType);
+  }
+
+  String? _firstMatchingWizardOption(
+    ServiceProfileQuestion? question,
+    List<String> candidates,
+  ) {
+    if (question == null) {
+      return null;
+    }
+
+    final options = question.options.map((option) => option.value).toSet();
+    for (final candidate in candidates) {
+      if (options.contains(candidate)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  String? _wizardLocationAnswer(
+    ServiceProfileQuestion? question,
+    BikeMemoryLocation location,
+  ) {
+    switch (location) {
+      case BikeMemoryLocation.front:
+        return _firstMatchingWizardOption(
+          question,
+          const ['front', 'delantero'],
+        );
+      case BikeMemoryLocation.rear:
+        return _firstMatchingWizardOption(
+          question,
+          const ['rear', 'trasero'],
+        );
+      case BikeMemoryLocation.left:
+        return _firstMatchingWizardOption(
+          question,
+          const ['left', 'izquierdo'],
+        );
+      case BikeMemoryLocation.right:
+        return _firstMatchingWizardOption(
+          question,
+          const ['right', 'derecho'],
+        );
+      case BikeMemoryLocation.center:
+        return _firstMatchingWizardOption(
+          question,
+          const ['center', 'centro'],
+        );
+      case BikeMemoryLocation.none:
+        return null;
+    }
+  }
+
+  String? _mappedRimBrakeFamilyWizardAnswer(
+    String? rawRimBrakeFamily,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null ||
+        rawRimBrakeFamily == null ||
+        rawRimBrakeFamily.isEmpty) {
+      return null;
+    }
+
+    final hints = switch (rawRimBrakeFamily) {
+      'v_brake' => const ['v-brake', 'v brake', 'vbrake'],
+      'cantilever' => const ['cantilever', 'canti'],
+      'road_caliper_short_reach' => const [
+          'short reach',
+          'caliper corto',
+          'caliper',
+          'ruta'
+        ],
+      'road_caliper_long_reach' => const [
+          'long reach',
+          'caliper largo',
+          'caliper',
+          'ruta'
+        ],
+      'u_brake' => const ['u-brake', 'u brake', 'ubrake'],
+      'rod_brake' => const ['varilla', 'rod brake'],
+      _ => const <String>[],
+    };
+
+    if (hints.isEmpty) {
+      return null;
+    }
+
+    return _firstMatchingWizardOption(question, hints);
+  }
+
+  String? _mappedBrakeTypeWizardAnswer(
+    String? rawBrakeType,
+    String? rawRimBrakeFamily,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null || rawBrakeType == null || rawBrakeType.isEmpty) {
+      return null;
+    }
+
+    switch (rawBrakeType) {
+      case 'hydraulic_disc':
+        return _firstMatchingWizardOption(question, const ['hidraulico']);
+      case 'mechanical_disc':
+        return _firstMatchingWizardOption(question, const ['mecanico']);
+      case 'rim':
+        final exactFamily = _mappedRimBrakeFamilyWizardAnswer(
+          rawRimBrakeFamily,
+          question,
+        );
+        if (exactFamily != null) {
+          return exactFamily;
+        }
+        if (rawRimBrakeFamily == null ||
+            rawRimBrakeFamily.isEmpty ||
+            rawRimBrakeFamily == 'unknown') {
+          final genericRim = _firstMatchingWizardOption(
+            question,
+            const ['llanta', 'rim'],
+          );
+          if (genericRim != null) {
+            return genericRim;
+          }
+          return _firstMatchingWizardOption(question, const ['mecanico']);
+        }
+        return null;
+      case 'roller_brake':
+        return _firstMatchingWizardOption(question, const ['roller']);
+      case 'drum_brake':
+        return _firstMatchingWizardOption(question, const ['tambor', 'drum']);
+      case 'coaster_brake':
+        return _firstMatchingWizardOption(
+          question,
+          const ['contrapedal', 'coaster'],
+        );
+      case 'band_brake':
+        return _firstMatchingWizardOption(question, const ['banda', 'band']);
+      default:
+        return null;
+    }
+  }
+
+  String? _mappedMechanicalBrakeTypeWizardAnswer(
+    String? rawBrakeType,
+    String? rawRimBrakeFamily,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null || rawBrakeType == null || rawBrakeType.isEmpty) {
+      return null;
+    }
+
+    switch (rawBrakeType) {
+      case 'mechanical_disc':
+        return _firstMatchingWizardOption(
+          question,
+          const ['disco_mec', 'mecanico'],
+        );
+      case 'rim':
+        return _mappedRimBrakeFamilyWizardAnswer(rawRimBrakeFamily, question);
+      default:
+        return null;
+    }
+  }
+
+  bool _needsRimBrakeFamilyConfirmation(
+    String? rawBrakeType,
+    String? rawRimBrakeFamily,
+  ) {
+    return rawBrakeType == 'rim' &&
+        (rawRimBrakeFamily == null ||
+            rawRimBrakeFamily.isEmpty ||
+            rawRimBrakeFamily == 'unknown');
+  }
+
+  String? _mappedRotorSizeWizardAnswer(
+    ServiceProfileQuestion? question,
+    Map<String, dynamic> technicalValues,
+    BikeMemoryLocation location,
+  ) {
+    if (question == null) {
+      return null;
+    }
+
+    final rawValue = switch (location) {
+      BikeMemoryLocation.front => technicalValues['frontRotorSizeMm'],
+      BikeMemoryLocation.rear => technicalValues['rearRotorSizeMm'],
+      _ => null,
+    };
+    if (rawValue == null) {
+      return null;
+    }
+
+    final normalized = rawValue.toString().trim();
+    return _firstMatchingWizardOption(question, [normalized]);
+  }
+
+  List<String>? _mappedDerailleursWizardAnswer(
+    String? drivetrainConfig,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null || question.questionType != 'multi_select') {
+      return null;
+    }
+
+    final normalized = drivetrainConfig?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    final options = question.options.map((option) => option.value).toSet();
+    if (!(options.contains('front') && options.contains('rear'))) {
+      return null;
+    }
+
+    if (normalized.startsWith('2x') || normalized.startsWith('3x')) {
+      return const ['front', 'rear'];
+    }
+
+    return null;
+  }
+
+  String? _buildDrivetrainProfileHint(Map<String, dynamic> technicalValues) {
+    final config = _normalizeNullableText(
+      technicalValues['drivetrainConfig']?.toString() ?? '',
+    );
+    final speeds = _normalizeNullableText(
+      technicalValues['drivetrainSpeeds']?.toString() ?? '',
+    );
+
+    final parts = <String>[];
+    if (config != null) {
+      parts.add(config);
+    }
+    if (speeds != null) {
+      parts.add('${speeds}v');
+    }
+
+    if (parts.isEmpty) {
+      return null;
+    }
+
+    return parts.join(' · ');
+  }
+
+  _ServiceWizardPreviewConfig? _buildServiceWizardPreviewConfig() {
+    final profile = _selectedServiceWizardProfile;
+    if (profile == null) {
+      return null;
+    }
+
+    final bike = _selectedWizardPreviewBike;
+    final technicalValues =
+        _selectedWizardPreviewBikeProfile?.technicalValues ??
+            const <String, dynamic>{};
+    final questionsByKey = {
+      for (final question in profile.questions) question.key: question,
+    };
+    final initialAnswers = ServiceWizardService.normalizeAnswersForProfile(
+      profile,
+      const <String, dynamic>{},
+    );
+    final hiddenQuestionKeys = <String>{};
+    final questionOverrides = <String, ServiceWizardQuestionOverride>{};
+    final diagnosisLinkedQuestionKeys = <String>{};
+    ServiceWizardContextSummary? contextSummary;
+
+    final wheelAnswer = _wizardLocationAnswer(
+      questionsByKey['which_wheel'],
+      _selectedWizardPreviewLocation,
+    );
+    if (wheelAnswer != null) {
+      initialAnswers['which_wheel'] = wheelAnswer;
+    }
+
+    String? helperText;
+    if (_isBrakeServiceFamily(profile.serviceFamily)) {
+      diagnosisLinkedQuestionKeys
+          .addAll(kDiagnosisLinkedBrakeWizardQuestionKeys);
+      if (_selectedWizardPreviewLocation != BikeMemoryLocation.none) {
+        hiddenQuestionKeys.add('which_wheel');
+      }
+
+      final rawBrakeType = technicalValues['brakeType']?.toString();
+      final rawRimBrakeFamily = technicalValues['rimBrakeFamily']?.toString();
+      questionOverrides['symptom'] = ServiceWizardQuestionOverride(
+        label: 'Síntomas observados',
+        helperText:
+            'Usa la misma lista del diagnóstico del freno para que el preview replique la base estructurada del taller.',
+        options: _serviceWizardPreviewBrakeSymptomOptions,
+      );
+
+      final bikeLabel = bike?.displayName ?? 'Sin bici seleccionada';
+      final bikeTypeLabel = bike?.bikeType?.displayName;
+      final targetLabel = switch (_selectedWizardPreviewLocation) {
+        BikeMemoryLocation.front => 'Freno delantero',
+        BikeMemoryLocation.rear => 'Freno trasero',
+        _ => 'Servicio de freno',
+      };
+      final needsRimBrakeFamilyConfirmation =
+          _needsRimBrakeFamilyConfirmation(rawBrakeType, rawRimBrakeFamily);
+      contextSummary = ServiceWizardContextSummary(
+        title: bikeLabel,
+        subtitle: targetLabel,
+        chips: [
+          if (bikeTypeLabel != null && bikeTypeLabel.isNotEmpty)
+            ServiceWizardContextChip(
+              icon: Icons.directions_bike_outlined,
+              label: 'Tipo de bici: $bikeTypeLabel',
+            ),
+          if (rawBrakeType != null && rawBrakeType.isNotEmpty)
+            ServiceWizardContextChip(
+              icon: Icons.tune_outlined,
+              label: needsRimBrakeFamilyConfirmation
+                  ? 'Freno confirmado: llanta · falta familia'
+                  : 'Freno confirmado: ${_formatBrakeSystemDetail(rawBrakeType, rawRimBrakeFamily)}',
+            ),
+        ],
+      );
+
+      if (needsRimBrakeFamilyConfirmation) {
+        final rimFamilyOptions = (questionsByKey['brake_type']?.options ??
+                const <ServiceQuestionOption>[])
+            .where(
+              (option) => kRimBrakeFamilyOptionValues.contains(option.value),
+            )
+            .toList(growable: false);
+        questionOverrides['brake_type'] = ServiceWizardQuestionOverride(
+          label: 'Familia de freno de llanta',
+          helperText:
+              'La plataforma ya viene confirmada desde la ficha de la bici. Aquí solo falta precisar la familia exacta.',
+          lockedSelection: const ServiceWizardLockedSelection(
+            label: 'Tipo de freno (desde la bicicleta)',
+            valueLabel: 'Llanta (rim)',
+          ),
+          options: rimFamilyOptions,
+        );
+      }
+
+      final mappedBrakeType = _mappedBrakeTypeWizardAnswer(
+        rawBrakeType,
+        rawRimBrakeFamily,
+        questionsByKey['brake_type'],
+      );
+      if (mappedBrakeType != null) {
+        initialAnswers['brake_type'] = mappedBrakeType;
+        if (!needsRimBrakeFamilyConfirmation) {
+          hiddenQuestionKeys.add('brake_type');
+        }
+      }
+
+      final mappedMechanicalBrakeType = _mappedMechanicalBrakeTypeWizardAnswer(
+        rawBrakeType,
+        rawRimBrakeFamily,
+        questionsByKey['brake_type_mech'],
+      );
+      if (mappedMechanicalBrakeType != null) {
+        initialAnswers['brake_type_mech'] = mappedMechanicalBrakeType;
+        hiddenQuestionKeys.add('brake_type_mech');
+      }
+
+      if (!_isDiscBrakeType(rawBrakeType)) {
+        initialAnswers.remove('rotor_size');
+        hiddenQuestionKeys.add('rotor_size');
+      } else {
+        final rotorSize = _mappedRotorSizeWizardAnswer(
+          questionsByKey['rotor_size'],
+          technicalValues,
+          _selectedWizardPreviewLocation,
+        );
+        if (rotorSize != null) {
+          initialAnswers['rotor_size'] = rotorSize;
+          hiddenQuestionKeys.add('rotor_size');
+        }
+      }
+
+      if (_selectedWizardPreviewLocation == BikeMemoryLocation.front) {
+        helperText = 'Se actualizará la ficha del freno delantero.';
+      } else if (_selectedWizardPreviewLocation == BikeMemoryLocation.rear) {
+        helperText = 'Se actualizará la ficha del freno trasero.';
+      } else {
+        helperText =
+            'Para dejarlo ligado a una ficha concreta, usa “Aplica a” y marca Del. o Tras.';
+      }
+
+      if (rawBrakeType != null && !_isDiscBrakeType(rawBrakeType)) {
+        if (needsRimBrakeFamilyConfirmation) {
+          helperText =
+              '$helperText La bici ya confirma plataforma llanta. Aquí solo falta precisar la familia exacta, y por eso no se muestran rotores.';
+        } else {
+          final brakeDetail = _formatBrakeSystemDetail(
+            rawBrakeType,
+            rawRimBrakeFamily,
+          );
+          helperText =
+              '$helperText La bici ya confirma freno $brakeDetail, así que el wizard no repite tipo ni rotores.';
+        }
+      } else if (rawBrakeType != null && rawBrakeType.isNotEmpty) {
+        helperText =
+            '$helperText La bici ya confirma freno ${_formatBrakeType(rawBrakeType)}.';
+      }
+
+      helperText =
+          '$helperText Los campos marcados como “Diagnóstico” comparten la misma base que usa la ficha estructurada del freno.';
+    } else if (profile.serviceFamily == 'drivetrain') {
+      final derailleurs = _mappedDerailleursWizardAnswer(
+        technicalValues['drivetrainConfig']?.toString(),
+        questionsByKey['derailleurs'],
+      );
+      if (derailleurs != null) {
+        initialAnswers['derailleurs'] = derailleurs;
+        hiddenQuestionKeys.add('derailleurs');
+      }
+
+      final drivetrainHint = _buildDrivetrainProfileHint(technicalValues);
+      helperText = drivetrainHint == null
+          ? 'Esta configuración puede actualizar la ficha técnica de transmisión de esta bicicleta.'
+          : 'Esta configuración puede actualizar la ficha técnica de transmisión de esta bicicleta. El perfil upstream ya marca $drivetrainHint.';
+
+      if (bike != null) {
+        contextSummary = ServiceWizardContextSummary(
+          title: bike.displayName,
+          subtitle: 'Transmisión',
+          chips: [
+            if (bike.bikeType != null)
+              ServiceWizardContextChip(
+                icon: Icons.directions_bike_outlined,
+                label: 'Tipo de bici: ${bike.bikeType!.displayName}',
+              ),
+            if (drivetrainHint != null)
+              ServiceWizardContextChip(
+                icon: Icons.settings_input_component_outlined,
+                label: 'Perfil confirmado: $drivetrainHint',
+              ),
+          ],
+        );
+      }
+    }
+
+    return _ServiceWizardPreviewConfig(
+      profile: profile,
+      initialAnswers: initialAnswers,
+      hiddenQuestionKeys: hiddenQuestionKeys,
+      helperText: helperText,
+      contextSummary: contextSummary,
+      questionOverrides: questionOverrides,
+      diagnosisLinkedQuestionKeys: diagnosisLinkedQuestionKeys,
+    );
+  }
+
+  Set<BikeMemoryLocation> _resolvePreviewBrakeDiagnosisTargets(
+    BikeMemoryLocation location,
+    Map<String, dynamic> answers,
+  ) {
+    if (location == BikeMemoryLocation.front) {
+      return {BikeMemoryLocation.front};
+    }
+    if (location == BikeMemoryLocation.rear) {
+      return {BikeMemoryLocation.rear};
+    }
+
+    switch (canonicalBrakeWheelValueFromAnswers(answers)) {
+      case 'front':
+        return {BikeMemoryLocation.front};
+      case 'rear':
+        return {BikeMemoryLocation.rear};
+      case 'both':
+        return {BikeMemoryLocation.front, BikeMemoryLocation.rear};
+      default:
+        return {};
+    }
+  }
+
+  String _resolveDiagnosisDestinationLabel(
+    ServiceWizardProfile profile,
+    Map<String, dynamic> answers,
+  ) {
+    if (_isBrakeServiceFamily(profile.serviceFamily)) {
+      final targets = _resolvePreviewBrakeDiagnosisTargets(
+        _selectedWizardPreviewLocation,
+        answers,
+      );
+      if (targets.isEmpty) {
+        return 'Sin target cerrado todavía. En la pega el wizard usará “Aplica a” para decidir si escribe en la ficha del freno delantero, trasero o ambas.';
+      }
+      if (targets.length == 2) {
+        return 'Escribe sobre las fichas de diagnóstico front_brake y rear_brake.';
+      }
+      if (targets.contains(BikeMemoryLocation.front)) {
+        return 'Escribe sobre la ficha de diagnóstico front_brake.';
+      }
+      return 'Escribe sobre la ficha de diagnóstico rear_brake.';
+    }
+
+    if (profile.serviceFamily == 'drivetrain') {
+      return 'Escribe sobre la ficha de diagnóstico drivetrain, elevando estado y anexando nota guiada cuando corresponde.';
+    }
+
+    return 'No hay sincronización estructurada directa definida para este perfil.';
+  }
+
+  Future<void> _openServiceWizardPreviewTester() async {
+    final config = _buildServiceWizardPreviewConfig();
+    if (config == null) {
+      return;
+    }
+
+    final productName = _nameController.text.trim().isEmpty
+        ? _selectedServiceProfile?.name ?? 'Servicio'
+        : _nameController.text.trim();
+
+    final result = await showServiceWizardDialog(
+      context,
+      productName: productName,
+      productIsService: true,
+      profile: config.profile,
+      initialAnswers: config.initialAnswers,
+      contextSummary: config.contextSummary,
+      helperText: config.helperText,
+      hiddenQuestionKeys: config.hiddenQuestionKeys,
+      questionOverrides: config.questionOverrides,
+      diagnosisLinkedQuestionKeys: config.diagnosisLinkedQuestionKeys,
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _lastServiceWizardPreviewResult = result;
+    });
+  }
+
+  String _resolveWizardPreviewValueLabel(
+    ServiceProfileQuestion question,
+    dynamic value,
+    _ServiceWizardPreviewConfig config,
+  ) {
+    if (value is bool) {
+      return value ? 'Sí' : 'No';
+    }
+
+    final overrideOptions = config.questionOverrides[question.key]?.options;
+    if (value is List) {
+      return value
+          .map(
+            (raw) => _resolveWizardPreviewSingleValueLabel(
+              question,
+              raw.toString(),
+              overrideOptions,
+            ),
+          )
+          .join(', ');
+    }
+
+    return _resolveWizardPreviewSingleValueLabel(
+      question,
+      value.toString(),
+      overrideOptions,
+    );
+  }
+
+  String _resolveWizardPreviewSingleValueLabel(
+    ServiceProfileQuestion question,
+    String rawValue,
+    List<ServiceQuestionOption>? overrideOptions,
+  ) {
+    if (overrideOptions != null) {
+      for (final option in overrideOptions) {
+        if (option.value == rawValue) {
+          return option.label;
+        }
+      }
+    }
+
+    return ServiceWizardService.resolveLabel(question, rawValue);
+  }
+
+  String _hiddenWizardQuestionReason(String key) {
+    switch (key) {
+      case 'which_wheel':
+        return 'La ubicación ya quedó fijada por el target del servicio.';
+      case 'brake_type':
+        return 'La bici ya confirmó la plataforma o la familia de freno.';
+      case 'brake_type_mech':
+        return 'La ficha técnica ya resolvió la variante mecánica.';
+      case 'rotor_size':
+        return 'No aplica para esta bici o ya viene resuelto desde el perfil upstream.';
+      case 'derailleurs':
+        return 'La configuración de transmisión ya se dedujo desde drivetrainConfig.';
+      default:
+        return 'La respuesta ya llega predefinida desde el backbone.';
+    }
   }
 
   void _handlePurchaseTreatmentChanged(PurchaseTreatment value) {
@@ -2207,19 +3892,33 @@ class _ProductFormPageState extends State<ProductFormPage>
       final rawBrand = _brandController.text.trim();
       final rawModel = _modelController.text.trim();
       final potentialBrand = _selectedBrand ?? _matchBrandSelection();
+      final categoryIdForSave =
+          _isServiceForm ? _existingProduct?.categoryId : _selectedCategoryId;
+      final supplierIdForSave =
+          _isServiceForm ? _existingProduct?.supplierId : _selectedSupplierId;
+      final supplierCodeForSave = _isServiceForm
+          ? _existingProduct?.supplierCode
+          : (_supplierCodeController.text.trim().isEmpty
+              ? null
+              : _supplierCodeController.text.trim());
       final normalizedBrandId = (() {
+        if (_isServiceForm) return _existingProduct?.brandId;
         final candidate = potentialBrand?.id ?? _selectedBrandId;
         if (candidate == null) return null;
         final trimmed = candidate.trim();
         return trimmed.isEmpty ? null : trimmed;
       })();
       final normalizedBrandName = (() {
+        if (_isServiceForm) return _existingProduct?.brand;
         if (potentialBrand != null) {
           final trimmed = potentialBrand.name.trim();
           return trimmed.isEmpty ? null : trimmed;
         }
         return rawBrand.isEmpty ? null : rawBrand;
       })();
+      final normalizedModel = _isServiceForm
+          ? _existingProduct?.model
+          : (rawModel.isEmpty ? null : rawModel);
       final price =
           double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
       final cost =
@@ -2239,7 +3938,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       String? selectedCategoryName;
       for (final category in _categories) {
-        if (category.id == _selectedCategoryId) {
+        if (category.id == categoryIdForSave) {
           selectedCategoryName = category.name;
           break;
         }
@@ -2247,11 +3946,14 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       String? selectedSupplierName;
       for (final supplier in _suppliers) {
-        if (supplier.id == _selectedSupplierId) {
+        if (supplier.id == supplierIdForSave) {
           selectedSupplierName = supplier.name;
           break;
         }
       }
+
+      final normalizedGoogleMerchant =
+          _isServiceForm ? false : _isGoogleMerchant;
 
       if (requiresInventoryConversion &&
           _existingProduct != null &&
@@ -2276,16 +3978,14 @@ class _ProductFormPageState extends State<ProductFormPage>
             sku: sku,
             description: rawDescription.isEmpty ? null : rawDescription,
             websiteDescription: rawWebsiteDescription,
-            categoryId: _selectedCategoryId,
+            categoryId: categoryIdForSave,
             categoryName: selectedCategoryName,
-            supplierId: _selectedSupplierId,
+            supplierId: supplierIdForSave,
             supplierName: selectedSupplierName,
-            supplierCode: _supplierCodeController.text.trim().isEmpty
-                ? null
-                : _supplierCodeController.text.trim(),
+            supplierCode: supplierCodeForSave,
             brandId: normalizedBrandId,
             brand: normalizedBrandName,
-            model: rawModel.isEmpty ? null : rawModel,
+            model: normalizedModel,
             price: price,
             cost: cost,
             inventoryQty: inventoryQty,
@@ -2296,7 +3996,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             additionalImages: safeAdditionalImages,
             isActive: _isActive,
             isPublished: _isPublished,
-            isGoogleMerchant: _isGoogleMerchant,
+            isGoogleMerchant: normalizedGoogleMerchant,
             purchaseTreatment: _selectedPurchaseTreatment,
             productType: _selectedProductType,
           );
@@ -2306,18 +4006,16 @@ class _ProductFormPageState extends State<ProductFormPage>
         sku: sku,
         description: rawDescription.isEmpty ? null : rawDescription,
         websiteDescription: rawWebsiteDescription,
-        categoryId: _selectedCategoryId,
+        categoryId: categoryIdForSave,
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
-        supplierId: _selectedSupplierId,
+        supplierId: supplierIdForSave,
         supplierName: selectedSupplierName ?? baseProduct.supplierName,
-        supplierCode: _supplierCodeController.text.trim().isEmpty
-            ? null
-            : _supplierCodeController.text.trim(),
+        supplierCode: supplierCodeForSave,
         brandId: normalizedBrandId,
         brandIdHasValue: true,
         brand: normalizedBrandName,
         brandHasValue: true,
-        model: rawModel.isEmpty ? null : rawModel,
+        model: normalizedModel,
         price: price,
         cost: cost,
         inventoryQty: inventoryQty,
@@ -2328,7 +4026,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         additionalImages: safeAdditionalImages,
         isActive: _isActive,
         isPublished: _isPublished,
-        isGoogleMerchant: _isGoogleMerchant,
+        isGoogleMerchant: normalizedGoogleMerchant,
         purchaseTreatment: _selectedPurchaseTreatment,
         productType: _selectedProductType,
         // Set configuration
@@ -2344,13 +4042,20 @@ class _ProductFormPageState extends State<ProductFormPage>
         savedProduct = await _inventoryService.createProduct(product);
       }
 
+      if (savedProduct.id != null) {
+        await _syncServiceProfileMapping(
+          tenantId: tenantId,
+          productId: savedProduct.id!,
+        );
+      }
+
       // Create component products if this is a set
       if (_isSet && _setComponents.isNotEmpty && savedProduct.id != null) {
         await _createSetComponentProducts(savedProduct);
       }
 
       // Save Ficha Técnica spec values
-      if (_specTemplate != null && savedProduct.id != null) {
+      if (!_isServiceForm && _specTemplate != null && savedProduct.id != null) {
         final tenantId = await TenantService().getTenantId();
         if (tenantId != null) {
           await SpecEngineService.instance.saveProductSpecValues(
@@ -2836,19 +4541,27 @@ class _ProductFormPageState extends State<ProductFormPage>
               labelColor: theme.colorScheme.primary,
               unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
               indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [
-                Tab(
+              tabs: [
+                const Tab(
                   icon: Icon(Icons.edit_note),
                   text: 'Detalles Generales',
                 ),
-                Tab(
+                const Tab(
                   icon: Icon(Icons.language),
                   text: 'Tienda Online',
                 ),
                 Tab(
-                  icon: Icon(Icons.tune),
-                  text: 'Ficha Técnica',
+                  icon: Icon(
+                    _isServiceForm ? Icons.alt_route_outlined : Icons.tune,
+                  ),
+                  text:
+                      _isServiceForm ? 'Workflow de Servicio' : 'Ficha Técnica',
                 ),
+                if (_isServiceForm)
+                  const Tab(
+                    icon: Icon(Icons.playlist_add_check_circle_outlined),
+                    text: 'Wizard y Diagnóstico',
+                  ),
               ],
             ),
           );
@@ -2878,7 +4591,17 @@ class _ProductFormPageState extends State<ProductFormPage>
                 case 1:
                   tabView = _buildWebsiteTab(theme, key: const ValueKey(1));
                 case 2:
-                  tabView = _buildSpecTab(theme, key: const ValueKey(2));
+                  tabView = _isServiceForm
+                      ? _buildServiceWorkflowTab(
+                          theme,
+                          key: const ValueKey(2),
+                        )
+                      : _buildSpecTab(theme, key: const ValueKey(2));
+                case 3:
+                  tabView = _buildServiceWizardPreviewTab(
+                    theme,
+                    key: const ValueKey(3),
+                  );
                 default:
                   tabView = const SizedBox.shrink(key: ValueKey(-1));
               }
@@ -2953,6 +4676,15 @@ class _ProductFormPageState extends State<ProductFormPage>
   Widget _buildRightSidebar(ThemeData theme) {
     return Column(
       children: [
+        if (_isServiceForm) ...[
+          _buildSectionCard(
+            theme,
+            icon: Icons.alt_route_outlined,
+            title: 'Backbone del servicio',
+            children: _buildServiceBackboneFields(theme, compact: true),
+          ),
+          const SizedBox(height: 16),
+        ],
         _buildSectionCard(
           theme,
           icon: Icons.image_outlined,
@@ -3026,23 +4758,35 @@ class _ProductFormPageState extends State<ProductFormPage>
         _buildSectionCard(
           theme,
           icon: Icons.description_outlined,
-          title: 'Información básica',
+          title:
+              _isServiceForm ? 'Identidad del servicio' : 'Información básica',
           children: _buildBasicInfoFields(theme),
         ),
         const SizedBox(height: 16),
         _buildSectionCard(
           theme,
           icon: Icons.attach_money_outlined,
-          title: 'Precios y márgenes',
+          title: _isServiceForm ? 'Tarifa y margen' : 'Precios y márgenes',
           children: _buildPricingFields(theme),
         ),
         const SizedBox(height: 16),
         _buildSectionCard(
           theme,
           icon: Icons.text_snippet_outlined,
-          title: 'Descripción del producto',
+          title: _isServiceForm
+              ? 'Descripción facturable del servicio'
+              : 'Descripción del producto',
           children: _buildDescriptionFields(theme),
         ),
+        if (_isServiceForm) ...[
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.account_tree_outlined,
+            title: 'Resumen estructurado',
+            children: _buildServiceSummaryFields(theme),
+          ),
+        ],
         // Only show set configuration for products, not services AND not child products
         if (_tracksInventoryInForm && !_isChildProduct) ...[
           const SizedBox(height: 16),
@@ -3055,6 +4799,1455 @@ class _ProductFormPageState extends State<ProductFormPage>
         ],
       ],
     );
+  }
+
+  Widget _buildServiceWorkflowTab(ThemeData theme, {Key? key}) {
+    return SingleChildScrollView(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            theme,
+            icon: Icons.alt_route_outlined,
+            title: 'Mapa del backbone',
+            children: _buildServiceBackboneFields(theme),
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.summarize_outlined,
+            title: 'Resumen cliente e interno',
+            children: _buildServiceSummaryFields(theme),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildServiceBackboneFields(
+    ThemeData theme, {
+    bool compact = false,
+  }) {
+    if (_isLoadingServiceProfiles && _serviceProfiles.isEmpty) {
+      return const [LinearProgressIndicator(minHeight: 2)];
+    }
+
+    final profile = _selectedServiceProfile;
+    if (profile == null) {
+      return [
+        Text(
+          compact
+              ? 'Selecciona un perfil estructurado para que este servicio deje de comportarse como un producto genérico.'
+              : 'Selecciona un perfil estructurado en Detalles Generales. Eso conecta el servicio con el wizard, el targeting técnico y los resúmenes que reutiliza el taller.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+      ];
+    }
+
+    return [
+      Text(
+        compact
+            ? 'Este servicio ya está vinculado al backbone operativo del taller.'
+            : 'El servicio se comportará como una operación estructurada: perfil, target técnico y downstream del taller quedan alineados desde este formulario.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 12),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.sell_outlined,
+        title: 'Servicio facturable',
+        body: _nameController.text.trim().isEmpty
+            ? 'Usa un nombre corto y cobrable.'
+            : '${_nameController.text.trim()} · ${_skuController.text.trim().isEmpty ? 'Sin código' : _skuController.text.trim()}',
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.hub_outlined,
+        title: 'Perfil estructurado',
+        body: '${profile.name} (${profile.key})',
+        chips: [
+          _serviceFamilyLabel(profile.serviceFamily),
+          if ((profile.targetFamily ?? '').isNotEmpty)
+            'Target: ${_serviceFamilyLabel(profile.targetFamily)}',
+        ],
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.filter_alt_outlined,
+        title: 'Target técnico',
+        body:
+            '${_serviceFamilyLabel(profile.targetFamily ?? profile.serviceFamily)} · ${_servicePositionModeLabel(profile.targetPositionMode)}',
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.construction_outlined,
+        title: 'Downstream del taller',
+        body:
+            'Wizard guiado, diagnosis reutilizable, mechanic_job_items y resumen de factura.',
+      ),
+    ];
+  }
+
+  List<Widget> _buildServiceSummaryFields(ThemeData theme) {
+    final clientSummary = _defaultServiceClientDescription;
+    final mechanicSummary = _defaultServiceMechanicSummary;
+
+    return [
+      Text(
+        'El resumen cliente debe ser corto y cobrable. El resumen interno puede retener más semántica técnica para el wizard y el equipo del taller.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 12),
+      _buildServiceSummaryPreview(
+        theme,
+        label: 'Resumen sugerido para cliente / factura',
+        value: clientSummary.isEmpty ? 'Aún no hay sugerencia.' : clientSummary,
+      ),
+      const SizedBox(height: 10),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed:
+              clientSummary.isEmpty ? null : _applySuggestedServiceDescription,
+          icon: const Icon(Icons.assignment_outlined),
+          label: const Text('Usar resumen cliente'),
+        ),
+      ),
+      const SizedBox(height: 16),
+      _buildServiceSummaryPreview(
+        theme,
+        label: 'Resumen interno / operativo',
+        value: mechanicSummary.isEmpty
+            ? 'Aún no hay sugerencia.'
+            : mechanicSummary,
+      ),
+      const SizedBox(height: 10),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _defaultServiceWebsiteDescription.isEmpty
+              ? null
+              : _applySuggestedWebsiteDescription,
+          icon: const Icon(Icons.language_outlined),
+          label: const Text('Usar texto base en web'),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildServiceFlowArrow(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          Icon(
+            Icons.south,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceFlowNode(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required String body,
+    List<String> chips = const [],
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+          ),
+          if (chips.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chips
+                  .map(
+                    (chip) => Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(chip),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceSummaryPreview(
+    ThemeData theme, {
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceWizardPreviewTab(ThemeData theme, {Key? key}) {
+    final previewConfig = _buildServiceWizardPreviewConfig();
+    final profile = _selectedServiceWizardProfile;
+    final previewAnswers = _lastServiceWizardPreviewResult?.answers ??
+        previewConfig?.initialAnswers ??
+        const <String, dynamic>{};
+
+    return SingleChildScrollView(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionCard(
+            theme,
+            icon: Icons.play_arrow_outlined,
+            title: 'Tester del wizard',
+            children: _buildServiceWizardTesterFields(theme),
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.view_quilt_outlined,
+            title: 'Comportamiento esperado',
+            children: _buildServiceWizardBehaviorFields(
+              theme,
+              previewConfig: previewConfig,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.account_tree_outlined,
+            title: 'Semántica del backbone',
+            children: _buildServiceBackboneSemanticsFields(
+              theme,
+              profile: profile,
+              previewConfig: previewConfig,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.sync_alt_outlined,
+            title: 'Vinculación con diagnóstico',
+            children: _buildServiceDiagnosisLinkFields(
+              theme,
+              profile: profile,
+              previewConfig: previewConfig,
+              previewAnswers: previewAnswers,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildServiceWizardTesterFields(ThemeData theme) {
+    final selectedBike = _selectedWizardPreviewBike;
+    final selectedProfile = _selectedServiceProfile;
+
+    return [
+      Text(
+        'Este tester no guarda nada. Simula cómo abrirá el wizard dentro de una pega usando el perfil estructurado del servicio y, si eliges una bici, la verdad upstream de esa bicicleta.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 16),
+      if (_isLoadingWizardPreviewCustomers ||
+          _isLoadingWizardPreviewBikes ||
+          _isLoadingWizardPreviewBikeProfile ||
+          _isLoadingSelectedServiceWizardProfile)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          SizedBox(
+            width: 280,
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedWizardPreviewCustomerId,
+              decoration: const InputDecoration(
+                labelText: 'Cliente para la simulación',
+                helperText: 'Opcional. Filtra las bicicletas del tester.',
+              ),
+              items: _wizardPreviewCustomers
+                  .map(
+                    (customer) => DropdownMenuItem<String>(
+                      value: customer.id,
+                      child: Text(customer.name),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _handleWizardPreviewCustomerChanged,
+            ),
+          ),
+          SizedBox(
+            width: 320,
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedWizardPreviewBikeId,
+              decoration: InputDecoration(
+                labelText: 'Bicicleta del cliente',
+                helperText: _selectedWizardPreviewCustomerId == null
+                    ? 'Selecciona un cliente para cargar sus bicicletas.'
+                    : 'Sin bici = wizard genérico; con bici = preview adaptado.',
+              ),
+              items: _wizardPreviewBikes
+                  .map(
+                    (bike) => DropdownMenuItem<String>(
+                      value: bike.id,
+                      child: Text(
+                          BikeProfileSummaryBuilder.buildIdentityLine(bike)),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _selectedWizardPreviewCustomerId == null
+                  ? null
+                  : _handleWizardPreviewBikeChanged,
+            ),
+          ),
+          if (selectedProfile?.targetPositionMode == 'front_rear')
+            SizedBox(
+              width: 320,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Target técnico para el preview',
+                  helperText:
+                      'Simula si el ítem ya viene fijado en delantero o trasero.',
+                ),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Lo decide el wizard'),
+                      selected: _selectedWizardPreviewLocation ==
+                          BikeMemoryLocation.none,
+                      onSelected: (_) => _handleWizardPreviewLocationChanged(
+                        BikeMemoryLocation.none,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Delantero'),
+                      selected: _selectedWizardPreviewLocation ==
+                          BikeMemoryLocation.front,
+                      onSelected: (_) => _handleWizardPreviewLocationChanged(
+                        BikeMemoryLocation.front,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Trasero'),
+                      selected: _selectedWizardPreviewLocation ==
+                          BikeMemoryLocation.rear,
+                      onSelected: (_) => _handleWizardPreviewLocationChanged(
+                        BikeMemoryLocation.rear,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          FilledButton.icon(
+            onPressed: _selectedServiceWizardProfile == null ||
+                    _isLoadingSelectedServiceWizardProfile
+                ? null
+                : _openServiceWizardPreviewTester,
+            icon: const Icon(Icons.play_arrow_outlined),
+            label: Text(
+              selectedBike == null
+                  ? 'Probar wizard genérico'
+                  : 'Probar con esta bici',
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: _selectedWizardPreviewCustomerId == null &&
+                    _selectedWizardPreviewBikeId == null
+                ? null
+                : () {
+                    setState(() {
+                      _selectedWizardPreviewCustomerId = null;
+                      _selectedWizardPreviewBikeId = null;
+                      _wizardPreviewBikes = [];
+                      _selectedWizardPreviewBikeProfile = null;
+                      _selectedWizardPreviewLocation = BikeMemoryLocation.none;
+                      _resetServiceWizardPreviewResult();
+                    });
+                  },
+            icon: const Icon(Icons.layers_clear_outlined),
+            label: const Text('Limpiar contexto de bici'),
+          ),
+        ],
+      ),
+      if (_selectedWizardPreviewCustomerId != null &&
+          !_isLoadingWizardPreviewBikes &&
+          _wizardPreviewBikes.isEmpty) ...[
+        const SizedBox(height: 12),
+        Text(
+          'Este cliente no tiene bicicletas activas para usar en la simulación.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+      if (selectedBike != null) ...[
+        const SizedBox(height: 16),
+        _buildWizardPreviewBikeSummary(theme, selectedBike),
+      ],
+      if (_lastServiceWizardPreviewResult != null) ...[
+        const SizedBox(height: 16),
+        _buildServiceSummaryPreview(
+          theme,
+          label: 'Último resultado probado en el tester',
+          value: _lastServiceWizardPreviewResult!.summary.trim().isEmpty
+              ? 'El wizard se cerró sin respuestas visibles.'
+              : _lastServiceWizardPreviewResult!.summary,
+        ),
+      ],
+    ];
+  }
+
+  Widget _buildWizardPreviewBikeSummary(ThemeData theme, Bike bike) {
+    final technicalValues =
+        _selectedWizardPreviewBikeProfile?.technicalValues ??
+            const <String, dynamic>{};
+    final technicalHighlights =
+        BikeProfileSummaryBuilder.buildTechnicalHighlights(
+      bike: bike,
+      technicalValues: technicalValues,
+    );
+    final warnings = BikeProfileSummaryBuilder.buildWarnings(
+      bike: bike,
+      technicalValues: technicalValues,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Contexto upstream de la bici seleccionada',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            BikeProfileSummaryBuilder.buildIdentityLine(bike),
+            style: theme.textTheme.bodyMedium,
+          ),
+          if (_selectedWizardPreviewCustomer != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Cliente: ${_selectedWizardPreviewCustomer!.name}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (technicalHighlights.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: technicalHighlights
+                  .map(
+                    (line) => Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(line),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...warnings.map(
+              (warning) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_outlined,
+                      size: 16,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        warning,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildServiceWizardBehaviorFields(
+    ThemeData theme, {
+    required _ServiceWizardPreviewConfig? previewConfig,
+  }) {
+    if (_selectedServiceProfile == null) {
+      return [
+        Text(
+          'Primero asigna un perfil estructurado al servicio. Sin eso no existe wizard real que mostrar.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ];
+    }
+
+    if (_isLoadingSelectedServiceWizardProfile && previewConfig == null) {
+      return const [LinearProgressIndicator(minHeight: 2)];
+    }
+
+    if (previewConfig == null) {
+      return [
+        Text(
+          'No se pudieron cargar las preguntas del wizard para este perfil.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+      ];
+    }
+
+    final visibleQuestions = previewConfig.profile.questions
+        .where(
+          (question) =>
+              !question.isAdvanced &&
+              !previewConfig.hiddenQuestionKeys.contains(question.key),
+        )
+        .toList(growable: false);
+    final hiddenQuestions = previewConfig.profile.questions
+        .where((question) =>
+            previewConfig.hiddenQuestionKeys.contains(question.key))
+        .toList(growable: false);
+
+    return [
+      Text(
+        'La vista usa el mismo perfil del taller y aplica la misma lógica upstream que luego consumirá la pega: contexto de bici, preguntas ocultas, bloqueos y prefills.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      if (previewConfig.contextSummary != null) ...[
+        const SizedBox(height: 16),
+        _buildWizardContextSummaryCard(theme, previewConfig.contextSummary!),
+      ],
+      if (previewConfig.helperText != null &&
+          previewConfig.helperText!.trim().isNotEmpty) ...[
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            previewConfig.helperText!,
+            style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+          ),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Text(
+        'Preguntas visibles en el wizard',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 10),
+      if (visibleQuestions.isEmpty)
+        Text(
+          'Con la configuración actual no quedan preguntas visibles. Todo llega resuelto por la ficha técnica o por el target del servicio.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        )
+      else
+        ...visibleQuestions.map(
+          (question) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildWizardPreviewQuestionCard(
+              theme,
+              question: question,
+              previewConfig: previewConfig,
+            ),
+          ),
+        ),
+      if (hiddenQuestions.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text(
+          'Preguntas ocultas por contexto upstream',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...hiddenQuestions.map(
+          (question) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.visibility_off_outlined,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${question.label}: ${_hiddenWizardQuestionReason(question.key)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Widget _buildWizardContextSummaryCard(
+    ThemeData theme,
+    ServiceWizardContextSummary contextSummary,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            contextSummary.title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (contextSummary.subtitle != null &&
+              contextSummary.subtitle!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              contextSummary.subtitle!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (contextSummary.chips.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: contextSummary.chips
+                  .map(
+                    (chip) => Chip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(chip.icon, size: 16),
+                      label: Text(chip.label),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWizardPreviewQuestionCard(
+    ThemeData theme, {
+    required ServiceProfileQuestion question,
+    required _ServiceWizardPreviewConfig previewConfig,
+  }) {
+    final semantics = _serviceWizardQuestionSemantics(
+      previewConfig.profile,
+      question,
+    );
+    final override = previewConfig.questionOverrides[question.key];
+    final prefillValue = previewConfig.initialAnswers[question.key];
+    final prefillLabel = prefillValue == null
+        ? null
+        : _resolveWizardPreviewValueLabel(
+            question, prefillValue, previewConfig);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  override?.label ?? question.label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                _wizardQuestionTypeLabel(question.questionType),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (question.isRequired)
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text('Obligatoria'),
+                ),
+              Chip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  _serviceWizardBackboneBucketIcon(semantics.bucket),
+                  size: 16,
+                ),
+                label:
+                    Text(_serviceWizardBackboneBucketLabel(semantics.bucket)),
+              ),
+              if (previewConfig.diagnosisLinkedQuestionKeys
+                  .contains(question.key))
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.sync_alt_outlined, size: 16),
+                  label: Text('Diagnóstico'),
+                ),
+              if (prefillLabel != null && prefillLabel.isNotEmpty)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+                  label: Text('Prefill: $prefillLabel'),
+                ),
+              if (override?.lockedSelection != null)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.lock_outline, size: 16),
+                  label: Text(
+                    '${override!.lockedSelection!.label}: ${override.lockedSelection!.valueLabel}',
+                  ),
+                ),
+            ],
+          ),
+          if (override?.helperText != null &&
+              override!.helperText!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              override.helperText!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text(
+              semantics.detail,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _wizardQuestionTypeLabel(String value) {
+    switch (value) {
+      case 'single_select':
+        return 'Selección única';
+      case 'multi_select':
+        return 'Selección múltiple';
+      case 'boolean':
+        return 'Sí / No';
+      case 'number':
+        return 'Número';
+      default:
+        return 'Texto';
+    }
+  }
+
+  List<Widget> _buildServiceBackboneSemanticsFields(
+    ThemeData theme, {
+    required ServiceWizardProfile? profile,
+    required _ServiceWizardPreviewConfig? previewConfig,
+  }) {
+    if (profile == null || previewConfig == null) {
+      return [
+        Text(
+          'Selecciona un perfil estructurado para clasificar cada campo entre verdad upstream, diagnóstico y ejecución.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ];
+    }
+
+    final questions = profile.questions
+        .where((question) => !question.isAdvanced)
+        .toList(growable: false);
+    final grouped =
+        <_ServiceWizardBackboneBucket, List<ServiceProfileQuestion>>{
+      for (final bucket in _ServiceWizardBackboneBucket.values)
+        bucket: <ServiceProfileQuestion>[],
+    };
+
+    for (final question in questions) {
+      final semantics = _serviceWizardQuestionSemantics(profile, question);
+      grouped[semantics.bucket]!.add(question);
+    }
+
+    final visibleUpstreamQuestions =
+        grouped[_ServiceWizardBackboneBucket.upstreamTruth]!
+            .where(
+              (question) =>
+                  !previewConfig.hiddenQuestionKeys.contains(question.key),
+            )
+            .toList(growable: false);
+
+    final widgets = <Widget>[
+      Text(
+        'Aquí se separa qué pertenece a la ficha técnica upstream de la bici, qué es verdad diagnóstica de la visita y qué solo vive como target o detalle operativo del servicio.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+    ];
+
+    if (visibleUpstreamQuestions.isNotEmpty) {
+      widgets.addAll([
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Deriva detectada en este perfil',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Estos campos siguen entrando por el wizard aunque arquitectónicamente pertenecen al backbone upstream. Deberían llegar desde bike profile / compatibilidad y el wizard solo debería consumirlos o confirmarlos.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: visibleUpstreamQuestions
+                    .map(
+                      (question) => Chip(
+                        visualDensity: VisualDensity.compact,
+                        avatar:
+                            const Icon(Icons.warning_amber_outlined, size: 16),
+                        label: Text(question.label),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
+          ),
+        ),
+      ]);
+    }
+
+    for (final bucket in _ServiceWizardBackboneBucket.values) {
+      final bucketQuestions = grouped[bucket]!;
+      if (bucketQuestions.isEmpty) {
+        continue;
+      }
+
+      widgets.addAll([
+        const SizedBox(height: 16),
+        Text(
+          _serviceWizardBackboneBucketTitle(bucket),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...bucketQuestions.map(
+          (question) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildServiceBackboneQuestionRow(
+              theme,
+              profile: profile,
+              question: question,
+              previewConfig: previewConfig,
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    return widgets;
+  }
+
+  Widget _buildServiceBackboneQuestionRow(
+    ThemeData theme, {
+    required ServiceWizardProfile profile,
+    required ServiceProfileQuestion question,
+    required _ServiceWizardPreviewConfig previewConfig,
+  }) {
+    final semantics = _serviceWizardQuestionSemantics(profile, question);
+    final isHidden = previewConfig.hiddenQuestionKeys.contains(question.key);
+    final hasPrefill = previewConfig.initialAnswers.containsKey(question.key);
+    final override = previewConfig.questionOverrides[question.key];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  question.label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                question.key,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  _serviceWizardBackboneBucketIcon(semantics.bucket),
+                  size: 16,
+                ),
+                label:
+                    Text(_serviceWizardBackboneBucketLabel(semantics.bucket)),
+              ),
+              if (isHidden)
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.visibility_off_outlined, size: 16),
+                  label: Text('Oculta por upstream'),
+                )
+              else if (hasPrefill)
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.auto_awesome_outlined, size: 16),
+                  label: Text('Prefill activo'),
+                ),
+              if (override?.lockedSelection != null)
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.lock_outline, size: 16),
+                  label: Text('Selección bloqueada'),
+                ),
+              if (previewConfig.diagnosisLinkedQuestionKeys
+                  .contains(question.key))
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.sync_alt_outlined, size: 16),
+                  label: Text('Sync diagnóstico'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            semantics.detail,
+            style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _ServiceWizardQuestionSemantics _serviceWizardQuestionSemantics(
+    ServiceWizardProfile profile,
+    ServiceProfileQuestion question,
+  ) {
+    final key = question.key;
+
+    if (key == 'which_wheel') {
+      return const _ServiceWizardQuestionSemantics(
+        bucket: _ServiceWizardBackboneBucket.targetExecution,
+        summary: 'Target técnico del ítem',
+        detail:
+            'No es verdad de la bici. Es metadata de target del servicio y debe salir del “Aplica a” o del contexto del item, no de la ficha técnica.',
+      );
+    }
+
+    if (_isBrakeServiceFamily(profile.serviceFamily)) {
+      if (kDiagnosisLinkedBrakeWizardQuestionKeys.contains(key)) {
+        return const _ServiceWizardQuestionSemantics(
+          bucket: _ServiceWizardBackboneBucket.diagnosisTruth,
+          summary: 'Verdad diagnóstica de la visita',
+          detail:
+              'Es un hallazgo del estado actual del freno. Debe sincronizar con diagnosis_sheet_data y no vivir solo como resumen del wizard.',
+        );
+      }
+
+      switch (key) {
+        case 'brake_type':
+        case 'brake_type_mech':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.upstreamTruth,
+            summary: 'Spec durable del sistema de freno',
+            detail:
+                'La plataforma o familia del freno pertenece a la verdad upstream de la bici. El wizard solo debería consumirla o confirmar el faltante, no convertirse en su primer almacenamiento.',
+          );
+        case 'rotor_size':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.upstreamTruth,
+            summary: 'Compatibilidad baseline del freno/rueda',
+            detail:
+                'El diámetro del rotor es una spec durable del target técnico. Cuando la bici y la rueda ya están resueltas, este valor debería venir del perfil/catálogo y no entrar como dato nuevo en cada servicio.',
+          );
+        case 'fluid_type':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.upstreamTruth,
+            summary: 'Spec durable del sistema hidráulico',
+            detail:
+                'El tipo de fluido no debería quedar atrapado en un solo purgado o sangrado. Si pasa a ser importante operativamente, debe crecer como verdad upstream del freno hidráulico y reutilizarse en compatibilidad y servicios.',
+          );
+        case 'piston_count':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.upstreamTruth,
+            summary: 'Spec durable del caliper',
+            detail:
+                'La cantidad de pistones describe la plataforma del caliper, no un hallazgo puntual de la visita. Si se vuelve relevante para productos/servicios, debe vivir en la capa upstream.',
+          );
+        case 'include_pads':
+        case 'replace_pads':
+        case 'replace_parts':
+        case 'replace_seals':
+        case 'fluid_check':
+        case 'include_housing':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.targetExecution,
+            summary: 'Detalle operativo del servicio',
+            detail:
+                'Esto pertenece a cómo se ejecuta o cotiza el trabajo actual. Puede quedarse en el item del servicio o en la nota guiada, pero no debe promoverse a ficha técnica permanente de la bici.',
+          );
+      }
+    }
+
+    if (profile.serviceFamily == 'drivetrain') {
+      switch (key) {
+        case 'derailleurs':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.upstreamTruth,
+            summary: 'Layout durable de transmisión',
+            detail:
+                'Qué desviadores existen se deriva del drivetrainConfig y de la arquitectura upstream de la transmisión. El wizard no debería ser la primera fuente de esa verdad.',
+          );
+        case 'chain_wear':
+        case 'cable_condition':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.diagnosisTruth,
+            summary: 'Hallazgo de la visita',
+            detail:
+                'Es estado actual de la transmisión y debe reflejarse en la ficha diagnóstica compartida, no quedarse solo como texto operativo del servicio.',
+          );
+        case 'lube_type':
+        case 'derailleur_check':
+        case 'include_housing':
+          return const _ServiceWizardQuestionSemantics(
+            bucket: _ServiceWizardBackboneBucket.targetExecution,
+            summary: 'Detalle operativo del servicio',
+            detail:
+                'Define cómo se hará el trabajo o qué se incluye en la intervención actual. No es verdad durable de la bici.',
+          );
+      }
+    }
+
+    return const _ServiceWizardQuestionSemantics(
+      bucket: _ServiceWizardBackboneBucket.reviewNeeded,
+      summary: 'Pendiente de mapear',
+      detail:
+          'Este campo todavía no tiene una clasificación explícita dentro del backbone. Antes de expandirlo, hay que decidir si es verdad upstream, diagnóstico de visita o ejecución-only.',
+    );
+  }
+
+  IconData _serviceWizardBackboneBucketIcon(
+    _ServiceWizardBackboneBucket bucket,
+  ) {
+    switch (bucket) {
+      case _ServiceWizardBackboneBucket.upstreamTruth:
+        return Icons.account_tree_outlined;
+      case _ServiceWizardBackboneBucket.diagnosisTruth:
+        return Icons.medical_information_outlined;
+      case _ServiceWizardBackboneBucket.targetExecution:
+        return Icons.build_circle_outlined;
+      case _ServiceWizardBackboneBucket.reviewNeeded:
+        return Icons.help_outline;
+    }
+  }
+
+  String _serviceWizardBackboneBucketLabel(
+    _ServiceWizardBackboneBucket bucket,
+  ) {
+    switch (bucket) {
+      case _ServiceWizardBackboneBucket.upstreamTruth:
+        return 'Upstream / Perfil';
+      case _ServiceWizardBackboneBucket.diagnosisTruth:
+        return 'Diagnóstico';
+      case _ServiceWizardBackboneBucket.targetExecution:
+        return 'Target / Ejecución';
+      case _ServiceWizardBackboneBucket.reviewNeeded:
+        return 'Revisión pendiente';
+    }
+  }
+
+  String _serviceWizardBackboneBucketTitle(
+    _ServiceWizardBackboneBucket bucket,
+  ) {
+    switch (bucket) {
+      case _ServiceWizardBackboneBucket.upstreamTruth:
+        return 'Verdad upstream que debe vivir en la bici/perfil';
+      case _ServiceWizardBackboneBucket.diagnosisTruth:
+        return 'Verdad diagnóstica de la visita';
+      case _ServiceWizardBackboneBucket.targetExecution:
+        return 'Target o detalle de ejecución';
+      case _ServiceWizardBackboneBucket.reviewNeeded:
+        return 'Campos todavía sin mapping explícito';
+    }
+  }
+
+  List<Widget> _buildServiceDiagnosisLinkFields(
+    ThemeData theme, {
+    required ServiceWizardProfile? profile,
+    required _ServiceWizardPreviewConfig? previewConfig,
+    required Map<String, dynamic> previewAnswers,
+  }) {
+    if (profile == null || previewConfig == null) {
+      return [
+        Text(
+          'Selecciona un perfil estructurado para mostrar el wiring entre wizard y diagnóstico.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ];
+    }
+
+    final destinationLabel = _resolveDiagnosisDestinationLabel(
+      profile,
+      previewAnswers,
+    );
+
+    return [
+      Text(
+        'En la pega real, el mechanic_job_item abre este wizard, guarda un resumen en el ítem y luego sincroniza parte de las respuestas con diagnosis_sheet_data. Esta pestaña explica esa ruta sin tocar datos reales.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 12),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.playlist_add_check_outlined,
+        title: '1. Servicio dentro de la pega',
+        body:
+            'El ítem del taller resuelve su perfil y abre el wizard con contexto de bici, target y respuestas iniciales.',
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.rule_folder_outlined,
+        title: '2. Gating por verdad upstream',
+        body:
+            'La ficha técnica de la bici decide qué preguntas se esconden, cuáles quedan bloqueadas y qué respuestas llegan predefinidas.',
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.receipt_long_outlined,
+        title: '3. Resumen persistido',
+        body:
+            'El wizard devuelve respuestas estructuradas + un resumen legible que queda asociado al ítem del trabajo.',
+      ),
+      _buildServiceFlowArrow(theme),
+      _buildServiceFlowNode(
+        theme,
+        icon: Icons.medical_information_outlined,
+        title: '4. Sync hacia diagnóstico',
+        body: destinationLabel,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Campos que impactan el diagnóstico',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 10),
+      ..._buildDiagnosisLinkRows(theme, profile),
+      if (_lastServiceWizardPreviewResult != null) ...[
+        const SizedBox(height: 16),
+        _buildServiceSummaryPreview(
+          theme,
+          label: 'Ruta que seguiría el último resultado probado',
+          value: _resolveDiagnosisDestinationLabel(
+            profile,
+            _lastServiceWizardPreviewResult!.answers,
+          ),
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _buildDiagnosisLinkRows(
+    ThemeData theme,
+    ServiceWizardProfile profile,
+  ) {
+    final rows = <Map<String, String>>[];
+    final questionKeys =
+        profile.questions.map((question) => question.key).toSet();
+
+    if (_isBrakeServiceFamily(profile.serviceFamily)) {
+      if (questionKeys.contains('pad_condition') ||
+          questionKeys.contains('pad_contaminated')) {
+        rows.add({
+          'title': 'Pastillas de freno',
+          'body':
+              'pad_condition y pad_contaminated alimentan desgaste y contaminación de la hoja front_brake / rear_brake según el target.',
+        });
+      }
+      if (questionKeys.contains('rotor_condition') ||
+          questionKeys.contains('damage_level') ||
+          questionKeys.contains('contamination_level')) {
+        rows.add({
+          'title': 'Rotor / severidad',
+          'body':
+              'rotor_condition, damage_level y contamination_level actualizan trueness, contaminación o severidad del rotor del mismo freno.',
+        });
+      }
+      if (questionKeys.contains('symptom')) {
+        rows.add({
+          'title': 'Síntomas del freno',
+          'body':
+              'symptom se proyecta a symptom_keys para que diagnóstico y wizard hablen el mismo vocabulario.',
+        });
+      }
+    } else if (profile.serviceFamily == 'drivetrain') {
+      rows.add({
+        'title': 'Estado global de transmisión',
+        'body':
+            'chain_wear y cable_condition pueden elevar el overallStatus de drivetrain según la severidad elegida.',
+      });
+      rows.add({
+        'title': 'Nota guiada persistente',
+        'body':
+            'El wizard agrega una nota marcada en drivetrain.notes para que el equipo vea el rastro operativo sin duplicar una verdad paralela.',
+      });
+    } else {
+      rows.add({
+        'title': 'Sin sync específico todavía',
+        'body':
+            'Este perfil todavía no declara una sincronización estructurada explícita hacia diagnosis_sheet_data.',
+      });
+    }
+
+    return rows
+        .map(
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row['title']!,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    row['body']!,
+                    style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        )
+        .toList(growable: false);
   }
 
   // ── Ficha Técnica tab ──────────────────────────────────────────────────
@@ -3334,7 +6527,8 @@ class _ProductFormPageState extends State<ProductFormPage>
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(icon, color: theme.colorScheme.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
@@ -3355,6 +6549,179 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   List<Widget> _buildBasicInfoFields(ThemeData theme) {
+    if (_isServiceForm) {
+      return _buildServiceBasicInfoFields(theme);
+    }
+
+    return _buildProductBasicInfoFields(theme);
+  }
+
+  Widget _buildProductTypeField() {
+    return DropdownButtonFormField<ProductType>(
+      initialValue: _selectedProductType,
+      decoration: const InputDecoration(
+        labelText: 'Tipo de producto',
+        helperText:
+            'Los productos pueden ser comprados y vendidos, los servicios solo se venden',
+        prefixIcon: Icon(Icons.category),
+      ),
+      items: ProductType.values.map((type) {
+        return DropdownMenuItem<ProductType>(
+          value: type,
+          child: Row(
+            children: [
+              Icon(
+                type == ProductType.product ? Icons.inventory_2 : Icons.build,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(type.displayName),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          _handleProductTypeChanged(value);
+        }
+      },
+    );
+  }
+
+  Widget _buildSkuFieldRow({
+    required String labelText,
+    required String hintText,
+    String? helperText,
+    required String buttonLabel,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: TextFormField(
+            controller: _skuController,
+            decoration: InputDecoration(
+              labelText: labelText,
+              hintText: hintText,
+              helperText: helperText,
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'El SKU es requerido';
+              }
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _isGeneratingSku ? null : () => _generateSku(),
+            icon: _isGeneratingSku
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_fix_high_outlined),
+            label: Text(buttonLabel),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildServiceBasicInfoFields(ThemeData theme) {
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          'Los servicios ya no dependen de categorías comerciales débiles. Aquí se define su identidad facturable y su vínculo con el backbone técnico del taller.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      _buildProductTypeField(),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _nameController,
+        decoration: const InputDecoration(
+          labelText: 'Nombre facturable del servicio',
+          hintText: 'Ej. Regulación de frenos delantero y trasero',
+        ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Ingresa un nombre válido';
+          }
+          return null;
+        },
+      ),
+      const SizedBox(height: 16),
+      if (_isLoadingServiceProfiles) ...[
+        const LinearProgressIndicator(minHeight: 2),
+        const SizedBox(height: 16),
+      ],
+      DropdownButtonFormField<String?>(
+        initialValue: _selectedServiceProfileId,
+        decoration: const InputDecoration(
+          labelText: 'Perfil estructurado de servicio',
+          helperText:
+              'Conecta este servicio con wizard, targeting técnico y resúmenes downstream.',
+          prefixIcon: Icon(Icons.hub_outlined),
+        ),
+        items: [
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('Sin perfil estructurado'),
+          ),
+          ..._serviceProfiles.map(
+            (profile) => DropdownMenuItem<String?>(
+              value: profile.id,
+              child: Text(
+                '${_serviceFamilyLabel(profile.targetFamily ?? profile.serviceFamily)} · ${profile.name}',
+              ),
+            ),
+          ),
+        ],
+        onChanged: _handleServiceProfileChanged,
+      ),
+      if (_selectedServiceProfile != null) ...[
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(label: Text(_selectedServiceProfileLabel)),
+            Chip(
+              label: Text(
+                _servicePositionModeLabel(
+                  _selectedServiceProfile?.targetPositionMode,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: 16),
+      _buildSkuFieldRow(
+        labelText: 'Código interno del servicio',
+        hintText: 'Ej. ${_buildServiceSkuPrefix()}-001',
+        helperText:
+            'Se recomienda una secuencia SRV por familia + operación para distinguir servicios de productos físicos.',
+        buttonLabel: 'Generar SRV',
+      ),
+    ];
+  }
+
+  List<Widget> _buildProductBasicInfoFields(ThemeData theme) {
     return [
       TextFormField(
         controller: _nameController,
@@ -3370,45 +6737,15 @@ class _ProductFormPageState extends State<ProductFormPage>
         },
       ),
       const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: TextFormField(
-              controller: _skuController,
-              decoration: InputDecoration(
-                labelText: 'SKU interno',
-                hintText: _usesAliExpressSkuSequence
-                    ? 'Se asigna automáticamente como AE####'
-                    : 'Ej. BIC-MTB-TRK-001',
-                helperText: _usesAliExpressSkuSequence
-                    ? 'Proveedor AliExpress: usa la secuencia automática AE####.'
-                    : null,
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'El SKU es requerido';
-                }
-                return null;
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _isGeneratingSku ? null : () => _generateSku(),
-              icon: _isGeneratingSku
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_fix_high_outlined),
-              label:
-                  Text(_usesAliExpressSkuSequence ? 'Siguiente AE' : 'Generar'),
-            ),
-          ),
-        ],
+      _buildSkuFieldRow(
+        labelText: 'SKU interno',
+        hintText: _usesAliExpressSkuSequence
+            ? 'Se asigna automáticamente como AE####'
+            : 'Ej. BIC-MTB-TRK-001',
+        helperText: _usesAliExpressSkuSequence
+            ? 'Proveedor AliExpress: usa la secuencia automática AE####.'
+            : null,
+        buttonLabel: _usesAliExpressSkuSequence ? 'Siguiente AE' : 'Generar',
       ),
       const SizedBox(height: 16),
       TextFormField(
@@ -3453,36 +6790,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ),
       const SizedBox(height: 16),
-      // Product Type Selector
-      DropdownButtonFormField<ProductType>(
-        initialValue: _selectedProductType,
-        decoration: const InputDecoration(
-          labelText: 'Tipo de producto',
-          helperText:
-              'Los productos pueden ser comprados y vendidos, los servicios solo se venden',
-          prefixIcon: Icon(Icons.category),
-        ),
-        items: ProductType.values.map((type) {
-          return DropdownMenuItem<ProductType>(
-            value: type,
-            child: Row(
-              children: [
-                Icon(
-                  type == ProductType.product ? Icons.inventory_2 : Icons.build,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(type.displayName),
-              ],
-            ),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value != null) {
-            _handleProductTypeChanged(value);
-          }
-        },
-      ),
+      _buildProductTypeField(),
       const SizedBox(height: 16),
       if (_selectedProductType != ProductType.service) ...[
         InputDecorator(
@@ -3527,7 +6835,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                       .withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                    color:
+                        Theme.of(context).dividerColor.withValues(alpha: 0.1),
                   ),
                 ),
                 child: Row(
@@ -3592,7 +6901,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.24)),
+                    border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.24)),
                   ),
                   child: Text(
                     'Al guardar se descargará el stock existente y se reclasificará su valor contable automáticamente para convertir este producto en ${_inventoryConversionTargetLabel()}.',
@@ -3753,8 +7063,9 @@ class _ProductFormPageState extends State<ProductFormPage>
             flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _priceController,
-              decoration: const InputDecoration(
-                labelText: 'Precio de venta',
+              decoration: InputDecoration(
+                labelText:
+                    _isServiceForm ? 'Tarifa al cliente' : 'Precio de venta',
                 prefixText: 'CLP ',
               ),
               keyboardType: const TextInputType.numberWithOptions(
@@ -3765,7 +7076,9 @@ class _ProductFormPageState extends State<ProductFormPage>
               ],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Define el precio de venta';
+                  return _isServiceForm
+                      ? 'Define la tarifa del servicio'
+                      : 'Define el precio de venta';
                 }
                 return null;
               },
@@ -3776,8 +7089,10 @@ class _ProductFormPageState extends State<ProductFormPage>
             flex: isMobile ? 0 : 1,
             child: TextFormField(
               controller: _costController,
-              decoration: const InputDecoration(
-                labelText: 'Costo unitario',
+              decoration: InputDecoration(
+                labelText: _isServiceForm
+                    ? 'Costo interno estimado'
+                    : 'Costo unitario',
                 prefixText: 'CLP ',
               ),
               keyboardType: const TextInputType.numberWithOptions(
@@ -3788,7 +7103,9 @@ class _ProductFormPageState extends State<ProductFormPage>
               ],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Indica el costo del producto';
+                  return _isServiceForm
+                      ? 'Indica el costo interno del servicio'
+                      : 'Indica el costo del producto';
                 }
                 return null;
               },
@@ -3820,7 +7137,9 @@ class _ProductFormPageState extends State<ProductFormPage>
                 Icon(Icons.show_chart, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Margen estimado',
+                  _isServiceForm
+                      ? 'Margen estimado del servicio'
+                      : 'Margen estimado',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: theme.colorScheme.primary,
@@ -3882,7 +7201,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                         showDuration: const Duration(seconds: 6),
                         preferBelow: false,
                         child: Material(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.12),
                           shape: const CircleBorder(),
                           child: IconButton(
                             tooltip: 'Registrar ajuste de stock',
@@ -3956,9 +7276,11 @@ class _ProductFormPageState extends State<ProductFormPage>
       // Toggle 1: Product Active (base toggle)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Producto activo'),
-        subtitle: const Text(
-          'Los productos inactivos no aparecen en el POS ni en catálogos públicos.',
+        title: Text(_isServiceForm ? 'Servicio activo' : 'Producto activo'),
+        subtitle: Text(
+          _isServiceForm
+              ? 'Los servicios inactivos no aparecen en taller, ventas ni catálogos públicos.'
+              : 'Los productos inactivos no aparecen en el POS ni en catálogos públicos.',
         ),
         value: _isActive,
         onChanged: (value) {
@@ -3978,7 +7300,9 @@ class _ProductFormPageState extends State<ProductFormPage>
   List<Widget> _buildWebsiteFields(ThemeData theme) {
     return [
       Text(
-        'Configura la visibilidad y contenido del producto en la tienda online.',
+        _isServiceForm
+            ? 'Configura cómo se presenta este servicio en la vitrina web.'
+            : 'Configura la visibilidad y contenido del producto en la tienda online.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -3988,15 +7312,21 @@ class _ProductFormPageState extends State<ProductFormPage>
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(
-          'Publicado en la tienda online',
+          _isServiceForm
+              ? 'Publicado en el catálogo de servicios'
+              : 'Publicado en la tienda online',
           style: TextStyle(
             color: _isActive ? null : theme.disabledColor,
           ),
         ),
         subtitle: Text(
           _isActive
-              ? 'Muestra este producto en el catálogo web.'
-              : 'Requiere que el producto esté activo.',
+              ? (_isServiceForm
+                  ? 'Muestra este servicio en la web pública.'
+                  : 'Muestra este producto en el catálogo web.')
+              : (_isServiceForm
+                  ? 'Requiere que el servicio esté activo.'
+                  : 'Requiere que el producto esté activo.'),
           style: TextStyle(
             color: _isActive ? null : theme.disabledColor,
           ),
@@ -4014,63 +7344,89 @@ class _ProductFormPageState extends State<ProductFormPage>
               }
             : null,
       ),
-      const SizedBox(height: 8),
+      if (!_isServiceForm) ...[
+        const SizedBox(height: 8),
 
-      // Toggle: Google Merchant Center (requires is_published)
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Row(
-          children: [
-            Text(
-              'Google Merchant Center',
-              style: TextStyle(
-                color: (_isActive && _isPublished) ? null : theme.disabledColor,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'Shopping',
+        // Toggle: Google Merchant Center (requires is_published)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Row(
+            children: [
+              Text(
+                'Google Merchant Center',
                 style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onPrimaryContainer,
+                  color:
+                      (_isActive && _isPublished) ? null : theme.disabledColor,
                 ),
               ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Shopping',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            !_isActive
+                ? 'Requiere que el producto esté activo.'
+                : !_isPublished
+                    ? 'Requiere que el producto esté publicado en la tienda.'
+                    : 'Incluye este producto en el feed de Google Shopping.',
+            style: TextStyle(
+              color: (_isActive && _isPublished) ? null : theme.disabledColor,
             ),
-          ],
+          ),
+          value: _isActive && _isPublished && _isGoogleMerchant,
+          onChanged: (_isActive && _isPublished)
+              ? (value) => setState(() => _isGoogleMerchant = value)
+              : null,
         ),
-        subtitle: Text(
-          !_isActive
-              ? 'Requiere que el producto esté activo.'
-              : !_isPublished
-                  ? 'Requiere que el producto esté publicado en la tienda.'
-                  : 'Incluye este producto en el feed de Google Shopping.',
-          style: TextStyle(
-            color: (_isActive && _isPublished) ? null : theme.disabledColor,
+        const SizedBox(height: 16),
+      ] else ...[
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            'Los servicios no se envían a Google Merchant. Su publicación web se controla solo con el catálogo público.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
           ),
         ),
-        value: _isActive && _isPublished && _isGoogleMerchant,
-        onChanged: (_isActive && _isPublished)
-            ? (value) => setState(() => _isGoogleMerchant = value)
-            : null,
-      ),
-      const SizedBox(height: 16),
+        const SizedBox(height: 16),
+      ],
       const Divider(),
       const SizedBox(height: 16),
       TextFormField(
         controller: _websiteDescriptionController,
-        decoration: const InputDecoration(
-          labelText: 'Descripción para web',
-          hintText:
-              'Descripción optimizada para ventas online (SEO, marketing).',
-          helperText:
-              'Esta descripción se mostrará en la página del producto en la web.',
+        decoration: InputDecoration(
+          labelText: _isServiceForm
+              ? 'Descripción web del servicio'
+              : 'Descripción para web',
+          hintText: _isServiceForm
+              ? 'Explica el alcance comercial del servicio con lenguaje claro.'
+              : 'Descripción optimizada para ventas online (SEO, marketing).',
+          helperText: _isServiceForm
+              ? 'Puedes partir desde el resumen estructurado del servicio y luego ampliarlo para la web.'
+              : 'Esta descripción se mostrará en la página del producto en la web.',
         ),
         maxLines: 6,
       ),
@@ -4101,15 +7457,49 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   List<Widget> _buildDescriptionFields(ThemeData theme) {
     return [
+      if (_isServiceForm) ...[
+        Text(
+          'Piensa este campo como el texto que verá el cliente en la factura. Debe ser breve, preciso y entendible, no una ficha técnica larga.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildServiceSummaryPreview(
+          theme,
+          label: 'Base sugerida para factura',
+          value: _defaultServiceClientDescription.isEmpty
+              ? 'Selecciona un perfil estructurado para ver una sugerencia.'
+              : _defaultServiceClientDescription,
+        ),
+        const SizedBox(height: 12),
+      ],
       TextFormField(
         controller: _descriptionController,
-        decoration: const InputDecoration(
-          labelText: 'Descripción detallada',
-          hintText:
-              'Materiales, especificaciones técnicas, beneficios y advertencias.',
+        decoration: InputDecoration(
+          labelText: _isServiceForm
+              ? 'Descripción para factura / ventas'
+              : 'Descripción detallada',
+          hintText: _isServiceForm
+              ? 'Ej. Regulación completa de frenos delantero y trasero.'
+              : 'Materiales, especificaciones técnicas, beneficios y advertencias.',
         ),
         maxLines: 6,
       ),
+      if (_isServiceForm) ...[
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _defaultServiceClientDescription.isEmpty
+                ? null
+                : _applySuggestedServiceDescription,
+            icon: const Icon(Icons.assignment_turned_in_outlined),
+            label: const Text('Usar sugerencia estructurada'),
+          ),
+        ),
+      ],
     ];
   }
 
