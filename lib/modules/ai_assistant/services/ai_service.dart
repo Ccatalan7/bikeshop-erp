@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
@@ -50,6 +53,34 @@ class AIAssistantResponse {
 
   final String text;
   final List<AIAssistantActionCard> cards;
+}
+
+class AIProductImageAnalysis {
+  const AIProductImageAnalysis({
+    required this.primaryType,
+    required this.catalogTerms,
+    required this.excludedTerms,
+    required this.confidence,
+    this.visualSummary,
+    this.textConflict = false,
+  });
+
+  final String primaryType;
+  final List<String> catalogTerms;
+  final List<String> excludedTerms;
+  final double confidence;
+  final String? visualSummary;
+  final bool textConflict;
+}
+
+class _PreparedGeminiImage {
+  const _PreparedGeminiImage({
+    required this.bytes,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String mimeType;
 }
 
 class _TireWidthRange {
@@ -110,6 +141,8 @@ class AIAssistantService extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   List<Content> get history => _history;
+  bool get isGeminiConfigured =>
+      (dotenv.env['GEMINI_API_KEY'] ?? '').trim().isNotEmpty;
 
   void initialize() {
     // Singleton guard: if already initialized, do nothing
@@ -210,6 +243,122 @@ class AIAssistantService extends ChangeNotifier {
       throw StateError('Empty AI response');
     }
     return text;
+  }
+
+  Future<AIProductImageAnalysis?> analyzeProductImage(
+    Uint8List imageBytes, {
+    String? fileName,
+    String? typedName,
+    String? typedDescription,
+    String modelName = 'gemini-2.5-flash',
+  }) async {
+    if (imageBytes.isEmpty) return null;
+
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey.isEmpty) {
+      throw StateError('GEMINI_API_KEY not configured');
+    }
+
+    final model = GenerativeModel(
+      model: modelName,
+      apiKey: apiKey,
+    );
+    final preparedImage = _prepareImageForGemini(imageBytes);
+
+    final hintLines = <String>[];
+    if (fileName != null && fileName.trim().isNotEmpty) {
+      hintLines.add('file_name: ${fileName.trim()}');
+    }
+    if (typedName != null && typedName.trim().isNotEmpty) {
+      hintLines.add('typed_name: ${typedName.trim()}');
+    }
+    if (typedDescription != null && typedDescription.trim().isNotEmpty) {
+      hintLines.add('typed_description: ${typedDescription.trim()}');
+    }
+
+    final prompt = '''
+Analiza esta foto de producto para un catalogo de bicicleteria.
+Tu objetivo es identificar que tipo de producto aparece realmente en la imagen.
+Usa el texto escrito solo como contexto debil. Si el texto contradice la foto, prioriza la foto.
+
+Responde SOLO JSON valido con esta forma exacta:
+{
+  "primary_type": "cambio trasero",
+  "catalog_terms": ["cambio trasero", "rear derailleur", "desviador", "shimano", "deore"],
+  "excluded_terms": ["cadena", "cassette", "pinon"],
+  "confidence": 0.93,
+  "text_conflict": false,
+  "visual_summary": "cambio trasero shimano deore negro 12v"
+}
+
+Reglas:
+- todo en minusculas
+- primary_type debe ser un sustantivo concreto y corto que podria aparecer en un titulo de producto
+- catalog_terms debe tener entre 3 y 8 terminos cortos utiles para buscar este producto en un catalogo
+- SI la marca, modelo o texto es VISIBLE en la foto (logo, etiqueta, texto impreso), INCLUYE la marca y modelo en catalog_terms
+- NO inventes marcas o modelos que no sean claramente visibles en la imagen
+- excluded_terms debe contener familias de producto claramente distintas cuando sea obvio
+- confidence debe ser un numero entre 0 y 1
+- no inventes especificaciones tecnicas invisibles, no escribas explicacion fuera del JSON
+- si la imagen es ambigua, igual responde con la mejor hipotesis pero baja confidence
+
+Contexto adicional:
+${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
+''';
+
+    try {
+      final response = await model.generateContent([
+        Content.multi([
+          TextPart(prompt),
+          DataPart(preparedImage.mimeType, preparedImage.bytes),
+        ]),
+      ]);
+
+      final rawText = response.text?.trim() ?? '';
+      if (rawText.isEmpty) return null;
+
+      final jsonBlock = _extractJsonObject(rawText);
+      if (jsonBlock == null) {
+        debugPrint(
+            '⚠️ [AI] Product image analysis returned non-JSON: $rawText');
+        return null;
+      }
+
+      final decoded = jsonDecode(jsonBlock);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final primaryType = _normalizeImageAnalysisTerm(
+        decoded['primary_type']?.toString(),
+      );
+      final catalogTerms =
+          _normalizeImageAnalysisTerms(decoded['catalog_terms']);
+      final excludedTerms =
+          _normalizeImageAnalysisTerms(decoded['excluded_terms']);
+
+      if (primaryType.isEmpty && catalogTerms.isEmpty) {
+        return null;
+      }
+
+      final mergedTerms = {
+        if (primaryType.isNotEmpty) primaryType,
+        ...catalogTerms,
+      }.toList(growable: false);
+
+      return AIProductImageAnalysis(
+        primaryType: primaryType,
+        catalogTerms: mergedTerms,
+        excludedTerms: excludedTerms,
+        confidence: _coerceAnalysisConfidence(decoded['confidence']),
+        visualSummary: _normalizeImageAnalysisTerm(
+          decoded['visual_summary']?.toString(),
+          maxWords: 12,
+        ),
+        textConflict: decoded['text_conflict'] == true,
+      );
+    } catch (e) {
+      debugPrint('❌ [AI] Product image analysis error: $e');
+      return null;
+    }
   }
 
   Future<AIAssistantResponse> sendMessage(
@@ -2469,6 +2618,147 @@ class AIAssistantService extends ChangeNotifier {
       debugPrint('❌ [AI] Embedding generation error: $e');
       return null;
     }
+  }
+
+  String _inferImageMimeType(Uint8List bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46) {
+      return 'image/gif';
+    }
+
+    return 'image/jpeg';
+  }
+
+  _PreparedGeminiImage _prepareImageForGemini(Uint8List sourceBytes) {
+    try {
+      final decoded = img.decodeImage(sourceBytes);
+      if (decoded == null) {
+        return _PreparedGeminiImage(
+          bytes: sourceBytes,
+          mimeType: _inferImageMimeType(sourceBytes),
+        );
+      }
+
+      const maxEdge = 1024;
+      final largestEdge =
+          decoded.width > decoded.height ? decoded.width : decoded.height;
+
+      final normalized = largestEdge > maxEdge
+          ? img.copyResize(
+              decoded,
+              width: decoded.width >= decoded.height ? maxEdge : null,
+              height: decoded.height > decoded.width ? maxEdge : null,
+              interpolation: img.Interpolation.average,
+            )
+          : decoded;
+
+      final jpegBytes = img.encodeJpg(normalized, quality: 88);
+      return _PreparedGeminiImage(
+        bytes: Uint8List.fromList(jpegBytes),
+        mimeType: 'image/jpeg',
+      );
+    } catch (e) {
+      debugPrint('⚠️ [AI] Failed to normalize image for Gemini: $e');
+      return _PreparedGeminiImage(
+        bytes: sourceBytes,
+        mimeType: _inferImageMimeType(sourceBytes),
+      );
+    }
+  }
+
+  String? _extractJsonObject(String rawText) {
+    final trimmed = rawText.trim();
+    if (trimmed.isEmpty) return null;
+
+    var candidate = trimmed;
+    if (candidate.startsWith('```')) {
+      candidate = candidate
+          .replaceFirst(RegExp(r'^```(?:json)?\s*'), '')
+          .replaceFirst(RegExp(r'\s*```$'), '')
+          .trim();
+    }
+
+    final start = candidate.indexOf('{');
+    final end = candidate.lastIndexOf('}');
+    if (start == -1 || end == -1 || end <= start) return null;
+    return candidate.substring(start, end + 1);
+  }
+
+  List<String> _normalizeImageAnalysisTerms(Object? rawValue) {
+    if (rawValue is! List) return const [];
+
+    return rawValue
+        .map((value) => _normalizeImageAnalysisTerm(value?.toString()))
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .take(8)
+        .toList(growable: false);
+  }
+
+  String _normalizeImageAnalysisTerm(
+    String? rawValue, {
+    int maxWords = 4,
+  }) {
+    if (rawValue == null) return '';
+
+    final normalized = rawValue
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[`"\[\]{}]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    if (normalized.isEmpty) return '';
+
+    final words = normalized
+        .split(' ')
+        .where((word) => word.trim().isNotEmpty)
+        .take(maxWords)
+        .toList(growable: false);
+
+    return words.join(' ');
+  }
+
+  double _coerceAnalysisConfidence(Object? rawValue) {
+    final numericValue = switch (rawValue) {
+      num value => value.toDouble(),
+      String value => double.tryParse(value.trim()),
+      _ => null,
+    };
+
+    if (numericValue == null) return 0.0;
+    if (numericValue > 1.0) {
+      return (numericValue / 100).clamp(0, 1).toDouble();
+    }
+    return numericValue.clamp(0, 1).toDouble();
   }
 
   Map<String, Object?> _toolNavigateToInventory(

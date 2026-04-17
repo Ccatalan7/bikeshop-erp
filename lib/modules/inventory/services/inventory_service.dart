@@ -160,6 +160,42 @@ class InventoryService extends ChangeNotifier {
     );
   }
 
+  void _updateCachedProductImageFingerprint(
+    String productId,
+    Map<String, dynamic>? imageFingerprint,
+  ) {
+    final cachedProducts = _cachedProducts;
+    if (cachedProducts == null) return;
+
+    final index =
+        cachedProducts.indexWhere((product) => product.id == productId);
+    if (index < 0) return;
+
+    cachedProducts[index] = cachedProducts[index].copyWith(
+      imageFingerprint: imageFingerprint,
+      imageFingerprintHasValue: true,
+    );
+  }
+
+  Future<void> storeProductImageFingerprint({
+    required String productId,
+    required Map<String, dynamic> imageFingerprint,
+  }) async {
+    try {
+      await _db.update(
+        'products',
+        productId,
+        {'image_fingerprint': imageFingerprint},
+        applyTimestamps: false,
+      );
+      _updateCachedProductImageFingerprint(productId, imageFingerprint);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error storing product image fingerprint: $e');
+      }
+    }
+  }
+
   InventoryService(this._db, this._tenantService);
 
   // Product operations
@@ -441,7 +477,7 @@ class InventoryService extends ChangeNotifier {
         throw Exception('ID de producto inválido');
       }
 
-      final productData = updatedProduct.toJson();
+      final productData = updatedProduct.toJson(includeNulls: true);
 
       // Stock must change only through explicit stock-adjustment workflows.
       productData.remove('inventory_qty');

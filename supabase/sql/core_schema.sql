@@ -1573,6 +1573,9 @@ create table if not exists products (
   brand_id uuid references public.product_brands(id) on delete set null,
   inventory_qty integer not null default 0,
   purchase_treatment text not null default 'inventory',
+  image_url text,
+  image_url_optimized text,
+  image_fingerprint jsonb,
   created_at timestamp with time zone not null default now()
 );
 
@@ -1602,6 +1605,16 @@ begin
   -- Add image_url
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_url') then
     alter table products add column image_url text;
+  end if;
+
+  -- Add image_url_optimized
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_url_optimized') then
+    alter table products add column image_url_optimized text;
+  end if;
+
+  -- Add image_fingerprint
+  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'image_fingerprint') then
+    alter table products add column image_fingerprint jsonb;
   end if;
 
   -- Add image_urls array

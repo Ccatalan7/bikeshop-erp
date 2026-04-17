@@ -34,6 +34,7 @@ class Product {
   final String? imageUrl;
   final String?
       imageUrlOptimized; // WebP optimized version for fast web loading
+  final Map<String, dynamic>? imageFingerprint;
   final List<String> additionalImages;
   final Map<String, String> specifications;
   final List<String> tags;
@@ -98,6 +99,7 @@ class Product {
     this.maxStockLevel,
     this.imageUrl,
     this.imageUrlOptimized,
+    this.imageFingerprint,
     this.additionalImages = const [],
     this.specifications = const {},
     this.tags = const [],
@@ -173,6 +175,9 @@ class Product {
       maxStockLevel: json['max_stock_level'],
       imageUrl: json['image_url'],
       imageUrlOptimized: json['image_url_optimized'],
+      imageFingerprint: json['image_fingerprint'] != null
+          ? Map<String, dynamic>.from(json['image_fingerprint'] as Map)
+          : null,
       additionalImages: json['additional_images'] != null
           ? List<String>.from(json['additional_images'])
           : (json['image_urls'] != null
@@ -238,7 +243,7 @@ class Product {
     return ProductType.product;
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool includeNulls = false}) {
     final json = {
       'tenant_id': tenantId,
       'name': name,
@@ -270,6 +275,7 @@ class Product {
       'max_stock_level': maxStockLevel,
       'image_url': imageUrl,
       'image_url_optimized': imageUrlOptimized,
+      'image_fingerprint': imageFingerprint,
       'image_urls': additionalImages,
       'additional_images': additionalImages,
       'specifications': specifications,
@@ -305,7 +311,9 @@ class Product {
       'updated_at': updatedAt.toIso8601String(),
     };
 
-    json.removeWhere((_, value) => value == null);
+    if (!includeNulls) {
+      json.removeWhere((_, value) => value == null);
+    }
 
     // Only include id if it's not null (for updates)
     if (id != null) {
@@ -349,7 +357,11 @@ class Product {
     int? minStockLevel,
     int? maxStockLevel,
     String? imageUrl,
+    bool imageUrlHasValue = false,
     String? imageUrlOptimized,
+    bool imageUrlOptimizedHasValue = false,
+    Map<String, dynamic>? imageFingerprint,
+    bool imageFingerprintHasValue = false,
     List<String>? additionalImages,
     Map<String, String>? specifications,
     List<String>? tags,
@@ -410,8 +422,15 @@ class Product {
       inventoryQty: inventoryQty ?? this.inventoryQty,
       minStockLevel: minStockLevel ?? this.minStockLevel,
       maxStockLevel: maxStockLevel ?? this.maxStockLevel,
-      imageUrl: imageUrl ?? this.imageUrl,
-      imageUrlOptimized: imageUrlOptimized ?? this.imageUrlOptimized,
+      imageUrl:
+          (imageUrlHasValue || imageUrl != null) ? imageUrl : this.imageUrl,
+      imageUrlOptimized:
+          (imageUrlOptimizedHasValue || imageUrlOptimized != null)
+              ? imageUrlOptimized
+              : this.imageUrlOptimized,
+      imageFingerprint: (imageFingerprintHasValue || imageFingerprint != null)
+          ? imageFingerprint
+          : this.imageFingerprint,
       additionalImages: additionalImages ?? this.additionalImages,
       specifications: specifications ?? this.specifications,
       tags: tags ?? this.tags,

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'product_image_fingerprint_service.dart';
+
 /// Service to import product images from Zoho Inventory
 class ZohoImageImportService {
   final String zohoApiKey;
@@ -21,14 +23,15 @@ class ZohoImageImportService {
     required Function(String) onProgress,
   }) async {
     onProgress('📦 Fetching products from Zoho Inventory...');
-    
+
     final List<Map<String, dynamic>> allProducts = [];
     int page = 1;
     bool hasMore = true;
 
     while (hasMore) {
       final response = await http.get(
-        Uri.parse('$baseUrl/items?organization_id=$zohoOrgId&page=$page&per_page=200'),
+        Uri.parse(
+            '$baseUrl/items?organization_id=$zohoOrgId&page=$page&per_page=200'),
         headers: {
           'Authorization': 'Zoho-oauthtoken $zohoApiKey',
         },
@@ -40,13 +43,14 @@ class ZohoImageImportService {
 
       final data = json.decode(response.body);
       final items = data['items'] as List? ?? [];
-      
+
       allProducts.addAll(items.map((item) => item as Map<String, dynamic>));
-      
+
       hasMore = data['page_context']?['has_more_page'] ?? false;
       page++;
-      
-      onProgress('   Fetched page $page (${allProducts.length} products so far)');
+
+      onProgress(
+          '   Fetched page $page (${allProducts.length} products so far)');
     }
 
     onProgress('✅ Total Zoho products fetched: ${allProducts.length}');
@@ -72,14 +76,15 @@ class ZohoImageImportService {
       );
 
       if (imageResponse.statusCode != 200) {
-        onProgress('   ❌ Failed to download image: ${imageResponse.statusCode}');
+        onProgress(
+            '   ❌ Failed to download image: ${imageResponse.statusCode}');
         return null;
       }
 
       // Determine file extension
       final contentType = imageResponse.headers['content-type'] ?? 'image/jpeg';
       final extension = contentType.contains('png') ? 'png' : 'jpg';
-      
+
       // Generate file path
       final fileName = 'product-images/$tenantId/$productId/main.$extension';
 
@@ -95,8 +100,24 @@ class ZohoImageImportService {
           );
 
       // Get public URL
-      final publicUrl = supabase.storage.from('product-images').getPublicUrl(fileName);
-      
+      final publicUrl =
+          supabase.storage.from('product-images').getPublicUrl(fileName);
+
+      final imageFingerprint =
+          ProductImageFingerprintService.computeStorageJson(
+        imageResponse.bodyBytes,
+      );
+
+      await supabase
+          .from('products')
+          .update({
+            'image_url': publicUrl,
+            'image_fingerprint': imageFingerprint,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', productId)
+          .eq('tenant_id', tenantId);
+
       onProgress('   ✅ Image uploaded successfully');
       return publicUrl;
     } catch (e) {
@@ -146,8 +167,7 @@ class ZohoImageImportService {
         final localSku = localProduct['sku']?.toString().toUpperCase();
         final localName = localProduct['name'];
         final localId = localProduct['id'];
-        final existingImageUrl = localProduct['image_url'];
-
+        final existingImageUrl = localProduct['image_url']?.toString();
         if (localSku == null || localSku.isEmpty) {
           onProgress('⚠️  Skipping "$localName" - No SKU');
           skippedCount++;
@@ -155,7 +175,7 @@ class ZohoImageImportService {
         }
 
         final zohoProduct = zohoProductsBySku[localSku];
-        
+
         if (zohoProduct == null) {
           onProgress('⚠️  No match in Zoho for SKU: $localSku ($localName)');
           continue;
@@ -169,7 +189,7 @@ class ZohoImageImportService {
 
         // Check if product has image in Zoho
         final imageUrl = zohoProduct['image_url']?.toString();
-        
+
         if (imageUrl == null || imageUrl.isEmpty) {
           onProgress('   ⚠️  No image in Zoho');
           skippedCount++;
@@ -193,14 +213,8 @@ class ZohoImageImportService {
         );
 
         if (uploadedUrl != null) {
-          // Update product with image URL
-          await supabase.from('products').update({
-            'image_url': uploadedUrl,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', localId);
-          
           successCount++;
-          onProgress('   ✅ Product updated with image URL');
+          onProgress('   ✅ Product updated with image URL + fingerprint');
         } else {
           failedCount++;
         }

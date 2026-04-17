@@ -6,6 +6,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/bulk_product_edit_models.dart';
 import '../models/inventory_models.dart';
 import 'inventory_service.dart' as inventory_services;
+import 'product_image_fingerprint_service.dart';
 
 class BulkProductEditService {
   BulkProductEditService({
@@ -471,6 +472,10 @@ class BulkProductEditService {
           {
             'image_url': upload.originalUrl,
             'image_url_optimized': upload.optimizedUrl,
+            'image_fingerprint':
+                ProductImageFingerprintService.computeStorageJson(
+              assignment.file!.bytes,
+            ),
             'updated_at': DateTime.now().toIso8601String(),
           },
           applyTimestamps: false,

@@ -25,6 +25,7 @@ import '../../../shared/models/product.dart' show PurchaseTreatment, SetType;
 import '../services/category_service.dart';
 import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../services/product_image_fingerprint_service.dart';
 import '../widgets/set_configuration_widget.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
@@ -3880,6 +3881,16 @@ class _ProductFormPageState extends State<ProductFormPage>
         finalImageUrlOptimized = uploadResult.optimizedUrl;
       }
 
+      final imageFingerprintForSave = _selectedImageBytes != null
+          ? ProductImageFingerprintService.computeStorageJson(
+              _selectedImageBytes!,
+            )
+          : ((finalImageUrl == null || finalImageUrl.trim().isEmpty) &&
+                  (finalImageUrlOptimized == null ||
+                      finalImageUrlOptimized.trim().isEmpty)
+              ? null
+              : _existingProduct?.imageFingerprint);
+
       // --- SAFEGUARD ---
       // Ensure only valid strings are passed to the model.
       final safeAdditionalImages =
@@ -3993,6 +4004,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             maxStockLevel: maxStockLevel,
             imageUrl: finalImageUrl,
             imageUrlOptimized: finalImageUrlOptimized,
+            imageFingerprint: imageFingerprintForSave,
             additionalImages: safeAdditionalImages,
             isActive: _isActive,
             isPublished: _isPublished,
@@ -4022,7 +4034,11 @@ class _ProductFormPageState extends State<ProductFormPage>
         minStockLevel: minStockLevel,
         maxStockLevel: maxStockLevel,
         imageUrl: finalImageUrl,
+        imageUrlHasValue: true,
         imageUrlOptimized: finalImageUrlOptimized,
+        imageUrlOptimizedHasValue: true,
+        imageFingerprint: imageFingerprintForSave,
+        imageFingerprintHasValue: true,
         additionalImages: safeAdditionalImages,
         isActive: _isActive,
         isPublished: _isPublished,
