@@ -264,7 +264,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Key _modelFieldKey =
       UniqueKey(); // Used to reset model field when brand changes
 
-  BikeType _selectedType = BikeType.other;
+  BikeType _selectedType = BikeType.mountainHardtail;
   DateTime? _purchaseDate;
   DateTime? _warrantyUntil;
 
@@ -329,10 +329,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     _notesController = TextEditingController(text: widget.bike?.notes);
 
     if (widget.bike != null) {
-      _selectedType = widget.bike!.bikeType ?? BikeType.mountain;
+      _selectedType = widget.bike!.bikeType ?? BikeType.mountainHardtail;
       _purchaseDate = widget.bike!.purchaseDate;
       _warrantyUntil = widget.bike!.warrantyUntil;
       _imageUrls = List.from(widget.bike!.imageUrls);
+      _applyBikeTypeDefaults();
+    } else {
       _applyBikeTypeDefaults();
     }
 
@@ -1563,12 +1565,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     });
   }
 
-  Future<void> _saveBike() async {
+  Future<void> _saveBike({bool allowIncompleteTechnicalKernel = false}) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    if (!_ensureTechnicalKernelReadyForSave()) {
+    if (!allowIncompleteTechnicalKernel &&
+        !_ensureTechnicalKernelReadyForSave()) {
       return;
     }
 
@@ -4151,12 +4154,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                 onPressed: _isSaving
                                     ? null
                                     : () {
-                                        // Validate before proceeding to save early
+                                        // Early save only requires the minimum
+                                        // identity fields; the full save path
+                                        // still enforces technical kernel review.
                                         if (!_formKey.currentState!
                                             .validate()) {
                                           return;
                                         }
-                                        _saveBike();
+                                        _saveBike(
+                                          allowIncompleteTechnicalKernel: true,
+                                        );
                                       },
                                 icon: const Icon(Icons.flash_on),
                                 label: const Text('Guardar rápido',
