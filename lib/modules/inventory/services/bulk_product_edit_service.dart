@@ -1,14 +1,20 @@
 import 'dart:math' as math;
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../models/bulk_product_edit_models.dart';
 import '../models/inventory_models.dart';
 import 'inventory_service.dart' as inventory_services;
 import 'product_image_fingerprint_service.dart';
 
 class BulkProductEditService {
+  static final DateTime _legacyInferenceCutoffAt = DateTime.utc(2026, 4, 8);
+
   BulkProductEditService({
     DatabaseService? databaseService,
     TenantService? tenantService,
@@ -206,7 +212,9 @@ class BulkProductEditService {
     required Map<String, BulkClassificationRowDraft> drafts,
   }) async {
     var succeeded = 0;
+    var skipped = 0;
     final errors = <String>[];
+    final items = <BulkUpdateItemResult>[];
     final activeProducts = products.where((product) {
       final productId = product.id;
       if (productId == null) return false;
@@ -221,25 +229,50 @@ class BulkProductEditService {
       if (draft == null || !draft.enabled) continue;
 
       final payload = <String, dynamic>{};
+      final beforeValues = <String, dynamic>{
+        'category': product.categoryName,
+        'brand': product.brand,
+        'supplier': product.supplierName,
+      };
+      final afterValues = <String, dynamic>{
+        'category': draft.categoryName,
+        'brand': draft.brandName,
+        'supplier': draft.supplierName,
+      };
+      final changedFields = <String>[];
 
       if ((draft.categoryId ?? '').trim() !=
           (product.categoryId ?? '').trim()) {
         payload['category_id'] = draft.categoryId;
+        changedFields.add('category');
       }
 
       if ((draft.brandId ?? '').trim() != (product.brandId ?? '').trim() ||
           (draft.brandName ?? '').trim() != (product.brand ?? '').trim()) {
         payload['brand_id'] = draft.brandId;
         payload['brand'] = draft.brandName;
+        changedFields.add('brand');
       }
 
       if ((draft.supplierId ?? '').trim() !=
           (product.supplierId ?? '').trim()) {
         payload['supplier_id'] = draft.supplierId;
+        changedFields.add('supplier');
       }
 
       if (payload.isEmpty) {
-        succeeded += 1;
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary: 'Sin cambios efectivos en categoría, marca o proveedor.',
+            beforeValues: beforeValues,
+            afterValues: beforeValues,
+          ),
+        );
         continue;
       }
 
@@ -249,16 +282,51 @@ class BulkProductEditService {
         await _db.update('products', productId, payload,
             applyTimestamps: false);
         succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+          ),
+        );
       } catch (error) {
         errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+            error: error.toString(),
+          ),
+        );
       }
     }
 
     return BulkUpdateResult(
       total: activeProducts.length,
       succeeded: succeeded,
+      skipped: skipped,
       failed: errors.length,
       errors: errors,
+      items: items,
     );
   }
 
@@ -267,7 +335,9 @@ class BulkProductEditService {
     required Map<String, BulkChannelsRowDraft> drafts,
   }) async {
     var succeeded = 0;
+    var skipped = 0;
     final errors = <String>[];
+    final items = <BulkUpdateItemResult>[];
     final activeProducts = products.where((product) {
       final productId = product.id;
       if (productId == null) return false;
@@ -286,22 +356,47 @@ class BulkProductEditService {
       final normalizedWebsite = draft.googleMerchant ? true : draft.website;
       final normalizedMerchant =
           normalizedWebsite ? draft.googleMerchant : false;
+      final beforeValues = <String, dynamic>{
+        'website': product.isPublished,
+        'google_merchant': product.isGoogleMerchant,
+        'active': product.isActive,
+      };
+      final afterValues = <String, dynamic>{
+        'website': normalizedWebsite,
+        'google_merchant': normalizedMerchant,
+        'active': draft.active,
+      };
+      final changedFields = <String>[];
 
       if (normalizedWebsite != product.isPublished) {
         payload['is_published'] = normalizedWebsite;
         payload['show_on_website'] = normalizedWebsite;
+        changedFields.add('website');
       }
 
       if (normalizedMerchant != product.isGoogleMerchant) {
         payload['is_google_merchant'] = normalizedMerchant;
+        changedFields.add('google_merchant');
       }
 
       if (draft.active != product.isActive) {
         payload['is_active'] = draft.active;
+        changedFields.add('active');
       }
 
       if (payload.isEmpty) {
-        succeeded += 1;
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary: 'Sin cambios efectivos en canales o estado.',
+            beforeValues: beforeValues,
+            afterValues: beforeValues,
+          ),
+        );
         continue;
       }
 
@@ -311,16 +406,51 @@ class BulkProductEditService {
         await _db.update('products', productId, payload,
             applyTimestamps: false);
         succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+          ),
+        );
       } catch (error) {
         errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+            error: error.toString(),
+          ),
+        );
       }
     }
 
     return BulkUpdateResult(
       total: activeProducts.length,
       succeeded: succeeded,
+      skipped: skipped,
       failed: errors.length,
       errors: errors,
+      items: items,
     );
   }
 
@@ -329,7 +459,9 @@ class BulkProductEditService {
     required Map<String, BulkPricingRowDraft> drafts,
   }) async {
     var succeeded = 0;
+    var skipped = 0;
     final errors = <String>[];
+    final items = <BulkUpdateItemResult>[];
     final activeProducts = products.where((product) {
       final productId = product.id;
       if (productId == null) return false;
@@ -343,31 +475,104 @@ class BulkProductEditService {
       final draft = drafts[productId];
       if (draft == null || !draft.enabled) continue;
 
-      final nextPrice = draft.price.clamp(0, double.infinity);
-      final nextCost = draft.cost.clamp(0, double.infinity);
+      final nextPrice = draft.price.clamp(0, double.infinity).toDouble();
+      final nextCost = draft.cost.clamp(0, double.infinity).toDouble();
+      final beforeValues = <String, dynamic>{
+        'price': product.price,
+        'cost': product.cost,
+      };
+      final afterValues = <String, dynamic>{
+        'price': nextPrice,
+        'cost': nextCost,
+      };
+      final changedFields = <String>[];
+
+      if (_doubleChanged(product.price, nextPrice)) {
+        changedFields.add('price');
+      }
+      if (_doubleChanged(product.cost, nextCost)) {
+        changedFields.add('cost');
+      }
+
+      if (changedFields.isEmpty) {
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary: 'Sin cambios efectivos en precio o costo.',
+            beforeValues: beforeValues,
+            afterValues: beforeValues,
+          ),
+        );
+        continue;
+      }
+
+      final payload = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (changedFields.contains('price')) {
+        payload['price'] = nextPrice;
+      }
+      if (changedFields.contains('cost')) {
+        payload['cost'] = nextCost;
+      }
 
       try {
         await _db.update(
           'products',
           productId,
-          {
-            'price': nextPrice,
-            'cost': nextCost,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
+          payload,
           applyTimestamps: false,
         );
         succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+          ),
+        );
       } catch (error) {
         errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: _summarizeFieldTransitions(
+              changedFields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+            error: error.toString(),
+          ),
+        );
       }
     }
 
     return BulkUpdateResult(
       total: activeProducts.length,
       succeeded: succeeded,
+      skipped: skipped,
       failed: errors.length,
       errors: errors,
+      items: items,
     );
   }
 
@@ -377,38 +582,97 @@ class BulkProductEditService {
     required Map<String, BulkStockRowDraft> drafts,
   }) async {
     var succeeded = 0;
+    var skipped = 0;
     final errors = <String>[];
-    var total = 0;
+    final items = <BulkUpdateItemResult>[];
+    final activeProducts = products.where((product) {
+      final productId = product.id;
+      if (productId == null) return false;
+      final draft = drafts[productId];
+      return draft != null && draft.enabled;
+    }).toList(growable: false);
 
-    for (final product in products) {
+    for (final product in activeProducts) {
       final productId = product.id;
       if (productId == null) continue;
 
       final draft = drafts[productId];
-      if (draft == null || !draft.enabled || !product.tracksInventory) {
+      if (draft == null || !draft.enabled) {
+        continue;
+      }
+
+      if (!product.tracksInventory) {
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary: 'El producto no lleva control de stock.',
+            beforeValues: const {},
+            afterValues: const {},
+          ),
+        );
         continue;
       }
 
       final quantity = math.max(0, draft.quantity);
       var delta = 0;
       String type;
+      final note = (draft.note ?? sharedConfig.sharedNote).trim();
 
       if (sharedConfig.mode == BulkStockEditMode.target) {
         delta = quantity - product.inventoryQty;
         if (delta == 0) {
+          skipped += 1;
+          items.add(
+            BulkUpdateItemResult(
+              productId: productId,
+              productName: product.name,
+              productSku: product.sku,
+              status: BulkUpdateItemStatus.skipped,
+              summary: 'El stock objetivo coincide con el stock actual.',
+              beforeValues: {'stock': product.inventoryQty},
+              afterValues: {'stock': product.inventoryQty},
+            ),
+          );
           continue;
         }
         type = delta > 0 ? 'IN' : 'OUT';
       } else {
         if (quantity == 0) {
+          skipped += 1;
+          items.add(
+            BulkUpdateItemResult(
+              productId: productId,
+              productName: product.name,
+              productSku: product.sku,
+              status: BulkUpdateItemStatus.skipped,
+              summary: 'La diferencia definida es 0, no se aplicó ajuste.',
+              beforeValues: {'stock': product.inventoryQty},
+              afterValues: {'stock': product.inventoryQty},
+            ),
+          );
           continue;
         }
         delta = quantity;
         type = sharedConfig.direction.dbValue;
       }
 
-      total += 1;
-      final note = (draft.note ?? sharedConfig.sharedNote).trim();
+      final nextStock = type == 'IN'
+          ? product.inventoryQty + delta.abs()
+          : product.inventoryQty - delta.abs();
+      final beforeValues = <String, dynamic>{
+        'stock': product.inventoryQty,
+      };
+      final afterValues = <String, dynamic>{
+        'stock': nextStock,
+        'direction': type,
+        'reason_type': draft.reasonType,
+        'note': note,
+        'effective_at': sharedConfig.effectiveAt.toIso8601String(),
+      };
 
       try {
         await _inventoryService.applyStockAdjustment(
@@ -418,18 +682,48 @@ class BulkProductEditService {
           reasonType: draft.reasonType,
           note: note.isEmpty ? null : note,
           effectiveAt: sharedConfig.effectiveAt,
+          adjustmentOrigin: StockAdjustmentOrigin.massEditPanel.value,
         );
         succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary:
+                'Stock ${product.inventoryQty} -> $nextStock · ${_reasonLabel(draft.reasonType)}',
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: const ['stock'],
+          ),
+        );
       } catch (error) {
         errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary:
+                'Stock ${product.inventoryQty} -> $nextStock · ${_reasonLabel(draft.reasonType)}',
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: const ['stock'],
+            error: error.toString(),
+          ),
+        );
       }
     }
 
     return BulkUpdateResult(
-      total: total,
+      total: activeProducts.length,
       succeeded: succeeded,
+      skipped: skipped,
       failed: errors.length,
       errors: errors,
+      items: items,
     );
   }
 
@@ -439,32 +733,74 @@ class BulkProductEditService {
     required bool onlyWhenMissingImage,
   }) async {
     var succeeded = 0;
+    var skipped = 0;
     final errors = <String>[];
-    var total = 0;
+    final items = <BulkUpdateItemResult>[];
+    final activeProducts = products.where((product) {
+      final productId = product.id;
+      if (productId == null) return false;
+      final assignment = assignments[productId];
+      return assignment != null && assignment.enabled;
+    }).toList(growable: false);
 
-    for (final product in products) {
+    for (final product in activeProducts) {
       final productId = product.id;
       if (productId == null) continue;
       final assignment = assignments[productId];
-      if (assignment == null ||
-          !assignment.enabled ||
-          assignment.file == null) {
+      if (assignment == null || !assignment.enabled) {
+        continue;
+      }
+
+      if (assignment.file == null) {
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary: 'Sin archivo asignado para esta fila.',
+            beforeValues: {'image_url': product.imageUrl},
+            afterValues: {'image_url': product.imageUrl},
+          ),
+        );
         continue;
       }
 
       if (onlyWhenMissingImage &&
           !assignment.forceReplace &&
           (product.imageUrl ?? '').trim().isNotEmpty) {
+        skipped += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.skipped,
+            summary:
+                'Se conservó la imagen existente por política de no sobrescribir.',
+            beforeValues: {'image_url': product.imageUrl},
+            afterValues: {'image_url': product.imageUrl},
+          ),
+        );
         continue;
       }
 
-      total += 1;
+      final beforeValues = <String, dynamic>{
+        'image_url': product.imageUrl,
+      };
 
       try {
         final upload = await ImageService.uploadProductImageWithOptimization(
           bytes: assignment.file!.bytes,
           fileName: assignment.file!.name,
         );
+        final afterValues = <String, dynamic>{
+          'image_url': upload.originalUrl,
+          'image_url_optimized': upload.optimizedUrl,
+          'file_name': assignment.file!.name,
+          'force_replace': assignment.forceReplace,
+        };
 
         await _db.update(
           'products',
@@ -481,20 +817,511 @@ class BulkProductEditService {
           applyTimestamps: false,
         );
         succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary: 'Imagen actualizada con ${assignment.file!.name}.',
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: const ['image_url'],
+          ),
+        );
       } catch (error) {
         errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary:
+                'Intento de actualizar imagen con ${assignment.file!.name}.',
+            beforeValues: beforeValues,
+            afterValues: {'file_name': assignment.file!.name},
+            changedFields: const ['image_url'],
+            error: error.toString(),
+          ),
+        );
       }
     }
 
     return BulkUpdateResult(
-      total: total,
+      total: activeProducts.length,
       succeeded: succeeded,
+      skipped: skipped,
       failed: errors.length,
       errors: errors,
+      items: items,
+    );
+  }
+
+  Future<void> recordHistory({
+    required BulkProductEditOperation operation,
+    required BulkProductScopeSource scopeSource,
+    required int scopeProductCount,
+    required Map<String, dynamic> filtersSnapshot,
+    required Map<String, dynamic> configSnapshot,
+    required BulkUpdateResult result,
+  }) async {
+    await _db.insert(
+      'product_bulk_edit_history',
+      {
+        'operation': operation.name,
+        'scope_source': scopeSource.name,
+        'status': _resolveHistoryStatus(result).name,
+        'actor_name': _resolveActorName(),
+        'summary': _buildHistorySummary(operation, result),
+        'scope_product_count': scopeProductCount,
+        'enabled_product_count': result.total,
+        'succeeded_product_count': result.succeeded,
+        'skipped_product_count': result.skipped,
+        'failed_product_count': result.failed,
+        'filters_snapshot': filtersSnapshot,
+        'config_snapshot': configSnapshot,
+        'product_changes': result.items.map((item) => item.toJson()).toList(),
+        'errors': result.errors,
+      },
+      applyTimestamps: false,
+    );
+  }
+
+  Future<List<BulkProductEditHistoryEntry>> loadHistory(
+      {int limit = 30}) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return const [];
+
+    final rows = await _db.supabase
+        .from('product_bulk_edit_history')
+        .select(
+          'id, operation, scope_source, status, created_by, actor_name, summary, '
+          'scope_product_count, enabled_product_count, succeeded_product_count, '
+          'skipped_product_count, failed_product_count, created_at',
+        )
+        .eq('tenant_id', tenantId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return (rows as List)
+        .map((row) => BulkProductEditHistoryEntry.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ))
+        .toList(growable: false);
+  }
+
+  Future<List<BulkProductEditHistoryEntry>> loadLegacyInferredHistory({
+    int limit = 30,
+    int sessionGapSeconds = 30,
+    int massDistinctProductsThreshold = 2,
+    int twoProductMassMaxGapSeconds = 10,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return const [];
+
+    final rawRows = await _db.supabase
+        .from('stock_adjustments')
+        .select(
+          'id, product_id, created_by, created_at, quantity, stock_before, '
+          'stock_after, adjustment_type, reason, reference, notes',
+        )
+        .eq('tenant_id', tenantId)
+        .inFilter('adjustment_type', ['manual', 'count_gain', 'count_loss'])
+        .order('created_by')
+        .order('created_at');
+
+    final rows = (rawRows as List)
+        .whereType<Map>()
+        .map(
+          (row) => _LegacyStockAdjustmentRow.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .where((row) => row.isEligibleLegacySource)
+        .where((row) => !row.createdAt.isBefore(_legacyInferenceCutoffAt))
+        .where((row) => row.productId.isNotEmpty)
+        .toList(growable: false)
+      ..sort((a, b) {
+        final actorComparison =
+            (a.createdBy ?? '').compareTo(b.createdBy ?? '');
+        if (actorComparison != 0) return actorComparison;
+
+        final bucketComparison = a.bucketKey.compareTo(b.bucketKey);
+        if (bucketComparison != 0) return bucketComparison;
+
+        final createdAtComparison = a.createdAt.compareTo(b.createdAt);
+        if (createdAtComparison != 0) return createdAtComparison;
+
+        return a.id.compareTo(b.id);
+      });
+
+    if (rows.isEmpty) return const [];
+
+    final productIds = rows
+        .map((row) => row.productId)
+        .where((id) => id.trim().isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final productMap = await _loadLegacyHistoryProducts(
+      tenantId: tenantId,
+      productIds: productIds,
+    );
+
+    final sessionGap = Duration(seconds: sessionGapSeconds);
+    final sessions = <_LegacyStockAdjustmentSession>[];
+    _LegacyStockAdjustmentSession? currentSession;
+
+    for (final row in rows) {
+      final sameActor = currentSession?.createdBy == row.createdBy;
+      final sameBucket = currentSession?.bucketKey == row.bucketKey;
+      final withinGap = sameActor &&
+          sameBucket &&
+          currentSession != null &&
+          row.createdAt.difference(currentSession.endAt) <= sessionGap;
+
+      if (!withinGap) {
+        if (currentSession != null) {
+          sessions.add(currentSession);
+        }
+        currentSession = _LegacyStockAdjustmentSession(
+          createdBy: row.createdBy,
+          bucketKey: row.bucketKey,
+          rows: <_LegacyStockAdjustmentRow>[row],
+        );
+        continue;
+      }
+
+      currentSession = currentSession.copyWith(
+        rows: [...currentSession.rows, row],
+      );
+    }
+
+    if (currentSession != null) {
+      sessions.add(currentSession);
+    }
+
+    final inferredSessions = sessions.toList(growable: false)
+      ..sort((a, b) => b.startAt.compareTo(a.startAt));
+
+    return inferredSessions
+        .take(limit)
+        .map(
+          (session) => _mapLegacySessionToHistoryEntry(
+            session: session,
+            productMap: productMap,
+            sessionGapSeconds: sessionGapSeconds,
+            massDistinctProductsThreshold: massDistinctProductsThreshold,
+            twoProductMassMaxGapSeconds: twoProductMassMaxGapSeconds,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<BulkProductEditHistoryEntry?> getHistoryById(String id) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return null;
+
+    final row = await _db.supabase
+        .from('product_bulk_edit_history')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('id', id)
+        .maybeSingle();
+
+    if (row == null) return null;
+    return BulkProductEditHistoryEntry.fromJson(
+      Map<String, dynamic>.from(row as Map),
     );
   }
 
   Future<String?> getTenantId() => _tenantService.getTenantId();
+
+  Future<Map<String, Product>> _loadLegacyHistoryProducts({
+    required String tenantId,
+    required List<String> productIds,
+  }) async {
+    if (productIds.isEmpty) return const {};
+
+    final result = <String, Product>{};
+    for (final chunk in _chunk(productIds, 200)) {
+      final rows = await _db.supabase
+          .from('products')
+          .select()
+          .eq('tenant_id', tenantId)
+          .inFilter('id', chunk);
+
+      for (final rawRow in rows) {
+        final row = Map<String, dynamic>.from(rawRow as Map);
+        final product = Product.fromJson(row);
+        final productId = product.id;
+        if (productId == null || productId.isEmpty) continue;
+        result[productId] = product;
+      }
+    }
+
+    return result;
+  }
+
+  BulkProductEditHistoryEntry _mapLegacySessionToHistoryEntry({
+    required _LegacyStockAdjustmentSession session,
+    required Map<String, Product> productMap,
+    required int sessionGapSeconds,
+    required int massDistinctProductsThreshold,
+    required int twoProductMassMaxGapSeconds,
+  }) {
+    final groupedRows = <String, List<_LegacyStockAdjustmentRow>>{};
+    for (final row in session.rows) {
+      groupedRows.putIfAbsent(
+          row.productId, () => <_LegacyStockAdjustmentRow>[])
+        ..add(row);
+    }
+
+    final items = groupedRows.entries.map((entry) {
+      final productRows = entry.value
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final firstRow = productRows.first;
+      final lastRow = productRows.last;
+      final product = productMap[entry.key];
+      final netQuantity =
+          productRows.fold<int>(0, (sum, row) => sum + row.quantity);
+      final movementCount = productRows.length;
+
+      final baseSummary = movementCount == 1
+          ? '${session.originLabel}: stock ${firstRow.stockBefore} -> ${lastRow.stockAfter}'
+          : '$movementCount movimientos de ${session.originLabel.toLowerCase()}: stock ${firstRow.stockBefore} -> ${lastRow.stockAfter}';
+      final deltaSummary =
+          ' (delta ${netQuantity >= 0 ? '+' : ''}$netQuantity).';
+
+      return BulkUpdateItemResult(
+        productId: entry.key,
+        productName: product?.name ?? firstRow.productNameFallback,
+        productSku: product?.sku ?? firstRow.productSkuFallback,
+        status: BulkUpdateItemStatus.updated,
+        summary: '$baseSummary$deltaSummary',
+        executionAt: lastRow.createdAt,
+        beforeValues: {'stock': firstRow.stockBefore},
+        afterValues: {'stock': lastRow.stockAfter},
+        changedFields: const ['stock'],
+      );
+    }).toList(growable: false)
+      ..sort((a, b) =>
+          a.productName.toLowerCase().compareTo(b.productName.toLowerCase()));
+
+    final references = session.rows
+        .map((row) => row.reference?.trim())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final notes = session.rows
+        .map((row) => row.notes?.trim())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    final durationSeconds = session.endAt.difference(session.startAt).inSeconds;
+    final sessionId =
+        'legacy-${session.createdBy ?? 'unknown'}-${session.startAt.millisecondsSinceEpoch}';
+    final legacySessionKind = _resolveLegacySessionKind(
+      session: session,
+      massDistinctProductsThreshold: massDistinctProductsThreshold,
+      twoProductMassMaxGapSeconds: twoProductMassMaxGapSeconds,
+    );
+
+    return BulkProductEditHistoryEntry(
+      id: sessionId,
+      origin: BulkProductEditHistoryOrigin.legacyInferred,
+      legacySessionKind: legacySessionKind,
+      isHydrated: true,
+      operation: BulkProductEditOperation.stock,
+      scopeSource: BulkProductScopeSource.filtered,
+      status: BulkProductEditHistoryStatus.completed,
+      scopeProductCount: session.distinctProductCount,
+      enabledProductCount: session.rows.length,
+      succeededProductCount: items.length,
+      skippedProductCount: 0,
+      failedProductCount: 0,
+      createdAt: session.startAt,
+      endedAt: session.endAt,
+      createdBy: session.createdBy,
+      actorName: _resolveHistoricalActorName(session.createdBy),
+      summary:
+          '${session.originLabel}: ${session.rows.length} movimientos en ${session.distinctProductCount} productos.',
+      infoMessage:
+          'Esta sesión fue reconstruida heurísticamente desde stock_adjustments usando proximidad temporal. Es útil como pista histórica, pero no reemplaza el historial canónico grabado por la función de edición masiva. Se marca como masiva cuando toca 3 o más productos distintos dentro de una ventana de ${sessionGapSeconds}s, o exactamente 2 productos si toda la sesión cabe dentro de ${twoProductMassMaxGapSeconds}s; si no, queda como singular. También se excluyen movimientos anteriores al 08/04/2026 para descartar ajustes previos a la introducción del módulo en el repo.',
+      filtersSnapshot: const {},
+      configSnapshot: {
+        'origen': 'stock_adjustments',
+        'tipo_inferido': session.bucketKey,
+        'clasificacion_sesion': legacySessionKind.label,
+        'corte_desde_repo': '2026-04-08',
+        'ventana_maxima_dos_productos_segundos': twoProductMassMaxGapSeconds,
+        'regla':
+            'Mismo usuario + gap <= ${sessionGapSeconds}s; masiva si toca >= 3 productos distintos, o exactamente 2 productos dentro de ${twoProductMassMaxGapSeconds}s',
+        'motivo_origen': session.sourceReason,
+        'movimientos_originales': session.rows.length,
+        'productos_distintos': session.distinctProductCount,
+        'duracion_segundos': durationSeconds,
+        if (references.isNotEmpty) 'referencias_detectadas': references,
+        if (notes.isNotEmpty) 'notas_detectadas': notes,
+      },
+      items: items,
+      errors: const [],
+    );
+  }
+
+  BulkLegacySessionKind _resolveLegacySessionKind({
+    required _LegacyStockAdjustmentSession session,
+    required int massDistinctProductsThreshold,
+    required int twoProductMassMaxGapSeconds,
+  }) {
+    final distinctProducts = session.distinctProductCount;
+    if (distinctProducts < massDistinctProductsThreshold) {
+      return BulkLegacySessionKind.singular;
+    }
+
+    if (distinctProducts > massDistinctProductsThreshold) {
+      return BulkLegacySessionKind.mass;
+    }
+
+    final durationSeconds = session.endAt.difference(session.startAt).inSeconds;
+    return durationSeconds <= twoProductMassMaxGapSeconds
+        ? BulkLegacySessionKind.mass
+        : BulkLegacySessionKind.singular;
+  }
+
+  String _resolveHistoricalActorName(String? createdBy) {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (createdBy != null && createdBy == currentUser?.id) {
+      return _resolveActorName();
+    }
+    if (createdBy == null || createdBy.trim().isEmpty) {
+      return 'Usuario histórico';
+    }
+    return 'Usuario ${createdBy.substring(0, math.min(8, createdBy.length))}';
+  }
+
+  BulkProductEditHistoryStatus _resolveHistoryStatus(BulkUpdateResult result) {
+    if (result.succeeded == 0 && result.failed == 0) {
+      return BulkProductEditHistoryStatus.skipped;
+    }
+    if (result.succeeded == 0 && result.failed > 0) {
+      return BulkProductEditHistoryStatus.failed;
+    }
+    if (result.failed > 0) {
+      return BulkProductEditHistoryStatus.partial;
+    }
+    return BulkProductEditHistoryStatus.completed;
+  }
+
+  String _buildHistorySummary(
+    BulkProductEditOperation operation,
+    BulkUpdateResult result,
+  ) {
+    return '${operation.label}: ${result.succeeded} actualizados, '
+        '${result.skipped} sin cambios, ${result.failed} con error.';
+  }
+
+  String _resolveActorName() {
+    final user = Supabase.instance.client.auth.currentUser;
+    final metadata = user?.userMetadata ?? const <String, dynamic>{};
+    final email = user?.email?.trim();
+    final fullName = metadata['full_name']?.toString().trim();
+    final name = metadata['name']?.toString().trim();
+    if (email != null && email.isNotEmpty) return email;
+    if (fullName != null && fullName.isNotEmpty) return fullName;
+    if (name != null && name.isNotEmpty) return name;
+    return 'Usuario actual';
+  }
+
+  bool _doubleChanged(double current, double next) {
+    return (current - next).abs() > 0.009;
+  }
+
+  String _summarizeFieldTransitions(
+    List<String> fields,
+    Map<String, dynamic> beforeValues,
+    Map<String, dynamic> afterValues,
+  ) {
+    return fields
+        .map(
+          (field) => '${_fieldLabel(field)}: '
+              '${_formatFieldValue(field, beforeValues[field])} -> '
+              '${_formatFieldValue(field, afterValues[field])}',
+        )
+        .join(' · ');
+  }
+
+  String _fieldLabel(String field) {
+    switch (field) {
+      case 'category':
+        return 'Categoría';
+      case 'brand':
+        return 'Marca';
+      case 'supplier':
+        return 'Proveedor';
+      case 'website':
+        return 'Portal web';
+      case 'google_merchant':
+        return 'Merchant';
+      case 'active':
+        return 'Activo';
+      case 'price':
+        return 'Precio';
+      case 'cost':
+        return 'Costo';
+      case 'image_url':
+        return 'Imagen';
+      case 'stock':
+        return 'Stock';
+      default:
+        return field;
+    }
+  }
+
+  String _formatFieldValue(String field, dynamic value) {
+    if (value == null) {
+      return 'Vacío';
+    }
+    if (field == 'price' || field == 'cost') {
+      final amount =
+          value is num ? value.toDouble() : double.tryParse('$value');
+      if (amount != null) {
+        return ChileanUtils.formatCurrency(amount);
+      }
+    }
+    if (value is bool) {
+      return value ? 'Sí' : 'No';
+    }
+    if (value is num) {
+      return value.toString();
+    }
+    final text = value.toString().trim();
+    return text.isEmpty ? 'Vacío' : text;
+  }
+
+  String _reasonLabel(String reasonType) {
+    switch (reasonType) {
+      case 'count':
+        return 'Reconteo / reevaluación';
+      case 'found':
+        return 'Hallazgo / recuperación';
+      case 'loss':
+        return 'Merma';
+      case 'damage':
+        return 'Daño';
+      case 'theft':
+        return 'Robo / extravío';
+      case 'internal_use':
+        return 'Uso interno / taller';
+      case 'manual':
+        return 'Otro ajuste manual';
+      default:
+        return reasonType;
+    }
+  }
 
   _BulkImageAutoMatch? _findBestImageMatch(
     BulkImageFile file,
@@ -765,6 +1592,117 @@ class BulkProductEditService {
     for (var index = 0; index < items.length; index += size) {
       yield items.sublist(index, math.min(index + size, items.length));
     }
+  }
+}
+
+class _LegacyStockAdjustmentRow {
+  const _LegacyStockAdjustmentRow({
+    required this.id,
+    required this.productId,
+    required this.createdAt,
+    required this.quantity,
+    required this.stockBefore,
+    required this.stockAfter,
+    this.adjustmentType,
+    this.createdBy,
+    this.reason,
+    this.reference,
+    this.notes,
+  });
+
+  final String id;
+  final String productId;
+  final DateTime createdAt;
+  final int quantity;
+  final int stockBefore;
+  final int stockAfter;
+  final String? adjustmentType;
+  final String? createdBy;
+  final String? reason;
+  final String? reference;
+  final String? notes;
+
+  String get productNameFallback => 'Producto $productId';
+  String get productSkuFallback => productId;
+  bool get isEligibleLegacySource {
+    if (adjustmentType == 'manual') {
+      return true;
+    }
+    if (adjustmentType == 'count_gain' || adjustmentType == 'count_loss') {
+      return (reason ?? '').startsWith('Regularización por conteo');
+    }
+    return false;
+  }
+
+  String get bucketKey {
+    if (adjustmentType == 'count_gain' || adjustmentType == 'count_loss') {
+      return 'count_regularization';
+    }
+    return 'manual_adjustment';
+  }
+
+  factory _LegacyStockAdjustmentRow.fromJson(Map<String, dynamic> json) {
+    return _LegacyStockAdjustmentRow(
+      id: json['id']?.toString() ?? '',
+      productId: json['product_id']?.toString() ?? '',
+      adjustmentType: json['adjustment_type']?.toString(),
+      createdBy: json['created_by']?.toString(),
+      createdAt: json['created_at'] == null
+          ? DateTime.now()
+          : DateTime.parse(json['created_at'].toString()),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      stockBefore: (json['stock_before'] as num?)?.toInt() ?? 0,
+      stockAfter: (json['stock_after'] as num?)?.toInt() ?? 0,
+      reason: json['reason']?.toString(),
+      reference: json['reference']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+}
+
+class _LegacyStockAdjustmentSession {
+  const _LegacyStockAdjustmentSession({
+    required this.createdBy,
+    required this.bucketKey,
+    required this.rows,
+  });
+
+  final String? createdBy;
+  final String bucketKey;
+  final List<_LegacyStockAdjustmentRow> rows;
+
+  DateTime get startAt => rows
+      .map((row) => row.createdAt)
+      .reduce((left, right) => left.isBefore(right) ? left : right);
+  DateTime get endAt => rows
+      .map((row) => row.createdAt)
+      .reduce((left, right) => left.isAfter(right) ? left : right);
+  int get distinctProductCount =>
+      rows.map((row) => row.productId).toSet().length;
+  String get sourceReason =>
+      rows.map((row) => row.reason?.trim()).whereType<String>().firstWhere(
+            (value) => value.isNotEmpty,
+            orElse: () => bucketKey,
+          );
+  String get originLabel {
+    switch (bucketKey) {
+      case 'count_regularization':
+        return 'Regularización por conteo inferida';
+      default:
+        return 'Ajuste manual inferido';
+    }
+  }
+
+  _LegacyStockAdjustmentSession copyWith({
+    String? createdBy,
+    String? bucketKey,
+    List<_LegacyStockAdjustmentRow>? rows,
+  }) {
+    return _LegacyStockAdjustmentSession(
+      createdBy: createdBy ?? this.createdBy,
+      bucketKey: bucketKey ?? this.bucketKey,
+      rows: rows ?? this.rows,
+    );
   }
 }
 

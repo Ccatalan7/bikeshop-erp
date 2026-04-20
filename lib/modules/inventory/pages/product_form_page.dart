@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
@@ -2353,6 +2354,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         reasonType: dialogResult.reasonType,
         note: dialogResult.note,
         effectiveAt: dialogResult.effectiveAt,
+        adjustmentOrigin: StockAdjustmentOrigin.productForm.value,
       );
 
       if (!mounted) return;

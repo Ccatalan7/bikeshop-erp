@@ -74,6 +74,30 @@ class JournalEntryService extends ChangeNotifier {
           DateTime.now().difference(linesStartTime).inMilliseconds;
       debugPrint('✅ Loaded ${lineDocs.length} lines in ${linesLoadTime}ms');
 
+      final stockAdjustmentIds = entryDocs
+          .where((entry) => entry['source_module'] == 'stock_adjustment')
+          .map((entry) => entry['source_reference']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toSet()
+          .toList();
+
+      final stockAdjustmentOrigins = <String, String>{};
+      if (stockAdjustmentIds.isNotEmpty) {
+        final stockAdjustmentDocs = await _databaseService.select(
+          'stock_adjustments',
+          where: 'id',
+          whereIn: stockAdjustmentIds,
+        );
+
+        for (final adjustment in stockAdjustmentDocs) {
+          final adjustmentId = adjustment['id']?.toString();
+          final adjustmentOrigin = adjustment['adjustment_origin']?.toString();
+          if (adjustmentId == null || adjustmentOrigin == null) continue;
+          stockAdjustmentOrigins[adjustmentId] = adjustmentOrigin;
+        }
+      }
+
       final linesByEntry = <String, List<JournalLine>>{};
       for (final rawLine in lineDocs) {
         final entryId =
@@ -88,7 +112,14 @@ class JournalEntryService extends ChangeNotifier {
         final entryId = rawEntry['id']?.toString();
         if (entryId == null) continue;
         final lines = linesByEntry[entryId] ?? <JournalLine>[];
-        entries.add(_mapEntryFromFirestore(rawEntry, entryId, lines));
+        final hydratedEntry = Map<String, dynamic>.from(rawEntry);
+        final sourceReference = hydratedEntry['source_reference']?.toString();
+        if (hydratedEntry['source_module'] == 'stock_adjustment' &&
+            sourceReference != null) {
+          hydratedEntry['stock_adjustment_origin'] =
+              stockAdjustmentOrigins[sourceReference];
+        }
+        entries.add(_mapEntryFromFirestore(hydratedEntry, entryId, lines));
       }
 
       // Already sorted by date DESC from query
@@ -120,7 +151,7 @@ class JournalEntryService extends ChangeNotifier {
     await ensureLoaded();
 
     _validateJournalEntry(lines);
-    
+
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
       throw Exception('User does not have a tenant_id. Cannot proceed.');

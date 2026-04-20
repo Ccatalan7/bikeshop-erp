@@ -1,3 +1,6 @@
+import '../../../shared/models/stock_adjustment_origin.dart'
+    as stock_adjustment_origin;
+
 class StockAdjustmentDetail {
   static final RegExp _uuidPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
@@ -14,6 +17,7 @@ class StockAdjustmentDetail {
   final int stockBefore;
   final int stockAfter;
   final String reason;
+  final String? adjustmentOrigin;
   final DateTime adjustmentDate;
   final DateTime createdAt;
   final String? createdBy;
@@ -40,6 +44,7 @@ class StockAdjustmentDetail {
     required this.stockBefore,
     required this.stockAfter,
     required this.reason,
+    this.adjustmentOrigin,
     required this.adjustmentDate,
     required this.createdAt,
     this.createdBy,
@@ -68,6 +73,7 @@ class StockAdjustmentDetail {
       stockBefore: (json['stock_before'] as num?)?.toInt() ?? 0,
       stockAfter: (json['stock_after'] as num?)?.toInt() ?? 0,
       reason: json['reason'] as String? ?? '',
+      adjustmentOrigin: json['adjustment_origin'] as String?,
       adjustmentDate: json['adjustment_date'] != null
           ? DateTime.parse(json['adjustment_date'] as String)
           : DateTime.now(),
@@ -93,6 +99,9 @@ class StockAdjustmentDetail {
 
   bool get isIncrease => quantity > 0;
   bool get isDecrease => quantity < 0;
+  String? get adjustmentOriginDisplay =>
+      stock_adjustment_origin.stockAdjustmentOriginDisplay(adjustmentOrigin);
+  bool get hasAdjustmentOrigin => adjustmentOriginDisplay != null;
 
   String get createdByDisplay {
     final email = createdByEmail?.trim();

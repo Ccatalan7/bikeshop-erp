@@ -1,8 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import '../../bikeshop/models/bikeshop_models.dart';
@@ -15,6 +13,7 @@ import '../../purchases/services/purchase_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../../../shared/models/supplier.dart';
+import '../../../shared/services/gemini_proxy_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 
 /// Callback type for navigation actions the AI can trigger.
@@ -121,14 +120,11 @@ class AIAssistantService extends ChangeNotifier {
   factory AIAssistantService() => _instance;
   AIAssistantService._internal();
 
-  GenerativeModel? _model;
-  GenerativeModel? _embeddingModel; // Added for semantic search
-  ChatSession? _chatSession;
-  final List<Content> _history = [];
+  final GeminiProxyService _geminiProxy = GeminiProxyService();
+  final List<Map<String, dynamic>> _history = [];
   bool _isLoading = false;
 
-  // Tools definition - NOT late final, so it can be reassigned safely
-  List<Tool> _tools = [];
+  List<Map<String, dynamic>> _toolDeclarations = [];
 
   /// SKUs from the last searchStock call, used to sync with inventory page.
   List<String>? _lastSearchSkus;
@@ -140,109 +136,74 @@ class AIAssistantService extends ChangeNotifier {
   static const int _stockFilterOutOfStock = 3;
 
   bool get isLoading => _isLoading;
-  List<Content> get history => _history;
-  bool get isGeminiConfigured =>
-      (dotenv.env['GEMINI_API_KEY'] ?? '').trim().isNotEmpty;
+  List<Map<String, dynamic>> get history => _history;
+  bool get isGeminiConfigured => true;
 
   void initialize() {
-    // Singleton guard: if already initialized, do nothing
-    if (_model != null) {
-      debugPrint('ℹ️ [AIService] Already initialized, skipping...');
+    if (_toolDeclarations.isNotEmpty) {
       return;
     }
 
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-
-    if (apiKey.isEmpty) {
-      debugPrint('⚠️ GEMINI_API_KEY not found in .env');
-      return;
-    }
-
-    debugPrint(
-        '🔑 [AIService] Initializing with API key starting with: ${apiKey.substring(0, 6)}...');
-
-    // Define tools
-    _tools = [
-      Tool(functionDeclarations: [
-        FunctionDeclaration(
-          'searchStock',
-          'Search for products in the inventory using semantic AI search. Returns product name, SKU, brand, category, price, stock quantity, and location.',
-          Schema(
-            SchemaType.object,
-            properties: {
-              'query': Schema(SchemaType.string,
-                  description:
-                      'Search query. Use the specific product type in Spanish as it appears in product names '
-                      '(e.g., "llanta 29" not "aro 29", "camara 29" not "tubo 29"). '
-                      'Include size and specs when the user mentions them.'),
+    _toolDeclarations = [
+      {
+        'functionDeclarations': [
+          {
+            'name': 'searchStock',
+            'description':
+                'Search for products in the inventory using semantic AI search. Returns product name, SKU, brand, category, price, stock quantity, and location.',
+            'parameters': {
+              'type': 'OBJECT',
+              'properties': {
+                'query': {
+                  'type': 'STRING',
+                  'description':
+                      'Search query. Use the specific product type in Spanish as it appears in product names (e.g., "llanta 29" not "aro 29", "camara 29" not "tubo 29"). Include size and specs when the user mentions them.',
+                },
+              },
+              'required': ['query'],
             },
-            requiredProperties: ['query'],
-          ),
-        ),
-        FunctionDeclaration(
-          'navigateToInventory',
-          'Navigates the app to the Inventory module and pre-fills the search box. '
-              'WARNING: The inventory screen uses KEYWORD text matching, NOT semantic search. '
-              'You MUST simplify and translate the user\'s request into the shortest possible keyword that will match product names. '
-              'Examples: "llantas mtb" → "llanta", "cámaras para mountain bike" → "camara", "ruedas para BMX" → "llanta 20". '
-              'NEVER pass conversational phrases, categories like "mtb", or connector words like "para", "de", "con".',
-          Schema(
-            SchemaType.object,
-            properties: {
-              'searchTerm': Schema(SchemaType.string,
-                  description:
-                      'The simplified keyword for the inventory text filter. Must match actual product names. Use the shortest effective keyword (e.g., "llanta", "camara 29", "cassette shimano").'),
+          },
+          {
+            'name': 'navigateToInventory',
+            'description':
+                'Navigates the app to the Inventory module and pre-fills the search box. WARNING: The inventory screen uses KEYWORD text matching, NOT semantic search. You MUST simplify and translate the user\'s request into the shortest possible keyword that will match product names. Examples: "llantas mtb" → "llanta", "cámaras para mountain bike" → "camara", "ruedas para BMX" → "llanta 20". NEVER pass conversational phrases, categories like "mtb", or connector words like "para", "de", "con".',
+            'parameters': {
+              'type': 'OBJECT',
+              'properties': {
+                'searchTerm': {
+                  'type': 'STRING',
+                  'description':
+                      'The simplified keyword for the inventory text filter. Must match actual product names. Use the shortest effective keyword (e.g., "llanta", "camara 29", "cassette shimano").',
+                },
+              },
+              'required': ['searchTerm'],
             },
-            requiredProperties: ['searchTerm'],
-          ),
-        ),
-        FunctionDeclaration(
-          'searchInternet',
-          'Search the internet for information not available in the internal database (e.g., bike compatibility, specs, standard parts).',
-          Schema(
-            SchemaType.object,
-            properties: {
-              'query':
-                  Schema(SchemaType.string, description: 'The search query.'),
+          },
+          {
+            'name': 'searchInternet',
+            'description':
+                'Search the internet for information not available in the internal database (e.g., bike compatibility, specs, standard parts).',
+            'parameters': {
+              'type': 'OBJECT',
+              'properties': {
+                'query': {
+                  'type': 'STRING',
+                  'description': 'The search query.',
+                },
+              },
+              'required': ['query'],
             },
-            requiredProperties: ['query'],
-          ),
-        ),
-      ]),
+          },
+        ],
+      },
     ];
-
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash-lite',
-      apiKey: apiKey,
-      tools: _tools,
-    );
-
-    // Initialize the embedding model
-    _embeddingModel = GenerativeModel(
-      model: 'gemini-embedding-001',
-      apiKey: apiKey,
-    );
   }
 
   Future<String> generateOneShotText(
     String prompt, {
     String modelName = 'gemini-2.5-flash-lite',
   }) async {
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-    if (apiKey.isEmpty) {
-      throw StateError('GEMINI_API_KEY not configured');
-    }
-
-    final model = GenerativeModel(
-      model: modelName,
-      apiKey: apiKey,
-    );
-    final response = await model.generateContent([Content.text(prompt)]);
-    final text = response.text?.trim() ?? '';
-    if (text.isEmpty) {
-      throw StateError('Empty AI response');
-    }
-    return text;
+    return _geminiProxy.generateText(prompt: prompt, model: modelName);
   }
 
   Future<AIProductImageAnalysis?> analyzeProductImage(
@@ -253,16 +214,6 @@ class AIAssistantService extends ChangeNotifier {
     String modelName = 'gemini-2.5-flash',
   }) async {
     if (imageBytes.isEmpty) return null;
-
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-    if (apiKey.isEmpty) {
-      throw StateError('GEMINI_API_KEY not configured');
-    }
-
-    final model = GenerativeModel(
-      model: modelName,
-      apiKey: apiKey,
-    );
     final preparedImage = _prepareImageForGemini(imageBytes);
 
     final hintLines = <String>[];
@@ -307,14 +258,25 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
 ''';
 
     try {
-      final response = await model.generateContent([
-        Content.multi([
-          TextPart(prompt),
-          DataPart(preparedImage.mimeType, preparedImage.bytes),
-        ]),
-      ]);
+      final response = await _geminiProxy.generateContent(
+        model: modelName,
+        contents: [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': prompt},
+              {
+                'inlineData': {
+                  'mimeType': preparedImage.mimeType,
+                  'data': base64Encode(preparedImage.bytes),
+                },
+              },
+            ],
+          },
+        ],
+      );
 
-      final rawText = response.text?.trim() ?? '';
+      final rawText = response.text.trim();
       if (rawText.isEmpty) return null;
 
       final jsonBlock = _extractJsonObject(rawText);
@@ -409,33 +371,50 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
         return directInventorySearch;
       }
 
-      if (_model == null) {
-        return _textResponse(
-            'Error: API Key not configured. Please add GEMINI_API_KEY to .env file.');
-      }
+      initialize();
 
-      // Initialize chat if not already started
-      if (_chatSession == null) {
-        final systemPrompt = _buildSystemPrompt(jobs ?? []);
-        _chatSession = _model!.startChat(history: [
-          Content('user', [TextPart(systemPrompt)]),
-          Content('model', [
-            TextPart(
-                'Entendido. Estoy listo para ayudar con trabajos, inventario y preguntas técnicas.')
-          ])
-        ]);
-      }
+      final workingHistory = List<Map<String, dynamic>>.from(_history);
+      final systemPrompt = _buildSystemPrompt(jobs ?? []);
+      workingHistory.add({
+        'role': 'user',
+        'parts': [
+          {'text': message},
+        ],
+      });
 
-      var response = await _chatSession!.sendMessage(Content.text(message));
+      var response = await _geminiProxy.generateContent(
+        model: 'gemini-2.5-flash-lite',
+        systemInstruction: {
+          'parts': [
+            {'text': systemPrompt},
+          ],
+        },
+        contents: workingHistory,
+        tools: _toolDeclarations,
+      );
 
       // Handle Tool Calls (Recursively if needed)
       int maxTurns = 5;
       while (response.functionCalls.isNotEmpty && maxTurns > 0) {
         maxTurns--;
         final functionCalls = response.functionCalls;
-        final functionResponses = <FunctionResponse>[];
+        final functionResponses = <Map<String, dynamic>>[];
         Map<String, Object?>? inventorySearchResult;
         Map<String, Object?>? inventoryNavigateResult;
+
+        workingHistory.add({
+          'role': 'model',
+          'parts': [
+            for (final call in functionCalls)
+              {
+                'functionCall': {
+                  'name': call.name,
+                  'args': call.args,
+                },
+              },
+            if (response.text.trim().isNotEmpty) {'text': response.text.trim()},
+          ],
+        });
 
         for (final call in functionCalls) {
           final name = call.name;
@@ -462,7 +441,12 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
             result = {'error': 'Function $name not found'};
           }
 
-          functionResponses.add(FunctionResponse(name, result));
+          functionResponses.add({
+            'functionResponse': {
+              'name': name,
+              'response': result,
+            },
+          });
         }
 
         final shouldAutoNavigateToInventory = inventorySearchResult != null &&
@@ -486,27 +470,58 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
           inventoryNavigateResult,
         );
         if (deterministicInventoryReply != null) {
+          _history
+            ..clear()
+            ..addAll(workingHistory)
+            ..add({
+              'role': 'model',
+              'parts': [
+                {'text': deterministicInventoryReply},
+              ],
+            });
           return _cardResponse(
             deterministicInventoryReply,
             cards: _buildInventoryCardsFromSearchResult(inventorySearchResult),
           );
         }
 
-        // Send tool results back to model
-        response = await _chatSession!.sendMessage(
-          Content.functionResponses(functionResponses),
+        workingHistory.add({
+          'role': 'user',
+          'parts': functionResponses,
+        });
+
+        response = await _geminiProxy.generateContent(
+          model: 'gemini-2.5-flash-lite',
+          systemInstruction: {
+            'parts': [
+              {'text': systemPrompt},
+            ],
+          },
+          contents: workingHistory,
+          tools: _toolDeclarations,
         );
       }
 
-      final text = response.text;
+      final text = response.text.trim();
 
-      if (text == null) {
+      if (text.isEmpty) {
         return _textResponse('Sorry, I could not generate a response.');
       }
 
+      workingHistory.add({
+        'role': 'model',
+        'parts': [
+          {'text': text},
+        ],
+      });
+
+      _history
+        ..clear()
+        ..addAll(workingHistory);
+
       return _textResponse(text);
     } catch (e) {
-      debugPrint('Error sending message to Gemini: $e');
+      debugPrint('Error sending message via Gemini proxy: $e');
       return _textResponse('Error: $e');
     } finally {
       _isLoading = false;
@@ -1951,7 +1966,6 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
   }
 
   void resetChat() {
-    _chatSession = null;
     _history.clear();
     notifyListeners();
   }
@@ -2600,20 +2614,8 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
 
   /// Generates a vector embedding for the given text.
   Future<List<double>?> generateEmbedding(String text) async {
-    if (_embeddingModel == null) {
-      final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-      if (apiKey.isEmpty) return null;
-      _embeddingModel = GenerativeModel(
-        model: 'gemini-embedding-001',
-        apiKey: apiKey,
-      );
-    }
-
     try {
-      final content = Content.text(text);
-      final result = await _embeddingModel!
-          .embedContent(content, outputDimensionality: 768);
-      return result.embedding.values.toList();
+      return await _geminiProxy.generateEmbedding(text: text);
     } catch (e) {
       debugPrint('❌ [AI] Embedding generation error: $e');
       return null;

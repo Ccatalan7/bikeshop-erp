@@ -22,6 +22,8 @@ class CustomerService extends ChangeNotifier {
   // Public getters for cached data (instant access)
   List<Customer> get cachedCustomers => _cachedCustomers ?? [];
   bool get hasCustomersCache => _cachedCustomers != null;
+  bool get isCustomersCacheFresh =>
+      _cachedCustomers != null && _isCacheValid(_customersCacheTime);
 
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;

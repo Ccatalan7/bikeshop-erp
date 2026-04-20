@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -513,6 +513,7 @@ class InventoryService extends ChangeNotifier {
     required String reasonType,
     String? note,
     DateTime? effectiveAt,
+    String? adjustmentOrigin,
   }) async {
     try {
       final response = await _db.rpc(
@@ -524,6 +525,8 @@ class InventoryService extends ChangeNotifier {
           'p_reason_type': reasonType,
           'p_note': note,
           'p_effective_at': (effectiveAt ?? DateTime.now()).toIso8601String(),
+          'p_adjustment_origin':
+              adjustmentOrigin ?? StockAdjustmentOrigin.productForm.value,
         },
       );
 
@@ -989,12 +992,6 @@ class InventoryService extends ChangeNotifier {
     if (_embeddingBackfillDone) return;
     _embeddingBackfillDone = true;
     try {
-      final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-      if (apiKey.isEmpty) {
-        debugPrint('⚠️ [Embedding] No API key, skipping backfill');
-        return;
-      }
-
       // Fetch only product IDs that are missing embeddings via raw RPC
       final List<dynamic> missingRows = await _db.rpc(
         'get_products_missing_embeddings',

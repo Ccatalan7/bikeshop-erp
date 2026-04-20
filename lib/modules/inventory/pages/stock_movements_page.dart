@@ -1095,6 +1095,11 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 ),
                 _buildAdjustmentMetaItem(
                     'Registrado por', detail.createdByDisplay),
+                if (detail.hasAdjustmentOrigin)
+                  _buildAdjustmentMetaItem(
+                    'Origen',
+                    detail.adjustmentOriginDisplay!,
+                  ),
                 if ((detail.journalEntryNumber ?? '').isNotEmpty)
                   _buildAdjustmentMetaItem(
                     'Asiento',
@@ -1114,8 +1119,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color:
-                  theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1721,7 +1726,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.05), shape: BoxShape.circle),
+              color: Colors.blue.withValues(alpha: 0.05),
+              shape: BoxShape.circle),
           child: Icon(icon, size: 16, color: Colors.blue[700]),
         ),
         const SizedBox(width: 12),
@@ -2546,14 +2552,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           // Source
           SizedBox(
             width: _colSourceWidth,
-            child: Text(
-              movement.sourceDisplay,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: _buildSourceCell(movement),
           ),
           const SizedBox(width: 8),
           // Reference
@@ -2635,6 +2634,66 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+      ],
+    );
+  }
+
+  Widget _buildSourceCell(StockMovement movement) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          movement.sourceDisplay,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (movement.hasAdjustmentOrigin) ...[
+          const SizedBox(height: 2),
+          Text(
+            movement.adjustmentOriginDisplay!,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCompactSourceInfo(StockMovement movement) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          movement.sourceDisplay,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (movement.hasAdjustmentOrigin)
+          Text(
+            movement.adjustmentOriginDisplay!,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
       ],
     );
   }
@@ -2734,9 +2793,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(width: 16),
-                Text(
-                  movement.sourceDisplay,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                Expanded(
+                  child: _buildCompactSourceInfo(movement),
                 ),
               ],
             ),

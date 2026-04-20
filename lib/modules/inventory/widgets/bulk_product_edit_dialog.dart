@@ -16,6 +16,7 @@ import '../models/bulk_product_edit_models.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
 import '../services/bulk_product_edit_service.dart';
+import 'bulk_product_edit_history_dialog.dart';
 
 class BulkProductEditDialog extends StatefulWidget {
   const BulkProductEditDialog({
@@ -45,6 +46,8 @@ class BulkProductEditDialog extends StatefulWidget {
 
 class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   final BulkProductEditService _service = BulkProductEditService();
+  final GlobalKey<BulkProductEditHistoryPanelState> _historyPanelKey =
+      GlobalKey<BulkProductEditHistoryPanelState>();
   final ScrollController _rowsScrollController = ScrollController();
   final TextEditingController _keywordController = TextEditingController();
   final TextEditingController _specQueryController = TextEditingController();
@@ -71,6 +74,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   bool _isDraggingImages = false;
   String? _hoveringImageProductId;
   bool _onlyAssignWhenMissingImage = true;
+  bool _isShowingHistory = false;
   String? _applySummary;
   List<String> _applyErrors = const [];
 
@@ -446,18 +450,193 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         );
     }
 
+    String? historyError;
+    try {
+      await _service.recordHistory(
+        operation: _operation!,
+        scopeSource: _scopeSource,
+        scopeProductCount: _matchedProducts.length,
+        filtersSnapshot: _buildFiltersSnapshot(),
+        configSnapshot: _buildConfigSnapshot(_operation!),
+        result: result,
+      );
+    } catch (error) {
+      historyError =
+          'Los cambios se aplicaron, pero no se pudo guardar el historial: $error';
+    }
+
     if (!mounted) return;
 
     setState(() {
       _isApplying = false;
       _applySummary =
-          'Se procesaron ${result.total} productos. ${result.succeeded} correctos, ${result.failed} con error.';
-      _applyErrors = result.errors;
+          'Se revisaron ${result.total} productos activos. ${result.succeeded} actualizados, ${result.skipped} sin cambios, ${result.failed} con error.';
+      _applyErrors = [
+        ...result.errors,
+        if (historyError != null) historyError,
+      ];
     });
 
-    if (result.failed == 0 && result.succeeded > 0) {
+    if (historyError == null && result.failed == 0 && result.succeeded > 0) {
       Navigator.of(context).pop(true);
     }
+  }
+
+  void _showHistoryPanel() {
+    final shouldRefresh = _isShowingHistory;
+    setState(() {
+      _isShowingHistory = true;
+    });
+
+    if (shouldRefresh) {
+      _historyPanelKey.currentState?.refresh();
+    }
+  }
+
+  void _closeHistoryPanel() {
+    setState(() {
+      _isShowingHistory = false;
+    });
+  }
+
+  Map<String, dynamic> _buildFiltersSnapshot() {
+    final snapshot = <String, dynamic>{
+      'Origen': _scopeSource.label,
+    };
+
+    if (_filters.keyword.trim().isNotEmpty) {
+      snapshot['Texto'] = _filters.keyword.trim();
+    }
+    if (_filters.specQuery.trim().isNotEmpty) {
+      snapshot['Especificaciones'] = _filters.specQuery.trim();
+    }
+    if (_filters.categoryId != null) {
+      snapshot['Categoría'] = widget.categories
+              .where((item) => item.id == _filters.categoryId)
+              .firstOrNull
+              ?.name ??
+          _filters.categoryId!;
+    }
+    if (_filters.brandId != null) {
+      snapshot['Marca'] = widget.brands
+              .where((item) => item.id == _filters.brandId)
+              .firstOrNull
+              ?.name ??
+          _filters.brandId!;
+    }
+    if (_filters.supplierId != null) {
+      snapshot['Proveedor'] = widget.suppliers
+              .where((item) => item.id == _filters.supplierId)
+              .firstOrNull
+              ?.name ??
+          _filters.supplierId!;
+    }
+    if (_filters.productType != null) {
+      snapshot['Tipo'] = _filters.productType!.displayName;
+    }
+    if (_filters.stockState != BulkFilterStockState.all) {
+      snapshot['Inventario'] = _filters.stockState.label;
+    }
+    if (_filters.websiteState != BulkToggleState.keep) {
+      snapshot['Portal web'] = _filters.websiteState.label;
+    }
+    if (_filters.googleMerchantState != BulkToggleState.keep) {
+      snapshot['Merchant'] = _filters.googleMerchantState.label;
+    }
+    if (_filters.activeState != BulkToggleState.keep) {
+      snapshot['Estado activo'] = _filters.activeState.label;
+    }
+    if (_filters.onlyMissingCategory) {
+      snapshot['Aviso'] = 'Solo productos sin categoría';
+    }
+    if (_filters.onlyMissingBrand) {
+      snapshot['Aviso marca'] = 'Solo productos sin marca';
+    }
+    if (_filters.onlyMissingImage) {
+      snapshot['Aviso imagen'] = 'Solo productos sin imagen';
+    }
+
+    return snapshot;
+  }
+
+  Map<String, dynamic> _buildConfigSnapshot(
+      BulkProductEditOperation operation) {
+    switch (operation) {
+      case BulkProductEditOperation.classification:
+        final snapshot = <String, dynamic>{};
+        if (_classificationConfig.categoryName != null) {
+          snapshot['Categoría destino'] = _classificationConfig.categoryName!;
+        }
+        if (_classificationConfig.brandName != null) {
+          snapshot['Marca destino'] = _classificationConfig.brandName!;
+        }
+        if (_classificationConfig.supplierName != null) {
+          snapshot['Proveedor destino'] = _classificationConfig.supplierName!;
+        }
+        snapshot['Solo rellenar vacíos'] =
+            _classificationConfig.onlyFillMissing;
+        return snapshot;
+      case BulkProductEditOperation.channels:
+        return {
+          if (_channelsConfig.website != BulkToggleState.keep)
+            'Portal web': _channelsConfig.website.label,
+          if (_channelsConfig.googleMerchant != BulkToggleState.keep)
+            'Merchant': _channelsConfig.googleMerchant.label,
+          if (_channelsConfig.active != BulkToggleState.keep)
+            'Estado activo': _channelsConfig.active.label,
+        };
+      case BulkProductEditOperation.pricing:
+        return {
+          if (_pricingConfig.price.isActive)
+            'Precio': _formatNumericChange(_pricingConfig.price),
+          if (_pricingConfig.cost.isActive)
+            'Costo': _formatNumericChange(_pricingConfig.cost),
+          'Redondeo': _pricingConfig.rounding.label,
+        };
+      case BulkProductEditOperation.stock:
+        return {
+          'Modo': _stockSharedConfig.mode.label,
+          if (_stockSharedConfig.mode == BulkStockEditMode.delta)
+            'Dirección': _stockSharedConfig.direction.label,
+          'Motivo base': _reasonLabels[_stockSharedConfig.reasonType] ??
+              _stockSharedConfig.reasonType,
+          if (_stockSharedConfig.sharedNote.trim().isNotEmpty)
+            'Nota compartida': _stockSharedConfig.sharedNote.trim(),
+          if (_stockSharedConfig.defaultQuantity != null)
+            'Cantidad sugerida': _stockSharedConfig.defaultQuantity,
+          'Fecha efectiva': _formatHistoryDate(_stockSharedConfig.effectiveAt),
+        };
+      case BulkProductEditOperation.images:
+        return {
+          'Solo cuando falta imagen': _onlyAssignWhenMissingImage,
+          'Archivos cargados': _imagePool.length,
+        };
+    }
+  }
+
+  String _formatNumericChange(BulkNumericChange change) {
+    final value = change.value ?? 0;
+    switch (change.mode) {
+      case BulkNumericChangeMode.keep:
+        return change.mode.label;
+      case BulkNumericChangeMode.set:
+      case BulkNumericChangeMode.increaseFixed:
+      case BulkNumericChangeMode.decreaseFixed:
+        return '${change.mode.label}: ${ChileanUtils.formatCurrency(value)}';
+      case BulkNumericChangeMode.increasePercent:
+      case BulkNumericChangeMode.decreasePercent:
+        return '${change.mode.label}: ${value.toStringAsFixed(2)}%';
+    }
+  }
+
+  String _formatHistoryDate(DateTime value) {
+    final local = value.toLocal();
+    final twoDigitHour = local.hour.toString().padLeft(2, '0');
+    final twoDigitMinute = local.minute.toString().padLeft(2, '0');
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/'
+        '${local.year} '
+        '$twoDigitHour:$twoDigitMinute';
   }
 
   Future<void> _pickImageFiles() async {
@@ -801,11 +980,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
             Container(
               width: 250,
               decoration: BoxDecoration(
-                color:
-                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.3),
                 border: Border(
                   right: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                   ),
                 ),
               ),
@@ -814,7 +994,11 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 children: [
                   _buildSidebarHeader(theme),
                   const SizedBox(height: 24),
-                  Expanded(child: _buildVerticalStepper(theme)),
+                  Expanded(
+                    child: _isShowingHistory
+                        ? _buildHistorySidebar(theme)
+                        : _buildVerticalStepper(theme),
+                  ),
                 ],
               ),
             ),
@@ -830,10 +1014,18 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
                         child: KeyedSubtree(
-                          key: ValueKey<int>(_stepIndex),
+                          key: ValueKey<String>(
+                            _isShowingHistory ? 'history' : 'step_$_stepIndex',
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                            child: _buildStepContent(theme),
+                            child: _isShowingHistory
+                                ? BulkProductEditHistoryPanel(
+                                    key: _historyPanelKey,
+                                    service: _service,
+                                    onBackToEditor: _closeHistoryPanel,
+                                  )
+                                : _buildStepContent(theme),
                           ),
                         ),
                       ),
@@ -877,10 +1069,101 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Sistematiza el control de inventario.',
+            _isShowingHistory
+                ? 'Consulta ejecuciones auditadas sin salir del mismo lote.'
+                : 'Sistematiza el control de inventario.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed:
+                _isShowingHistory ? _closeHistoryPanel : _showHistoryPanel,
+            icon: Icon(
+              _isShowingHistory
+                  ? Icons.arrow_back_rounded
+                  : Icons.history_rounded,
+              size: 18,
+            ),
+            label: Text(_isShowingHistory ? 'Volver al lote' : 'Historial'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistorySidebar(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.history_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Auditoría del módulo',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Aquí ves los lotes guardados con su resumen, detalle por producto y errores reportados.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer
+                        .withValues(alpha: 0.85),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Límite histórico',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Las ediciones masivas previas a esta implementación no quedaron guardadas como lotes auditables. Por eso este historial parte desde las nuevas ejecuciones.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -928,8 +1211,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       boxShadow: isActive
                           ? [
                               BoxShadow(
-                                color:
-                                    theme.colorScheme.primary.withValues(alpha: 0.3),
+                                color: theme.colorScheme.primary
+                                    .withValues(alpha: 0.3),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               )
@@ -958,7 +1241,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       decoration: BoxDecoration(
                         color: isDone
                             ? theme.colorScheme.primary.withValues(alpha: 0.3)
-                            : theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                            : theme.colorScheme.outlineVariant
+                                .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -1210,12 +1494,14 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -1246,12 +1532,14 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -1587,7 +1875,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           ),
           if (!_isRefreshingScope) _buildCleanStatRow(theme),
           const SizedBox(height: 16),
-          Divider(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          Divider(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Expanded(
             child: _matchedProducts.isEmpty
@@ -1611,7 +1900,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     itemCount: math.min(_matchedProducts.length, 10),
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
-                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.3),
                     ),
                     itemBuilder: (context, index) {
                       final product = _matchedProducts[index];
@@ -1684,7 +1974,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                                   const SizedBox(height: 2),
                                   Text(
                                     [
-                                      if (product.sku != null) product.sku,
+                                      product.sku,
                                       if (product.categoryName != null)
                                         product.categoryName,
                                       if (product.brand != null) product.brand,
@@ -1700,7 +1990,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                             ),
                             const SizedBox(width: 16),
                             Text(
-                              '${product.inventoryQty ?? 0}',
+                              '${product.inventoryQty}',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: theme.colorScheme.onSurface,
@@ -1802,13 +2092,15 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                     border: Border.all(
                       color: isSelected
                           ? theme.colorScheme.primary
-                          : theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                          : theme.colorScheme.outlineVariant
+                              .withValues(alpha: 0.3),
                       width: isSelected ? 2 : 1,
                     ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.1),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             )
@@ -1885,12 +2177,14 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             collapsedShape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
             title: Row(
               children: [
@@ -1942,7 +2236,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.5)),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -2584,7 +2879,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                   border: Border.all(
                     color: _isDraggingImages
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                        : theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5),
                   ),
                 ),
                 child: Row(
@@ -2945,7 +3241,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
+          height: 1,
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) {
         final product = _matchedProducts[index];
         final productId = product.id;
@@ -3113,7 +3410,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
+          height: 1,
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) {
         final product = _matchedProducts[index];
         final productId = product.id;
@@ -3296,7 +3594,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                   border: Border.all(
                     color: isRowDropTarget
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                        : theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.6),
                     width: isRowDropTarget ? 2 : 1,
                   ),
                   borderRadius: BorderRadius.circular(8),
@@ -3405,6 +3704,34 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   }
 
   Widget _buildFooter(ThemeData theme) {
+    if (_isShowingHistory) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+            const Spacer(),
+            FilledButton.tonalIcon(
+              onPressed: _closeHistoryPanel,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Volver a edición'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
       decoration: BoxDecoration(
@@ -3569,8 +3896,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       onSelected: onChanged,
       showCheckmark: false,
       selectedColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-      side:
-          BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+      side: BorderSide(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
     );
   }
 
@@ -3585,7 +3912,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       itemCount: _matchedProducts.length,
       separatorBuilder: (_, __) => Divider(
-          height: 1, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
+          height: 1,
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25)),
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: rowBuilder(_matchedProducts[index]),

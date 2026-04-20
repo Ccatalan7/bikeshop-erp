@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/brake_canonical_data.dart';
+import '../config/diagnosis_field_definitions.dart';
+import '../config/drivetrain_canonical_data.dart';
 
 /// A single question in the service wizard
 class ServiceProfileQuestion {
@@ -155,30 +157,46 @@ class ServiceWizardService {
       return null;
     }
 
-    if (profile.serviceFamily != 'brake' && profile.serviceFamily != 'brakes') {
-      return profile;
+    if (profile.serviceFamily == 'brake' || profile.serviceFamily == 'brakes') {
+      return ServiceWizardProfile(
+        id: profile.id,
+        name: profile.name,
+        serviceFamily: 'brake',
+        customerSummaryTemplate: profile.customerSummaryTemplate,
+        questions: _normalizeBrakeQuestions(profile.questions),
+      );
     }
 
-    return ServiceWizardProfile(
-      id: profile.id,
-      name: profile.name,
-      serviceFamily: 'brake',
-      customerSummaryTemplate: profile.customerSummaryTemplate,
-      questions: _normalizeBrakeQuestions(profile.questions),
-    );
+    if (profile.serviceFamily == 'drivetrain') {
+      return ServiceWizardProfile(
+        id: profile.id,
+        name: profile.name,
+        serviceFamily: profile.serviceFamily,
+        customerSummaryTemplate: profile.customerSummaryTemplate,
+        questions: _normalizeDrivetrainQuestions(profile.questions),
+      );
+    }
+
+    return profile;
   }
 
   static Map<String, dynamic> normalizeAnswersForProfile(
     ServiceWizardProfile? profile,
     Map<String, dynamic> answers,
   ) {
-    if (profile == null ||
-        (profile.serviceFamily != 'brake' &&
-            profile.serviceFamily != 'brakes')) {
+    if (profile == null) {
       return Map<String, dynamic>.from(answers);
     }
 
-    return canonicalizeBrakeWizardAnswers(answers);
+    if (profile.serviceFamily == 'brake' || profile.serviceFamily == 'brakes') {
+      return canonicalizeBrakeWizardAnswers(answers);
+    }
+
+    if (profile.serviceFamily == 'drivetrain') {
+      return canonicalizeDrivetrainWizardAnswers(answers);
+    }
+
+    return Map<String, dynamic>.from(answers);
   }
 
   /// Generate a human-readable summary from wizard answers + questions.
@@ -246,9 +264,61 @@ class ServiceWizardService {
         return kBrakeTypeDisplayLabels[rawValue] ?? rawValue;
       case 'symptom':
         return resolveBrakeSymptomLabel(rawValue) ?? rawValue;
+      case 'chain_wear':
+      case 'cable_condition':
+        return resolveDrivetrainAnswerLabel(q.key, rawValue) ?? rawValue;
       default:
+        final definition = diagnosisFieldDefinitionForKey(q.key);
+        if (definition != null) {
+          return definition.options[rawValue] ?? rawValue;
+        }
         return rawValue;
     }
+  }
+
+  static List<ServiceProfileQuestion> _normalizeDrivetrainQuestions(
+    List<ServiceProfileQuestion> questions,
+  ) {
+    final result = <ServiceProfileQuestion>[];
+
+    for (final question in questions) {
+      if (isDiagnosisLinkedDrivetrainQuestionKey(question.key)) {
+        final definition = diagnosisFieldDefinitionForKey(question.key);
+        if (definition != null) {
+          result.add(
+            question.copyWith(
+              label: definition.label,
+              options: _optionsFromMap(definition.options),
+            ),
+          );
+          continue;
+        }
+      }
+
+      if (question.key == 'derailleurs') {
+        result.add(
+          question.copyWith(
+            label: '¿Que desviadores?',
+            options: const [
+              ServiceQuestionOption(value: 'rear', label: 'Trasero'),
+              ServiceQuestionOption(value: 'front', label: 'Delantero'),
+            ],
+          ),
+        );
+        continue;
+      }
+
+      result.add(question);
+    }
+
+    result.sort((left, right) {
+      final orderComparison = left.sortOrder.compareTo(right.sortOrder);
+      if (orderComparison != 0) {
+        return orderComparison;
+      }
+      return left.key.compareTo(right.key);
+    });
+    return result;
   }
 
   static List<ServiceProfileQuestion> _normalizeBrakeQuestions(

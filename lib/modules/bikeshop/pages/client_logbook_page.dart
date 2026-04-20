@@ -195,10 +195,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     });
 
     _loadData();
-    if (initialIndex == 3) {
+    if (initialIndex == 2) {
       unawaited(_loadInvoices());
     }
-    if (initialIndex == 4) {
+    if (initialIndex == 3) {
       unawaited(_loadChats());
     }
   }
@@ -310,12 +310,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     switch (initialTab) {
       case 'pegas':
         return 1;
-      case 'historial':
-        return 2;
       case 'facturas':
       case 'invoices':
-        return 3;
+        return 2;
       case 'chats':
+        return 3;
+      case 'historial':
         return 4;
       default:
         return 0;
@@ -327,12 +327,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       return;
     }
 
-    if (_tabController.index == 3 &&
+    if (_tabController.index == 2 &&
         !_hasLoadedInvoices &&
         !_isLoadingInvoices) {
       unawaited(_loadInvoices());
     }
-    if (_tabController.index == 4 && !_hasLoadedChats && !_isLoadingChats) {
+    if (_tabController.index == 3 && !_hasLoadedChats && !_isLoadingChats) {
       unawaited(_loadChats());
     }
   }
@@ -1207,6 +1207,25 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Back link ──
+            GestureDetector(
+              onTap: () => context.go('/clientes'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 12, color: theme.colorScheme.primary),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Clientes',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             // ── Identity ──
             Center(
               child: CircleAvatar(
@@ -1476,18 +1495,6 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Historial'),
-                        if (_timeline.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(_timeline.length),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
                         const Text('Facturas'),
                         if (_invoices.isNotEmpty) ...[
                           const SizedBox(width: 6),
@@ -1521,6 +1528,18 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                             highlightValue:
                                 _chats.where((c) => c.unreadCount > 0).length,
                           ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Historial'),
+                        if (_timeline.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _buildTabCount(_timeline.length),
                         ],
                       ],
                     ),
@@ -1599,9 +1618,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
             children: [
               _buildBikesTab(),
               _buildJobsTab(),
-              _buildTimelineTab(),
               _buildInvoicesTab(),
               _buildChatsTab(),
+              _buildTimelineTab(),
             ],
           ),
         ),

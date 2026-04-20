@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../config/brake_canonical_data.dart';
+import '../config/diagnosis_field_definitions.dart';
 import '../services/service_wizard_service.dart';
 import 'bikeshop_multi_select_picker_field.dart';
 
@@ -174,7 +174,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
   bool _prefersDropdownInput(ServiceProfileQuestion q) {
     return _overrideFor(q)?.preferDropdownInput == true ||
         (_isDiagnosisLinked(q) &&
-            isDiagnosisLinkedBrakeQuestionKey(q.key) &&
+            isDiagnosisSemanticFieldKey(q.key) &&
             (q.questionType == 'single_select' ||
                 q.questionType == 'multi_select'));
   }

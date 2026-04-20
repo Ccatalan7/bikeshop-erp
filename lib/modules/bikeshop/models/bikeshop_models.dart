@@ -3137,6 +3137,7 @@ class MechanicJobDiagnosisSheet {
 class DrivetrainDiagnosisSheet {
   final BikeSystemOverallStatus overallStatus;
   final double? chainWearPercent;
+  final String? cableCondition;
   final String? chainLubricationStatus;
   final String? cassetteCondition;
   final String? chainringCondition;
@@ -3148,6 +3149,7 @@ class DrivetrainDiagnosisSheet {
   const DrivetrainDiagnosisSheet({
     this.overallStatus = BikeSystemOverallStatus.unknown,
     this.chainWearPercent,
+    this.cableCondition,
     this.chainLubricationStatus,
     this.cassetteCondition,
     this.chainringCondition,
@@ -3160,6 +3162,7 @@ class DrivetrainDiagnosisSheet {
   bool get hasMeaningfulData =>
       overallStatus != BikeSystemOverallStatus.unknown ||
       chainWearPercent != null ||
+      (cableCondition != null && cableCondition!.isNotEmpty) ||
       (chainLubricationStatus != null && chainLubricationStatus!.isNotEmpty) ||
       (cassetteCondition != null && cassetteCondition!.isNotEmpty) ||
       (chainringCondition != null && chainringCondition!.isNotEmpty) ||
@@ -3177,6 +3180,7 @@ class DrivetrainDiagnosisSheet {
       ),
       chainWearPercent:
           double.tryParse(json['chain_wear_percent']?.toString() ?? ''),
+      cableCondition: json['cable_condition']?.toString(),
       chainLubricationStatus: json['chain_lubrication_status']?.toString(),
       cassetteCondition: json['cassette_condition']?.toString(),
       chainringCondition: json['chainring_condition']?.toString(),
@@ -3191,6 +3195,7 @@ class DrivetrainDiagnosisSheet {
     return {
       'overall_status': overallStatus.dbValue,
       'chain_wear_percent': chainWearPercent,
+      'cable_condition': cableCondition,
       'chain_lubrication_status': chainLubricationStatus,
       'cassette_condition': cassetteCondition,
       'chainring_condition': chainringCondition,
@@ -3205,6 +3210,8 @@ class DrivetrainDiagnosisSheet {
     BikeSystemOverallStatus? overallStatus,
     double? chainWearPercent,
     bool clearChainWearPercent = false,
+    String? cableCondition,
+    bool clearCableCondition = false,
     String? chainLubricationStatus,
     bool clearChainLubricationStatus = false,
     String? cassetteCondition,
@@ -3225,6 +3232,8 @@ class DrivetrainDiagnosisSheet {
       chainWearPercent: clearChainWearPercent
           ? null
           : (chainWearPercent ?? this.chainWearPercent),
+      cableCondition:
+          clearCableCondition ? null : (cableCondition ?? this.cableCondition),
       chainLubricationStatus: clearChainLubricationStatus
           ? null
           : (chainLubricationStatus ?? this.chainLubricationStatus),
@@ -3373,6 +3382,7 @@ class MechanicJobItem {
   final double unitPrice;
   final double totalPrice;
   final String? notes;
+  final Map<String, dynamic>? serviceConfigurationData;
   final String itemType; // 'product' | 'service' | 'adhoc'
   final String? systemKey;
   final String? componentSlotKey;
@@ -3394,6 +3404,7 @@ class MechanicJobItem {
     this.unitPrice = 0,
     this.totalPrice = 0,
     this.notes,
+    this.serviceConfigurationData,
     this.itemType = 'product',
     this.systemKey,
     this.componentSlotKey,
@@ -3417,6 +3428,14 @@ class MechanicJobItem {
       unitPrice: double.tryParse(json['unit_price']?.toString() ?? '0') ?? 0,
       totalPrice: double.tryParse(json['total_price']?.toString() ?? '0') ?? 0,
       notes: json['notes'] as String?,
+      serviceConfigurationData:
+          json['service_configuration_data'] is Map<String, dynamic>
+              ? Map<String, dynamic>.from(
+                  json['service_configuration_data'] as Map<String, dynamic>)
+              : (json['service_configuration_data'] is Map
+                  ? Map<String, dynamic>.from(
+                      json['service_configuration_data'] as Map)
+                  : null),
       itemType: json['item_type'] as String? ?? 'product',
       systemKey: json['system_key']?.toString(),
       componentSlotKey: json['component_slot_key']?.toString(),
@@ -3445,6 +3464,7 @@ class MechanicJobItem {
       'unit_price': unitPrice,
       'total_price': totalPrice,
       'notes': notes,
+      'service_configuration_data': serviceConfigurationData,
       'item_type': itemType,
       'system_key': systemKey,
       'component_slot_key': componentSlotKey,
@@ -3468,6 +3488,7 @@ class MechanicJobItem {
     double? unitPrice,
     double? totalPrice,
     String? notes,
+    Map<String, dynamic>? serviceConfigurationData,
     String? itemType,
     String? systemKey,
     String? componentSlotKey,
@@ -3488,6 +3509,8 @@ class MechanicJobItem {
       unitPrice: unitPrice ?? this.unitPrice,
       totalPrice: totalPrice ?? this.totalPrice,
       notes: notes ?? this.notes,
+      serviceConfigurationData:
+          serviceConfigurationData ?? this.serviceConfigurationData,
       itemType: itemType ?? this.itemType,
       systemKey: systemKey ?? this.systemKey,
       componentSlotKey: componentSlotKey ?? this.componentSlotKey,

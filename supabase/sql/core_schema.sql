@@ -3065,6 +3065,7 @@ create table if not exists stock_adjustments (
   reason text,
   notes text,
   reference text, -- For imports: stores import batch ID or filename
+  adjustment_origin text,
   adjustment_date timestamp with time zone not null default now(),
   created_by uuid references auth.users(id),
   created_at timestamp with time zone not null default now(),
@@ -3073,6 +3074,7 @@ create table if not exists stock_adjustments (
 
 -- Migration: Add reference column for existing tables (if created before this was added)
 alter table stock_adjustments add column if not exists reference text;
+alter table stock_adjustments add column if not exists adjustment_origin text;
 alter table stock_adjustments add column if not exists adjustment_date timestamp with time zone;
 
 update stock_adjustments
@@ -3102,6 +3104,7 @@ create index if not exists idx_stock_adjustments_tenant on stock_adjustments(ten
 create index if not exists idx_stock_adjustments_product on stock_adjustments(product_id);
 create index if not exists idx_stock_adjustments_created_at on stock_adjustments(created_at);
 create index if not exists idx_stock_adjustments_adjustment_date on stock_adjustments(adjustment_date);
+create index if not exists idx_stock_adjustments_tenant_origin on stock_adjustments(tenant_id, adjustment_origin);
 
 -- Enable RLS
 alter table stock_adjustments enable row level security;
@@ -3124,6 +3127,59 @@ create policy "stock_adjustments_update" on stock_adjustments
   using (tenant_id = public.user_tenant_id());
 
 create policy "stock_adjustments_delete" on stock_adjustments
+  for delete to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- PRODUCT BULK EDIT HISTORY - Immutable audit trail for mass inventory edits
+-- ============================================================================
+create table if not exists product_bulk_edit_history (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  operation text not null check (operation in ('classification', 'channels', 'pricing', 'stock', 'images')),
+  scope_source text not null check (scope_source in ('selected', 'filtered', 'all')),
+  status text not null check (status in ('completed', 'partial', 'failed', 'skipped')),
+  actor_name text,
+  summary text,
+  scope_product_count integer not null default 0,
+  enabled_product_count integer not null default 0,
+  succeeded_product_count integer not null default 0,
+  skipped_product_count integer not null default 0,
+  failed_product_count integer not null default 0,
+  filters_snapshot jsonb not null default '{}'::jsonb,
+  config_snapshot jsonb not null default '{}'::jsonb,
+  product_changes jsonb not null default '[]'::jsonb,
+  errors jsonb not null default '[]'::jsonb,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamp with time zone not null default now(),
+  unique(tenant_id, id)
+);
+
+create index if not exists idx_product_bulk_edit_history_tenant_created_at
+  on product_bulk_edit_history(tenant_id, created_at desc);
+create index if not exists idx_product_bulk_edit_history_created_by
+  on product_bulk_edit_history(created_by);
+
+alter table product_bulk_edit_history enable row level security;
+
+drop policy if exists "product_bulk_edit_history_select" on product_bulk_edit_history;
+drop policy if exists "product_bulk_edit_history_insert" on product_bulk_edit_history;
+drop policy if exists "product_bulk_edit_history_update" on product_bulk_edit_history;
+drop policy if exists "product_bulk_edit_history_delete" on product_bulk_edit_history;
+
+create policy "product_bulk_edit_history_select" on product_bulk_edit_history
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "product_bulk_edit_history_insert" on product_bulk_edit_history
+  for insert to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "product_bulk_edit_history_update" on product_bulk_edit_history
+  for update to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "product_bulk_edit_history_delete" on product_bulk_edit_history
   for delete to authenticated
   using (tenant_id = public.user_tenant_id());
 
@@ -9519,6 +9575,7 @@ movements_with_resolution as (
     end as reference_number,
     md.quantity,
     md.notes,
+    sa.adjustment_origin,
     coalesce(md.created_by, sa.created_by) as created_by,
     md.created_at,
     md.tenant_id
@@ -9574,6 +9631,7 @@ select
   (calculated_stock_after - quantity)::integer as stock_before,
   calculated_stock_after as stock_after,
   notes,
+  adjustment_origin,
   created_by,
   created_at,
   tenant_id
@@ -9616,13 +9674,16 @@ create trigger trg_sync_adjustment_to_movement
   for each row
   execute function sync_stock_adjustment_to_movement();
 
+drop function if exists public.apply_inventory_stock_adjustment(uuid, integer, text, text, text, timestamp with time zone);
+
 create or replace function public.apply_inventory_stock_adjustment(
   p_product_id uuid,
   p_quantity integer,
   p_type text,
   p_reason_type text,
   p_note text default null,
-  p_effective_at timestamp with time zone default now()
+  p_effective_at timestamp with time zone default now(),
+  p_adjustment_origin text default null
 )
 returns jsonb
 language plpgsql
@@ -9638,6 +9699,8 @@ declare
   v_reason text;
   v_adjustment_type text;
   v_reference text;
+  v_adjustment_origin text;
+  v_adjustment_origin_label text;
   v_adjustment_date timestamp with time zone := coalesce(p_effective_at, now());
   v_created_at timestamp with time zone := now();
   v_adjustment_id uuid;
@@ -9673,6 +9736,14 @@ begin
 
   if p_type = 'OUT' and p_reason_type = 'found' then
     raise exception 'Reason % is only valid for stock increases', p_reason_type
+      using errcode = 'check_violation';
+  end if;
+
+  v_adjustment_origin := nullif(trim(coalesce(p_adjustment_origin, '')), '');
+
+  if v_adjustment_origin is not null
+     and v_adjustment_origin not in ('product_form', 'mass_edit_panel', 'manual_service') then
+    raise exception 'Invalid stock adjustment origin: %', v_adjustment_origin
       using errcode = 'check_violation';
   end if;
 
@@ -9731,9 +9802,20 @@ begin
     when nullif(trim(coalesce(p_note, '')), '') is null then v_reason_label
     else format('%s: %s', v_reason_label, trim(p_note))
   end;
+
+  case v_adjustment_origin
+    when 'product_form' then v_adjustment_origin_label := 'Formulario producto';
+    when 'mass_edit_panel' then v_adjustment_origin_label := 'Edicion masiva';
+    when 'manual_service' then v_adjustment_origin_label := 'Ajuste manual';
+    else v_adjustment_origin_label := null;
+  end case;
+
   v_reference := public.get_next_document_number(v_product.tenant_id, 'stock_adjustment');
   v_inventory_value := round(abs(v_delta) * greatest(coalesce(v_product.cost, 0), 0), 2);
-  v_description := format('%s %s - %s', v_reason_label, v_reference, v_product.name);
+  v_description := case
+    when v_adjustment_origin_label is null then format('%s %s - %s', v_reason_label, v_reference, v_product.name)
+    else format('%s [%s] %s - %s', v_reason_label, v_adjustment_origin_label, v_reference, v_product.name)
+  end;
 
   perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
 
@@ -9753,6 +9835,7 @@ begin
     stock_after,
     reason,
     reference,
+    adjustment_origin,
     adjustment_date,
     created_by,
     created_at
@@ -9765,6 +9848,7 @@ begin
     v_stock_after,
     v_reason,
     v_reference,
+    v_adjustment_origin,
     v_adjustment_date,
     auth.uid(),
     v_created_at
@@ -9996,6 +10080,7 @@ begin
     'stock_before', v_stock_before,
     'stock_after', v_stock_after,
     'reason', v_reason,
+    'adjustment_origin', v_adjustment_origin,
     'adjustment_date', v_adjustment_date,
     'created_at', v_created_at,
     'journal_entry_id', v_entry_id,
@@ -10009,13 +10094,16 @@ exception
 end;
 $$;
 
-grant execute on function public.apply_inventory_stock_adjustment(uuid, integer, text, text, text, timestamp with time zone) to authenticated;
+grant execute on function public.apply_inventory_stock_adjustment(uuid, integer, text, text, text, timestamp with time zone, text) to authenticated;
+
+drop function if exists public.apply_manual_stock_adjustment(uuid, integer, text, text);
 
 create or replace function public.apply_manual_stock_adjustment(
   p_product_id uuid,
   p_quantity integer,
   p_type text,
-  p_reason text default 'Ajuste Manual'
+  p_reason text default 'Ajuste Manual',
+  p_adjustment_origin text default 'manual_service'
 )
 returns jsonb
 language plpgsql
@@ -10029,12 +10117,13 @@ begin
     p_type,
     'count',
     p_reason,
-    now()
+    now(),
+    p_adjustment_origin
   );
 end;
 $$;
 
-grant execute on function public.apply_manual_stock_adjustment(uuid, integer, text, text) to authenticated;
+grant execute on function public.apply_manual_stock_adjustment(uuid, integer, text, text, text) to authenticated;
 
 create or replace function public.get_stock_adjustment_details(
   p_adjustment_id uuid
@@ -10062,6 +10151,7 @@ begin
     sa.stock_after,
     sa.reason,
     sa.reference,
+    sa.adjustment_origin,
     sa.adjustment_date,
     sa.created_at,
     sa.created_by,
@@ -10128,6 +10218,7 @@ begin
     'stock_before', v_adjustment.stock_before,
     'stock_after', v_adjustment.stock_after,
     'reason', v_adjustment.reason,
+    'adjustment_origin', v_adjustment.adjustment_origin,
     'adjustment_date', v_adjustment.adjustment_date,
     'created_at', v_adjustment.created_at,
     'created_by', v_adjustment.created_by,
@@ -13315,6 +13406,7 @@ create table if not exists mechanic_job_items (
   unit_price numeric(12,2) not null default 0,
   total_price numeric(12,2) not null default 0,
   notes text,
+  service_configuration_data jsonb,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
@@ -13344,6 +13436,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'notes') then
     alter table mechanic_job_items add column notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'service_configuration_data') then
+    alter table mechanic_job_items add column service_configuration_data jsonb;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'created_at') then
     alter table mechanic_job_items add column created_at timestamp with time zone not null default now();

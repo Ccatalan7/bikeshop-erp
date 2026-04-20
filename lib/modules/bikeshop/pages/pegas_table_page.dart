@@ -20,6 +20,7 @@ import '../../../shared/services/database_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
 
 import '../../../shared/services/image_service.dart';
 import '../services/bikeshop_service.dart';
@@ -59,6 +60,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   late CustomerService _customerService;
   late DatabaseService _databaseService;
   late JobStatusService _jobStatusService;
+  late SalesService _salesService;
 
   List<MechanicJob> _jobs = [];
   List<MechanicJob> _filteredJobs = [];
@@ -170,6 +172,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
+    _salesService = Provider.of<SalesService>(context, listen: false);
 
     // Listen to BikeshopService changes (realtime updates for jobs AND invoices)
     _bikeshopService.addListener(_onBikeshopServiceChanged);
@@ -261,6 +264,18 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     setState(() {
       _jobs = _bikeshopService.cachedJobs;
+      if (_customerService.hasCustomersCache) {
+        _customers = _buildCustomerMap(_customerService.cachedCustomers);
+      }
+      if (_bikeshopService.hasBikesCache) {
+        _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
+      }
+      if (_bikeshopService.hasJobBikesCache) {
+        _jobBikesMap = _bikeshopService.cachedAllJobBikes;
+      }
+      if (_salesService.hasInvoicesCache) {
+        _invoices = _buildInvoiceMap(_salesService.cachedInvoices);
+      }
 
       // Update selected job if it exists in the new list (to get fresh totals/status)
       if (_selectedJob != null) {
@@ -496,12 +511,71 @@ class _PegasTablePageState extends State<PegasTablePage>
     await _loadData();
   }
 
+  Map<String, Customer> _buildCustomerMap(List<Customer> customers) {
+    final customerMap = <String, Customer>{};
+    for (final customer in customers) {
+      final customerId = customer.id;
+      if (customerId != null) {
+        customerMap[customerId] = customer;
+      }
+    }
+    return customerMap;
+  }
+
+  Map<String, Bike> _buildBikeMap(List<Bike> bikes) {
+    final bikeMap = <String, Bike>{};
+    for (final bike in bikes) {
+      final bikeId = bike.id;
+      if (bikeId != null) {
+        bikeMap[bikeId] = bike;
+      }
+    }
+    return bikeMap;
+  }
+
+  Map<String, Invoice> _buildInvoiceMap(List<Invoice> invoices) {
+    final invoiceMap = <String, Invoice>{};
+    for (final invoice in invoices) {
+      final invoiceId = invoice.id;
+      if (invoiceId != null) {
+        invoiceMap[invoiceId] = invoice;
+      }
+    }
+    return invoiceMap;
+  }
+
+  bool _isJobInvoicedEffective(MechanicJob job) {
+    return job.invoiceId != null || job.isInvoiced;
+  }
+
+  bool _isJobPaidEffective(MechanicJob job, {Invoice? invoice}) {
+    final resolvedInvoice =
+        invoice ?? (job.invoiceId != null ? _invoices[job.invoiceId] : null);
+    if (resolvedInvoice != null) {
+      return resolvedInvoice.status == InvoiceStatus.paid;
+    }
+    return job.isPaid;
+  }
+
+  bool get _canUseFreshInstantCache =>
+      _bikeshopService.isJobsCacheFresh &&
+      _customerService.isCustomersCacheFresh &&
+      _bikeshopService.isBikesCacheFresh &&
+      _bikeshopService.isJobBikesCacheFresh &&
+      _salesService.isInvoicesCacheFresh;
+
   Future<void> _loadData() async {
-    // Show cached jobs immediately if available (instant render)
-    if (_bikeshopService.hasJobsCache && _jobs.isEmpty) {
+    // Only instant-render when all companion caches are still fresh.
+    // Rendering from an expired jobs cache causes the stale first frame the user sees
+    // before the full fetch corrects customer/bike names and row membership.
+    if (_canUseFreshInstantCache && _jobs.isEmpty) {
       setState(() {
         _jobs = _bikeshopService.cachedJobs;
         _filteredJobs = _jobs;
+        _customers = _buildCustomerMap(_customerService.cachedCustomers);
+        _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
+        _jobBikesMap = _bikeshopService.cachedAllJobBikes;
+        _invoices = _buildInvoiceMap(_salesService.cachedInvoices);
         _isLoading = false;
       });
       _applyFiltersAndSort();
@@ -524,20 +598,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       final invoices = results[3] as List<Invoice>;
       final jobBikesMap = results[4] as Map<String, List<MechanicJobBike>>;
 
-      final customerMap = <String, Customer>{};
-      for (final customer in customers) {
-        if (customer.id != null) customerMap[customer.id!] = customer;
-      }
+      final customerMap = _buildCustomerMap(customers);
+      final bikeMap = _buildBikeMap(bikes);
 
-      final bikeMap = <String, Bike>{};
-      for (final bike in bikes) {
-        if (bike.id != null) bikeMap[bike.id!] = bike;
-      }
-
-      final invoiceMap = <String, Invoice>{};
-      for (final invoice in invoices) {
-        if (invoice.id != null) invoiceMap[invoice.id!] = invoice;
-      }
+      final invoiceMap = _buildInvoiceMap(invoices);
 
       if (mounted) {
         setState(() {
@@ -563,8 +627,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<List<Invoice>> _loadInvoices() async {
     try {
-      final data = await _databaseService.select('sales_invoices');
-      return data.map((json) => Invoice.fromJson(json)).toList();
+      await _salesService.loadInvoices();
+      return _salesService.cachedInvoices.toList();
     } catch (e) {
       return [];
     }
@@ -676,9 +740,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     var filtered = _jobs.where((job) {
       final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
       final isMarkedAsTest = _jobMatchesTestFilter(job);
-      final isInvoicedEffective = job.isInvoiced || job.invoiceId != null;
-      final isPaidEffective =
-          job.isPaid || (invoice?.status == InvoiceStatus.paid);
+      final isInvoicedEffective = _isJobInvoicedEffective(job);
+      final isPaidEffective = _isJobPaidEffective(job, invoice: invoice);
 
       final isDelivered = job.deliveredAt != null ||
           job.status == JobStatus.entregado ||
@@ -2232,9 +2295,14 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     }
 
-    final items = _filteredJobs
-        .where((j) => j.jobType == JobType.itemService || j.bikeId == null)
-        .length;
+    final items = _filteredJobs.where((j) {
+      if (j.jobType == JobType.itemService) return true;
+      if (j.jobType == JobType.quotation) return false;
+      if (j.bikeId != null) return false;
+      return j.subjectData != null ||
+          j.subjectId != null ||
+          (j.subjectNotes?.trim().isNotEmpty ?? false);
+    }).length;
     // Only count warranty-type jobs that are still in progress (not completed/finalizado).
     // Warranty jobs in the complete phase (e.g. "Terminado Cubierto") are done
     // and should not count as "active" warranties in the counter.

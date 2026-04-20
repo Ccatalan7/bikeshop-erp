@@ -1,3 +1,6 @@
+import '../../../shared/models/stock_adjustment_origin.dart'
+    as stock_adjustment_origin;
+
 enum StockMovementCategory {
   purchase,
   sale,
@@ -52,6 +55,7 @@ class StockMovement {
   final int stockBefore;
   final int quantity;
   final int stockAfter;
+  final String? adjustmentOrigin;
   final String? notes;
   final String? createdBy;
   final DateTime createdAt;
@@ -70,6 +74,7 @@ class StockMovement {
     required this.stockBefore,
     required this.quantity,
     required this.stockAfter,
+    this.adjustmentOrigin,
     this.notes,
     this.createdBy,
     required this.createdAt,
@@ -91,6 +96,7 @@ class StockMovement {
       stockBefore: (json['stock_before'] as num?)?.toInt() ?? 0,
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
       stockAfter: (json['stock_after'] as num?)?.toInt() ?? 0,
+      adjustmentOrigin: json['adjustment_origin'] as String?,
       notes: json['notes'] as String?,
       createdBy: json['created_by']?.toString(),
       createdAt: json['created_at'] != null
@@ -117,6 +123,7 @@ class StockMovement {
     int? stockBefore,
     int? quantity,
     int? stockAfter,
+    String? adjustmentOrigin,
     String? notes,
     String? createdBy,
     DateTime? createdAt,
@@ -135,6 +142,7 @@ class StockMovement {
       stockBefore: stockBefore ?? this.stockBefore,
       quantity: quantity ?? this.quantity,
       stockAfter: stockAfter ?? this.stockAfter,
+      adjustmentOrigin: adjustmentOrigin ?? this.adjustmentOrigin,
       notes: notes ?? this.notes,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
@@ -155,6 +163,7 @@ class StockMovement {
       'stock_before': stockBefore,
       'quantity': quantity,
       'stock_after': stockAfter,
+      'adjustment_origin': adjustmentOrigin,
       'notes': notes,
       'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
@@ -163,6 +172,9 @@ class StockMovement {
 
   bool get isIncrease => quantity > 0;
   bool get isDecrease => quantity < 0;
+  String? get adjustmentOriginDisplay =>
+      stock_adjustment_origin.stockAdjustmentOriginDisplay(adjustmentOrigin);
+  bool get hasAdjustmentOrigin => adjustmentOriginDisplay != null;
 
   StockMovementCategory get category {
     switch (movementType) {

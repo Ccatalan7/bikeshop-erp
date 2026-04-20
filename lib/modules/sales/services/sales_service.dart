@@ -48,6 +48,8 @@ class SalesService extends ChangeNotifier {
       _invoices.isNotEmpty && _invoicesCacheTime != null;
   bool get hasPaymentsCache =>
       _payments.isNotEmpty && _paymentsCacheTime != null;
+  bool get isInvoicesCacheFresh => _isCacheValid(_invoicesCacheTime);
+  bool get isPaymentsCacheFresh => _isCacheValid(_paymentsCacheTime);
 
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {

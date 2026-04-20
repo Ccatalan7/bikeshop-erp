@@ -572,6 +572,12 @@ class _JournalEntryCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                        if (entry.hasStockAdjustmentOrigin)
+                          _buildBadge(
+                            color: Colors.blueGrey.shade600,
+                            icon: Icons.inventory_2_outlined,
+                            text: entry.stockAdjustmentOriginDisplay!,
+                          ),
                       ],
                     ),
                   ],

@@ -1,3 +1,6 @@
+import '../../../shared/models/stock_adjustment_origin.dart'
+    as stock_adjustment_origin;
+
 class JournalEntry {
   final String? id;
   final String tenantId;
@@ -7,6 +10,7 @@ class JournalEntry {
   final JournalEntryType type;
   final String? sourceModule;
   final String? sourceReference;
+  final String? stockAdjustmentOrigin;
   final List<JournalLine> lines;
   final JournalEntryStatus status;
   final double totalDebit;
@@ -23,6 +27,7 @@ class JournalEntry {
     required this.type,
     this.sourceModule,
     this.sourceReference,
+    this.stockAdjustmentOrigin,
     required this.lines,
     this.status = JournalEntryStatus.draft,
     required this.totalDebit,
@@ -47,6 +52,7 @@ class JournalEntry {
       ),
       sourceModule: json['source_module'] as String?,
       sourceReference: json['source_reference'] as String?,
+      stockAdjustmentOrigin: json['stock_adjustment_origin'] as String?,
       lines: (json['lines'] as List?)
               ?.map((line) => JournalLine.fromJson(line))
               .toList() ??
@@ -72,6 +78,7 @@ class JournalEntry {
       'entry_type': type.name, // Use new column name
       'source_module': sourceModule,
       'source_reference': sourceReference,
+      'stock_adjustment_origin': stockAdjustmentOrigin,
       'lines': lines.map((line) => line.toJson()).toList(),
       'status': status.name,
       'total_debit': totalDebit,
@@ -90,6 +97,7 @@ class JournalEntry {
     JournalEntryType? type,
     String? sourceModule,
     String? sourceReference,
+    String? stockAdjustmentOrigin,
     List<JournalLine>? lines,
     JournalEntryStatus? status,
     double? totalDebit,
@@ -106,6 +114,8 @@ class JournalEntry {
       type: type ?? this.type,
       sourceModule: sourceModule ?? this.sourceModule,
       sourceReference: sourceReference ?? this.sourceReference,
+      stockAdjustmentOrigin:
+          stockAdjustmentOrigin ?? this.stockAdjustmentOrigin,
       lines: lines ?? this.lines,
       status: status ?? this.status,
       totalDebit: totalDebit ?? this.totalDebit,
@@ -116,6 +126,11 @@ class JournalEntry {
   }
 
   bool get isBalanced => (totalDebit - totalCredit).abs() < 0.01;
+  String? get stockAdjustmentOriginDisplay =>
+      stock_adjustment_origin.stockAdjustmentOriginDisplay(
+        stockAdjustmentOrigin,
+      );
+  bool get hasStockAdjustmentOrigin => stockAdjustmentOriginDisplay != null;
 
   @override
   String toString() {

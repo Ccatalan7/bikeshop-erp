@@ -416,8 +416,9 @@ class DatabaseService extends ChangeNotifier {
     String productId,
     int quantity,
     String type,
-    String reference,
-  ) async {
+    String reference, {
+    String? adjustmentOrigin,
+  }) async {
     try {
       final normalizedType = type.trim().toUpperCase();
       final result =
@@ -426,6 +427,7 @@ class DatabaseService extends ChangeNotifier {
         'p_quantity': quantity,
         'p_type': normalizedType,
         'p_reason': reference,
+        'p_adjustment_origin': adjustmentOrigin,
       });
 
       notifyListeners();

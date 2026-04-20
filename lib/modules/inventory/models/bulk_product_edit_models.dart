@@ -79,6 +79,87 @@ enum BulkPriceRounding {
   final String label;
 }
 
+BulkProductScopeSource bulkProductScopeSourceFromValue(String? value) {
+  return BulkProductScopeSource.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkProductScopeSource.filtered,
+  );
+}
+
+BulkProductEditOperation bulkProductEditOperationFromValue(String? value) {
+  return BulkProductEditOperation.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkProductEditOperation.classification,
+  );
+}
+
+enum BulkUpdateItemStatus {
+  updated('Actualizado'),
+  skipped('Sin cambios'),
+  failed('Con error');
+
+  const BulkUpdateItemStatus(this.label);
+  final String label;
+}
+
+BulkUpdateItemStatus bulkUpdateItemStatusFromValue(String? value) {
+  return BulkUpdateItemStatus.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkUpdateItemStatus.updated,
+  );
+}
+
+enum BulkProductEditHistoryStatus {
+  completed('Completado'),
+  partial('Parcial'),
+  failed('Fallido'),
+  skipped('Sin cambios');
+
+  const BulkProductEditHistoryStatus(this.label);
+  final String label;
+}
+
+BulkProductEditHistoryStatus bulkProductEditHistoryStatusFromValue(
+  String? value,
+) {
+  return BulkProductEditHistoryStatus.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkProductEditHistoryStatus.completed,
+  );
+}
+
+enum BulkProductEditHistoryOrigin {
+  recorded('Registrado'),
+  legacyInferred('Legado inferido');
+
+  const BulkProductEditHistoryOrigin(this.label);
+  final String label;
+}
+
+BulkProductEditHistoryOrigin bulkProductEditHistoryOriginFromValue(
+  String? value,
+) {
+  return BulkProductEditHistoryOrigin.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkProductEditHistoryOrigin.recorded,
+  );
+}
+
+enum BulkLegacySessionKind {
+  mass('Masiva'),
+  singular('Singular');
+
+  const BulkLegacySessionKind(this.label);
+  final String label;
+}
+
+BulkLegacySessionKind bulkLegacySessionKindFromValue(String? value) {
+  return BulkLegacySessionKind.values.firstWhere(
+    (item) => item.name == value,
+    orElse: () => BulkLegacySessionKind.mass,
+  );
+}
+
 class BulkProductSmartFilters {
   const BulkProductSmartFilters({
     this.keyword = '',
@@ -517,16 +598,199 @@ class BulkImageAssignment {
   }
 }
 
+class BulkUpdateItemResult {
+  const BulkUpdateItemResult({
+    required this.productId,
+    required this.productName,
+    required this.productSku,
+    required this.status,
+    required this.summary,
+    this.executionAt,
+    this.beforeValues = const {},
+    this.afterValues = const {},
+    this.changedFields = const [],
+    this.error,
+  });
+
+  final String productId;
+  final String productName;
+  final String productSku;
+  final BulkUpdateItemStatus status;
+  final String summary;
+  final DateTime? executionAt;
+  final Map<String, dynamic> beforeValues;
+  final Map<String, dynamic> afterValues;
+  final List<String> changedFields;
+  final String? error;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'product_id': productId,
+      'product_name': productName,
+      'product_sku': productSku,
+      'status': status.name,
+      'summary': summary,
+      'execution_at': executionAt?.toIso8601String(),
+      'before_values': beforeValues,
+      'after_values': afterValues,
+      'changed_fields': changedFields,
+      'error': error,
+    };
+  }
+
+  factory BulkUpdateItemResult.fromJson(Map<String, dynamic> json) {
+    return BulkUpdateItemResult(
+      productId: json['product_id']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? '',
+      productSku: json['product_sku']?.toString() ?? '',
+      status: bulkUpdateItemStatusFromValue(json['status']?.toString()),
+      summary: json['summary']?.toString() ?? '',
+      executionAt: json['execution_at'] == null
+          ? null
+          : DateTime.parse(json['execution_at'].toString()),
+      beforeValues: json['before_values'] is Map
+          ? Map<String, dynamic>.from(json['before_values'] as Map)
+          : const {},
+      afterValues: json['after_values'] is Map
+          ? Map<String, dynamic>.from(json['after_values'] as Map)
+          : const {},
+      changedFields: json['changed_fields'] is List
+          ? List<String>.from(json['changed_fields'] as List)
+          : const [],
+      error: json['error']?.toString(),
+    );
+  }
+}
+
+class BulkProductEditHistoryEntry {
+  const BulkProductEditHistoryEntry({
+    required this.id,
+    required this.operation,
+    required this.scopeSource,
+    required this.status,
+    required this.scopeProductCount,
+    required this.enabledProductCount,
+    required this.succeededProductCount,
+    required this.skippedProductCount,
+    required this.failedProductCount,
+    required this.createdAt,
+    this.origin = BulkProductEditHistoryOrigin.recorded,
+    this.legacySessionKind = BulkLegacySessionKind.mass,
+    this.isHydrated = false,
+    this.endedAt,
+    this.createdBy,
+    this.actorName,
+    this.summary,
+    this.infoMessage,
+    this.filtersSnapshot = const {},
+    this.configSnapshot = const {},
+    this.items = const [],
+    this.errors = const [],
+  });
+
+  final String id;
+  final BulkProductEditOperation operation;
+  final BulkProductScopeSource scopeSource;
+  final BulkProductEditHistoryStatus status;
+  final int scopeProductCount;
+  final int enabledProductCount;
+  final int succeededProductCount;
+  final int skippedProductCount;
+  final int failedProductCount;
+  final DateTime createdAt;
+  final BulkProductEditHistoryOrigin origin;
+  final BulkLegacySessionKind legacySessionKind;
+  final bool isHydrated;
+  final DateTime? endedAt;
+  final String? createdBy;
+  final String? actorName;
+  final String? summary;
+  final String? infoMessage;
+  final Map<String, dynamic> filtersSnapshot;
+  final Map<String, dynamic> configSnapshot;
+  final List<BulkUpdateItemResult> items;
+  final List<String> errors;
+
+  bool get isLegacyInferred =>
+      origin == BulkProductEditHistoryOrigin.legacyInferred;
+
+  bool get isLegacyMassSession =>
+      isLegacyInferred && legacySessionKind == BulkLegacySessionKind.mass;
+
+  bool get isLegacySingularSession =>
+      isLegacyInferred && legacySessionKind == BulkLegacySessionKind.singular;
+
+  factory BulkProductEditHistoryEntry.fromJson(Map<String, dynamic> json) {
+    final hasHydratedPayload = json.containsKey('filters_snapshot') ||
+        json.containsKey('config_snapshot') ||
+        json.containsKey('product_changes') ||
+        json.containsKey('errors');
+
+    return BulkProductEditHistoryEntry(
+      id: json['id']?.toString() ?? '',
+      operation:
+          bulkProductEditOperationFromValue(json['operation']?.toString()),
+      scopeSource:
+          bulkProductScopeSourceFromValue(json['scope_source']?.toString()),
+      status: bulkProductEditHistoryStatusFromValue(
+        json['status']?.toString(),
+      ),
+      scopeProductCount: (json['scope_product_count'] as num?)?.toInt() ?? 0,
+      enabledProductCount:
+          (json['enabled_product_count'] as num?)?.toInt() ?? 0,
+      succeededProductCount:
+          (json['succeeded_product_count'] as num?)?.toInt() ?? 0,
+      skippedProductCount:
+          (json['skipped_product_count'] as num?)?.toInt() ?? 0,
+      failedProductCount: (json['failed_product_count'] as num?)?.toInt() ?? 0,
+      createdAt: json['created_at'] == null
+          ? DateTime.now()
+          : DateTime.parse(json['created_at'].toString()),
+      origin: bulkProductEditHistoryOriginFromValue(json['origin']?.toString()),
+      legacySessionKind: bulkLegacySessionKindFromValue(
+          json['legacy_session_kind']?.toString()),
+      isHydrated: hasHydratedPayload,
+      endedAt: json['ended_at'] == null
+          ? null
+          : DateTime.parse(json['ended_at'].toString()),
+      createdBy: json['created_by']?.toString(),
+      actorName: json['actor_name']?.toString(),
+      summary: json['summary']?.toString(),
+      infoMessage: json['info_message']?.toString(),
+      filtersSnapshot: json['filters_snapshot'] is Map
+          ? Map<String, dynamic>.from(json['filters_snapshot'] as Map)
+          : const {},
+      configSnapshot: json['config_snapshot'] is Map
+          ? Map<String, dynamic>.from(json['config_snapshot'] as Map)
+          : const {},
+      items: json['product_changes'] is List
+          ? (json['product_changes'] as List)
+              .whereType<Map>()
+              .map((item) => BulkUpdateItemResult.fromJson(
+                  Map<String, dynamic>.from(item)))
+              .toList(growable: false)
+          : const [],
+      errors: json['errors'] is List
+          ? List<String>.from(json['errors'] as List)
+          : const [],
+    );
+  }
+}
+
 class BulkUpdateResult {
   const BulkUpdateResult({
     required this.total,
     required this.succeeded,
+    required this.skipped,
     required this.failed,
     required this.errors,
+    this.items = const [],
   });
 
   final int total;
   final int succeeded;
+  final int skipped;
   final int failed;
   final List<String> errors;
+  final List<BulkUpdateItemResult> items;
 }

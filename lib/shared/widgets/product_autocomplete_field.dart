@@ -2,8 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/product_compatibility.dart';
 import '../services/inventory_service.dart' as shared_inventory;
 import '../models/product.dart';
+
+enum _ProductCompatibilityBrowseMode {
+  compatibleOnly,
+  showAll,
+}
 
 /// Flexible autocomplete field for products and services
 /// Supports:
@@ -22,6 +28,9 @@ class ProductAutocompleteField extends StatefulWidget {
   final bool enabled;
   final bool showCost; // Show cost instead of price (for purchase invoices)
   final bool autoFocus; // Auto-focus when created
+  final Future<Map<String, ProductCompatibilityAssessment>> Function(
+      List<Product> products)? compatibilityResolver;
+  final Object? compatibilityContextKey;
 
   const ProductAutocompleteField({
     super.key,
@@ -35,6 +44,8 @@ class ProductAutocompleteField extends StatefulWidget {
     this.enabled = true,
     this.showCost = false, // Default to showing price
     this.autoFocus = false,
+    this.compatibilityResolver,
+    this.compatibilityContextKey,
   });
 
   @override
@@ -43,12 +54,17 @@ class ProductAutocompleteField extends StatefulWidget {
 }
 
 class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
+  static const int _compatibilityBatchSize = 60;
+
   late TextEditingController _controller;
   late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
   List<Product> _allFetchedProducts = [];
   Product? _selectedProduct;
   bool _isLoading = false;
+  bool _compatibilityEngineEnabled = false;
+  _ProductCompatibilityBrowseMode _compatibilityBrowseMode =
+      _ProductCompatibilityBrowseMode.compatibleOnly;
 
   // Filter states
   bool _filterShowProducts = true;
@@ -76,14 +92,20 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       _selectedBrand = null;
       _selectedSupplier = null;
     });
+    unawaited(_refreshCompatibilityIfNeeded());
     _updateOverlay();
     Future.delayed(const Duration(milliseconds: 80), () {
       if (mounted && _overlayEntry != null) _focusNode.requestFocus();
     });
   }
 
-  List<Product> get _filteredProducts {
-    return _allFetchedProducts.where((p) {
+  bool get _hasCompatibilityCapability => widget.compatibilityResolver != null;
+
+  bool get _isCompatibilityEngineActive =>
+      _hasCompatibilityCapability && _compatibilityEngineEnabled;
+
+  List<Product> get _baseFilteredProducts {
+    final filteredProducts = _allFetchedProducts.where((p) {
       if (!_filterShowProducts && p.productType == ProductType.product) {
         return false;
       }
@@ -106,6 +128,44 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
       return true;
     }).toList();
+
+    return filteredProducts;
+  }
+
+  List<Product> get _filteredProducts {
+    final filteredProducts = List<Product>.from(_baseFilteredProducts);
+
+    if (_isCompatibilityEngineActive &&
+        _compatibilityBrowseMode ==
+            _ProductCompatibilityBrowseMode.compatibleOnly &&
+        _compatibilityByProductId.isNotEmpty) {
+      filteredProducts.removeWhere(
+        (product) =>
+            _compatibilityByProductId[product.id]?.level ==
+            ProductCompatibilityLevel.incompatible,
+      );
+    }
+
+    if (!_isCompatibilityEngineActive || _compatibilityByProductId.isEmpty) {
+      return filteredProducts;
+    }
+
+    final originalOrder = <String, int>{
+      for (var index = 0; index < filteredProducts.length; index++)
+        filteredProducts[index].id: index,
+    };
+
+    filteredProducts.sort((a, b) {
+      final aPriority = _compatibilityByProductId[a.id]?.sortPriority ?? 50;
+      final bPriority = _compatibilityByProductId[b.id]?.sortPriority ?? 50;
+      final priorityCompare = aPriority.compareTo(bPriority);
+      if (priorityCompare != 0) {
+        return priorityCompare;
+      }
+      return (originalOrder[a.id] ?? 0).compareTo(originalOrder[b.id] ?? 0);
+    });
+
+    return filteredProducts;
   }
 
   bool _isTapInProgress =
@@ -114,15 +174,20 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       false; // Track if user has interacted with the field
   bool _isMouseOverDropdown = false; // Track if mouse is over the dropdown
   bool _isSearchDialogOpen = false;
+  bool _isRefreshingCompatibility = false;
   late shared_inventory.InventoryService _inventoryService;
   OverlayEntry? _overlayEntry;
   Timer? _debounce;
+  Map<String, ProductCompatibilityAssessment> _compatibilityByProductId = {};
+  int _compatibilityRequestSerial = 0;
+  String? _lastCompatibilitySignature;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller ?? TextEditingController();
     _focusNode = widget.focusNode ?? FocusNode();
+    _compatibilityEngineEnabled = widget.compatibilityResolver != null;
     _inventoryService =
         Provider.of<shared_inventory.InventoryService>(context, listen: false);
     _controller.text = widget.initialValue ?? '';
@@ -178,6 +243,31 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     }
     _debounce?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.compatibilityResolver == null &&
+        widget.compatibilityResolver != null) {
+      _compatibilityEngineEnabled = true;
+      _compatibilityBrowseMode = _ProductCompatibilityBrowseMode.compatibleOnly;
+    } else if (oldWidget.compatibilityResolver != null &&
+        widget.compatibilityResolver == null) {
+      _compatibilityEngineEnabled = false;
+    }
+
+    if (oldWidget.compatibilityContextKey != widget.compatibilityContextKey ||
+        oldWidget.compatibilityResolver != widget.compatibilityResolver) {
+      _lastCompatibilitySignature = null;
+      if (_compatibilityByProductId.isNotEmpty) {
+        setState(() {
+          _compatibilityByProductId = {};
+        });
+      }
+      unawaited(_refreshCompatibilityIfNeeded());
+    }
   }
 
   void _removeOverlay() {
@@ -260,6 +350,10 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   Widget _buildDropdownContent(ThemeData theme, double maxHeight) {
+    final filteredProducts = _filteredProducts;
+    final canShowCustomItem =
+        widget.allowCustomItems && _controller.text.trim().isNotEmpty;
+
     return MouseRegion(
       onEnter: (_) {
         // Keep overlay open when mouse is over dropdown
@@ -300,30 +394,185 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_hasCompatibilityCapability)
+                _buildCompatibilityControls(theme),
               _buildFiltersBar(theme),
               Flexible(
-                child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: _filteredProducts.length +
-                      (widget.allowCustomItems ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    // Custom item option at the end
-                    if (widget.allowCustomItems &&
-                        index == _filteredProducts.length) {
-                      if (_controller.text.trim().isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return _buildCustomItemTile(theme);
-                    }
+                child: filteredProducts.isEmpty && !canShowCustomItem
+                    ? _buildEmptyResultsState(theme)
+                    : ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: filteredProducts.length +
+                            (widget.allowCustomItems ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          // Custom item option at the end
+                          if (widget.allowCustomItems &&
+                              index == filteredProducts.length) {
+                            if (_controller.text.trim().isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return _buildCustomItemTile(theme);
+                          }
 
-                    final product = _filteredProducts[index];
-                    return _buildProductTile(product, theme);
-                  },
-                ),
+                          final product = filteredProducts[index];
+                          return _buildProductTile(product, theme);
+                        },
+                      ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompatibilityControls(ThemeData theme) {
+    final helperText = _isCompatibilityEngineActive
+        ? (_isRefreshingCompatibility
+            ? 'Aplicando compatibilidad al catálogo...'
+            : 'Oculta incompatibles por defecto y permite revisar todo desde el buscador.')
+        : 'Autocomplete normal, sin filtros ni marcas de compatibilidad.';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.tune_outlined,
+                size: 16,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Motor de compatibilidad',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      helperText,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Switch.adaptive(
+                value: _isCompatibilityEngineActive,
+                onChanged: (value) {
+                  setState(() {
+                    _compatibilityEngineEnabled = value;
+                    if (value) {
+                      _compatibilityBrowseMode =
+                          _ProductCompatibilityBrowseMode.compatibleOnly;
+                    }
+                  });
+                  unawaited(_refreshCompatibilityIfNeeded());
+                  _updateOverlay();
+                  _focusNode.requestFocus();
+                },
+              ),
+            ],
+          ),
+          if (_isCompatibilityEngineActive) ...[
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<_ProductCompatibilityBrowseMode>(
+                segments: const [
+                  ButtonSegment<_ProductCompatibilityBrowseMode>(
+                    value: _ProductCompatibilityBrowseMode.compatibleOnly,
+                    label: Text('Solo compatibles'),
+                  ),
+                  ButtonSegment<_ProductCompatibilityBrowseMode>(
+                    value: _ProductCompatibilityBrowseMode.showAll,
+                    label: Text('Mostrar todo'),
+                  ),
+                ],
+                selected: <_ProductCompatibilityBrowseMode>{
+                  _compatibilityBrowseMode,
+                },
+                onSelectionChanged: (selected) {
+                  if (selected.isEmpty) return;
+                  setState(() {
+                    _compatibilityBrowseMode = selected.first;
+                  });
+                  _updateOverlay();
+                  _focusNode.requestFocus();
+                },
+                showSelectedIcon: false,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyResultsState(ThemeData theme) {
+    final isCompatibilityFiltered = _isCompatibilityEngineActive &&
+        _compatibilityBrowseMode ==
+            _ProductCompatibilityBrowseMode.compatibleOnly &&
+        _baseFilteredProducts.isNotEmpty;
+
+    final title = isCompatibilityFiltered
+        ? 'No hay resultados compatibles'
+        : 'No se encontraron resultados';
+    final subtitle = isCompatibilityFiltered
+        ? 'Cambia a Mostrar todo o apaga compatibilidad para ver el resto del catálogo.'
+        : 'Prueba con otro texto o ajusta los filtros.';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isCompatibilityFiltered
+                  ? Icons.rule_folder_outlined
+                  : Icons.search_off_outlined,
+              size: 24,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
@@ -381,6 +630,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     selected: _filterInStockOnly,
                     onSelected: (val) {
                       setState(() => _filterInStockOnly = val);
+                      unawaited(_refreshCompatibilityIfNeeded());
                       _updateOverlay();
                       _focusNode.requestFocus();
                     },
@@ -393,6 +643,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     selected: _filterShowProducts,
                     onSelected: (val) {
                       setState(() => _filterShowProducts = val);
+                      unawaited(_refreshCompatibilityIfNeeded());
                       _updateOverlay();
                       _focusNode.requestFocus();
                     },
@@ -405,6 +656,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     selected: _filterShowServices,
                     onSelected: (val) {
                       setState(() => _filterShowServices = val);
+                      unawaited(_refreshCompatibilityIfNeeded());
                       _updateOverlay();
                       _focusNode.requestFocus();
                     },
@@ -429,6 +681,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       items: categories.toList(),
                       onSelected: (val) {
                         setState(() => _selectedCategory = val);
+                        unawaited(_refreshCompatibilityIfNeeded());
                         _updateOverlay();
                         Future.delayed(const Duration(milliseconds: 80), () {
                           if (mounted) _focusNode.requestFocus();
@@ -458,6 +711,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       items: brands.toList(),
                       onSelected: (val) {
                         setState(() => _selectedBrand = val);
+                        unawaited(_refreshCompatibilityIfNeeded());
                         _updateOverlay();
                         Future.delayed(const Duration(milliseconds: 80), () {
                           if (mounted) _focusNode.requestFocus();
@@ -487,6 +741,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                       items: suppliers.toList(),
                       onSelected: (val) {
                         setState(() => _selectedSupplier = val);
+                        unawaited(_refreshCompatibilityIfNeeded());
                         _updateOverlay();
                         Future.delayed(const Duration(milliseconds: 80), () {
                           if (mounted) _focusNode.requestFocus();
@@ -534,7 +789,9 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           ),
           const SizedBox(width: 12),
           Text(
-            '${_filteredProducts.length} resultados',
+            _isRefreshingCompatibility
+                ? 'Aplicando compatibilidad...'
+                : '${_filteredProducts.length} resultados',
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -623,9 +880,113 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     );
   }
 
+  IconData _compatibilityIcon(ProductCompatibilityLevel level) {
+    switch (level) {
+      case ProductCompatibilityLevel.compatible:
+        return Icons.check_circle_outline;
+      case ProductCompatibilityLevel.caution:
+        return Icons.rule_outlined;
+      case ProductCompatibilityLevel.incompatible:
+        return Icons.block_outlined;
+    }
+  }
+
+  Color _compatibilityColor(
+    ThemeData theme,
+    ProductCompatibilityLevel level,
+  ) {
+    switch (level) {
+      case ProductCompatibilityLevel.compatible:
+        return theme.colorScheme.primary;
+      case ProductCompatibilityLevel.caution:
+        return theme.colorScheme.tertiary;
+      case ProductCompatibilityLevel.incompatible:
+        return theme.colorScheme.error;
+    }
+  }
+
+  Widget _buildCompatibilityBadge(
+    ProductCompatibilityAssessment compatibility,
+    ThemeData theme,
+  ) {
+    final accentColor = _compatibilityColor(theme, compatibility.level);
+    return _buildCompactBadge(
+      _compatibilityIcon(compatibility.level),
+      compatibility.label,
+      theme,
+      color: accentColor,
+    );
+  }
+
+  bool _shouldShowCompatibilityFeedback(
+    ProductCompatibilityAssessment? compatibility,
+  ) {
+    if (!_isCompatibilityEngineActive || compatibility == null) {
+      return false;
+    }
+
+    if (_compatibilityBrowseMode != _ProductCompatibilityBrowseMode.showAll) {
+      return false;
+    }
+
+    return compatibility.level != ProductCompatibilityLevel.compatible;
+  }
+
+  Widget? _buildCompatibilityDetail(
+    ProductCompatibilityAssessment? compatibility,
+    ThemeData theme,
+  ) {
+    if (!_shouldShowCompatibilityFeedback(compatibility)) {
+      return null;
+    }
+
+    final detail = compatibility!.detail?.trim();
+    if (detail == null || detail.isEmpty) {
+      return null;
+    }
+
+    final accentColor = _compatibilityColor(theme, compatibility.level);
+    return Text(
+      detail,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: accentColor,
+        height: 1.15,
+      ),
+    );
+  }
+
+  Widget _buildCompatibilityBlock(
+    ProductCompatibilityAssessment compatibility,
+    ThemeData theme,
+  ) {
+    final detailWidget = _buildCompatibilityDetail(compatibility, theme);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            _buildCompatibilityBadge(compatibility, theme),
+          ],
+        ),
+        if (detailWidget != null) ...[
+          const SizedBox(height: 4),
+          detailWidget,
+        ],
+      ],
+    );
+  }
+
   Widget _buildProductTile(Product product, ThemeData theme) {
     // Only relevant for stockable products — services have no stock concept
     final hasStock = product.stockQuantity > 0;
+    final compatibility = _compatibilityByProductId[product.id];
+    final showCompatibilityFeedback =
+        _shouldShowCompatibilityFeedback(compatibility);
     bool isHovered = false;
 
     return StatefulBuilder(
@@ -757,6 +1118,11 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                             ],
                           ],
                         ),
+                        if (showCompatibilityFeedback &&
+                            compatibility != null) ...[
+                          const SizedBox(height: 6),
+                          _buildCompatibilityBlock(compatibility, theme),
+                        ],
                       ],
                     ),
                   ),
@@ -970,6 +1336,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         setState(() {
           _allFetchedProducts = products;
         });
+        unawaited(_refreshCompatibilityIfNeeded());
         // Re-show overlay so clearing text immediately refreshes the dropdown
         if (_focusNode.hasFocus) {
           _showOverlay();
@@ -1000,6 +1367,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
             _allFetchedProducts = results;
             _selectedProduct = null;
           });
+          unawaited(_refreshCompatibilityIfNeeded());
           _showOverlay();
         }
       } finally {
@@ -1067,6 +1435,86 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     if (_focusNode.hasFocus) {
       _showOverlay();
     }
+  }
+
+  Future<void> _refreshCompatibilityIfNeeded() async {
+    final resolver = widget.compatibilityResolver;
+    if (resolver == null || !_isCompatibilityEngineActive) {
+      _lastCompatibilitySignature = null;
+      if (_compatibilityByProductId.isNotEmpty || _isRefreshingCompatibility) {
+        setState(() {
+          _compatibilityByProductId = {};
+          _isRefreshingCompatibility = false;
+        });
+        _overlayEntry?.markNeedsBuild();
+      }
+      return;
+    }
+
+    final products = _baseFilteredProducts.toList(growable: false);
+    if (products.isEmpty) {
+      _lastCompatibilitySignature = null;
+      if (_compatibilityByProductId.isNotEmpty || _isRefreshingCompatibility) {
+        setState(() {
+          _compatibilityByProductId = {};
+          _isRefreshingCompatibility = false;
+        });
+        _overlayEntry?.markNeedsBuild();
+      }
+      return;
+    }
+
+    final signature = [
+      widget.compatibilityContextKey?.toString() ?? 'none',
+      ...products.map((product) => product.id),
+    ].join('|');
+    if (signature == _lastCompatibilitySignature &&
+        _compatibilityByProductId.isNotEmpty &&
+        !_isRefreshingCompatibility) {
+      return;
+    }
+
+    _lastCompatibilitySignature = signature;
+    final requestSerial = ++_compatibilityRequestSerial;
+    setState(() {
+      _compatibilityByProductId = {};
+      _isRefreshingCompatibility = true;
+    });
+    _overlayEntry?.markNeedsBuild();
+
+    final resolvedCompatibility = <String, ProductCompatibilityAssessment>{};
+    for (var start = 0;
+        start < products.length;
+        start += _compatibilityBatchSize) {
+      final end = (start + _compatibilityBatchSize < products.length)
+          ? start + _compatibilityBatchSize
+          : products.length;
+      final batch = products.sublist(start, end);
+      final batchCompatibility = await resolver(batch);
+
+      if (!mounted || requestSerial != _compatibilityRequestSerial) {
+        return;
+      }
+
+      resolvedCompatibility.addAll(batchCompatibility);
+      setState(() {
+        _compatibilityByProductId =
+            Map<String, ProductCompatibilityAssessment>.from(
+          resolvedCompatibility,
+        );
+      });
+      _overlayEntry?.markNeedsBuild();
+    }
+
+    if (!mounted || requestSerial != _compatibilityRequestSerial) {
+      return;
+    }
+
+    setState(() {
+      _compatibilityByProductId = resolvedCompatibility;
+      _isRefreshingCompatibility = false;
+    });
+    _overlayEntry?.markNeedsBuild();
   }
 
   @override

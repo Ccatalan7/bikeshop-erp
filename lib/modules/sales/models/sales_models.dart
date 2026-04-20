@@ -265,11 +265,36 @@ enum InvoiceStatus {
 extension InvoiceStatusX on InvoiceStatus {
   static InvoiceStatus? fromName(dynamic raw) {
     if (raw == null) return null;
-    final value = raw.toString();
+    final value = raw.toString().trim();
     return InvoiceStatus.values.firstWhere(
       (status) => status.name == value,
       orElse: () {
         final normalized = value.toLowerCase();
+        const aliases = <String, InvoiceStatus>{
+          'borrador': InvoiceStatus.draft,
+          'draft': InvoiceStatus.draft,
+          'enviado': InvoiceStatus.sent,
+          'sent': InvoiceStatus.sent,
+          'confirmado': InvoiceStatus.confirmed,
+          'confirmada': InvoiceStatus.confirmed,
+          'confirmed': InvoiceStatus.confirmed,
+          'pagado': InvoiceStatus.paid,
+          'pagada': InvoiceStatus.paid,
+          'paid': InvoiceStatus.paid,
+          'vencido': InvoiceStatus.overdue,
+          'vencida': InvoiceStatus.overdue,
+          'overdue': InvoiceStatus.overdue,
+          'cancelado': InvoiceStatus.cancelled,
+          'cancelada': InvoiceStatus.cancelled,
+          'anulado': InvoiceStatus.cancelled,
+          'anulada': InvoiceStatus.cancelled,
+          'cancelled': InvoiceStatus.cancelled,
+          'canceled': InvoiceStatus.cancelled,
+        };
+        final alias = aliases[normalized];
+        if (alias != null) {
+          return alias;
+        }
         return InvoiceStatus.values.firstWhere(
           (status) => status.name.toLowerCase() == normalized,
           orElse: () => InvoiceStatus.draft,

@@ -56,10 +56,13 @@ If a durable technical spec becomes important for products, services, diagnosis 
 
 - shared suggestion truth in `bike_catalog` when known globally
 - confirmed tenant-bike truth in `bike_profiles.technical_profile.values`
+- future component-backed truth may be mixed-source: some installed parts may map to sellable `products`, while others may be OEM/reference components that are not inventory sale rows
 - the same canonical compatibility key reused by products and services when matching depends on it
 - downstream diagnosis and service wizard behavior that consumes that truth instead of becoming the first place where it is stored
 
 Do not trap new durable specs in wizard-answer JSON, service-row notes, or diagnosis-only hacks.
+
+Do not force every installed bike component into inventory just to make the bike technically representable. During the transition toward richer component-backed bikes, the current bike/profile kernel remains the active upstream bridge, and future component identity must stay open to both inventory products and non-sellable reference/OEM parts.
 
 This applies to all systems: brakes, drivetrain, wheels, hubs, suspension, steering, tires, frame interfaces, e-bike systems, and future component families.
 
@@ -69,8 +72,13 @@ Diagnosis and service customization must follow the same backbone:
 - diagnosis is the shared visit-truth layer for component state
 - visit narrative may be AI-assisted, but only as an editable human-readable projection of the already-defined structured diagnosis for that visit; it must not become a parallel diagnosis truth store and it must omit undefined fields instead of narrating placeholders
 - service wizards should be service-aware views over that same diagnosis target, plus a narrow set of service-execution-only fields
+- service-execution-only structured answers must persist on `mechanic_job_items.service_configuration_data`; do not strand them only in row notes or transient UI state
 - user-customized fields may propagate across wizards, product suggestions, bike profile promotion, or bike timeline automation only when mapped to a known semantic role from a controlled catalog
 - arbitrary local custom fields must remain diagnosis-only and must not silently affect the rest of the workflow
+- diagnosis-linked fields are not allowed to use vague, action-oriented, or history-oriented answer values as technical truth; answer options must describe present component state, a measured condition, or a directly observed symptom
+- labels or values such as `ok`, `correcto`, `normal`, `replace`, `ya_reemplazados`, `ajustado`, or `lubricado` are not valid diagnosis truth by themselves unless a shared canonical field definition explicitly anchors their semantics
+- diagnosis-linked wizard questions must reuse one centralized field-definition layer for canonical key, labels, allowed values, render type, and diagnosis-mapping policy; if a live profile only has weak or execution/history-oriented options, keep that question execution-only until the profile is normalized
+- coarse wizard buckets must not silently degrade a more precise structured measurement when round-tripping between wizard answers and diagnosis truth
 
 Service taxonomy must follow the same backbone too:
 - structured services should not be modeled only as flat billable product names
@@ -117,6 +125,7 @@ At the intake/UI layer, canonical compatibility values should also be captured t
 - default brake service profiles and seeded `service_profile_questions` must expose compatible vocabulary for those same brake platforms and rim subtypes; otherwise the wizard becomes a lossy downstream layer even when upstream bike profile truth is correct
 - diagnosis-linked wizard fields must reuse the same canonical vocabulary and labels as `mechanic_job_bikes.diagnosis_sheet_data`; brake symptom wording must not fork into a second synonym set just because a legacy service profile still exists
 - when the upstream bike profile already confirms the top-level brake platform, the wizard UI should lock that platform visually and ask only for the unresolved refinement that is still missing; a legacy rim bike may still need `rimBrakeFamily`, but the mechanic should not see the entire mixed brake-platform list vomited back into the flow
+- if the wizard resolves that missing `rimBrakeFamily` refinement for a bike already confirmed as `brakeType = rim`, saving the job must promote that confirmation back into `bike_profiles.technical_profile.values` so the same bike does not keep getting asked again on later brake services
 - diagnosis-linked brake fields must be driven from one shared field-definition layer in code, including option labels and render style, so the bike intake, diagnosis sheet, and guided service wizard do not fork into separate local widget logic for the same centralized truth
 - any bike-system map/controller used in diagnosis, bike record/history, bike profile, or future workshop UI must come from one shared code-side widget + registry; do not keep separate local pin/spec lists or duplicated bike-map implementations per screen
 - the shared `BikeSystemController` now owns exploded-detail gating and hover preview state internally; parent widgets must treat `selectedSystemKey` as highlight-only, treat `onClearSelection` as notification-only, and must not lift hover/detail state out of the controller or reintroduce parent-driven `MouseRegion` rebuild loops
@@ -159,6 +168,12 @@ The product spec engine must reuse the same canonical compatibility vocabulary a
 
 Do **not** create one set of compatibility keys for bikes and a different set for products.
 
+The coarse product-side technical-family bridge already exists and should be reused deliberately:
+
+- `category_tech_mappings.technical_family` is the controlled coarse fallback between business categories and workshop compatibility meaning
+- `spec_templates.technical_family` is the ficha-template side of that same vocabulary
+- raw `products.category_name` remains weak display metadata and must not be promoted into the compatibility engine directly
+
 Phase-one matching should focus on high-leverage workshop categories such as:
 
 - rims
@@ -175,6 +190,8 @@ Phase-one behavior should:
 - hard-block only obvious base incompatibilities
 - soft-warn when compatibility data is incomplete
 - prefer ranked suggestions over heavy validation when the dataset is still immature
+- when detailed product specs are missing, the compatibility layer may still use `category_tech_mappings.technical_family` for obvious family-level mismatches such as `rotor` on a rim-brake bike
+- after that coarse gate, detailed `product_spec_values` should remain the stronger source for within-family refinement such as rotor size, thickness, material, or floating status
 
 ## Maintenance Protocol
 
@@ -248,16 +265,27 @@ Preferred rule: improve the backbone deliberately, do not build a second backbon
 
 For a fresh chat, the current code-side state is:
 
-- `lib/modules/bikeshop/widgets/bike_system_controller.dart` is now a backbone widget, not a local screen helper. It is the shared bike-system controller for mechanic-job diagnosis and bike record/history.
+- `lib/modules/bikeshop/widgets/bike_system_controller.dart` is now a backbone widget, not a local screen helper. It is the shared bike-system controller for mechanic-job diagnosis, bike record/history, and the bike record technical read model.
 - the current shared controller registry is `cockpit`, `suspension`, `front_brake`, `wheels`, `drivetrain`, and `rear_brake`.
 - only `drivetrain`, `front_brake`, and `rear_brake` currently have structured editable diagnosis inspectors in `mechanic_job_form_page.dart`; `cockpit`, `suspension`, and `wheels` intentionally render explicit unavailable-system placeholders instead of a second reduced controller.
-- `lib/modules/bikeshop/widgets/bike_record_panel.dart` already uses the same shared controller in read-model mode with hover overlay / telemetry; do not fork a second bike map for history.
+- `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses a bike-first split shell like the intake wizard: keep the bike persistently visible in the left preview pane, and do not regress to the old top-cover / tabs-below shell.
+- `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses the same shared controller both in the history workbench and in the technical specs tab's upstream kernel read model, with those maps anchored in the left preview pane; do not fork a second bike map for record visibility.
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now uses the same shared controller as the upstream technical-step navigator, with system-by-system profile panels and explicit placeholder handling for unmodeled intake systems such as `cockpit`.
 - brake canonical alias normalization now lives in `lib/modules/bikeshop/config/brake_canonical_data.dart` and `lib/modules/bikeshop/services/service_wizard_service.dart`, not in ad hoc page-local branches.
 - global drivetrain service profiles `chain_lube` and `derailleur_adjustment` now have explicit `service_profile_targets` rows with `target_family = drivetrain` and `target_position_mode = none`; do not reintroduce fake front/rear targeting for drivetrain-level services.
 - first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, but `derailleurs` prefill must still stay conservative until `drivetrainConfig` coverage improves.
+- drivetrain diagnosis-linked wizard answers `chain_wear` and `cable_condition` now round-trip with the structured diagnosis sheet: `chain_wear` prefills from and writes back to `DrivetrainDiagnosisSheet.chainWearPercent`, while `cable_condition` is stored explicitly as `DrivetrainDiagnosisSheet.cableCondition` inside the shifter slice instead of being left in guided-note text.
+- live production audit on 2026-04-18 confirmed that some active mapped wizard vocabularies are still semantically weak, especially drivetrain `cable_condition` with `ok` / `frayed` / `replace` and the label `Ya reemplazados`; future work must normalize these through a shared diagnosis-field definition layer instead of proliferating them into more backbone flows.
+- the first shared diagnosis-field definition layer now exists in `lib/modules/bikeshop/config/diagnosis_field_definitions.dart`, and `mechanic_job_form_page.dart` only marks wizard questions as diagnosis-linked when their normalized key, question type, and option set match that registry.
+- drivetrain diagnosis-linked normalization now also lives in `lib/modules/bikeshop/config/drivetrain_canonical_data.dart` plus `lib/modules/bikeshop/services/service_wizard_service.dart`, so `cable_condition` uses anchored present-state labels in the app layer instead of inheriting weak service-history wording from live profile rows.
+- `mechanic_job_items.service_configuration_data` now persists structured service wizard answers for executed service rows; `notes` remains the editable human-readable summary, while diagnosis-linked truths still round-trip through `mechanic_job_bikes.diagnosis_sheet_data`.
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now stages missing rim-brake-family confirmations from brake service wizards into the selected bike profile immediately in local state and promotes them into `bike_profiles.technical_profile.values` through `BikeshopService.upsertBikeProfile()` when the job is saved, so later brake services stop re-asking the same refinement.
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now treats `freehubType` as an explicit review field with an `unknown` option, applies the safe BMX `bmx_driver` default upstream, and bounces early saves back into the technical step when drivetrain basics have not been reviewed yet.
 - `lib/modules/inventory/pages/product_form_page.dart` now gives `ProductType.service` a profile-first workflow form: regular product categories are suppressed, service codes can be generated as `SRV-<family>-<operation>-NNN`, and saving the form updates `service_product_profile_mappings` so the service catalog irrigates the workshop backbone directly instead of behaving like an almost-normal stock product.
+- `lib/modules/bikeshop/services/bike_product_compatibility_service.dart` now provides the first brake-first product compatibility scorer, and `lib/shared/widgets/product_autocomplete_field.dart` can surface optional compatibility ranking/badges when a caller provides bike context.
+- live inspection on 2026-04-18 confirmed that the repo already has a separate coarse technical-family bridge through `category_tech_mappings` and `spec_templates.technical_family`; Viñabike production already maps categories such as `Rotores` and `Rotor BMX` to `rotor`, plus `V-Brake` / `Herraduras` to `rim_brake`.
+- the current brake-first compatibility scorer still trusts detailed `product_spec_values` only, so obvious family-level mismatches can remain neutral when ficha rows are sparse; the next pass should consume the existing technical-family bridge instead of inventing a new category system.
+- a first live rotor-spec enrichment pass on 2026-04-18 seeded canonical rotor fields on explicit 160/180/203 mm rotor rows in Viñabike production, improving brake-spec coverage but not replacing the need for the coarse technical-family fallback.
 
 Before continuing this implementation in a fresh chat, also read:
 
@@ -274,7 +302,7 @@ Immediate next queue:
 1. Validate the brake prototype against live production service profiles/questions/mappings before expanding it further.
 2. Extend structured diagnosis to remaining shared-controller systems only with a real schema/editor plan; until then, keep explicit unavailable placeholders and do not fork another controller.
 3. Improve upstream `bike_profiles.technical_profile.values` coverage for drivetrain (`drivetrainConfig`, `freehubType`) now that the first drivetrain service mappings are live, with caution around the `derailleurs` multi-select template behavior.
-4. Start making product compatibility / suggestion flows consume the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
+4. Extend the new brake-first product compatibility layer to consume `category_tech_mappings.technical_family` as the coarse fallback for obvious family-level mismatches, especially `rotor` vs rim-brake bikes, before broadening the hints into other suggestion and catalog flows.
 
 ---
 

@@ -270,6 +270,7 @@ class InventoryService extends ChangeNotifier {
     String productId,
     int newQuantity, {
     String reference = 'Ajuste manual',
+    String? adjustmentOrigin,
   }) async {
     if (newQuantity < 0) return false;
     final product = await getProductById(productId);
@@ -283,7 +284,13 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db.adjustStock(productId, quantity, type, reference);
+        await _db.adjustStock(
+          productId,
+          quantity,
+          type,
+          reference,
+          adjustmentOrigin: adjustmentOrigin,
+        );
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
@@ -306,6 +313,7 @@ class InventoryService extends ChangeNotifier {
     String productId,
     int quantity, {
     String reference = 'Venta POS',
+    String? adjustmentOrigin,
   }) async {
     if (quantity <= 0) return false;
     final product = await getProductById(productId);
@@ -322,7 +330,13 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db.adjustStock(productId, quantity, 'OUT', reference);
+        await _db.adjustStock(
+          productId,
+          quantity,
+          'OUT',
+          reference,
+          adjustmentOrigin: adjustmentOrigin,
+        );
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
@@ -345,6 +359,7 @@ class InventoryService extends ChangeNotifier {
     String productId,
     int quantity, {
     String reference = 'Ingreso inventario',
+    String? adjustmentOrigin,
   }) async {
     if (quantity <= 0) return false;
     final product = await getProductById(productId);
@@ -352,7 +367,13 @@ class InventoryService extends ChangeNotifier {
 
     if (_db != null) {
       try {
-        await _db.adjustStock(productId, quantity, 'IN', reference);
+        await _db.adjustStock(
+          productId,
+          quantity,
+          'IN',
+          reference,
+          adjustmentOrigin: adjustmentOrigin,
+        );
         await getProducts(forceRefresh: true);
         return true;
       } catch (e) {
