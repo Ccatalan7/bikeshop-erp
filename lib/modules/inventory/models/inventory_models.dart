@@ -306,7 +306,6 @@ class Product {
       'parent_set_id': parentSetId,
       'component_label': componentLabel,
       'component_position': componentPosition,
-      'is_partial': isPartial,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
