@@ -1093,16 +1093,47 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     return pending.join(' ');
   }
 
-  void _focusTechnicalStepWithMessage(String message) {
+  String? _identityMinimumValidationMessage() {
+    if (_selectedBrand == null) {
+      return 'Guardar rapido solo usa la identidad minima. Vuelve a Identidad y Base y selecciona una marca valida.';
+    }
+
+    if (_selectedModel == null) {
+      return 'Guardar rapido solo usa la identidad minima. Vuelve a Identidad y Base y selecciona un modelo valido.';
+    }
+
+    final yearError = _yearValidationMessage(_yearController.text);
+    if (yearError != null) {
+      return 'Corrige el año en Identidad y Base antes de usar Guardar rapido.';
+    }
+
+    return null;
+  }
+
+  String? _yearValidationMessage(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final year = int.tryParse(normalized);
+    if (year == null || year < 1900 || year > DateTime.now().year + 1) {
+      return 'Año inválido';
+    }
+
+    return null;
+  }
+
+  void _focusStepWithMessage(int stepIndex, String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
 
-    if (_currentStep != _technicalStepIndex) {
+    if (_currentStep != stepIndex) {
       setState(() {
-        _currentStep = _technicalStepIndex;
+        _currentStep = stepIndex;
       });
       _pageController.animateToPage(
-        _technicalStepIndex,
+        stepIndex,
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeOutCubic,
       );
@@ -1114,6 +1145,20 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         backgroundColor: Colors.orange,
       ),
     );
+  }
+
+  void _focusIdentityStepWithMessage(String message) {
+    _focusStepWithMessage(0, message);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentStep != 0) {
+        return;
+      }
+      _formKey.currentState?.validate();
+    });
+  }
+
+  void _focusTechnicalStepWithMessage(String message) {
+    _focusStepWithMessage(_technicalStepIndex, message);
   }
 
   bool _ensureTechnicalKernelReadyForSave() {
@@ -1566,7 +1611,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   Future<void> _saveBike({bool allowIncompleteTechnicalKernel = false}) async {
-    if (!_formKey.currentState!.validate()) {
+    if (allowIncompleteTechnicalKernel) {
+      final identityValidationMessage = _identityMinimumValidationMessage();
+      if (identityValidationMessage != null) {
+        _focusIdentityStepWithMessage(identityValidationMessage);
+        return;
+      }
+    } else if (!_formKey.currentState!.validate()) {
+      if (_currentStep != 0) {
+        _focusIdentityStepWithMessage(
+          'Antes de guardar, revisa Identidad y Base y corrige los campos obligatorios.',
+        );
+      }
       return;
     }
 
@@ -2242,17 +2298,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 prefixIcon: Icon(Icons.calendar_today_outlined),
               ),
               keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value != null && value.isNotEmpty) {
-                  final year = int.tryParse(value);
-                  if (year == null ||
-                      year < 1900 ||
-                      year > DateTime.now().year + 1) {
-                    return 'Año inválido';
-                  }
-                }
-                return null;
-              },
+              validator: _yearValidationMessage,
             ),
           ],
           minItemWidth: 220,
@@ -4154,13 +4200,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                 onPressed: _isSaving
                                     ? null
                                     : () {
-                                        // Early save only requires the minimum
-                                        // identity fields; the full save path
-                                        // still enforces technical kernel review.
-                                        if (!_formKey.currentState!
-                                            .validate()) {
-                                          return;
-                                        }
                                         _saveBike(
                                           allowIncompleteTechnicalKernel: true,
                                         );

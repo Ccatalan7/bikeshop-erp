@@ -249,21 +249,50 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required _CategoryTechMapping? technicalMapping,
   }) {
-    final semanticKey = technicalMapping?.semanticKey;
-    if (semanticKey == null || semanticKey.isEmpty) {
+    final semanticKeys = _semanticKeysForMapping(technicalMapping);
+    if (semanticKeys.isEmpty) {
       return null;
     }
 
-    switch (semanticKey) {
-      case 'rotor':
-        return _assessRotorFamilyCompatibility(compatibilityContext);
-      case 'rim_brake':
-        return _assessRimBrakeFamilyCompatibility(compatibilityContext);
-      case 'hydraulic_disc_brake':
-        return _assessHydraulicDiscFamilyCompatibility(compatibilityContext);
-      default:
-        return null;
+    for (final semanticKey in semanticKeys) {
+      switch (semanticKey) {
+        case 'rotor':
+          return _assessRotorFamilyCompatibility(compatibilityContext);
+        case 'rim_brake':
+          return _assessRimBrakeFamilyCompatibility(compatibilityContext);
+        case 'hydraulic_disc_brake':
+          return _assessHydraulicDiscFamilyCompatibility(compatibilityContext);
+        case 'mechanical_disc_brake':
+          return _assessMechanicalDiscFamilyCompatibility(
+            compatibilityContext,
+          );
+        case 'disc_brake':
+        case 'disc':
+          return _assessDiscBrakeFamilyCompatibility(compatibilityContext);
+        case 'brake_pad':
+          return _assessBrakePadFamilyCompatibility(compatibilityContext);
+        case 'brake_caliper':
+          return _assessBrakeCaliperFamilyCompatibility(compatibilityContext);
+        case 'brake_lever':
+          return _assessBrakeLeverFamilyCompatibility(compatibilityContext);
+      }
     }
+
+    return null;
+  }
+
+  List<String> _semanticKeysForMapping(_CategoryTechMapping? technicalMapping) {
+    if (technicalMapping == null) {
+      return const [];
+    }
+
+    return {
+      if (technicalMapping.templateKey != null &&
+          technicalMapping.templateKey!.isNotEmpty)
+        technicalMapping.templateKey!,
+      if (technicalMapping.technicalFamily.isNotEmpty)
+        technicalMapping.technicalFamily,
+    }.toList(growable: false);
   }
 
   ProductCompatibilityAssessment? _assessDetailedCompatibility({
@@ -375,6 +404,170 @@ class BikeProductCompatibilityService {
     return const ProductCompatibilityAssessment.caution(
       detail: 'Producto hidraulico; revisar rotor, montaje y manguera',
       sortPriority: 22,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessMechanicalDiscFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final brakeType = compatibilityContext.brakeType;
+    if (brakeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Producto para disco mecanico; falta confirmar el sistema de freno de la bici',
+        sortPriority: 32,
+      );
+    }
+
+    if (brakeType == 'disc') {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Producto para disco mecanico; falta confirmar si la bici es mecanica o hidraulica',
+        sortPriority: 24,
+      );
+    }
+
+    if (brakeType != 'mechanical_disc') {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Producto para disco mecanico, pero la bici usa ${_brakeTypePhrase(brakeType)}',
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail: 'Producto para disco mecanico; revisar rotor, montaje y tiro',
+      sortPriority: 22,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessDiscBrakeFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final brakeType = compatibilityContext.brakeType;
+    if (brakeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Producto para freno de disco; falta confirmar el sistema de la bici',
+        sortPriority: 32,
+      );
+    }
+
+    if (!_isDiscBrakeType(brakeType)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Producto para freno de disco, pero la bici usa ${_brakeTypePhrase(brakeType)}',
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail: 'Producto para freno de disco; revisar subtipo, rotor y montaje',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessBrakePadFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final brakeType = compatibilityContext.brakeType;
+    if (brakeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Pastillas de freno; falta confirmar si la bici usa freno de disco',
+        sortPriority: 32,
+      );
+    }
+
+    if (!_isDiscBrakeType(brakeType)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Pastillas de freno para disco, pero la bici usa ${_brakeTypePhrase(brakeType)}',
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail: 'Pastillas de freno; revisar forma y compatibilidad del caliper',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessBrakeCaliperFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final brakeType = compatibilityContext.brakeType;
+    if (brakeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Caliper de freno; falta confirmar si la bici usa freno de disco',
+        sortPriority: 32,
+      );
+    }
+
+    if (!_isDiscBrakeType(brakeType)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Caliper para disco, pero la bici usa ${_brakeTypePhrase(brakeType)}',
+      );
+    }
+
+    if (brakeType == 'hydraulic_disc') {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Caliper hidraulico; revisar montaje, manguera y rotor',
+        sortPriority: 22,
+      );
+    }
+
+    if (brakeType == 'mechanical_disc') {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Caliper mecanico; revisar montaje, tiro y rotor',
+        sortPriority: 22,
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Caliper para disco; falta confirmar si la bici es mecanica o hidraulica',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessBrakeLeverFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final brakeType = compatibilityContext.brakeType;
+    if (brakeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Manilla de freno; falta confirmar el sistema de freno de la bici',
+        sortPriority: 34,
+      );
+    }
+
+    if (brakeType == 'coaster_brake') {
+      return const ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Manilla de freno no corresponde a una bici con freno contrapedal',
+      );
+    }
+
+    if (brakeType == 'hydraulic_disc') {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Manilla de freno; revisar sistema hidraulico y compatibilidad del conjunto',
+        sortPriority: 26,
+      );
+    }
+
+    if (brakeType == 'mechanical_disc' || brakeType == 'rim') {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Manilla de freno; revisar tiro y compatibilidad del sistema',
+        sortPriority: 26,
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Manilla de freno; revisar compatibilidad con el sistema de la bici',
+      sortPriority: 30,
     );
   }
 

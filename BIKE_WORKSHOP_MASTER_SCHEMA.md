@@ -1334,8 +1334,8 @@ Important rule:
 - bike profile is not yet the hard gating layer for diagnosis field visibility
 - only `drivetrain`, `front_brake`, and `rear_brake` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, and `wheels` are still intentional placeholders waiting for a real schema/editor pass
 - type-driven gating is stronger at intake now, but downstream service/product compatibility still does not fully consume the richer base kernel
-- the first brake-first compatibility scorer currently trusts detailed `product_spec_values` only; it does not yet consume the already-existing `category_tech_mappings.technical_family` bridge for coarse obvious incompatibility gates
-- live production inspection on 2026-04-18 showed that this gap is operationally important because many obvious rotor products initially had no brake-spec rows, leaving rim-brake bikes with neutral rotor suggestions until product specs were enriched
+- the brake-first compatibility scorer now consumes the already-existing `category_tech_mappings.technical_family` / `spec_templates.key` bridge as a coarse fallback for live brake families such as `rotor`, `rim_brake`, `hydraulic_disc_brake`, `brake_pad`, `brake_caliper`, and `brake_lever`; detailed `product_spec_values` still remain the stronger within-family refinement layer
+- live production inspection on 2026-04-20 confirmed that this bridge matters because real Viñabike product populations still rely on family-level mappings for categories such as `Pastillas`, `Calipers`, `Manillas`, `Herraduras`, `Rotores`, and `Frenos hidráulicos completos`
 - brake/rim/disc-driven conditional forms are not yet fully implemented
 - bike record visibility is now more kernel-aligned, but some systems such as `cockpit` are still intentional placeholders and the read model is not yet a full schema-driven inspector layer
 
